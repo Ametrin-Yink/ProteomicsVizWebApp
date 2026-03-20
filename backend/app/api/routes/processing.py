@@ -1,0 +1,225 @@
+"""
+Processing API routes.
+
+Processing status and control endpoints.
+"""
+
+import asyncio
+import logging
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+
+from app.core.config import settings
+from app.core.exceptions import ProcessingError
+from app.db.session_store import SessionStore
+from app.models.session import ProcessingStatus, SessionState, Session
+from app.models.analysis import AnalysisConfig, Organism
+from app.services.processing_orchestrator import processing_orchestrator
+from app.services.session_manager import session_manager
+
+router = APIRouter()
+logger = logging.getLogger("proteomics")
+
+
+def get_session_store() -> SessionStore:
+    """Dependency to get session store."""
+    return SessionStore(settings.sessions_dir)
+
+
+@router.get("/{session_id}/status")
+async def get_processing_status(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store)
+) -> ProcessingStatus:
+    """Get detailed processing status."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+    
+    # Return default status based on session state
+    return ProcessingStatus(
+        state=session.state,
+        progress=0,
+        steps=[]
+    )
+
+
+@router.post("/{session_id}/retry")
+async def retry_processing(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store)
+):
+    """Retry failed processing."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+    
+    if session.state != SessionState.ERROR:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Can only retry failed sessions"
+        )
+    
+    # Reset state and retry
+    session.state = SessionState.PROCESSING
+    session.error_message = None
+    await store.save(session)
+
+    # Start processing in background using asyncio.create_task
+    import asyncio
+    asyncio.create_task(run_processing_pipeline_async(session_id, session))
+
+    return {
+        "message": "Processing retry initiated",
+        "session_id": session_id,
+        "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}"
+    }
+
+
+@router.post("/{session_id}/process")
+async def start_processing(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store)
+):
+    """Start the processing pipeline for a session.
+
+    Args:
+        session_id: Session ID
+        background_tasks: FastAPI background tasks
+        store: Session store dependency
+
+    Returns:
+        202 Accepted with WebSocket URL
+
+    Raises:
+        HTTPException: 404 if session not found, 400 if validation fails, 409 if already processing
+    """
+    logger.info(f"Starting processing for session {session_id}")
+
+    # Get session
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+
+    # Check if already processing
+    if session.state == SessionState.PROCESSING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Session is already being processed"
+        )
+
+    # Validate session has configuration
+    if not session.config:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session configuration required. Please configure treatment, control, and organism."
+        )
+
+    # Validate session has files
+    if not session.files or not session.files.proteomics:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No proteomics files uploaded. Please upload at least 6 PSM files."
+        )
+
+    # Validate minimum file count (at least 3 per condition, 2 conditions = 6 minimum)
+    if len(session.files.proteomics) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At least 6 proteomics files required (3 per condition). Current: {len(session.files.proteomics)}"
+        )
+
+    # Update session state to processing
+    session.state = SessionState.PROCESSING
+    session.error_message = None
+    await store.save(session)
+
+    # Start processing in background using asyncio.create_task
+    # This properly schedules the async function to run
+    import asyncio
+    asyncio.create_task(run_processing_pipeline_async(session_id, session))
+
+    logger.info(f"Processing started for session {session_id} (async task created)")
+
+    return {
+        "data": {
+            "status": "started",
+            "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}"
+        }
+    }
+
+
+async def run_processing_pipeline_async(session_id: str, session: Session):
+    """Run the processing pipeline (async version).
+
+    Args:
+        session_id: Session ID
+        session: Session object with config
+    """
+    logger.info(f"BACKGROUND TASK STARTED for session {session_id}")
+    
+    # Don't wait for WebSocket - start processing immediately
+    # WebSocket will reconnect and receive updates
+    logger.info(f"Starting processing for session {session_id} (WebSocket will reconnect if needed)")
+    
+    try:
+        # Convert session config to AnalysisConfig
+        config = AnalysisConfig(
+            treatment=session.config.treatment,
+            control=session.config.control,
+            organism=Organism(session.config.organism),
+            remove_razor=session.config.remove_razor,
+            strict_filtering=session.config.strict_filtering,
+        )
+
+        # Create WebSocket callback for progress updates
+        async def websocket_callback(progress):
+            """Send progress update via WebSocket."""
+            try:
+                await session_manager.send_progress_update(session_id, progress.model_dump())
+            except Exception as e:
+                logger.warning(f"Failed to send WebSocket progress update: {e}")
+
+        # Run the processing pipeline
+        result = await processing_orchestrator.process_session(
+            session_id=session_id,
+            config=config,
+            websocket_callback=websocket_callback
+        )
+
+        logger.info(
+            f"Processing completed for session {session_id}",
+            extra={
+                "session_id": session_id,
+                "total_psms": result.total_psms,
+                "total_proteins": result.total_proteins,
+                "significant_proteins": result.significant_proteins,
+            }
+        )
+
+    except ProcessingError as e:
+        logger.error(
+            f"Processing failed for session {session_id}: {e.message}",
+            extra={"session_id": session_id, "error": e.message, "step": e.step}
+        )
+        # Session state already updated by orchestrator
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during processing for session {session_id}: {str(e)}",
+            extra={"session_id": session_id, "error": str(e)}
+        )
+        # Update session state to error
+        await session_manager.update_session_state(
+            session_id, SessionState.ERROR, str(e)
+        )
+
+
+

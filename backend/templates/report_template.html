@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report_title }}</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+        }
+        
+        /* Page layout */
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm 15mm;
+            margin: 0 auto;
+            background: white;
+        }
+        
+        /* Header */
+        .report-header {
+            text-align: center;
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .report-header h1 {
+            font-size: 24pt;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .report-header .generated-at {
+            font-size: 10pt;
+            color: #7f8c8d;
+        }
+        
+        /* Section styles */
+        .section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .section-title {
+            font-size: 16pt;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .section-subtitle {
+            font-size: 13pt;
+            color: #34495e;
+            margin: 15px 0 10px 0;
+        }
+        
+        /* Info boxes */
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .info-box.warning {
+            border-left-color: #f39c12;
+            background: #fef9e7;
+        }
+        
+        .info-box.success {
+            border-left-color: #27ae60;
+            background: #eafaf1;
+        }
+        
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 10pt;
+        }
+        
+        th, td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background: #34495e;
+            color: white;
+            font-weight: 600;
+        }
+        
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        tr:hover {
+            background: #e8f4f8;
+        }
+        
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            font-size: 24pt;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card p {
+            font-size: 10pt;
+            opacity: 0.9;
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .stat-card.danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+        
+        /* Configuration table */
+        .config-table {
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .config-table td:first-child {
+            font-weight: 600;
+            color: #2c3e50;
+            width: 40%;
+        }
+        
+        /* File list */
+        .file-list {
+            list-style: none;
+        }
+        
+        .file-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .file-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .file-name {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .file-meta {
+            color: #7f8c8d;
+            font-size: 9pt;
+        }
+        
+        /* Plot container */
+        .plot-container {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .plot-caption {
+            font-size: 10pt;
+            color: #7f8c8d;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        
+        /* Protein table */
+        .protein-table {
+            font-size: 9pt;
+        }
+        
+        .protein-table th {
+            background: #2c3e50;
+        }
+        
+        .protein-table .significant {
+            font-weight: 600;
+        }
+        
+        .protein-table .upregulated {
+            color: #e74c3c;
+        }
+        
+        .protein-table .downregulated {
+            color: #3498db;
+        }
+        
+        /* GSEA results */
+        .gsea-database {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+        
+        .gsea-database h4 {
+            background: #34495e;
+            color: white;
+            padding: 10px 15px;
+            margin: 0;
+            font-size: 12pt;
+        }
+        
+        .gsea-stats {
+            display: flex;
+            gap: 20px;
+            padding: 10px 15px;
+            background: #ecf0f1;
+            font-size: 10pt;
+        }
+        
+        .gsea-stats span {
+            font-weight: 600;
+        }
+        
+        /* Pathway table */
+        .pathway-table {
+            margin-top: 0;
+        }
+        
+        .pathway-table .nes-positive {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+        
+        .pathway-table .nes-negative {
+            color: #3498db;
+            font-weight: 600;
+        }
+        
+        /* Footer */
+        .report-footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            font-size: 9pt;
+            color: #7f8c8d;
+        }
+        
+        /* Print styles */
+        @media print {
+            .page {
+                width: 100%;
+                padding: 0;
+            }
+            
+            .section {
+                page-break-inside: avoid;
+            }
+            
+            .gsea-database {
+                page-break-inside: avoid;
+            }
+        }
+        
+        /* Utility classes */
+        .text-center {
+            text-align: center;
+        }
+        
+        .mt-20 {
+            margin-top: 20px;
+        }
+        
+        .mb-20 {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Report Header -->
+        <div class="report-header">
+            <h1>{{ report_title }}</h1>
+            <p class="generated-at">Generated: {{ generated_at }}</p>
+        </div>
+
+        <!-- Section 1: Sample Information -->
+        <div class="section">
+            <h2 class="section-title">1. Sample Information</h2>
+            
+            <div class="info-box">
+                <strong>Session:</strong> {{ sample_info.session_name }}<br>
+                <strong>Session ID:</strong> {{ sample_info.session_id }}<br>
+                <strong>Created:</strong> {{ sample_info.created_at }}
+            </div>
+            
+            <h3 class="section-subtitle">Uploaded Files ({{ sample_info.total_files }})</h3>
+            <ul class="file-list">
+                {% for file in sample_info.uploaded_files %}
+                <li>
+                    <span class="file-name">{{ file.filename }}</span>
+                    <span class="file-meta">{{ file.condition }} (Rep {{ file.replicate }}) - {{ file.size_mb }} MB</span>
+                </li>
+                {% endfor %}
+            </ul>
+            
+            <h3 class="section-subtitle">Conditions & Replicates</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Condition</th>
+                        <th>Number of Replicates</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for condition, count in sample_info.replicate_counts.items() %}
+                    <tr>
+                        <td>{{ condition }}</td>
+                        <td>{{ count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            {% if sample_info.has_compound_file %}
+            <div class="info-box success">
+                Compound file uploaded: Yes
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Section 2: User Configuration -->
+        <div class="section">
+            <h2 class="section-title">2. Analysis Configuration</h2>
+            
+            <table class="config-table">
+                <tbody>
+                    <tr>
+                        <td>Treatment Condition</td>
+                        <td>{{ user_config.treatment }}</td>
+                    </tr>
+                    <tr>
+                        <td>Control Condition</td>
+                        <td>{{ user_config.control }}</td>
+                    </tr>
+                    <tr>
+                        <td>Organism</td>
+                        <td>{{ user_config.organism }}</td>
+                    </tr>
+                    <tr>
+                        <td>Remove Razor Peptides</td>
+                        <td>{{ user_config.remove_razor }}</td>
+                    </tr>
+                    <tr>
+                        <td>Strict Filtering</td>
+                        <td>{{ user_config.strict_filtering }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Section 3: Results -->
+        {% if results %}
+        <div class="section">
+            <h2 class="section-title">3. Differential Expression Results</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>{{ results.total_proteins }}</h3>
+                    <p>Total Proteins</p>
+                </div>
+                <div class="stat-card success">
+                    <h3>{{ results.significant_proteins }}</h3>
+                    <p>Significant Proteins</p>
+                </div>
+            </div>
+            
+            {% if results.volcano_plot %}
+            <h3 class="section-subtitle">Volcano Plot</h3>
+            <div class="plot-container">
+                <p class="plot-caption">
+                    Volcano plot showing log2 fold change vs -log10(p-value). 
+                    Red points: upregulated proteins. Blue points: downregulated proteins.
+                </p>
+            </div>
+            {% endif %}
+            
+            {% if results.top_proteins %}
+            <h3 class="section-subtitle">Top 50 Significant Proteins</h3>
+            <div style="max-height: 500px; overflow-y: auto;">
+                <table class="protein-table">
+                    <thead>
+                        <tr>
+                            <th>Protein</th>
+                            <th>Gene</th>
+                            <th>Log2 FC</th>
+                            <th>P-value</th>
+                            <th>Significant</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for protein in results.top_proteins %}
+                        <tr class="{% if protein.significant %}significant{% endif %}">
+                            <td>{{ protein.protein }}</td>
+                            <td>{{ protein.gene }}</td>
+                            <td class="{% if protein.log_fc > 0 %}upregulated{% else %}downregulated{% endif %}">
+                                {{ protein.log_fc }}
+                            </td>
+                            <td>{{ protein.pval }}</td>
+                            <td>{% if protein.significant %}Yes{% else %}No{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Section 4: QC Analysis -->
+        {% if qc_data %}
+        <div class="section">
+            <h2 class="section-title">4. Quality Control Analysis</h2>
+            
+            {% if qc_data.pca %}
+            <h3 class="section-subtitle">Principal Component Analysis</h3>
+            <div class="info-box">
+                <strong>PC1 Variance:</strong> {{ qc_data.pca.pc1_variance }}% | 
+                <strong>PC2 Variance:</strong> {{ qc_data.pca.pc2_variance }}%
+            </div>
+            <div class="plot-container">
+                <p class="plot-caption">
+                    PCA plot showing sample clustering. Samples from the same condition should cluster together.
+                </p>
+            </div>
+            {% endif %}
+            
+            {% if qc_data.pvalue_distribution %}
+            <h3 class="section-subtitle">P-value Distribution</h3>
+            <div class="plot-container">
+                <p class="plot-caption">
+                    Distribution of p-values across all proteins. A peak near 0 indicates differentially expressed proteins.
+                </p>
+            </div>
+            {% endif %}
+            
+            {% if qc_data.cv_data %}
+            <h3 class="section-subtitle">Coefficient of Variation</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Condition</th>
+                        <th>Mean CV</th>
+                        <th>Median CV</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for condition, cv_values in qc_data.cv_data.items() %}
+                    <tr>
+                        <td>{{ condition }}</td>
+                        <td>{{ "%.3f"|format(cv_values|sum / cv_values|length) if cv_values else "N/A" }}</td>
+                        <td>{{ "%.3f"|format(cv_values|sort[cv_values|length // 2]) if cv_values else "N/A" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            
+            {% if qc_data.data_completeness %}
+            <h3 class="section-subtitle">Data Completeness by Sample</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sample</th>
+                        <th>Present</th>
+                        <th>Missing</th>
+                        <th>Completeness %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sample in qc_data.data_completeness %}
+                    <tr>
+                        <td>{{ sample.sample }}</td>
+                        <td>{{ sample.present }}</td>
+                        <td>{{ sample.missing }}</td>
+                        <td>{{ sample.completeness_pct }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Section 5: Bioinformatics Analysis -->
+        {% if gsea_results and gsea_results.databases %}
+        <div class="section">
+            <h2 class="section-title">5. Gene Set Enrichment Analysis</h2>
+            
+            {% for database in gsea_results.databases %}
+            <div class="gsea-database">
+                <h4>{{ database.name }}</h4>
+                <div class="gsea-stats">
+                    <span>Total Pathways: {{ database.total_pathways }}</span>
+                    <span>Significant: {{ database.significant_pathways }}</span>
+                    <span style="color: #e74c3c;">Overrepresented: {{ database.overrepresented }}</span>
+                    <span style="color: #3498db;">Underrepresented: {{ database.underrepresented }}</span>
+                </div>
+                
+                {% if database.top_pathways %}
+                <table class="pathway-table">
+                    <thead>
+                        <tr>
+                            <th>Pathway</th>
+                            <th>NES</th>
+                            <th>P-value</th>
+                            <th>FDR</th>
+                            <th>Genes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pathway in database.top_pathways %}
+                        <tr>
+                            <td title="{{ pathway.name }}">{{ pathway.name[:60] }}{% if pathway.name|length > 60 %}...{% endif %}</td>
+                            <td class="{% if pathway.nes > 0 %}nes-positive{% else %}nes-negative{% endif %}">
+                                {{ pathway.nes }}
+                            </td>
+                            <td>{{ pathway.pval }}</td>
+                            <td>{{ pathway.fdr }}</td>
+                            <td>{{ pathway.matched_genes }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="info-box warning">
+                    No significant pathways found in this database.
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Report Footer -->
+        <div class="report-footer">
+            <p>Generated by Proteomics Visualization Web App</p>
+            <p>Session ID: {{ sample_info.session_id }}</p>
+        </div>
+    </div>
+</body>
+</html>

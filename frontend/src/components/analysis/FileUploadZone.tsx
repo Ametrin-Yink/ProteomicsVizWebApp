@@ -1,0 +1,487 @@
+/**
+ * FileUploadZone Component
+ * Drag-and-drop file upload with progress tracking
+ */
+
+'use client';
+
+import React, { useCallback, useState, useRef } from 'react';
+import { Upload, File, X, Database, AlertCircle } from 'lucide-react';
+import { useAnalysisStore } from '@/stores/analysis-store';
+import { useUIStore } from '@/stores/ui-store';
+import { uploadApi } from '@/lib/api-client';
+import type { ParsedFilename, UploadProgress } from '@/types';
+
+interface FileUploadZoneProps {
+  sessionId: string;
+}
+
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+const ALLOWED_EXTENSIONS = ['.csv'];
+
+/**
+ * Parse PSM filename to extract metadata
+ * Pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv
+ */
+const parseFilename = (filename: string): ParsedFilename | null => {
+  const pattern = /^PSM_([A-Za-z0-9_-]+)_([A-Za-z0-9_-]+)_(\d+)\.csv$/;
+  const match = filename.match(pattern);
+  
+  if (!match) {
+    return null;
+  }
+  
+  return {
+    filename,
+    experiment: match[1],
+    condition: match[2],
+    replicate: parseInt(match[3], 10),
+    size: 0,
+  };
+};
+
+/**
+ * Format file size for display
+ */
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+};
+
+export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isCompoundUpload, setIsCompoundUpload] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const compoundInputRef = useRef<HTMLInputElement>(null);
+  
+  const {
+    uploadedFiles,
+    uploadProgress,
+    compoundFile,
+    isUploading,
+    addUploadedFile,
+    removeUploadedFile,
+    setUploadProgress,
+    setCompoundFile,
+    setIsUploading,
+    setUploadError,
+  } = useAnalysisStore();
+  
+  const { addToast } = useUIStore();
+  
+  const validateFile = (file: File): string | null => {
+    if (file.size > MAX_FILE_SIZE) {
+      return `File too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}`;
+    }
+    
+    const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
+      return `Invalid file type. Only ${ALLOWED_EXTENSIONS.join(', ')} files are allowed`;
+    }
+    
+    return null;
+  };
+  
+  const handleFiles = useCallback(async (files: FileList | null, isCompound: boolean = false) => {
+    console.log('handleFiles called:', { filesCount: files?.length, isCompound, sessionId });
+    if (!files || files.length === 0) {
+      console.log('handleFiles: No files provided');
+      return;
+    }
+    
+    console.log('handleFiles called:', { 
+      filesCount: files.length, 
+      isCompound,
+      fileNames: Array.from(files).map(f => f.name)
+    });
+    
+    // Check if sessionId is available
+    if (!sessionId) {
+      console.error('No sessionId available');
+      addToast({
+        type: 'error',
+        message: 'No session available. Please create a session first.',
+      });
+      return;
+    }
+    
+    setIsUploading(true);
+    setUploadError(null);
+    
+    const fileArray = Array.from(files);
+    console.log('handleFiles: Processing', fileArray.length, 'files');
+    
+    // Validate files
+    for (const file of fileArray) {
+      const error = validateFile(file);
+      if (error) {
+        addToast({
+          type: 'error',
+          message: `${file.name}: ${error}`,
+        });
+        setIsUploading(false);
+        return;
+      }
+    }
+    
+    try {
+      if (isCompound) {
+        // Handle compound file upload
+        const file = fileArray[0];
+        setUploadProgress(file.name, 0, 'uploading');
+        
+        const result = await uploadApi.uploadCompound(sessionId, file);
+        setCompoundFile(result);
+        setUploadProgress(file.name, 100, 'completed');
+        
+        addToast({
+          type: 'success',
+          message: `Compound file uploaded successfully: ${result.compounds.length} compounds`,
+        });
+      } else {
+        // Handle proteomics files upload - validate all files first
+        console.log('Uploading proteomics files:', fileArray.map(f => f.name));
+        
+        const validFiles: File[] = [];
+        for (const file of fileArray) {
+          const parsed = parseFilename(file.name);
+          if (!parsed) {
+            console.error('Invalid filename:', file.name);
+            addToast({
+              type: 'error',
+              message: `Invalid filename: ${file.name}. Expected: PSM_ExperimentName_Condition_ReplicateNumber.csv`,
+            });
+            continue;
+          }
+          validFiles.push(file);
+          setUploadProgress(file.name, 0, 'uploading');
+        }
+        
+        if (validFiles.length === 0) {
+          setIsUploading(false);
+          return;
+        }
+        
+        try {
+          console.log('Calling uploadApi.uploadProteomics for session:', sessionId);
+          const results = await uploadApi.uploadProteomics(sessionId, validFiles, (name, progress) => {
+            console.log('Upload progress:', name, progress);
+            setUploadProgress(name, progress, progress === 100 ? 'completed' : 'uploading');
+          });
+          console.log('Upload results:', results);
+          
+          // Process all uploaded files
+          for (const uploadedFile of results) {
+            console.log('Adding uploaded file to store:', uploadedFile);
+            try {
+              // Parse filename: PSM_ExperimentName_Condition_ReplicateNumber.csv
+              const originalName = uploadedFile.original_filename || uploadedFile.filename || '';
+              const parts = originalName.replace('.csv', '').split('_');
+              // parts = ['PSM', 'ExperimentName', 'Condition', 'ReplicateNumber']
+              const parsedExperiment = parts.length >= 2 ? parts[1] : 'Unknown';
+              const parsedCondition = parts.length >= 3 ? parts[2] : 'Unknown';
+              const parsedReplicate = parts.length >= 4 ? parseInt(parts[3]) || 1 : 1;
+              
+              addUploadedFile({
+                filename: uploadedFile.filename,
+                experiment: uploadedFile.experiment || parsedExperiment,
+                condition: uploadedFile.condition || parsedCondition,
+                replicate: uploadedFile.replicate || parsedReplicate,
+                size: uploadedFile.size,
+                columns: uploadedFile.columns || [],
+              });
+              console.log('File added to store successfully');
+            } catch (error) {
+              console.error('Error adding file to store:', error);
+            }
+          }
+          
+          if (results.length > 0) {
+            addToast({
+              type: 'success',
+              message: `Uploaded ${results.length} file(s) successfully`,
+            });
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Upload failed';
+          for (const file of validFiles) {
+            setUploadProgress(file.name, 0, 'error');
+          }
+          addToast({
+            type: 'error',
+            message: `Failed to upload files: ${message}`,
+          });
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Upload failed';
+      setUploadError(message);
+      addToast({
+        type: 'error',
+        message: `Upload failed: ${message}`,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  }, [sessionId, addUploadedFile, setUploadProgress, setCompoundFile, setIsUploading, setUploadError, addToast]);
+  
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+  
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+  
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFiles(e.dataTransfer.files, isCompoundUpload);
+  }, [handleFiles, isCompoundUpload]);
+  
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, isCompound: boolean = false) => {
+    const files = e.target.files;
+    console.log('handleFileInputChange called:', { 
+      fileCount: files?.length || 0, 
+      isCompound,
+      fileNames: files ? Array.from(files).map(f => f.name) : []
+    });
+    handleFiles(files, isCompound);
+    e.target.value = ''; // Reset input
+  }, [handleFiles]);
+  
+  const getProgressForFile = (filename: string): UploadProgress | undefined => {
+    return uploadProgress.find((p) => p.filename === filename);
+  };
+  
+  return (
+    <div className="space-y-6">
+      {/* Proteomics File Upload */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">Proteomics Data Files</h3>
+        
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`
+            relative border-2 border-dashed rounded-xl p-8 cursor-pointer
+            transition-all duration-200 ease-in-out
+            ${isDragging 
+              ? 'border-cyan-500 bg-cyan-50' 
+              : 'border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100'
+            }
+          `}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            multiple
+            data-testid="proteomics-upload"
+            onChange={(e) => handleFileInputChange(e, false)}
+            className="hidden"
+          />
+          
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className={`
+              p-4 rounded-full transition-colors duration-200
+              ${isDragging ? 'bg-cyan-100' : 'bg-gray-200'}
+            `}>
+              <Upload className={`
+                w-8 h-8 transition-colors duration-200
+                ${isDragging ? 'text-cyan-600' : 'text-gray-500'}
+              `} />
+            </div>
+            
+            <div>
+              <p className="text-base font-medium text-gray-900">
+                {isDragging ? 'Drop files here' : 'Drag & drop files here'}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                or click to browse
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span>Supported: CSV files</span>
+              <span>•</span>
+              <span>Max {formatFileSize(MAX_FILE_SIZE)}</span>
+            </div>
+            
+            <div className="text-xs text-gray-400 bg-gray-100 px-3 py-1.5 rounded-full">
+              Pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv
+            </div>
+          </div>
+        </div>
+        
+        {/* Upload from Database Button */}
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              addToast({
+                type: 'info',
+                message: 'Database upload feature coming soon (TBD)',
+              });
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
+          >
+            <Database className="w-4 h-4" />
+            Upload from Database
+          </button>
+        </div>
+        
+        {/* Uploaded Files List */}
+        {uploadedFiles.length > 0 && (
+          <div className="mt-6" data-testid="file-table">
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Uploaded Files ({uploadedFiles.length})</h4>
+            <div className="space-y-2">
+              {uploadedFiles.map((file) => {
+                const progress = getProgressForFile(file.filename);
+                const isCompleted = progress?.status === 'completed';
+                const hasError = progress?.status === 'error';
+                
+                return (
+                  <div
+                    key={file.filename}
+                    className={`
+                      flex items-center justify-between p-3 rounded-lg border
+                      ${hasError ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}
+                    `}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <File className={`
+                        w-5 h-5 flex-shrink-0
+                        ${hasError ? 'text-red-500' : isCompleted ? 'text-green-500' : 'text-gray-400'}
+                      `} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {file.filename}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{formatFileSize(file.size)}</span>
+                          <span>•</span>
+                          <span>Exp: {file.experiment}</span>
+                          <span>•</span>
+                          <span>Cond: {file.condition}</span>
+                          <span>•</span>
+                          <span>Rep: {file.replicate}</span>
+                        </div>
+                        
+                        {/* Progress bar */}
+                        {progress && progress.status === 'uploading' && (
+                          <div className="mt-2" data-testid="upload-progress">
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className="bg-cyan-500 h-1.5 rounded-full transition-all duration-300"
+                                style={{ width: `${progress.progress}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{progress.progress}%</p>
+                          </div>
+                        )}
+                        
+                        {isCompleted && (
+                          <p className="text-xs text-green-600 mt-1" data-testid="upload-success">Upload complete</p>
+                        )}
+                        
+                        {hasError && progress?.error && (
+                          <p className="text-xs text-red-600 mt-1" data-testid="upload-error">{progress.error}</p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => removeUploadedFile(file.filename)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      title="Remove file"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Compound File Upload */}
+      <div className="space-y-4 pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900">Compound Information (Optional)</h3>
+        
+        <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-blue-700">
+            <p className="font-medium">Optional: Upload compound file</p>
+            <p className="mt-1">
+              Upload a CSV with Corp ID and SMILES columns to display compound structures.
+              Corp IDs will be matched to condition names.
+            </p>
+          </div>
+        </div>
+        
+        {compoundFile ? (
+          <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg" data-testid="compound-upload-success">
+            <div className="flex items-center gap-3">
+              <File className="w-5 h-5 text-green-500" />
+              <div>
+                <p className="text-sm font-medium text-gray-900">{compoundFile.filename}</p>
+                <p className="text-xs text-gray-500">
+                  {formatFileSize(compoundFile.size)} • {compoundFile.compounds.length} compounds
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setCompoundFile(null)}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div
+            onClick={() => compoundInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.currentTarget.classList.add('border-cyan-500', 'bg-cyan-50');
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.currentTarget.classList.remove('border-cyan-500', 'bg-cyan-50');
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.currentTarget.classList.remove('border-cyan-500', 'bg-cyan-50');
+              handleFiles(e.dataTransfer.files, true);
+            }}
+            className="border-2 border-dashed border-gray-300 rounded-xl p-6 cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+          >
+            <input
+              ref={compoundInputRef}
+              type="file"
+              accept=".csv"
+              data-testid="compound-upload"
+              onChange={(e) => handleFileInputChange(e, true)}
+              className="hidden"
+            />
+            <div className="flex flex-col items-center text-center space-y-2">
+              <Upload className="w-6 h-6 text-gray-400" />
+              <p className="text-sm font-medium text-gray-700">Drag & drop compound file here</p>
+              <p className="text-xs text-gray-500">or click to browse • CSV with Corp ID and SMILES columns</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default FileUploadZone;

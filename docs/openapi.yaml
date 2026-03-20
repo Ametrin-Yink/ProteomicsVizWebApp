@@ -1,0 +1,196 @@
+openapi: 3.0.0
+info:
+  title: Proteomics Visualization Web App API
+  version: 1.0.0
+  description: API for proteomics data analysis and visualization
+
+servers:
+  - url: http://localhost:8000/api
+    description: Development server
+
+paths:
+  /sessions:
+    post:
+      summary: Create a new session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+    get:
+      summary: List all sessions
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+
+  /sessions/{sessionId}:
+    get:
+      summary: Get session details
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+    delete:
+      summary: Delete a session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Session deleted
+
+  /sessions/{sessionId}/upload/proteomics:
+    post:
+      summary: Upload proteomics files
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '201':
+          description: Files uploaded
+
+  /sessions/{sessionId}/process:
+    post:
+      summary: Start processing pipeline
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Processing started
+
+  /sessions/{sessionId}/results:
+    get:
+      summary: Get differential expression results
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Results data
+
+  /sessions/{sessionId}/qc/plots:
+    get:
+      summary: Get QC plot data
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: QC plot data
+
+  /sessions/{sessionId}/gsea/{database}:
+    get:
+      summary: Get GSEA results
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [go_bp, go_mf, go_cc, kegg, reactome]
+      responses:
+        '200':
+          description: GSEA results
+
+components:
+  schemas:
+    SessionCreate:
+      type: object
+      required:
+        - name
+        - template
+      properties:
+        name:
+          type: string
+        template:
+          type: string
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        template:
+          type: string
+        state:
+          type: string
+          enum: [created, configuring, processing, completed, error]
+        config:
+          $ref: '#/components/schemas/SessionConfig'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SessionConfig:
+      type: object
+      properties:
+        treatment:
+          type: string
+        control:
+          type: string
+        organism:
+          type: string
+        remove_razor:
+          type: boolean
+        strict_filtering:
+          type: boolean

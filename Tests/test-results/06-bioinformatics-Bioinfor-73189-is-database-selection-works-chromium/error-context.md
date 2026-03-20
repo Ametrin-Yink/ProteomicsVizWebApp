@@ -1,0 +1,99 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "ProteomicsViz" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+        - generic [ref=e7]: ProteomicsViz
+      - generic [ref=e8]:
+        - link "Home" [ref=e9] [cursor=pointer]:
+          - /url: /
+        - link "About" [ref=e10] [cursor=pointer]:
+          - /url: "#about"
+        - link "Documentation" [ref=e11] [cursor=pointer]:
+          - /url: "#docs"
+  - generic [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e16]:
+        - img [ref=e18]
+        - generic [ref=e20]:
+          - heading "ProteomicsViz" [level=1] [ref=e21]
+          - paragraph [ref=e22]: Analysis Platform
+      - button "New Analysis" [ref=e24]:
+        - img [ref=e25]
+        - text: New Analysis
+      - generic [ref=e27]:
+        - button "All (2)" [ref=e28]:
+          - img [ref=e29]
+          - text: All (2)
+        - button "Recent" [ref=e31]:
+          - img [ref=e32]
+          - text: Recent
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - heading "Active" [level=3] [ref=e38]
+          - generic [ref=e40] [cursor=pointer]:
+            - img [ref=e42]
+            - generic [ref=e45]:
+              - paragraph [ref=e46]: test
+              - paragraph [ref=e47]: Created
+        - generic [ref=e48]:
+          - heading "Completed" [level=3] [ref=e49]
+          - generic [ref=e51] [cursor=pointer]:
+            - img [ref=e53]
+            - generic [ref=e56]:
+              - paragraph [ref=e57]: Analysis 3/20/2026, 4:58:06 AM
+              - paragraph [ref=e58]: Completed
+      - button "Settings" [ref=e60]:
+        - img [ref=e61]
+        - text: Settings
+    - main [ref=e64]:
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - img [ref=e68]
+          - heading "Welcome to ProteomicsViz" [level=1] [ref=e70]
+          - paragraph [ref=e71]: Select an analysis template to get started with your proteomics data analysis.
+        - generic [ref=e72]:
+          - heading "Choose Analysis Type" [level=2] [ref=e73]
+          - generic [ref=e74]:
+            - generic [ref=e76] [cursor=pointer]:
+              - img [ref=e78]
+              - generic [ref=e80]:
+                - heading "Protein Pair-wise Comparison Analysis" [level=3] [ref=e82]
+                - paragraph [ref=e83]: Compare protein abundance between two experimental conditions using statistical testing and visualization.
+              - img [ref=e85]
+            - generic [ref=e88] [cursor=pointer]:
+              - img [ref=e90]
+              - generic [ref=e92]:
+                - generic [ref=e93]:
+                  - heading "Multi-Condition Analysis" [level=3] [ref=e94]
+                  - generic [ref=e95]: TBD
+                - paragraph [ref=e96]: Analyze protein expression across multiple experimental conditions.
+              - img [ref=e98]
+            - generic [ref=e101] [cursor=pointer]:
+              - img [ref=e103]
+              - generic [ref=e107]:
+                - generic [ref=e108]:
+                  - heading "Time Course Analysis" [level=3] [ref=e109]
+                  - generic [ref=e110]: TBD
+                - paragraph [ref=e111]: Track protein abundance changes over time.
+              - img [ref=e113]
+            - generic [ref=e116] [cursor=pointer]:
+              - img [ref=e118]
+              - generic [ref=e130]:
+                - generic [ref=e131]:
+                  - heading "Pathway Enrichment Analysis" [level=3] [ref=e132]
+                  - generic [ref=e133]: TBD
+                - paragraph [ref=e134]: Identify enriched biological pathways from differential expression results.
+              - img [ref=e136]
+        - paragraph [ref=e139]:
+          - text: Need help getting started?
+          - link "View documentation" [ref=e140] [cursor=pointer]:
+            - /url: "#docs"
+  - button "Open Next.js Dev Tools" [ref=e146] [cursor=pointer]:
+    - img [ref=e147]
+  - alert [ref=e150]
+```

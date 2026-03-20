@@ -1,0 +1,34 @@
+# Core Framework
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-multipart
+websockets
+
+# Data Processing
+pandas
+numpy
+scipy
+scikit-learn
+
+# GSEA Analysis
+gseapy
+
+# Chemistry (RDKit)
+rdkit
+
+# PDF Generation
+reportlab
+playwright
+
+# Async Support
+aiofiles
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+
+# Utilities
+python-dotenv

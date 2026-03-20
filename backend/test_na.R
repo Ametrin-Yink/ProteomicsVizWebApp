@@ -1,0 +1,6 @@
+psm_data <- read.delim('sessions/224c8838-08ea-4cbc-89b4-0a7cfc29ddf3/results/PSM_Abundances.tsv', sep='\t', stringsAsFactors=FALSE)
+cat('Total rows:', nrow(psm_data), '\n')
+cat('Rows with NA Abundance:', sum(is.na(psm_data$Abundance)), '\n')
+cat('Rows with empty Quan_Info:', sum(psm_data$Quan_Info == '' | psm_data$Quan_Info == ' '), '\n')
+cat('Sample of data:\n')
+print(head(psm_data[, c('Abundance', 'Quan_Info', 'Master_Protein_Accessions')]))

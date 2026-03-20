@@ -1,0 +1,18 @@
+{
+  "current_step": 0,
+  "completed_steps": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "failed_step": 0,
+  "error": "Protein abundance calculation failed: Protein abundance calculation failed: \u9519\u8bef: Input file not found: D:\\CodingWorks\\ProteomicsVizWebApp\\backend\\sessions\\74d2f5e8-0d00-4e72-a318-4600f99c830a\\results\\PSM_Abundances.tsv\r\n\u505c\u6b62\u6267\u884c\r\n",
+  "outputs": {
+    "step_1": "D:\\CodingWorks\\ProteomicsVizWebApp\\backend\\sessions\\74d2f5e8-0d00-4e72-a318-4600f99c830a\\results\\PSM_Abundances.tsv",
+    "step_5": "D:\\CodingWorks\\ProteomicsVizWebApp\\backend\\sessions\\74d2f5e8-0d00-4e72-a318-4600f99c830a\\results\\PSM_Abundances.tsv"
+  },
+  "started_at": "2026-03-20T08:42:08.294407",
+  "completed_at": null
+}

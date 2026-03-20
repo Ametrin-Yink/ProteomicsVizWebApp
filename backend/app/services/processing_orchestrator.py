@@ -1,0 +1,560 @@
+"""Processing Pipeline Orchestrator.
+
+Coordinates the 9-step data processing pipeline with WebSocket status updates.
+Manages state persistence and error recovery.
+"""
+
+import asyncio
+import json
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+import pandas as pd
+
+from app.core.config import settings
+from app.core.exceptions import ProcessingError, RScriptError
+from app.models.analysis import (
+    AnalysisConfig,
+    AnalysisResult,
+    ProcessingProgress,
+    STEP_DISPLAY_NAMES,
+    STEP_NAMES,
+)
+from app.models.data import QCData
+from app.models.session import SessionState as SessionStateEnum
+from app.services.data_processor import DataProcessor, ProcessingConfig
+from app.services.gsea_service import gsea_service
+from app.services.msqrob2_wrapper import msqrob2_wrapper
+from app.services.qc_calculator import qc_calculator
+from app.services.session_manager import session_manager
+
+logger = logging.getLogger("proteomics")
+
+
+class PipelineState:
+    """Track pipeline execution state."""
+
+    def __init__(self, session_id: str):
+        """Initialize pipeline state.
+
+        Args:
+            session_id: Session ID
+        """
+        self.session_id = session_id
+        self.state_file = settings.sessions_dir / session_id / "pipeline_state.json"
+        self.data = self._load()
+
+    def _load(self) -> dict:
+        """Load state from disk."""
+        if self.state_file.exists():
+            try:
+                with open(self.state_file, encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load pipeline state: {e}")
+
+        return {
+            "current_step": 0,
+            "completed_steps": [],
+            "failed_step": None,
+            "error": None,
+            "outputs": {},
+            "started_at": None,
+            "completed_at": None,
+        }
+
+    def save(self) -> None:
+        """Save state to disk."""
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.state_file, "w", encoding='utf-8') as f:
+            json.dump(self.data, f, indent=2)
+
+    def mark_started(self) -> None:
+        """Mark pipeline as started."""
+        self.data["started_at"] = datetime.utcnow().isoformat()
+        self.save()
+
+    def mark_step_started(self, step: int) -> None:
+        """Mark step as started.
+
+        Args:
+            step: Step number (1-9)
+        """
+        self.data["current_step"] = step
+        self.save()
+
+    def mark_step_completed(self, step: int, output_path: Optional[Path] = None) -> None:
+        """Mark step as completed.
+
+        Args:
+            step: Step number (1-9)
+            output_path: Optional output file path
+        """
+        if step not in self.data["completed_steps"]:
+            self.data["completed_steps"].append(step)
+
+        if output_path:
+            self.data["outputs"][f"step_{step}"] = str(output_path)
+
+        self.save()
+
+    def mark_failed(self, step: int, error: str) -> None:
+        """Mark step as failed.
+
+        Args:
+            step: Step number (1-9)
+            error: Error message
+        """
+        self.data["failed_step"] = step
+        self.data["error"] = error
+        self.save()
+
+    def mark_completed(self) -> None:
+        """Mark pipeline as completed."""
+        self.data["completed_at"] = datetime.utcnow().isoformat()
+        self.save()
+
+    def can_resume(self) -> bool:
+        """Check if pipeline can be resumed from a failed step."""
+        return (
+            self.data["failed_step"] is not None
+            and self.data["current_step"] == self.data["failed_step"]
+        )
+
+    def get_last_completed_step(self) -> int:
+        """Get the last completed step number."""
+        if self.data["completed_steps"]:
+            return max(self.data["completed_steps"])
+        return 0
+
+
+class ProcessingOrchestrator:
+    """Orchestrates the 9-step processing pipeline."""
+
+    def __init__(self):
+        """Initialize orchestrator."""
+        self.progress_callbacks: list[Callable[[ProcessingProgress], None]] = []
+
+    def register_progress_callback(
+        self, callback: Callable[[ProcessingProgress], None]
+    ) -> None:
+        """Register a callback for progress updates.
+
+        Args:
+            callback: Function to call with progress updates
+        """
+        self.progress_callbacks.append(callback)
+
+    async def _send_progress(self, progress: ProcessingProgress) -> None:
+        """Send progress update to all registered callbacks.
+
+        Args:
+            progress: Progress update
+        """
+        for callback in self.progress_callbacks:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(progress)
+                else:
+                    callback(progress)
+            except Exception as e:
+                logger.warning(f"Progress callback failed: {e}")
+
+    def _create_progress(
+        self,
+        step: int,
+        status: str,
+        progress_pct: int,
+        message: Optional[str] = None,
+    ) -> ProcessingProgress:
+        """Create a progress update.
+
+        Args:
+            step: Step number (1-9)
+            status: Status (started, in_progress, completed, failed)
+            progress_pct: Progress percentage (0-100)
+            message: Optional message
+
+        Returns:
+            ProcessingProgress object
+        """
+        # Validate step to prevent errors
+        if step < 1:
+            logger.error(f"Invalid step number: {step}. Must be >= 1")
+            step = 1
+        if step > 9:
+            step = 9
+            
+        overall_progress = int(((step - 1) * 100 + progress_pct) / 9)
+        
+        # Ensure overall_progress is within valid range
+        overall_progress = max(0, min(100, overall_progress))
+        
+        logger.debug(f"Creating progress: step={step}, status={status}, progress={progress_pct}, overall={overall_progress}")
+
+        return ProcessingProgress(
+            step=step,
+            step_name=STEP_DISPLAY_NAMES.get(step, f"Step {step}"),
+            status=status,
+            progress=progress_pct,
+            message=message,
+            overall_progress=overall_progress,
+        )
+
+    async def process_session(
+        self,
+        session_id: str,
+        config: AnalysisConfig,
+        websocket_callback: Optional[Callable[[ProcessingProgress], None]] = None,
+    ) -> AnalysisResult:
+        """Process a session through all 9 steps.
+
+        Args:
+            session_id: Session ID
+            config: Analysis configuration
+            websocket_callback: Optional WebSocket callback for progress updates
+
+        Returns:
+            AnalysisResult with all outputs
+
+        Raises:
+            ProcessingError: If processing fails
+        """
+        logger.info(
+            f"Starting processing pipeline for session {session_id}",
+            extra={"session_id": session_id, "config": config.model_dump()},
+        )
+
+        # Register WebSocket callback
+        if websocket_callback:
+            self.register_progress_callback(websocket_callback)
+
+        # Initialize state
+        state = PipelineState(session_id)
+        state.mark_started()
+
+        # Get session directories
+        uploads_dir = await session_manager.get_uploads_dir(session_id)
+        results_dir = await session_manager.get_results_dir(session_id)
+
+        # Initialize result
+        result = AnalysisResult(session_id=session_id)
+
+        try:
+            # Update session state
+            await session_manager.update_session_state(
+                session_id, SessionStateEnum.PROCESSING
+            )
+
+            # Get proteomics files
+            session = await session_manager.get_session(session_id)
+            if not session.files or not session.files.proteomics:
+                raise ProcessingError(
+                    message="No proteomics files found",
+                    step=1,
+                    recoverable=False,
+                )
+
+            file_paths = [
+                uploads_dir / f.filename for f in session.files.proteomics
+            ]
+
+            # Step 1-5: Data Processing (Python) - Individual steps with progress updates
+            psm_output = results_dir / "PSM_Abundances.tsv"
+
+            processing_config = ProcessingConfig(
+                remove_razor=config.remove_razor,
+                strict_filtering=config.strict_filtering,
+            )
+            processor = DataProcessor(processing_config)
+
+            # Step 1: Combine Replicates
+            await self._send_progress(
+                self._create_progress(1, "started", 0, "Combining replicates...")
+            )
+            
+            psm_df = processor.step1_combine_replicates(file_paths)
+            
+            state.mark_step_completed(1, psm_output)
+            result.psm_abundances_path = str(psm_output)
+            result.total_psms = len(psm_df)
+
+            await self._send_progress(
+                self._create_progress(
+                    1, "completed", 100, f"Combined {len(psm_df)} PSMs"
+                )
+            )
+
+            # Step 2: Generate Unique PSM
+            await self._send_progress(
+                self._create_progress(2, "started", 0, "Generating unique PSM identifiers...")
+            )
+            
+            psm_df = processor.step2_generate_unique_psm(psm_df)
+            
+            state.mark_step_completed(2)
+
+            await self._send_progress(
+                self._create_progress(
+                    2, "completed", 100, f"Generated {len(psm_df)} unique PSMs"
+                )
+            )
+
+            # Step 3: Remove Razor (optional)
+            await self._send_progress(
+                self._create_progress(3, "started", 0, "Removing razor peptides..." if config.remove_razor else "Skipping razor removal...")
+            )
+            
+            psm_df = processor.step3_remove_razor(psm_df)
+            
+            state.mark_step_completed(3)
+
+            await self._send_progress(
+                self._create_progress(
+                    3, "completed", 100, f"Razor removal {'complete' if config.remove_razor else 'skipped'}, {len(psm_df)} PSMs remaining"
+                )
+            )
+
+            # Step 4: Remove Low Quality
+            await self._send_progress(
+                self._create_progress(4, "started", 0, "Removing low quality PSMs...")
+            )
+            
+            psm_df = processor.step4_remove_low_quality(psm_df)
+            
+            state.mark_step_completed(4)
+
+            await self._send_progress(
+                self._create_progress(
+                    4, "completed", 100, f"Quality filtering complete, {len(psm_df)} PSMs remaining"
+                )
+            )
+
+            # Step 5: Filter by Criteria
+            await self._send_progress(
+                self._create_progress(5, "started", 0, f"Applying {'strict' if config.strict_filtering else 'lenient'} filtering criteria...")
+            )
+            
+            psm_df = processor.step5_filter_by_criteria(psm_df)
+            
+            # Save output after Step 5
+            psm_output.parent.mkdir(parents=True, exist_ok=True)
+            psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
+            
+            state.mark_step_completed(5, psm_output)
+
+            await self._send_progress(
+                self._create_progress(
+                    5, "completed", 100, f"Filtering complete, {len(psm_df)} PSMs remaining"
+                )
+            )
+
+            # Step 6: Protein Abundance (R)
+            protein_output = results_dir / "Protein_Abundances.tsv"
+
+            await self._send_progress(
+                self._create_progress(
+                    6, "started", 0, "Calculating protein abundance with msqrob2..."
+                )
+            )
+
+            await msqrob2_wrapper.step6_protein_abundance(
+                input_file=psm_output,
+                output_file=protein_output,
+            )
+
+            state.mark_step_completed(6, protein_output)
+            result.protein_abundances_path = str(protein_output)
+
+            # Count proteins
+            import pandas as pd
+
+            protein_df = pd.read_csv(protein_output, sep="\t")
+            result.total_proteins = len(protein_df)
+
+            await self._send_progress(
+                self._create_progress(
+                    6, "completed", 100, f"Calculated {len(protein_df)} protein abundances"
+                )
+            )
+
+            # Step 7: Differential Expression (R)
+            de_output = results_dir / "Diff_Expression.tsv"
+
+            await self._send_progress(
+                self._create_progress(
+                    7, "started", 0, "Running differential expression analysis..."
+                )
+            )
+
+            await msqrob2_wrapper.step7_differential_expression(
+                input_file=protein_output,
+                output_file=de_output,
+                treatment=config.treatment,
+                control=config.control,
+            )
+
+            state.mark_step_completed(7, de_output)
+            result.diff_expression_path = str(de_output)
+
+            # Count significant proteins
+            de_df = pd.read_csv(de_output, sep="\t")
+            significant = de_df[de_df["adjPval"] < config.pvalue_threshold]
+            result.significant_proteins = len(significant)
+
+            await self._send_progress(
+                self._create_progress(
+                    7,
+                    "completed",
+                    100,
+                    f"Found {len(significant)} significant proteins",
+                )
+            )
+
+            # Step 8: QC Metrics (Python)
+            qc_output = results_dir / "QC_Results.json"
+
+            await self._send_progress(
+                self._create_progress(8, "started", 0, "Calculating QC metrics...")
+            )
+
+            qc_data = await qc_calculator.calculate_all_metrics(
+                protein_abundances_path=protein_output,
+                diff_expression_path=de_output,
+                psm_abundances_path=psm_output,
+            )
+
+            qc_calculator.save_qc_data(qc_output)
+
+            state.mark_step_completed(8, qc_output)
+            result.qc_results_path = str(qc_output)
+
+            await self._send_progress(
+                self._create_progress(8, "completed", 100, "QC metrics calculated")
+            )
+
+            # Step 9: GSEA Analysis (Python)
+            gsea_output = results_dir / "GSEA_Results.json"
+
+            await self._send_progress(
+                self._create_progress(9, "started", 0, "Running GSEA analysis...")
+            )
+
+            gsea_results = await gsea_service.run_gsea_analysis(
+                diff_expression_path=de_output,
+                output_dir=results_dir / "gsea",
+            )
+
+            gsea_service.save_results(gsea_output)
+
+            state.mark_step_completed(9, gsea_output)
+            result.gsea_results_path = str(gsea_output)
+
+            total_pathways = sum(
+                r.significant_pathways for r in gsea_results.values()
+            )
+            await self._send_progress(
+                self._create_progress(
+                    9, "completed", 100, f"Found {total_pathways} significant pathways"
+                )
+            )
+
+            # Mark pipeline as completed
+            state.mark_completed()
+            await session_manager.update_session_state(
+                session_id, SessionStateEnum.COMPLETED
+            )
+
+            # Calculate processing time
+            if state.data["started_at"]:
+                start_time = datetime.fromisoformat(state.data["started_at"])
+                result.processing_time_seconds = (
+                    datetime.utcnow() - start_time
+                ).total_seconds()
+
+            result.steps_completed = state.data["completed_steps"]
+
+            logger.info(
+                f"Processing pipeline completed for session {session_id}",
+                extra={
+                    "session_id": session_id,
+                    "total_psms": result.total_psms,
+                    "total_proteins": result.total_proteins,
+                    "significant_proteins": result.significant_proteins,
+                },
+            )
+
+            return result
+
+        except Exception as e:
+            # Mark step as failed
+            current_step = state.data["current_step"]
+            state.mark_failed(current_step, str(e))
+
+            # Update session state
+            await session_manager.update_session_state(
+                session_id, SessionStateEnum.ERROR, str(e)
+            )
+
+            # Send failure progress
+            await self._send_progress(
+                self._create_progress(
+                    current_step, "failed", 0, f"Processing failed: {str(e)}"
+                )
+            )
+
+            # Raise processing error
+            if isinstance(e, ProcessingError):
+                raise
+            else:
+                raise ProcessingError(
+                    message=f"Processing failed: {str(e)}",
+                    step=current_step,
+                    recoverable=True,
+                    details={"error": str(e)},
+                )
+
+    async def resume_processing(
+        self,
+        session_id: str,
+        config: AnalysisConfig,
+        websocket_callback: Optional[Callable[[ProcessingProgress], None]] = None,
+    ) -> AnalysisResult:
+        """Resume processing from last failed step.
+
+        Args:
+            session_id: Session ID
+            config: Analysis configuration
+            websocket_callback: Optional WebSocket callback
+
+        Returns:
+            AnalysisResult
+        """
+        state = PipelineState(session_id)
+
+        if not state.can_resume():
+            raise ProcessingError(
+                message="Cannot resume: no failed step to resume from",
+                step=0,
+                recoverable=False,
+            )
+
+        failed_step = state.data["failed_step"]
+        logger.info(
+            f"Resuming processing from step {failed_step}",
+            extra={"session_id": session_id, "step": failed_step},
+        )
+
+        # Clear failed state
+        state.data["failed_step"] = None
+        state.data["error"] = None
+        state.save()
+
+        # Re-run processing (will skip completed steps if implemented)
+        return await self.process_session(session_id, config, websocket_callback)
+
+
+# Global orchestrator instance
+processing_orchestrator = ProcessingOrchestrator()
