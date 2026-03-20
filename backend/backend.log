@@ -1629,3 +1629,127 @@ INFO:     127.0.0.1:53374 - "GET /api/sessions/1845a810-0bf9-49b2-8a8f-d6390792d
 INFO:     127.0.0.1:54486 - "GET /api/sessions/1845a810-0bf9-49b2-8a8f-d6390792d8fc/results?page=1&page_size=1000 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:60237 - "GET /api/sessions HTTP/1.1" 200 OK
 INFO:     127.0.0.1:60239 - "DELETE /api/sessions/1845a810-0bf9-49b2-8a8f-d6390792d8fc HTTP/1.1" 204 No Content
+INFO:     127.0.0.1:53544 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64772 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64775 - "POST /api/sessions HTTP/1.1" 201 Created
+INFO:     127.0.0.1:64776 - "GET /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64777 - "GET /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64778 - "GET /api/organisms HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62798 - "GET /api/organisms HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62799 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54823 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53892 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/upload/proteomics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65364 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/upload/proteomics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60418 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/upload/proteomics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63609 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/upload/proteomics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57363 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/upload/proteomics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58478 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/upload/proteomics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53723 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/config?_t=1774030802227 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58709 - "POST /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/process HTTP/1.1" 200 OK
+WebSocket connection requested for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+INFO:     127.0.0.1:62707 - "WebSocket /ws/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa" [accepted]
+WebSocket connection accepted for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Got session_manager for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+WebSocket registered for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Entering WebSocket message loop for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+INFO:     connection open
+Received message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: {"type":"subscribe","payload":{"session_id":"16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa"}}...
+Subscribe message received for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Sending 5 completed steps to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: [1, 2, 3, 4, 5]
+Sent progress for completed step 1 to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Sent progress for completed step 2 to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Sent progress for completed step 3 to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Sent progress for completed step 4 to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Sent progress for completed step 5 to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+Received message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: {"type":"ping","payload":{"timestamp":"2026-03-20T18:20:32.744Z"}}...
+Sending pong to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Pong sent to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+WebSocket timeout for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa, sending ping
+Ping sent to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+Received message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: {"type":"pong"}...
+Pong received from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+2026-03-20 14:21:06,519 [ERROR] No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,519 [ERROR] The first entry of your gene_sets (gmt) look like this : { 'de novo' posttranslational protein folding (GO:0051084): [SDF2L1, HSPA9, CCT2, HSPA6, ST13, ENTPD5, HSPA1L, HSPA5, PTGES3, HSPA8, DNAJB13, HSPA2, DNAJB14, HSPE1, DNAJC18, GAK, DNAJC7, DNAJB12, HSPA1A, HSPA1B, ERO1A, SELENOF, HSPA14, HSPA13, DNAJB1, CHCHD4, BAG1, DNAJB5, DNAJB4, SDF2, UGGT1]}
+2026-03-20 14:21:06,521 [ERROR] The first 5 genes look like this : [ O00232, O14531, O43175, O43660, O43837 ]
+GSEA analysis failed for GO_Biological_Process_2021: No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,577 [ERROR] No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,578 [ERROR] The first entry of your gene_sets (gmt) look like this : { 1,4-alpha-oligoglucan phosphorylase activity (GO:0004645): [MTAP, PYGB, PYGL, PYGM, GDPGP1]}
+2026-03-20 14:21:06,582 [ERROR] The first 5 genes look like this : [ O00232, O14531, O43175, O43660, O43837 ]
+GSEA analysis failed for GO_Molecular_Function_2021: No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,641 [ERROR] No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,641 [ERROR] The first entry of your gene_sets (gmt) look like this : { 9+0 non-motile cilium (GO:0097731): [IFTAP, PHYH, PEX6, ATP1A4, C4ORF47, TULP3, C1ORF115, DYNLL2]}
+2026-03-20 14:21:06,644 [ERROR] The first 5 genes look like this : [ O00232, O14531, O43175, O43660, O43837 ]
+GSEA analysis failed for GO_Cellular_Component_2021: No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,724 [ERROR] No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,725 [ERROR] The first entry of your gene_sets (gmt) look like this : { ABC transporters: [ABCA2, ABCC4, ABCG8, ABCA3, ABCC5, ABCC2, ABCA1, ABCC3, ABCA6, ABCC8, ABCA7, ABCC9, ABCA4, ABCC6, ABCA5, TAP2, ABCA8, TAP1, ABCA9, ABCA10, ABCB10, ABCA12, ABCB11, ABCC10, ABCG1, ABCG4, ABCC1, ABCG5, ABCG2, CFTR, ABCB4, ABCB1, ABCD3, ABCD4, ABCB7, ABCB8, ABCB5, ABCB6, ABCB9, ABCA13, ABCC11, ABCC12, DEFB1, ABCD1, ABCD2]}
+2026-03-20 14:21:06,728 [ERROR] The first 5 genes look like this : [ O00232, O14531, O43175, O43660, O43837 ]
+GSEA analysis failed for KEGG_2021_Human: No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,863 [ERROR] No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+2026-03-20 14:21:06,864 [ERROR] The first entry of your gene_sets (gmt) look like this : { 2-LTR Circle Formation R-HSA-164843: [XRCC5, XRCC6, SGIP1, XRCC4, PSIP1, BANF1, LIG4, HMGA1]}
+2026-03-20 14:21:06,865 [ERROR] The first 5 genes look like this : [ O00232, O14531, O43175, O43660, O43837 ]
+GSEA analysis failed for Reactome_2022: No gene sets passed through filtering condition !!! 
+Hint 1: Try to lower min_size or increase max_size !
+Hint 2: Check gene symbols are identifiable to your gmt input.
+Hint 3: Gene symbols curated in Enrichr web services are all upcases.
+
+Received message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: {"type":"ping","payload":{"timestamp":"2026-03-20T18:21:02.740Z"}}...
+Sending pong to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Pong sent to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+WebSocket timeout for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa, sending ping
+Ping sent to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+Received message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: {"type":"pong"}...
+Pong received from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+Received message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: {"type":"ping","payload":{"timestamp":"2026-03-20T18:21:32.748Z"}}...
+Sending pong to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Pong sent to session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Waiting for message from session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa...
+WebSocket disconnected for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+WebSocket connection closing for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa
+Error closing WebSocket for session 16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa: Unexpected ASGI message 'websocket.close', after sending 'websocket.close' or response already completed.
+INFO:     connection closed
+INFO:     127.0.0.1:61222 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52200 - "GET /api/sessions/16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa/gsea/go_bp HTTP/1.1" 200 OK

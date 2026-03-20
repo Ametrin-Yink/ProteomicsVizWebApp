@@ -2149,3 +2149,9 @@ Request body exceeded 10MB for /api/sessions/fcbc5cd0-d860-43ec-93c4-b8ac43b6300
 }
  GET /analysis/visualization?session=1845a810-0bf9-49b2-8a8f-d6390792d8fc&tab=bioinformatics 500 in 3.3s (compile: 15ms, render: 3.3s)
  GET / 200 in 181ms (compile: 11ms, render: 170ms)
+ GET / 200 in 110ms (compile: 5ms, render: 105ms)
+ GET /analysis?session=16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa 200 in 113ms (compile: 65ms, render: 48ms)
+ GET /analysis/processing?session_id=16e15bd4-1bb9-4b5e-b053-c5b237e6bbfa 200 in 140ms (compile: 59ms, render: 81ms)
+The system cannot find the path specified.
+
+D:\CodingWorks\ProteomicsVizWebApp\frontend>
