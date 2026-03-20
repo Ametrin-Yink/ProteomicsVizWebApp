@@ -323,7 +323,7 @@ test.describe('Bioinformatics - No Pathways Found', () => {
       });
     });
 
-    await page.goto('/analysis/visualization?session=test&tab=bioinformatics');
+    await page.goto('/analysis/visualization/bioinformatics?session=test');
 
     // Verify no pathways message
     await expect(page.locator('[data-testid="no-pathways-message"]')).toBeVisible();
@@ -344,7 +344,7 @@ test.describe('Bioinformatics - Loading States', () => {
       route.continue();
     });
 
-    await page.goto('/analysis/visualization?session=test&tab=bioinformatics');
+    await page.goto('/analysis/visualization/bioinformatics?session=test');
 
     // Verify loading indicator
     await expect(page.locator('[data-testid="gsea-loading"]')).toBeVisible();
