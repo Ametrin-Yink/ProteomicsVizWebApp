@@ -7,6 +7,7 @@ Initializes the FastAPI application with all routers, middleware, and WebSocket 
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,18 +25,33 @@ logger = logging.getLogger("proteomics")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
+    """Application lifespan manager with timeout protection."""
     # Startup
-    settings.ensure_directories()
+    try:
+        settings.ensure_directories()
+    except Exception as e:
+        logger.error(f"Failed to create directories: {e}")
+        # Continue anyway - might be permission issue but app can still run
+
     session_store = SessionStore(settings.sessions_dir)
-    app.state.session_manager = SessionManager(session_store)
     app.state.session_store = session_store
-    
-    # Scan existing sessions
-    await app.state.session_manager.scan_existing_sessions()
-    
+    app.state.session_manager = SessionManager(session_store)
+
+    # Scan existing sessions with timeout protection
+    # Use asyncio.wait_for to prevent hanging on corrupted files
+    try:
+        import asyncio
+        await asyncio.wait_for(
+            app.state.session_manager.scan_existing_sessions(),
+            timeout=30.0  # 30 second timeout for session scanning
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Session scanning timed out after 30 seconds - continuing with empty session list")
+    except Exception as e:
+        logger.warning(f"Session scanning failed: {e} - continuing with empty session list")
+
     yield
-    
+
     # Shutdown
     pass
 
@@ -114,11 +130,15 @@ async def http_exception_handler(request, exc: HTTPException):
     return response
 
 
-# Health check endpoint
+# Health check endpoint - responds immediately without scanning sessions
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "version": settings.app_version}
+    """Health check endpoint - responds immediately even if sessions aren't loaded."""
+    return {
+        "status": "healthy",
+        "version": settings.app_version,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 # Explicit CORS preflight handler for all routes

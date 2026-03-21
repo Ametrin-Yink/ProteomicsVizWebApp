@@ -347,33 +347,47 @@ class SessionStore:
         """
         Scan for existing sessions in the sessions directory.
         Loads all valid session files found.
-        
+        Skips corrupted files and continues scanning.
+
         Returns:
             List of loaded sessions
         """
+        import asyncio
         sessions = []
-        
+
         if not self.sessions_dir.exists():
             logger.info("Sessions directory does not exist yet, creating...")
             self.sessions_dir.mkdir(parents=True, exist_ok=True)
             return sessions
-        
-        for session_dir in self.sessions_dir.iterdir():
-            if session_dir.is_dir():
-                session_file = session_dir / "session.json"
-                if session_file.exists():
-                    try:
+
+        session_dirs = [d for d in self.sessions_dir.iterdir() if d.is_dir()]
+        logger.info(f"Found {len(session_dirs)} session directories to scan")
+
+        for session_dir in session_dirs:
+            session_file = session_dir / "session.json"
+            if session_file.exists():
+                try:
+                    # Add timeout for each file read to prevent hanging
+                    async with asyncio.timeout(5.0):  # 5 second timeout per file
                         async with aiofiles.open(session_file, 'r', encoding='utf-8') as f:
                             content = await f.read()
+                            if not content.strip():
+                                logger.warning(f"Empty session file: {session_file}")
+                                continue
                             data = json.loads(content)
                             session = Session(**data)
                             sessions.append(session)
                             logger.info(f"Loaded existing session: {session.id}")
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to load session from {session_dir.name}: {e}"
-                        )
-        
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout reading session file: {session_file}")
+                    continue
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Corrupted JSON in {session_file}: {e}")
+                    continue
+                except Exception as e:
+                    logger.warning(f"Failed to load session from {session_dir.name}: {e}")
+                    continue
+
         logger.info(f"Scanned {len(sessions)} existing sessions")
         return sessions
 

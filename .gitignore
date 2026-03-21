@@ -246,6 +246,15 @@ temp/
 *.bak
 *.backup
 
+# Test screenshots (generated during test runs)
+Tests/screenshots/
+test-screenshots/
+
+# Backend logs
+backend.log
+backend/logs/
+*.log
+
 # Local configuration overrides
 config.local.yaml
 config.local.yml
@@ -280,3 +289,11 @@ api_keys.json
 *~
 *.orig
 *.save
+
+# Claude Code
+.claude/
+.remember/
+
+# Local test data
+local/
+

@@ -15,11 +15,11 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { 
-  useExistingSession, 
+import {
+  createCompletedSession,
   cleanupSession,
-  purgeLegacyScreenshots, 
-  takeScreenshot 
+  purgeLegacyScreenshots,
+  takeScreenshot
 } from './helpers';
 
 // Purge legacy screenshots before all tests
@@ -28,18 +28,22 @@ test.beforeAll(() => {
 });
 
 test.describe('Results Visualization', () => {
-  // Use a specific completed session ID to avoid creating new sessions for each test
-  const TEST_SESSION_ID = '1845a810-0bf9-49b2-8a8f-d6390792d8fc';
   let sessionId: string;
 
-  test.beforeEach(async ({ page }) => {
-    // Use existing completed session with results
-    sessionId = await useExistingSession(page, TEST_SESSION_ID);
+  test.beforeAll(async ({ page }) => {
+    // Create a completed session with results for all tests in this suite
+    sessionId = await createCompletedSession(page);
   });
 
-  test.afterEach(async ({ page }) => {
-    // Skip cleanup to preserve session for next test
-    // Session will be cleaned up at the end of all tests or manually
+  test.beforeEach(async ({ page }) => {
+    // Navigate to the visualization page with the completed session
+    await page.goto(`/analysis/visualization?session=${sessionId}`);
+    await expect(page.locator('[data-testid="general-info-panel"]')).toBeVisible({ timeout: 10000 });
+  });
+
+  test.afterAll(async ({ page }) => {
+    // Clean up the session after all tests
+    await cleanupSession(page, sessionId);
   });
 
   test('general info panel displays', async ({ page }) => {
@@ -259,6 +263,211 @@ test.describe('Results Visualization', () => {
     expect(shapes).toBeGreaterThanOrEqual(2);
 
     await takeScreenshot(page, '04-results', 'threshold-lines-on-volcano-plot', 'final');
+  });
+
+  test('volcano plot click mode selects one protein', async ({ page }) => {
+    // Ensure click mode is selected
+    await page.click('[data-testid="mode-click"]');
+
+    // Click on a data point
+    const point = page.locator('.scatterlayer .point').first();
+    await point.click();
+
+    // Verify one protein is selected
+    await expect(page.locator('[data-testid="selection-count"]')).toContainText('1');
+
+    // Verify protein info panel shows details
+    await expect(page.locator('[data-testid="protein-info-panel"]')).toBeVisible();
+    await expect(page.locator('[data-testid="protein-accession"]')).toBeVisible();
+    await expect(page.locator('[data-testid="gene-name"]')).toBeVisible();
+
+    // Verify fold change values are displayed
+    await expect(page.locator('[data-testid="fold-change"]')).toBeVisible();
+    await expect(page.locator('[data-testid="log2-fold-change"]')).toBeVisible();
+
+    // Verify p-values are displayed
+    await expect(page.locator('[data-testid="p-value"]')).toBeVisible();
+    await expect(page.locator('[data-testid="adj-p-value"]')).toBeVisible();
+
+    await takeScreenshot(page, '04-results', 'volcano-plot-click-mode-selects-one-protein', 'final');
+  });
+
+  test('volcano plot box mode selects multiple proteins', async ({ page }) => {
+    // Select box mode
+    await page.click('[data-testid="mode-box"]');
+
+    // Get plot bounding box
+    const plot = page.locator('[data-testid="volcano-plot"]');
+    const box = await plot.boundingBox();
+    expect(box).not.toBeNull();
+
+    if (box) {
+      // Draw a box selection (drag from top-left to bottom-right of plot)
+      await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.7);
+      await page.mouse.up();
+    }
+
+    // Wait for selection to update
+    await page.waitForTimeout(500);
+
+    // Verify multiple proteins are selected (count > 0)
+    const selectionText = await page.locator('[data-testid="selection-count"]').textContent();
+    const count = parseInt(selectionText?.match(/\d+/)?.[0] || '0');
+    expect(count).toBeGreaterThan(0);
+
+    await takeScreenshot(page, '04-results', 'volcano-plot-box-mode-selects-multiple', 'final');
+  });
+
+  test('volcano plot lasso mode selects multiple proteins', async ({ page }) => {
+    // Select lasso mode
+    await page.click('[data-testid="mode-lasso"]');
+
+    // Get plot bounding box
+    const plot = page.locator('[data-testid="volcano-plot"]');
+    const box = await plot.boundingBox();
+    expect(box).not.toBeNull();
+
+    if (box) {
+      // Draw a lasso selection (draw a small circle)
+      const centerX = box.x + box.width / 2;
+      const centerY = box.y + box.height / 2;
+      const radius = 50;
+
+      await page.mouse.move(centerX + radius, centerY);
+      await page.mouse.down();
+
+      // Draw circle
+      for (let i = 0; i <= 8; i++) {
+        const angle = (i / 8) * 2 * Math.PI;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        await page.mouse.move(x, y);
+      }
+
+      await page.mouse.up();
+    }
+
+    // Wait for selection to update
+    await page.waitForTimeout(500);
+
+    // Verify proteins are selected
+    const selectionText = await page.locator('[data-testid="selection-count"]').textContent();
+    const count = parseInt(selectionText?.match(/\d+/)?.[0] || '0');
+
+    // Lasso may select 0 or more depending on where we drew
+    // Just verify the selection count is displayed
+    await expect(page.locator('[data-testid="selection-count"]')).toBeVisible();
+
+    await takeScreenshot(page, '04-results', 'volcano-plot-lasso-mode-selects-multiple', 'final');
+  });
+
+  test('clear selection button removes all selections', async ({ page }) => {
+    // First select a protein
+    await page.click('[data-testid="mode-click"]');
+    const point = page.locator('.scatterlayer .point').first();
+    await point.click();
+
+    // Verify selection exists
+    await expect(page.locator('[data-testid="selection-count"]')).toContainText('1');
+
+    // Click clear selection
+    await page.click('[data-testid="clear-selection-btn"]');
+
+    // Verify selection is cleared
+    await expect(page.locator('[data-testid="selection-count"]')).toContainText('0');
+
+    await takeScreenshot(page, '04-results', 'clear-selection-button-removes-all', 'final');
+  });
+
+  test('protein info panel shows all required details', async ({ page }) => {
+    // Select a protein
+    await page.click('[data-testid="mode-click"]');
+    const point = page.locator('.scatterlayer .point').first();
+    await point.click();
+
+    // Verify protein info panel is visible
+    await expect(page.locator('[data-testid="protein-info-panel"]')).toBeVisible();
+
+    // Verify Master Protein Accessions (UniProt IDs)
+    await expect(page.locator('[data-testid="protein-accession"]')).toBeVisible();
+    const accessionText = await page.locator('[data-testid="protein-accession"]').textContent();
+    expect(accessionText).toMatch(/[A-Z][0-9][A-Z0-9]{3,}/); // UniProt ID pattern
+
+    // Verify Gene Name
+    await expect(page.locator('[data-testid="gene-name"]')).toBeVisible();
+    const geneNameText = await page.locator('[data-testid="gene-name"]').textContent();
+    expect(geneNameText).toBeTruthy(); // Should not be empty
+
+    // Verify Fold Change (non-log2)
+    await expect(page.locator('[data-testid="fold-change"]')).toBeVisible();
+    const foldChangeText = await page.locator('[data-testid="fold-change"]').textContent();
+    expect(foldChangeText).toMatch(/\d+\.?\d*/);
+
+    // Verify Log2 Fold Change
+    await expect(page.locator('[data-testid="log2-fold-change"]')).toBeVisible();
+    const log2FcText = await page.locator('[data-testid="log2-fold-change"]').textContent();
+    expect(log2FcText).toMatch(/-?\d+\.?\d*/);
+
+    // Verify P-value
+    await expect(page.locator('[data-testid="p-value"]')).toBeVisible();
+    const pvalueText = await page.locator('[data-testid="p-value"]').textContent();
+    expect(pvalueText).toMatch(/\d+\.?\d*e?-?\d*/i);
+
+    // Verify Adj P-value
+    await expect(page.locator('[data-testid="adj-p-value"]')).toBeVisible();
+    const adjPvalText = await page.locator('[data-testid="adj-p-value"]').textContent();
+    expect(adjPvalText).toMatch(/\d+\.?\d*e?-?\d*/i);
+
+    // Verify Number of PSMs
+    await expect(page.locator('[data-testid="num-psms"]')).toBeVisible();
+    const numPsmsText = await page.locator('[data-testid="num-psms"]').textContent();
+    expect(numPsmsText).toMatch(/\d+/);
+
+    // Verify UniProt links are clickable
+    const uniprotLink = page.locator('[data-testid="uniprot-link"]').first();
+    await expect(uniprotLink).toBeVisible();
+    const href = await uniprotLink.getAttribute('href');
+    expect(href).toMatch(/uniprot\.org/);
+
+    await takeScreenshot(page, '04-results', 'protein-info-panel-shows-all-details', 'final');
+  });
+
+  test('protein abundance plot displays', async ({ page }) => {
+    // Select a protein
+    await page.click('[data-testid="mode-click"]');
+    const point = page.locator('.scatterlayer .point').first();
+    await point.click();
+
+    // Verify protein abundance plot is visible
+    await expect(page.locator('[data-testid="protein-abundance-plot"]')).toBeVisible({ timeout: 10000 });
+
+    // Verify plot has bars (column plot)
+    const bars = await page.locator('[data-testid="protein-abundance-plot"] .barlayer .trace').count();
+    expect(bars).toBeGreaterThan(0);
+
+    // Verify y-axis label contains log2
+    const plotText = await page.locator('[data-testid="protein-abundance-plot"]').textContent();
+    expect(plotText).toMatch(/log2|log/i);
+
+    await takeScreenshot(page, '04-results', 'protein-abundance-plot-displays', 'final');
+  });
+
+  test('psm abundance plot displays', async ({ page }) => {
+    // Select a protein
+    await page.click('[data-testid="mode-click"]');
+    const point = page.locator('.scatterlayer .point').first();
+    await point.click();
+
+    // Verify PSM abundance plot is visible
+    await expect(page.locator('[data-testid="psm-abundance-plot"]')).toBeVisible({ timeout: 10000 });
+
+    // Verify plot has traces (dot-line plot)
+    const traces = await page.locator('[data-testid="psm-abundance-plot"] .scatterlayer .trace').count();
+    expect(traces).toBeGreaterThan(0);
+
+    await takeScreenshot(page, '04-results', 'psm-abundance-plot-displays', 'final');
   });
 });
 

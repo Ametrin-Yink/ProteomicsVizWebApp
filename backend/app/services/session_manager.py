@@ -527,13 +527,22 @@ class SessionManager:
         """
         Scan for existing sessions in the sessions directory.
         This method is called during application startup.
+        Errors are caught and logged to prevent startup failures.
         """
+        import asyncio
         logger.info("Scanning for existing sessions...")
         try:
-            await self.store.scan_existing_sessions()
+            # Add overall timeout for scanning to prevent hanging
+            await asyncio.wait_for(
+                self.store.scan_existing_sessions(),
+                timeout=60.0  # 60 second total timeout
+            )
             logger.info("Session scan completed")
+        except asyncio.TimeoutError:
+            logger.warning("Session scanning timed out after 60 seconds")
         except Exception as e:
             logger.warning(f"Session scan failed (may be first run): {e}")
+            # Don't re-raise - allow app to continue with empty session list
 
     # WebSocket Management Methods
 

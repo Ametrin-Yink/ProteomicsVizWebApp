@@ -30,16 +30,23 @@ test.beforeAll(() => {
 test.describe('Bioinformatics - GSEA Analysis', () => {
   let sessionId: string;
 
+  test.beforeAll(async ({ page }) => {
+    // Create a completed session with results for all tests in this suite
+    const { createCompletedSession } = await import('./helpers');
+    sessionId = await createCompletedSession(page);
+  });
+
   test.beforeEach(async ({ page }) => {
-    // Use existing completed session with GSEA data
-    sessionId = await useExistingSession(page);
+    // Navigate to bioinformatics tab with the completed session
     await page.goto(`/analysis/visualization/bioinformatics?session=${sessionId}`);
 
     // Wait for bioinformatics tab to load
     await expect(page.locator('[data-testid="bioinformatics-container"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test.afterEach(async ({ page }) => {
+  test.afterAll(async ({ page }) => {
+    // Clean up the session after all tests
+    const { cleanupSession } = await import('./helpers');
     await cleanupSession(page, sessionId);
   });
 

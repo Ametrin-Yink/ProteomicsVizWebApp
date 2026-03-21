@@ -15,11 +15,9 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { 
-  useExistingSession, 
-  cleanupSession,
-  purgeLegacyScreenshots, 
-  takeScreenshot 
+import {
+  purgeLegacyScreenshots,
+  takeScreenshot
 } from './helpers';
 
 // Purge legacy screenshots before all tests
@@ -28,27 +26,31 @@ test.beforeAll(() => {
 });
 
 test.describe('QC Plots - CRITICAL: NO EMPTY PLOTS', () => {
-  // Use a specific completed session ID to avoid creating new sessions for each test
-  const TEST_SESSION_ID = '1845a810-0bf9-49b2-8a8f-d6390792d8fc';
   let sessionId: string;
 
+  test.beforeAll(async ({ page }) => {
+    // Create a completed session with results for all tests in this suite
+    // Import helpers dynamically to avoid circular dependency
+    const { createCompletedSession } = await import('./helpers');
+    sessionId = await createCompletedSession(page);
+  });
+
   test.beforeEach(async ({ page }) => {
-    // Use existing completed session with QC data
-    sessionId = await useExistingSession(page, TEST_SESSION_ID);
-    
-    // Navigate to visualization page
+    // Navigate to the visualization page with the completed session
     await page.goto(`/analysis/visualization?session=${sessionId}`);
     await expect(page.locator('[data-testid="general-info-panel"]')).toBeVisible({ timeout: 10000 });
-    
+
     // Click on QC Plots tab
     await page.click('[data-testid="qc-tab"]');
-    
+
     // Wait for QC tab to load
     await expect(page.locator('[data-testid="qc-plots-container"]')).toBeVisible({ timeout: 10000 });
   });
 
-  test.afterEach(async ({ page }) => {
-    // Skip cleanup to preserve session for next test
+  test.afterAll(async ({ page }) => {
+    // Clean up the session after all tests
+    const { cleanupSession } = await import('./helpers');
+    await cleanupSession(page, sessionId);
   });
 
   test('all 6 plots are visible', async ({ page }) => {
@@ -138,21 +140,21 @@ test.describe('QC Plots - CRITICAL: NO EMPTY PLOTS', () => {
     // Wait a moment for plot to render
     await page.waitForTimeout(500);
 
-    // Check if plot shows "No data available" message
+    // CRITICAL: Plot MUST have data - no "no data" message allowed
     const noDataMessage = plot.locator('[data-testid="no-data"]');
     const noDataCount = await noDataMessage.count();
-    
-    if (noDataCount > 0 && await noDataMessage.isVisible()) {
-      // Plot has no data - this is acceptable if backend doesn't provide intensity data
-      console.log('PSM intensity plot shows no data - backend may not provide this data');
-    } else {
-      // Plot has data - verify it has traces (histogram or any plot type)
-      const traces = await plot.locator('.js-plotly-plot .trace').count();
-      expect(traces, 'PSM intensity plot must have traces when data is available').toBeGreaterThan(0);
-      
-      // Verify y-axis label
-      await expect(plot).toContainText('Intensity');
+
+    if (noDataCount > 0) {
+      const isVisible = await noDataMessage.isVisible();
+      expect(isVisible, 'PSM intensity plot shows "no data" - this violates requirements!').toBeFalsy();
     }
+
+    // Verify plot has traces (histogram or any plot type)
+    const traces = await plot.locator('.js-plotly-plot .trace').count();
+    expect(traces, 'PSM intensity plot must have traces').toBeGreaterThan(0);
+
+    // Verify y-axis label
+    await expect(plot).toContainText('Intensity');
 
     await takeScreenshot(page, '05-qc-plots', 'psm-intensity-plot-has-real-data', 'final');
   });
@@ -166,21 +168,21 @@ test.describe('QC Plots - CRITICAL: NO EMPTY PLOTS', () => {
     // Wait a moment for plot to render
     await page.waitForTimeout(500);
 
-    // Check if plot shows "No data available" message
+    // CRITICAL: Plot MUST have data - no "no data" message allowed
     const noDataMessage = plot.locator('[data-testid="no-data"]');
     const noDataCount = await noDataMessage.count();
-    
-    if (noDataCount > 0 && await noDataMessage.isVisible()) {
-      // Plot has no data - this is acceptable if backend doesn't provide intensity data
-      console.log('Protein intensity plot shows no data - backend may not provide this data');
-    } else {
-      // Plot has data - verify it has traces (histogram or any plot type)
-      const traces = await plot.locator('.js-plotly-plot .trace').count();
-      expect(traces, 'Protein intensity plot must have traces when data is available').toBeGreaterThan(0);
-      
-      // Verify y-axis label
-      await expect(plot).toContainText('Intensity');
+
+    if (noDataCount > 0) {
+      const isVisible = await noDataMessage.isVisible();
+      expect(isVisible, 'Protein intensity plot shows "no data" - this violates requirements!').toBeFalsy();
     }
+
+    // Verify plot has traces (histogram or any plot type)
+    const traces = await plot.locator('.js-plotly-plot .trace').count();
+    expect(traces, 'Protein intensity plot must have traces').toBeGreaterThan(0);
+
+    // Verify y-axis label
+    await expect(plot).toContainText('Intensity');
 
     await takeScreenshot(page, '05-qc-plots', 'protein-intensity-plot-has-real-data', 'final');
   });

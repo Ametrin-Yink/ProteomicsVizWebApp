@@ -14,11 +14,9 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { 
-  useExistingSession, 
-  cleanupSession,
-  purgeLegacyScreenshots, 
-  takeScreenshot 
+import {
+  purgeLegacyScreenshots,
+  takeScreenshot
 } from './helpers';
 
 // Purge legacy screenshots before all tests
@@ -29,13 +27,20 @@ test.beforeAll(() => {
 test.describe('PDF Export', () => {
   let sessionId: string;
 
+  test.beforeAll(async ({ page }) => {
+    // Create a completed session with results for all tests in this suite
+    const { createCompletedSession } = await import('./helpers');
+    sessionId = await createCompletedSession(page);
+  });
+
   test.beforeEach(async ({ page }) => {
-    // Use existing completed session
-    sessionId = await useExistingSession(page);
+    // Navigate to the visualization page with the completed session
     await page.goto(`/analysis/visualization?session=${sessionId}`);
   });
 
-  test.afterEach(async ({ page }) => {
+  test.afterAll(async ({ page }) => {
+    // Clean up the session after all tests
+    const { cleanupSession } = await import('./helpers');
     await cleanupSession(page, sessionId);
   });
 
@@ -220,7 +225,9 @@ test.describe('PDF Export', () => {
 
 test.describe('PDF Content Verification', () => {
   test('PDF includes all sections', async ({ page }) => {
-    const sessionId = await useExistingSession(page);
+    // Create a completed session for this test
+    const { createCompletedSession, cleanupSession } = await import('./helpers');
+    const sessionId = await createCompletedSession(page);
     await page.goto(`/analysis/visualization?session=${sessionId}`);
 
     // Generate PDF
@@ -233,8 +240,8 @@ test.describe('PDF Content Verification', () => {
       page.click('[data-testid="download-pdf-btn"]')
     ]);
 
-    const path = await download.path();
-    if (path) {
+    const downloadPath = await download.path();
+    if (downloadPath) {
       // TODO: Verify PDF content includes:
       // - Title page
       // - Summary statistics

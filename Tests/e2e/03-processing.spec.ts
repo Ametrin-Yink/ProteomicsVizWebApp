@@ -153,16 +153,55 @@ test.describe('Processing Pipeline', () => {
 
     // Wait for processing page
     await expect(page).toHaveURL(/\/analysis\/processing/, { timeout: 10000 });
-    
+
     // Wait for processing to start
     await page.waitForTimeout(3000);
-    
+
     // Verify the processing page is functional - estimated time may or may not appear
     // depending on backend calculation timing
     await expect(page.locator('[data-testid="processing-page"]')).toBeVisible();
     await expect(page.locator('[data-testid="progress-bar"]').first()).toBeVisible();
-    
+
     await takeScreenshot(page, '03-processing', 'shows-estimated-completion-time', 'final');
+  });
+
+  test('processing completes all 9 steps and navigates to results', async ({ page }) => {
+    await page.locator('[data-testid="start-analysis-btn"]').first().click();
+
+    // Wait for processing page
+    await expect(page).toHaveURL(/\/analysis\/processing/, { timeout: 10000 });
+
+    // Wait for processing to complete (up to 5 minutes)
+    await expect(page.locator('[data-testid="processing-complete"]')).toBeVisible({ timeout: 300000 });
+
+    // Verify completion message
+    await expect(page.locator('[data-testid="processing-complete"]')).toContainText('complete');
+
+    // Wait for auto-redirect to visualization page
+    await expect(page).toHaveURL(/\/analysis\/visualization/, { timeout: 10000 });
+
+    // Verify results page loaded
+    await expect(page.locator('[data-testid="general-info-panel"]')).toBeVisible({ timeout: 10000 });
+
+    await takeScreenshot(page, '03-processing', 'processing-completes-all-steps', 'final');
+  });
+
+  test('all steps show completed status', async ({ page }) => {
+    await page.locator('[data-testid="start-analysis-btn"]').first().click();
+
+    // Wait for processing page
+    await expect(page).toHaveURL(/\/analysis\/processing/, { timeout: 10000 });
+
+    // Wait for completion
+    await expect(page.locator('[data-testid="processing-complete"]')).toBeVisible({ timeout: 300000 });
+
+    // Verify all 9 steps show completed status
+    for (let i = 1; i <= 9; i++) {
+      const stepStatus = await page.locator(`[data-testid="step-${i}-status"]`).textContent();
+      expect(stepStatus).toMatch(/completed|finished|done/i);
+    }
+
+    await takeScreenshot(page, '03-processing', 'all-steps-show-completed-status', 'final');
   });
 
   test('allows canceling processing', async ({ page }) => {
