@@ -16,3 +16,90 @@
 ✓ Starting...
 ✓ Ready in 15.6s
 ○ Compiling / ...
+ GET / 200 in 5.9s (compile: 5.7s, render: 195ms)
+ GET / 200 in 92ms (compile: 4ms, render: 88ms)
+(node:2136) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Failed to proxy http://127.0.0.1:8000/api/sessions Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET / 200 in 52ms (compile: 5ms, render: 47ms)
+Failed to proxy http://127.0.0.1:8000/api/sessions Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET / 200 in 55ms (compile: 5ms, render: 50ms)
+Failed to proxy http://127.0.0.1:8000/api/sessions Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET / 200 in 51ms (compile: 4ms, render: 47ms)
+Failed to proxy http://127.0.0.1:8000/api/sessions Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/sessions Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}

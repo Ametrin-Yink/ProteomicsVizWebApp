@@ -6,7 +6,7 @@ Processing status and control endpoints.
 
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 
 from app.core.config import settings
 from app.core.exceptions import ProcessingError
@@ -164,12 +164,14 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         session_id: Session ID
         session: Session object with config
     """
+    import traceback
+
     logger.info(f"BACKGROUND TASK STARTED for session {session_id}")
-    
+
     # Don't wait for WebSocket - start processing immediately
     # WebSocket will reconnect and receive updates
     logger.info(f"Starting processing for session {session_id} (WebSocket will reconnect if needed)")
-    
+
     try:
         # Convert session config to AnalysisConfig
         config = AnalysisConfig(
@@ -179,16 +181,20 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             remove_razor=session.config.remove_razor,
             strict_filtering=session.config.strict_filtering,
         )
+        logger.info(f"Config created: treatment={config.treatment}, control={config.control}")
 
         # Create WebSocket callback for progress updates
         async def websocket_callback(progress):
             """Send progress update via WebSocket."""
             try:
+                logger.info(f"WebSocket callback: step {progress.step}, status {progress.status}")
                 await session_manager.send_progress_update(session_id, progress.model_dump())
+                logger.info(f"WebSocket callback: sent successfully")
             except Exception as e:
-                logger.warning(f"Failed to send WebSocket progress update: {e}")
+                logger.warning(f"Failed to send WebSocket progress update: {e}", exc_info=True)
 
         # Run the processing pipeline
+        logger.info(f"Calling process_session for {session_id}")
         result = await processing_orchestrator.process_session(
             session_id=session_id,
             config=config,
@@ -205,16 +211,33 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             }
         )
 
+        # Send completion message via WebSocket
+        try:
+            await session_manager.send_complete_message(
+                session_id=session_id,
+                outputs={
+                    "psm_abundances": result.psm_abundances_path,
+                    "protein_abundances": result.protein_abundances_path,
+                    "diff_expression": result.diff_expression_path,
+                    "qc_results": result.qc_results_path,
+                    "gsea_results": result.gsea_results_path,
+                },
+                duration=result.processing_time_seconds or 0
+            )
+            logger.info(f"Sent completion message to session {session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to send completion message: {e}")
+
     except ProcessingError as e:
         logger.error(
             f"Processing failed for session {session_id}: {e.message}",
-            extra={"session_id": session_id, "error": e.message, "step": e.step}
+            extra={"session_id": session_id, "error": e.message, "step": e.step, "traceback": traceback.format_exc()}
         )
         # Session state already updated by orchestrator
     except Exception as e:
         logger.error(
             f"Unexpected error during processing for session {session_id}: {str(e)}",
-            extra={"session_id": session_id, "error": str(e)}
+            extra={"session_id": session_id, "error": str(e), "traceback": traceback.format_exc()}
         )
         # Update session state to error
         await session_manager.update_session_state(

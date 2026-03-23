@@ -63,13 +63,27 @@ def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
         # Field names must match frontend DEResult interface
         results = []
         for _, row in df.iterrows():
+            # Handle NaN values - convert to None for JSON serialization
+            log_fc = row.get("logFC", 0)
+            pval = row.get("pval", 1)
+            adj_pval = row.get("adjPval", 1)
+
+            # Convert NaN/Inf to None
+            import math
+            if pd.isna(log_fc) or (isinstance(log_fc, float) and math.isinf(log_fc)):
+                log_fc = None
+            if pd.isna(pval) or (isinstance(pval, float) and math.isinf(pval)):
+                pval = None
+            if pd.isna(adj_pval) or (isinstance(adj_pval, float) and math.isinf(adj_pval)):
+                adj_pval = None
+
             result = {
                 "master_protein_accessions": str(row.get("Master_Protein_Accessions", "")),
                 "gene_name": str(row.get("Gene_Name", "")),
-                "log_fc": float(row.get("logFC", 0) or 0),
-                "pval": float(row.get("pval", 1) or 1),
-                "adj_pval": float(row.get("adjPval", 1) or 1),
-                "significant": bool((row.get("adjPval", 1) or 1) < 0.05),
+                "log_fc": float(log_fc) if log_fc is not None else 0,
+                "pval": float(pval) if pval is not None else 1,
+                "adj_pval": float(adj_pval) if adj_pval is not None else 1,
+                "significant": bool((adj_pval if adj_pval is not None else 1) < 0.05),
             }
             results.append(result)
         
@@ -152,7 +166,7 @@ def load_gsea_results(results_dir: Path, database: str) -> Dict[str, Any]:
 async def get_results(
     session_id: str,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=1000),
+    page_size: int = Query(50, ge=1, le=20000),
     sort_by: str = Query("adj_pvalue"),
     sort_order: str = Query("asc"),
     significant_only: bool = Query(False),
@@ -261,50 +275,59 @@ async def get_gsea_results(
 
 def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
     """Load protein abundance data from TSV file.
-    
+
     Args:
         results_dir: Path to session results directory
         protein_id: Protein accession ID
-        
+
     Returns:
-        Protein abundance data dictionary
+        Protein abundance data dictionary matching frontend ProteinAbundance interface
     """
     abundance_file = results_dir / "Protein_Abundances.tsv"
-    
+
     if not abundance_file.exists():
-        return {"protein_id": protein_id, "abundances": []}
-    
+        return {"samples": [], "abundances": [], "conditions": []}
+
     try:
         df = pd.read_csv(abundance_file, sep='\t')
-        
+
         # Find the protein row
         protein_row = df[df['Master_Protein_Accessions'] == protein_id]
-        
+
         if protein_row.empty:
-            return {"protein_id": protein_id, "abundances": []}
-        
+            return {"samples": [], "abundances": [], "conditions": []}
+
         # Get abundance columns (all columns except metadata)
-        metadata_cols = ['Master_Protein_Accessions', 'Gene_Name', 'Description', 'Organism']
+        metadata_cols = ['Master_Protein_Accessions', 'Gene_Name']
         abundance_cols = [col for col in df.columns if col not in metadata_cols]
-        
-        # Build abundance data
+
+        # Build arrays for frontend format
+        samples = []
         abundances = []
+        conditions = []
+
         for col in abundance_cols:
             value = protein_row.iloc[0].get(col)
             if pd.notna(value):
-                abundances.append({
-                    "sample": col,
-                    "abundance": float(value)
-                })
-        
+                samples.append(col)
+                abundances.append(float(value))
+                # Try to infer condition from sample name (e.g., "Abundance F1 Sample_DMSO_1")
+                # Default to Unknown if can't parse
+                condition = "Unknown"
+                if "DMSO" in col.upper():
+                    condition = "Control"
+                elif "INCZ" in col.upper() or "TREATMENT" in col.upper():
+                    condition = "Treatment"
+                conditions.append(condition)
+
         return {
-            "protein_id": protein_id,
-            "gene_name": str(protein_row.iloc[0].get('Gene_Name', '')),
-            "abundances": abundances
+            "samples": samples,
+            "abundances": abundances,
+            "conditions": conditions
         }
     except Exception as e:
         print(f"Error loading protein abundance: {e}")
-        return {"protein_id": protein_id, "abundances": []}
+        return {"samples": [], "abundances": [], "conditions": []}
 
 
 @router.get("/{session_id}/protein/{protein_id}/abundance")
@@ -332,59 +355,55 @@ async def get_protein_abundance(
 
 def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
     """Load PSM abundance data from TSV file.
-    
+
     Args:
         results_dir: Path to session results directory
         protein_id: Protein accession ID
-        
+
     Returns:
-        PSM abundance data dictionary
+        PSM abundance data dictionary matching frontend PSMAbundanceData interface
     """
     psm_file = results_dir / "PSM_Abundances.tsv"
-    
+
     if not psm_file.exists():
-        return {"protein_id": protein_id, "psms": []}
-    
+        return {"psms": []}
+
     try:
         df = pd.read_csv(psm_file, sep='\t')
-        
+
         # Filter rows for this protein
         protein_rows = df[df['Master_Protein_Accessions'] == protein_id]
-        
+
         if protein_rows.empty:
-            return {"protein_id": protein_id, "psms": []}
-        
+            return {"psms": []}
+
         # Get abundance columns (all columns except metadata)
-        metadata_cols = ['PSM_ID', 'Sequence', 'Modifications', 'Charge', 'Master_Protein_Accessions']
+        metadata_cols = ['Unique_PSM', 'Sequence', 'Modifications', 'Charge', 'Master_Protein_Accessions', 'Quan_Info']
         abundance_cols = [col for col in df.columns if col not in metadata_cols]
-        
-        # Build PSM data
+
+        # Build PSM data for frontend format
         psms = []
         for _, row in protein_rows.iterrows():
+            samples = []
             abundances = []
+
             for col in abundance_cols:
                 value = row.get(col)
                 if pd.notna(value):
-                    abundances.append({
-                        "sample": col,
-                        "abundance": float(value)
-                    })
-            
+                    samples.append(col)
+                    abundances.append(float(value))
+
             psms.append({
-                "psm_id": str(row.get('PSM_ID', '')),
+                "psm_id": str(row.get('Unique_PSM', '')),
                 "sequence": str(row.get('Sequence', '')),
-                "modifications": str(row.get('Modifications', '')),
-                "charge": int(row.get('Charge', 0)) if pd.notna(row.get('Charge')) else 0,
-                "abundances": abundances
+                "abundances": abundances,
+                "samples": samples
             })
-        
-        return {
-            "protein_id": protein_id,
-            "psms": psms
-        }
+
+        return {"psms": psms}
     except Exception as e:
         print(f"Error loading PSM abundance: {e}")
-        return {"protein_id": protein_id, "psms": []}
+        return {"psms": []}
 
 
 @router.get("/{session_id}/protein/{protein_id}/psm")

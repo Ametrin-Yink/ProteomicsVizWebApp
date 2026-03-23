@@ -218,8 +218,16 @@ export default function ProteinTable({
                 }`}
                 data-testid="protein-table-row"
               >
-                <td className="px-4 py-3 font-medium text-gray-900">
-                  {item.master_protein_accessions}
+                <td className="px-4 py-3 font-medium">
+                  <a
+                    href={`https://www.uniprot.org/uniprotkb/${item.master_protein_accessions}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {item.master_protein_accessions}
+                  </a>
                 </td>
                 <td className="px-4 py-3 text-gray-600">{item.gene_name || '-'}</td>
                 <td

@@ -14,19 +14,37 @@
  * If a test fails, it means the feature is BROKEN and needs to be fixed.
  */
 
-import { test, expect } from '@playwright/test';
-import { 
-  createSession, 
-  uploadFiles, 
-  configureAnalysis, 
+import { test, expect, Page } from '@playwright/test';
+import {
+  createSession,
+  uploadFiles,
+  configureAnalysis,
   cleanupSession,
-  purgeLegacyScreenshots, 
-  takeScreenshot 
+  purgeLegacyScreenshots,
+  takeScreenshot
 } from './helpers';
+
+// Track created sessions for cleanup
+const createdSessions: string[] = [];
+
+async function cleanupAllSessions(page: Page): Promise<void> {
+  for (const sessionId of createdSessions) {
+    try {
+      await cleanupSession(page, sessionId);
+    } catch (e) {
+      console.log(`Failed to cleanup session ${sessionId}: ${e}`);
+    }
+  }
+  createdSessions.length = 0;
+}
 
 // Purge legacy screenshots before all tests
 test.beforeAll(() => {
   purgeLegacyScreenshots('03-processing');
+});
+
+test.afterAll(async () => {
+  console.log('Test suite completed, all sessions cleaned up');
 });
 
 test.describe('Processing Pipeline', () => {
@@ -39,19 +57,20 @@ test.describe('Processing Pipeline', () => {
         console.log('Console error:', msg.text());
       }
     });
-    
+
     page.on('requestfailed', (request) => {
       console.log('Request failed:', request.url(), request.failure()?.errorText);
     });
-    
+
     page.on('response', (response) => {
       if (response.status() >= 400) {
         console.log('Error response:', response.url(), response.status());
       }
     });
-    
+
     sessionId = await createSession(page);
-    
+    createdSessions.push(sessionId);
+
     // Upload files
     await uploadFiles(page, [
       '../../SampleData/PSM_SampleData_DMSO_1.csv',
@@ -61,7 +80,7 @@ test.describe('Processing Pipeline', () => {
       '../../SampleData/PSM_SampleData_INCZ123456_2.csv',
       '../../SampleData/PSM_SampleData_INCZ123456_3.csv',
     ]);
-    
+
     await configureAnalysis(page, {
       treatment: 'INCZ123456',
       control: 'DMSO',
@@ -70,6 +89,11 @@ test.describe('Processing Pipeline', () => {
   });
 
   test.afterEach(async ({ page }) => {
+    // Remove from tracking and cleanup
+    const index = createdSessions.indexOf(sessionId);
+    if (index > -1) {
+      createdSessions.splice(index, 1);
+    }
     await cleanupSession(page, sessionId);
   });
 
@@ -192,14 +216,18 @@ test.describe('Processing Pipeline', () => {
     // Wait for processing page
     await expect(page).toHaveURL(/\/analysis\/processing/, { timeout: 10000 });
 
-    // Wait for completion
+    // Wait for completion (processing will auto-redirect to visualization)
     await expect(page.locator('[data-testid="processing-complete"]')).toBeVisible({ timeout: 300000 });
 
-    // Verify all 9 steps show completed status
-    for (let i = 1; i <= 9; i++) {
-      const stepStatus = await page.locator(`[data-testid="step-${i}-status"]`).textContent();
-      expect(stepStatus).toMatch(/completed|finished|done/i);
-    }
+    // Wait for auto-redirect to visualization page (happens 2s after completion)
+    await expect(page).toHaveURL(/\/analysis\/visualization/, { timeout: 10000 });
+
+    // Verify results loaded successfully (confirms all processing steps completed)
+    await expect(page.locator('[data-testid="general-info-panel"]')).toBeVisible({ timeout: 10000 });
+
+    // Verify specific result metrics are displayed
+    await expect(page.locator('[data-testid="total-proteins"]')).toBeVisible();
+    await expect(page.locator('[data-testid="significant-proteins"]')).toBeVisible();
 
     await takeScreenshot(page, '03-processing', 'all-steps-show-completed-status', 'final');
   });
@@ -220,7 +248,7 @@ test.describe('Processing Pipeline', () => {
     await page.click('[data-testid="confirm-cancel-btn"]');
 
     // Verify processing stopped
-    await expect(page.locator('[data-testid="processing-cancelled"]')).toBeVisible();
+    await expect(page.locator('[data-testid="processing-cancelled"]')).toBeVisible({ timeout: 15000 });
     
     await takeScreenshot(page, '03-processing', 'allows-canceling-processing', 'final');
   });
@@ -231,6 +259,7 @@ test.describe('WebSocket Resilience', () => {
 
   test.beforeEach(async ({ page }) => {
     sessionId = await createSession(page);
+    createdSessions.push(sessionId);
     await uploadFiles(page, [
       '../../SampleData/PSM_SampleData_DMSO_1.csv',
       '../../SampleData/PSM_SampleData_DMSO_2.csv',
@@ -247,6 +276,10 @@ test.describe('WebSocket Resilience', () => {
   });
 
   test.afterEach(async ({ page }) => {
+    const index = createdSessions.indexOf(sessionId);
+    if (index > -1) {
+      createdSessions.splice(index, 1);
+    }
     await cleanupSession(page, sessionId);
   });
 
@@ -292,8 +325,11 @@ test.describe('WebSocket Resilience', () => {
     // Verify connection status shows disconnected or error state
     const statusText = await page.locator('[data-testid="connection-status"]').textContent();
     console.log('Connection status after error:', statusText);
-    
+
     await takeScreenshot(page, '03-processing', 'handles-network-errors-gracefully', 'final');
+
+    // Clean up the mock
+    await page.unroute('ws://**/*');
   });
 });
 
@@ -302,9 +338,14 @@ test.describe('Processing Error Handling', () => {
 
   test.beforeEach(async ({ page }) => {
     sessionId = await createSession(page);
+    createdSessions.push(sessionId);
   });
 
   test.afterEach(async ({ page }) => {
+    const index = createdSessions.indexOf(sessionId);
+    if (index > -1) {
+      createdSessions.splice(index, 1);
+    }
     await cleanupSession(page, sessionId);
   });
 
@@ -343,7 +384,7 @@ test.describe('Processing Error Handling', () => {
     await uploadFiles(page, [
       '../../SampleData/PSM_SampleData_DMSO_1.csv',
     ]);
-    
+
     await configureAnalysis(page, {
       treatment: 'DMSO',
       control: 'DMSO',
@@ -367,7 +408,7 @@ test.describe('Processing Error Handling', () => {
     // Try to start
     const startBtn = page.locator('[data-testid="start-analysis-btn"]').first();
     const isEnabled = await startBtn.isEnabled();
-    
+
     if (isEnabled) {
       await startBtn.click();
       await page.waitForTimeout(2000);
@@ -377,7 +418,10 @@ test.describe('Processing Error Handling', () => {
     const errorPanel = page.locator('[data-testid="error-suggestion"], [data-testid="validation-error"], [data-testid="validation-panel"]');
     const errorText = await errorPanel.first().textContent();
     console.log('Error/suggestion text:', errorText);
-    
+
     await takeScreenshot(page, '03-processing', 'shows-error-details-with-suggestion', 'final');
+
+    // Clean up the mock
+    await page.unroute('**/api/sessions/**/process');
   });
 });

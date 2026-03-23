@@ -153,14 +153,16 @@ class ProcessingOrchestrator:
         Args:
             progress: Progress update
         """
+        logger.info(f"_send_progress: step {progress.step}, status {progress.status}, callbacks={len(self.progress_callbacks)}")
         for callback in self.progress_callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
                     await callback(progress)
                 else:
                     callback(progress)
+                logger.info(f"_send_progress: callback succeeded for step {progress.step}")
             except Exception as e:
-                logger.warning(f"Progress callback failed: {e}")
+                logger.warning(f"Progress callback failed: {e}", exc_info=True)
 
     def _create_progress(
         self,
@@ -222,27 +224,33 @@ class ProcessingOrchestrator:
         Raises:
             ProcessingError: If processing fails
         """
+        import traceback
+
         logger.info(
-            f"Starting processing pipeline for session {session_id}",
+            f"=== ENTERING process_session for session {session_id} ===",
             extra={"session_id": session_id, "config": config.model_dump()},
         )
 
         # Register WebSocket callback
         if websocket_callback:
             self.register_progress_callback(websocket_callback)
+            logger.info(f"WebSocket callback registered for session {session_id}")
 
         # Initialize state
         state = PipelineState(session_id)
-        state.mark_started()
-
-        # Get session directories
-        uploads_dir = await session_manager.get_uploads_dir(session_id)
-        results_dir = await session_manager.get_results_dir(session_id)
-
-        # Initialize result
-        result = AnalysisResult(session_id=session_id)
+        logger.info(f"PipelineState initialized: current_step={state.data['current_step']}, completed={state.data['completed_steps']}")
 
         try:
+            state.mark_started()
+            logger.info(f"Pipeline marked as started for session {session_id}")
+
+            # Get session directories
+            uploads_dir = await session_manager.get_uploads_dir(session_id)
+            results_dir = await session_manager.get_results_dir(session_id)
+
+            # Initialize result
+            result = AnalysisResult(session_id=session_id)
+
             # Update session state
             await session_manager.update_session_state(
                 session_id, SessionStateEnum.PROCESSING
@@ -318,12 +326,20 @@ class ProcessingOrchestrator:
             )
 
             # Step 4: Remove Low Quality
+            logger.info(f"Step 4: Starting with DataFrame shape: {psm_df.shape}, columns: {list(psm_df.columns)}")
+            logger.info(f"Step 4: Sample Abundance values (first 5): {psm_df['Abundance'].head().tolist()}")
+            logger.info(f"Step 4: Sample Quan_Info values (unique): {psm_df['Quan_Info'].unique()[:10]}")
+
             await self._send_progress(
                 self._create_progress(4, "started", 0, "Removing low quality PSMs...")
             )
-            
+
             psm_df = processor.step4_remove_low_quality(psm_df)
-            
+
+            logger.info(f"Step 4: Completed with DataFrame shape: {psm_df.shape}")
+            if len(psm_df) == 0:
+                logger.error("Step 4: DataFrame is EMPTY after filtering!")
+
             state.mark_step_completed(4)
 
             await self._send_progress(
@@ -333,16 +349,36 @@ class ProcessingOrchestrator:
             )
 
             # Step 5: Filter by Criteria
+            logger.info(f"Step 5: Starting with DataFrame shape: {psm_df.shape}, columns: {list(psm_df.columns)}")
+
             await self._send_progress(
                 self._create_progress(5, "started", 0, f"Applying {'strict' if config.strict_filtering else 'lenient'} filtering criteria...")
             )
             
             psm_df = processor.step5_filter_by_criteria(psm_df)
-            
+
             # Save output after Step 5
+            logger.info(f"Step 5: About to save PSM data. DataFrame shape: {psm_df.shape}, output path: {psm_output}")
+            logger.info(f"Step 5: Parent directory exists before mkdir: {psm_output.parent.exists()}")
+
             psm_output.parent.mkdir(parents=True, exist_ok=True)
+
+            logger.info(f"Step 5: Parent directory exists after mkdir: {psm_output.parent.exists()}")
+
             psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
-            
+
+            logger.info(f"Step 5: File exists after to_csv: {psm_output.exists()}, size: {psm_output.stat().st_size if psm_output.exists() else 'N/A'}")
+
+            # VERIFY FILE WAS ACTUALLY SAVED
+            if not psm_output.exists():
+                logger.error(f"Step 5: CRITICAL - File does not exist after save attempt: {psm_output}")
+                raise ProcessingError(
+                    message=f"Failed to save PSM_Abundances.tsv to {psm_output}",
+                    step=5,
+                    recoverable=False
+                )
+            logger.info(f"Step 5: VERIFIED - File exists at {psm_output}, size: {psm_output.stat().st_size} bytes")
+
             state.mark_step_completed(5, psm_output)
 
             await self._send_progress(
@@ -354,16 +390,61 @@ class ProcessingOrchestrator:
             # Step 6: Protein Abundance (R)
             protein_output = results_dir / "Protein_Abundances.tsv"
 
+            logger.info(f"Step 6: About to run protein abundance. Input file exists: {psm_output.exists()}, path: {psm_output}")
+            if psm_output.exists():
+                logger.info(f"Step 6: Input file size: {psm_output.stat().st_size} bytes")
+                # Log first few lines of input file for debugging
+                try:
+                    with open(psm_output, 'r') as f:
+                        header = f.readline().strip()
+                        first_data = f.readline().strip()
+                        logger.info(f"Step 6: Input file header: {header[:200]}...")
+                        logger.info(f"Step 6: First data row: {first_data[:200]}...")
+                except Exception as e:
+                    logger.warning(f"Step 6: Could not read input file preview: {e}")
+
             await self._send_progress(
                 self._create_progress(
                     6, "started", 0, "Calculating protein abundance with msqrob2..."
                 )
             )
 
-            await msqrob2_wrapper.step6_protein_abundance(
-                input_file=psm_output,
-                output_file=protein_output,
-            )
+            try:
+                # Determine gene mapping file based on organism
+                organism = getattr(config, 'organism', 'human').lower()
+                gene_mapping_file = None
+                if organism == 'human':
+                    gene_mapping_file = settings.protein_database_dir / "Human_GeneName.tsv"
+                elif organism == 'mouse':
+                    gene_mapping_file = settings.protein_database_dir / "Mouse_GeneName.tsv"
+
+                # Debug logging to file
+                try:
+                    debug_log_path = results_dir / "step6_debug.log"
+                    with open(debug_log_path, "w") as f:
+                        f.write(f"Organism: {organism}\n")
+                        f.write(f"Protein database dir: {settings.protein_database_dir}\n")
+                        f.write(f"Gene mapping file path: {gene_mapping_file}\n")
+                        f.write(f"File exists: {gene_mapping_file.exists() if gene_mapping_file else 'N/A'}\n")
+                        f.write(f"Config organism: {getattr(config, 'organism', 'NOT_FOUND')}\n")
+                except Exception as e:
+                    logger.error(f"Failed to write debug log: {e}")
+
+                if gene_mapping_file and gene_mapping_file.exists():
+                    logger.info(f"Step 6: Using gene mapping file: {gene_mapping_file}")
+                else:
+                    logger.warning(f"Step 6: No gene mapping file found for organism: {organism}")
+                    gene_mapping_file = None
+
+                await msqrob2_wrapper.step6_protein_abundance(
+                    input_file=psm_output,
+                    output_file=protein_output,
+                    gene_mapping_file=gene_mapping_file,
+                )
+                logger.info(f"Step 6: msqrob2_wrapper completed successfully")
+            except Exception as e:
+                logger.error(f"Step 6: msqrob2_wrapper failed with error: {type(e).__name__}: {e}")
+                raise
 
             state.mark_step_completed(6, protein_output)
             result.protein_abundances_path = str(protein_output)
@@ -491,17 +572,30 @@ class ProcessingOrchestrator:
         except Exception as e:
             # Mark step as failed
             current_step = state.data["current_step"]
-            state.mark_failed(current_step, str(e))
+            error_msg = str(e)
+            error_trace = traceback.format_exc()
+
+            logger.error(
+                f"Processing failed at step {current_step}: {error_msg}",
+                extra={
+                    "session_id": session_id,
+                    "step": current_step,
+                    "error": error_msg,
+                    "traceback": error_trace,
+                }
+            )
+
+            state.mark_failed(current_step, error_msg)
 
             # Update session state
             await session_manager.update_session_state(
-                session_id, SessionStateEnum.ERROR, str(e)
+                session_id, SessionStateEnum.ERROR, error_msg
             )
 
             # Send failure progress
             await self._send_progress(
                 self._create_progress(
-                    current_step, "failed", 0, f"Processing failed: {str(e)}"
+                    current_step, "failed", 0, f"Processing failed: {error_msg}"
                 )
             )
 
@@ -510,10 +604,10 @@ class ProcessingOrchestrator:
                 raise
             else:
                 raise ProcessingError(
-                    message=f"Processing failed: {str(e)}",
+                    message=f"Processing failed: {error_msg}",
                     step=current_step,
                     recoverable=True,
-                    details={"error": str(e)},
+                    details={"error": error_msg, "traceback": error_trace},
                 )
 
     async def resume_processing(

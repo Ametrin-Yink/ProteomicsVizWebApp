@@ -168,6 +168,8 @@ Output: Results, QC Plots, GSEA
 - **NEVER use rpy2** - Always use subprocess
 - **Required packages:** msqrob2, QFeatures, limma (verify with Rscript command)
 - **Handle encoding:** UTF-8 with latin-1 fallback for R output
+- **Debug argument passing:** Add logging with error handling in wrapper to trace file paths
+- **R script receives args positionally:** Check argument count in R with `length(args)`
 
 ### File Patterns (Immutable)
 - **Filename format:** `PSM_ExperimentName_Condition_ReplicateNumber.csv`
@@ -229,6 +231,8 @@ interface ApiError {
 - 8 test suites: 01-welcome through 08-session-manager
 - Test helpers in `Tests/helpers.ts`
 - Run with: `cd frontend && npx playwright test`
+- Tests preserve sessions in `backend/sessions/{session_id}/` for investigation
+- Clear sessions between runs: `rm -rf backend/sessions/*`
 
 **Backend Tests:**
 - Located in `backend/tests/`
@@ -282,6 +286,21 @@ taskkill /F /IM python.exe  # Windows
 ```bash
 # Verify packages
 Rscript -e "library(msqrob2); library(QFeatures); library(limma)"
+```
+
+**Python code changes not picked up:**
+```bash
+# Clear all __pycache__ directories recursively
+find backend -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+find backend -name "*.pyc" -delete 2>/dev/null
+```
+
+**Port 8000 in use (Windows):**
+```bash
+# Find PID using port 8000
+netstat -ano | findstr :8000
+# Kill specific PID (use double slashes in bash)
+taskkill //F //PID <PID>
 ```
 
 **Test failures:**

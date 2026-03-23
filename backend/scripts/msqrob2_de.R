@@ -124,44 +124,50 @@ cat("Created QFeatures object with", nrow(pe[["protein"]]), "proteins\n")
 cat("colData in QFeatures:\n")
 print(colData(pe))
 
-# Fit robust linear model with msqrob
-cat("Fitting robust linear models...\n")
+# Fit robust linear model with limma (for protein-level data)
+cat("Fitting robust linear models with limma...\n")
+cat("Note: Protein abundances are already log2 transformed from Step 6\n")
 
-pe <- tryCatch({
-    msqrob(
-        object = pe,
-        i = "protein",
-        formula = ~ condition,
-        modelColumnName = "rlm",
-        robust = TRUE
-    )
-}, error = function(e) {
-    cat("Error in msqrob:", conditionMessage(e), "\n")
-    stop("Differential expression analysis failed")
-})
+# Protein abundances from Step 6 are already log2 transformed
+# No additional log2 needed
+protein_matrix_log2 <- protein_matrix
+
+# Create design matrix using the condition factor directly
+design <- model.matrix(~ 0 + col_data$condition)
+colnames(design) <- levels(col_data$condition)
+
+cat("Design matrix:\n")
+print(design)
+
+# Fit linear model
+fit <- lmFit(protein_matrix_log2, design)
+
+# Create contrast for Treatment vs Control
+contrast <- makeContrasts(TreatmentvsControl = Treatment - Control, levels = design)
+
+cat("Contrast matrix:\n")
+print(contrast)
+
+# Fit contrast
+fit2 <- contrasts.fit(fit, contrast)
+
+# Apply empirical Bayes moderation
+fit2 <- eBayes(fit2)
 
 cat("Model fitting complete\n")
 
 # Extract results
 cat("Extracting differential expression results...\n")
 
-# Get the model coefficients to build contrast
-models <- rowData(pe[["protein"]])$rlm
-coef_names <- names(getCoef(models[[1]]))
-cat("Model coefficients:", coef_names, "\n")
+# Get topTable results
+results_df <- topTable(fit2, number = Inf, sort.by = "p", adjust.method = "BH")
 
-# Build contrast for Treatment vs Control
-# The contrast tests if conditionTreatment = 0 (i.e., Treatment vs Control)
-L <- makeContrast("conditionTreatment=0", coef_names)
-
-# Get the results for the condition effect using topFeatures
-results_df <- topFeatures(
-    models,
-    contrast = L,
-    adjust.method = "BH",
-    sort = TRUE,
-    alpha = 1  # Return all features
-)
+# Rename columns to match expected format
+names(results_df)[names(results_df) == "logFC"] <- "logFC"
+names(results_df)[names(results_df) == "P.Value"] <- "pval"
+names(results_df)[names(results_df) == "adj.P.Val"] <- "adjPval"
+names(results_df)[names(results_df) == "t"] <- "t"
+names(results_df)[names(results_df) == "B"] <- "B"
 
 # Convert to data frame if needed
 if (!is.data.frame(results_df)) {
@@ -171,9 +177,11 @@ if (!is.data.frame(results_df)) {
 # Add protein IDs
 results_df$Master_Protein_Accessions <- rownames(results_df)
 
-# Add gene names if available
-if ("Gene_Name" %in% names(rowData(pe[["protein"]]))) {
-    results_df$Gene_Name <- rowData(pe[["protein"]])$Gene_Name
+# Add gene names from protein_data if available
+if ("Gene_Name" %in% names(protein_data)) {
+    # Create mapping from protein ID to gene name
+    gene_map <- setNames(protein_data$Gene_Name, protein_data$Master_Protein_Accessions)
+    results_df$Gene_Name <- gene_map[rownames(results_df)]
 }
 
 # Rename columns for consistency

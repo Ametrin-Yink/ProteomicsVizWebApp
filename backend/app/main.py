@@ -18,7 +18,7 @@ from app.api.routes import sessions, upload, analysis, processing, visualization
 from app.core.config import settings
 from app.core.exceptions import ProteomicsException, AppException
 from app.db.session_store import SessionStore
-from app.services.session_manager import SessionManager
+from app.services.session_manager import session_manager
 
 logger = logging.getLogger("proteomics")
 
@@ -35,7 +35,9 @@ async def lifespan(app: FastAPI):
 
     session_store = SessionStore(settings.sessions_dir)
     app.state.session_store = session_store
-    app.state.session_manager = SessionManager(session_store)
+    # Use the global session_manager instance
+    session_manager.session_store = session_store
+    app.state.session_manager = session_manager
 
     # Scan existing sessions with timeout protection
     # Use asyncio.wait_for to prevent hanging on corrupted files
@@ -199,9 +201,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             try:
                 # Receive message (ping/keepalive from client)
                 print(f"Waiting for message from session {session_id}...", flush=True)
+                # Use a longer timeout (60s) to allow for processing time
+                # Frontend sends ping every 30s, so 60s gives enough buffer
                 data = await asyncio.wait_for(
                     websocket.receive_text(),
-                    timeout=settings.websocket_ping_interval
+                    timeout=60
                 )
                 print(f"Received message from session {session_id}: {data[:100]}...", flush=True)
                 

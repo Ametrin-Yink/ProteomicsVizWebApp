@@ -595,6 +595,48 @@ class SessionManager:
                 logger.warning(f"Failed to send WebSocket message: {e}")
                 disconnected.append(websocket)
 
+        # Clean up disconnected websockets - ONLY in send_progress_update
+        # Don't actually unregister - let WebSocket handler clean up when connection closes
+        if disconnected:
+            logger.warning(f"{len(disconnected)} WebSockets failed to receive progress for session {session_id}")
+        # for websocket in disconnected:
+        #     await self.unregister_websocket(session_id, websocket)
+
+    async def send_complete_message(self, session_id: str, outputs: dict, duration: float) -> None:
+        """Send completion message to all WebSocket connections for a session.
+
+        Args:
+            session_id: Session ID
+            outputs: Output file paths
+            duration: Processing duration in seconds
+        """
+        logger.info(f"Attempting to send completion message for session {session_id}")
+        logger.info(f"Current WebSocket connections: {list(self._websocket_connections.keys())}")
+
+        if session_id not in self._websocket_connections:
+            logger.warning(f"No WebSocket connections for session {session_id}, cannot send completion message")
+            return
+
+        logger.info(f"Found {len(self._websocket_connections[session_id])} WebSocket connections for session {session_id}")
+
+        message = {
+            "type": "complete",
+            "payload": {
+                "session_id": session_id,
+                "outputs": outputs,
+                "duration": duration
+            }
+        }
+
+        disconnected = []
+        for websocket in self._websocket_connections[session_id]:
+            try:
+                await websocket.send_json(message)
+                logger.info(f"Sent completion message to session {session_id}")
+            except Exception as e:
+                logger.warning(f"Failed to send completion message: {e}")
+                disconnected.append(websocket)
+
         # Clean up disconnected websockets
         for websocket in disconnected:
             await self.unregister_websocket(session_id, websocket)

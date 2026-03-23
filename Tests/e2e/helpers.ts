@@ -257,12 +257,13 @@ export async function startAnalysis(page: Page, timeout: number = 300000): Promi
 
 /**
  * Create a completed session with results
- * CRITICAL: This runs the full pipeline and takes 3-5 minutes
+ * NOTE: This runs the full pipeline. Default timeout is 3 minutes (180000ms).
+ * Increase timeout only when necessary for large datasets.
  */
 export async function createCompletedSession(
   page: Page,
   name?: string,
-  timeout: number = 600000
+  timeout: number = 180000
 ): Promise<string> {
   const sessionId = await createSession(page, name);
 
@@ -387,11 +388,14 @@ export async function createCompleteSession(
 /**
  * Clean up and delete a session
  * Set PRESERVE_TEST_SESSIONS=true to keep sessions for debugging
+ * CRITICAL: Set PRESERVE_TEST_SESSIONS=false to clean up after debugging
  */
 export async function cleanupSession(page: Page, sessionId: string): Promise<void> {
-  // Check if we should preserve sessions for Test Suite 4 and beyond
-  if (process.env.PRESERVE_TEST_SESSIONS === 'true') {
-    console.log(`Preserving session ${sessionId} for reuse`);
+  // ALWAYS preserve sessions for debugging - set to false after debugging complete
+  const preserveSessions = process.env.PRESERVE_TEST_SESSIONS !== 'false';
+
+  if (preserveSessions) {
+    console.log(`[DEBUG] Preserving session ${sessionId} for investigation`);
     return;
   }
   

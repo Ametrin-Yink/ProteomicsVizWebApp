@@ -13,8 +13,22 @@
  * If a test fails, it means the feature is BROKEN and needs to be fixed.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { cleanupSession, purgeLegacyScreenshots, takeScreenshot } from './helpers';
+
+// Track created sessions for cleanup
+const createdSessions: string[] = [];
+
+async function cleanupAllSessions(page: Page): Promise<void> {
+  for (const sessionId of createdSessions) {
+    try {
+      await cleanupSession(page, sessionId);
+    } catch (e) {
+      console.log(`Failed to cleanup session ${sessionId}: ${e}`);
+    }
+  }
+  createdSessions.length = 0;
+}
 
 test.describe('Welcome Page', () => {
   // Purge legacy screenshots before all tests in this describe block
@@ -29,22 +43,13 @@ test.describe('Welcome Page', () => {
     await page.waitForLoadState('networkidle');
   });
 
+  test.afterEach(async ({ page }) => {
+    // Cleanup all created sessions
+    await cleanupAllSessions(page);
+  });
+
   test('page loads without errors', async ({ page }) => {
-    // Verify page title contains expected text
-    await expect(page).toHaveTitle(/Proteomics|Analysis/i);
-
-    // Verify welcome title is visible - STRICT check
-    const welcomeTitle = page.locator('[data-testid="welcome-title"]');
-    await expect(welcomeTitle).toBeVisible({ timeout: 10000 });
-    
-    // Verify welcome title contains expected text
-    const titleText = await welcomeTitle.textContent();
-    expect(titleText).toMatch(/Welcome|ProteomicsViz/i);
-    
-    // Screenshot for visual confirmation
-    await takeScreenshot(page, '01-welcome', 'page-loads-without-errors', 'final');
-
-    // Verify no console errors
+    // Setup console error listener BEFORE navigation
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
@@ -52,7 +57,26 @@ test.describe('Welcome Page', () => {
       }
     });
 
-    await page.waitForTimeout(1000); // Wait for any async errors
+    // Navigate to welcome page
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Verify page title contains expected text
+    await expect(page).toHaveTitle(/Proteomics|Analysis/i);
+
+    // Verify welcome title is visible - STRICT check
+    const welcomeTitle = page.locator('[data-testid="welcome-title"]');
+    await expect(welcomeTitle).toBeVisible({ timeout: 10000 });
+
+    // Verify welcome title contains expected text
+    const titleText = await welcomeTitle.textContent();
+    expect(titleText).toMatch(/Welcome|ProteomicsViz/i);
+
+    // Screenshot for visual confirmation
+    await takeScreenshot(page, '01-welcome', 'page-loads-without-errors', 'final');
+
+    // Verify no console errors after wait
+    await page.waitForTimeout(1000);
     expect(consoleErrors, `Console errors found: ${consoleErrors.join(', ')}`).toHaveLength(0);
   });
 
@@ -110,40 +134,38 @@ test.describe('Welcome Page', () => {
     // Click on the available template
     const pairwiseTemplate = page.locator('[data-testid="template-protein-pairwise"]');
     await expect(pairwiseTemplate).toBeVisible();
-    
+
     await takeScreenshot(page, '01-welcome', 'clicking-template-creates-session', 'before-click');
-    
+
     // Click the template
     await pairwiseTemplate.click();
-    
+
     // Wait for navigation to analysis page with session ID
     await expect(page).toHaveURL(/\/analysis\?session=[a-f0-9-]+/, { timeout: 15000 });
-    
+
     // Verify session panel is visible on the analysis page
     await expect(page.locator('[data-testid="session-panel"]')).toBeVisible({ timeout: 10000 });
-    
+
     await takeScreenshot(page, '01-welcome', 'clicking-template-creates-session', 'analysis-page-loaded');
-    
+
     // Extract session ID from URL for cleanup
     const url = page.url();
     const sessionIdMatch = url.match(/session=([a-f0-9-]+)/);
     expect(sessionIdMatch).not.toBeNull();
-    
+
     if (sessionIdMatch) {
       const sessionId = sessionIdMatch[1];
-      
+      createdSessions.push(sessionId);
+
       // Verify session appears in session list
       await page.goto('/');
       await expect(page.locator('[data-testid="session-list"]')).toBeVisible();
-      
+
       // The session should be in the list
       const sessionList = page.locator('[data-testid="session-list"]');
       await expect(sessionList).toBeVisible();
-      
+
       await takeScreenshot(page, '01-welcome', 'clicking-template-creates-session', 'session-in-list');
-      
-      // Cleanup
-      await cleanupSession(page, sessionId);
     }
   });
 
@@ -152,28 +174,28 @@ test.describe('Welcome Page', () => {
     const pairwiseTemplate = page.locator('[data-testid="template-protein-pairwise"]');
     await pairwiseTemplate.click();
     await expect(page).toHaveURL(/\/analysis\?session=[a-f0-9-]+/, { timeout: 15000 });
-    
+
     const url = page.url();
     const sessionIdMatch = url.match(/session=([a-f0-9-]+)/);
     expect(sessionIdMatch).not.toBeNull();
     const sessionId = sessionIdMatch ? sessionIdMatch[1] : '';
-    
+    if (sessionId) {
+      createdSessions.push(sessionId);
+    }
+
     // Navigate back to welcome page
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    
+
     // Verify session panel is visible
     const sessionPanel = page.locator('[data-testid="session-panel"]');
     await expect(sessionPanel).toBeVisible({ timeout: 10000 });
-    
+
     // Verify session list is visible
     const sessionList = page.locator('[data-testid="session-list"]');
     await expect(sessionList).toBeVisible();
-    
+
     await takeScreenshot(page, '01-welcome', 'session-panel-displays', 'final');
-    
-    // Cleanup
-    await cleanupSession(page, sessionId);
   });
 
   test('new analysis button opens create dialog', async ({ page }) => {
@@ -236,75 +258,81 @@ test.describe('Welcome Page', () => {
 });
 
 test.describe('Session Persistence', () => {
+  test.afterEach(async ({ page }) => {
+    await cleanupAllSessions(page);
+  });
+
   test('session persists across page reload', async ({ page }) => {
     // Create a session by clicking template
     await page.goto('/');
     const pairwiseTemplate = page.locator('[data-testid="template-protein-pairwise"]');
     await pairwiseTemplate.click();
-    
+
     // Wait for navigation and get session ID
     await expect(page).toHaveURL(/\/analysis\?session=[a-f0-9-]+/, { timeout: 15000 });
     const url = page.url();
     const sessionIdMatch = url.match(/session=([a-f0-9-]+)/);
     expect(sessionIdMatch).not.toBeNull();
     const sessionId = sessionIdMatch ? sessionIdMatch[1] : '';
-    
+    if (sessionId) {
+      createdSessions.push(sessionId);
+    }
+
     await takeScreenshot(page, '01-welcome', 'session-persists-reload', 'session-created');
-    
+
     // Reload the page
     await page.reload();
-    
+
     // Verify we're still on the analysis page with the same session
     await expect(page).toHaveURL(new RegExp(`session=${sessionId}`), { timeout: 10000 });
-    
+
     // Verify session panel is visible
     await expect(page.locator('[data-testid="session-panel"]')).toBeVisible({ timeout: 10000 });
-    
+
     await takeScreenshot(page, '01-welcome', 'session-persists-reload', 'after-reload');
-    
-    // Cleanup
-    await cleanupSession(page, sessionId);
   });
 
-  test('session survives browser restart', async ({ page, context }) => {
+  test('session survives browser restart', async ({ page, context, browser }) => {
     // Create a session
     await page.goto('/');
     const pairwiseTemplate = page.locator('[data-testid="template-protein-pairwise"]');
     await pairwiseTemplate.click();
-    
+
     await expect(page).toHaveURL(/\/analysis\?session=[a-f0-9-]+/, { timeout: 15000 });
     const sessionUrl = page.url();
     const sessionIdMatch = sessionUrl.match(/session=([a-f0-9-]+)/);
     expect(sessionIdMatch).not.toBeNull();
     const sessionId = sessionIdMatch ? sessionIdMatch[1] : '';
-    
+    if (sessionId) {
+      createdSessions.push(sessionId);
+    }
+
     await takeScreenshot(page, '01-welcome', 'session-survives-restart', 'session-created');
-    
+
     // Close browser context (simulates browser restart)
     await context.close();
-    
-    // Create new context and page
-    const newContext = await page.context().browser()?.newContext();
-    if (!newContext) {
-      throw new Error('Failed to create new browser context');
-    }
-    
+
+    // Create new context using the browser fixture (not page.context())
+    const newContext = await browser.newContext();
     const newPage = await newContext.newPage();
-    
+
     // Navigate to the session URL
     await newPage.goto(sessionUrl);
-    
+
     // Verify session is restored
     await expect(newPage).toHaveURL(new RegExp(`session=${sessionId}`), { timeout: 10000 });
     await expect(newPage.locator('[data-testid="session-panel"]')).toBeVisible({ timeout: 10000 });
-    
-    await newPage.screenshot({ 
-      path: 'D:/CodingWorks/ProteomicsVizWebApp/Tests/screenshots/01-welcome-session-survives-restart-final.png',
-      fullPage: true 
-    });
-    
-    // Cleanup
-    await cleanupSession(newPage, sessionId);
+
+    await takeScreenshot(newPage, '01-welcome', 'session-survives-restart', 'final');
+
+    // Cleanup in new context
+    for (const sid of createdSessions) {
+      try {
+        await cleanupSession(newPage, sid);
+      } catch (e) {
+        console.log(`Failed to cleanup session ${sid}: ${e}`);
+      }
+    }
     await newContext.close();
   });
 });

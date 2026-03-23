@@ -15,7 +15,7 @@ const SESSION_ID = 'mock-session-id';
 function ResultsContent() {
   const searchParams = useSearchParams();
   const tab = searchParams.get('tab') || 'results';
-  const sessionId = searchParams.get('session') || SESSION_ID;
+  const sessionId = searchParams.get('session_id') || searchParams.get('session') || SESSION_ID;
 
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ function ResultsContent() {
       try {
         const results = await getDEResults(sessionId, {
           page: 1,
-          per_page: 1000, // Get all for client-side filtering
+          per_page: 20000, // Get all for client-side filtering
         });
         setData(results);
       } catch (err) {
@@ -51,7 +51,7 @@ function ResultsContent() {
     }
 
     fetchData();
-  }, []);
+  }, [sessionId]);
 
   // Handle protein selection from volcano plot
   const handleSelectProteins = useCallback((proteins: string[]) => {
@@ -291,7 +291,7 @@ function ResultsContent() {
 
           {/* Right Column - Protein Info */}
           <div className="lg:col-span-1">
-            <ProteinInfo protein={selectedProteinData} sessionId={SESSION_ID} />
+            <ProteinInfo protein={selectedProteinData} sessionId={sessionId} />
           </div>
         </div>
       </div>

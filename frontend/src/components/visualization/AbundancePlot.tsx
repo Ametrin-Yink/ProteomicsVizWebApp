@@ -13,16 +13,26 @@ interface ProteinAbundancePlotProps {
 
 export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: ProteinAbundancePlotProps) {
   const plotData = useMemo(() => {
+    // Defensive: ensure data exists and has required arrays
+    if (!data || !data.samples || !data.abundances || data.samples.length === 0) {
+      return [];
+    }
+
     // Group by condition
     const conditionData: { [condition: string]: { samples: string[]; abundances: number[] } } = {};
 
     data.samples.forEach((sample, i) => {
-      const condition = data.conditions[i] || 'Unknown';
+      const condition = data.conditions?.[i] || 'Unknown';
+      const abundance = data.abundances?.[i];
+      // Skip invalid abundance values (0, negative, or undefined)
+      if (abundance === undefined || abundance === null || abundance <= 0) {
+        return;
+      }
       if (!conditionData[condition]) {
         conditionData[condition] = { samples: [], abundances: [] };
       }
       conditionData[condition].samples.push(sample);
-      conditionData[condition].abundances.push(Math.log2(data.abundances[i] || 1));
+      conditionData[condition].abundances.push(Math.log2(abundance));
     });
 
     const colors: Record<string, string> = {
@@ -99,6 +109,11 @@ interface PSMAbundancePlotProps {
 
 export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundancePlotProps) {
   const plotData = useMemo(() => {
+    // Defensive: ensure data exists and has psms array
+    if (!data || !data.psms || data.psms.length === 0) {
+      return [];
+    }
+
     const traces: Array<{
       x: string[];
       y: number[];
@@ -113,15 +128,20 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
     const colors = ['#E73564', '#00ADEF', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
 
     data.psms.forEach((psm, index) => {
+      // Defensive: ensure psm has required arrays
+      if (!psm || !psm.samples || !psm.abundances) {
+        return;
+      }
+
       const color = colors[index % colors.length];
       traces.push({
         x: psm.samples,
         y: psm.abundances,
         mode: 'lines+markers' as const,
-        name: psm.psm_id,
+        name: psm.psm_id || `PSM ${index + 1}`,
         line: { color, width: 2 },
         marker: { size: 6 },
-        hovertemplate: `<b>${psm.sequence}</b><br>Sample: %{x}<br>Abundance: %{y:.2f}<extra></extra>`,
+        hovertemplate: `<b>${psm.sequence || 'Unknown'}</b><br>Sample: %{x}<br>Abundance: %{y:.2f}<extra></extra>`,
         type: 'scatter' as const,
       });
     });
