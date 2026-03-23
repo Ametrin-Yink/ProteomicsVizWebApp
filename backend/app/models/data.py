@@ -142,7 +142,7 @@ class QCData(BaseModel):
 
 class GSEAResult(BaseModel):
     """GSEA result for a single pathway/term."""
-    
+
     term: str = Field(..., description="Pathway/term identifier")
     name: str = Field(..., description="Pathway/term name")
     es: float = Field(..., description="Enrichment score")
@@ -151,12 +151,21 @@ class GSEAResult(BaseModel):
     fdr: float = Field(..., ge=0, le=1, description="False discovery rate")
     lead_genes: list[str] = Field(default_factory=list, description="Leading edge genes")
     matched_genes: int = Field(..., ge=0, description="Number of matched genes")
-    
+    # Running enrichment score curve data for plotting
+    running_es_curve: Optional[list[tuple[int, float]]] = Field(
+        default=None,
+        description="Running ES curve as list of (rank, es) tuples"
+    )
+    rank_metric_positions: Optional[list[tuple[str, int, float]]] = Field(
+        default=None,
+        description="Gene positions in ranked list: (gene_name, rank, metric_value)"
+    )
+
     @property
     def significant(self) -> bool:
         """Check if result is significant (|NES| >= 1 and FDR < 0.05)."""
         return abs(self.nes) >= 1.0 and self.fdr < 0.05
-    
+
     @property
     def enrichment_direction(self) -> str:
         """Return enrichment direction."""

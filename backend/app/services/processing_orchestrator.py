@@ -63,6 +63,7 @@ class PipelineState:
             "outputs": {},
             "started_at": None,
             "completed_at": None,
+            "logs": [],  # Store logs in state
         }
 
     def save(self) -> None:
@@ -70,6 +71,28 @@ class PipelineState:
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.state_file, "w", encoding='utf-8') as f:
             json.dump(self.data, f, indent=2)
+
+    def add_log(self, level: str, message: str, step: int = None) -> None:
+        """Add a log entry to state.
+
+        Args:
+            level: Log level (info, warning, error)
+            message: Log message
+            step: Optional step number
+        """
+        if "logs" not in self.data:
+            self.data["logs"] = []
+        self.data["logs"].append({
+            "level": level,
+            "message": message,
+            "step": step,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        self.save()
+
+    def get_logs(self) -> list:
+        """Get all stored logs."""
+        return self.data.get("logs", [])
 
     def mark_started(self) -> None:
         """Mark pipeline as started."""
@@ -174,7 +197,7 @@ class ProcessingOrchestrator:
                 logger.warning(f"Progress callback failed: {e}", exc_info=True)
 
     async def _send_log(self, level: str, message: str, step: int = None) -> None:
-        """Send log message to WebSocket.
+        """Send log message to WebSocket and store in state.
 
         Args:
             level: Log level (info, warning, error)
@@ -182,6 +205,11 @@ class ProcessingOrchestrator:
             step: Optional step number
         """
         try:
+            # Store log in pipeline state
+            state = PipelineState(self._current_session_id) if self._current_session_id else None
+            if state:
+                state.add_log(level, message, step)
+
             # Use the current session_id if available
             if self._current_session_id and hasattr(session_manager, 'send_log_message'):
                 await session_manager.send_log_message(
@@ -472,6 +500,7 @@ class ProcessingOrchestrator:
                     input_file=psm_output,
                     output_file=protein_output,
                     gene_mapping_file=gene_mapping_file,
+                    log_callback=lambda level, msg: self._send_log(level, msg, step=6)
                 )
                 logger.info(f"Step 6: msqrob2_wrapper completed successfully")
             except Exception as e:
@@ -507,6 +536,7 @@ class ProcessingOrchestrator:
                 output_file=de_output,
                 treatment=config.treatment,
                 control=config.control,
+                log_callback=lambda level, msg: self._send_log(level, msg, step=7)
             )
 
             state.mark_step_completed(7, de_output)

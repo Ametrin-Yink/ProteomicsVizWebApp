@@ -77,10 +77,10 @@ class Settings(BaseSettings):
     )
 
     r_script_timeout: int = Field(
-        default=300,
+        default=1800,  # 30 minutes for large datasets
         description="R script execution timeout in seconds",
         ge=30,
-        le=3600,
+        le=7200,  # Max 2 hours
     )
 
     # WebSocket settings

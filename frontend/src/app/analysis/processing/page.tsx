@@ -17,6 +17,7 @@ import { LogPanel } from '@/components/processing/LogPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { formatDuration } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import type { LogEntry } from '@/types/processing';
 
 import {
   Activity,
@@ -211,6 +212,7 @@ function ProcessingContent() {
     initializeSteps,
     setSessionId,
     setCancelled,
+    setLogs,
     retry,
   } = useProcessingStore();
 
@@ -222,8 +224,36 @@ function ProcessingContent() {
     if (sessionId) {
       setSessionId(sessionId);
       initializeSteps(removeRazor);
+
+      // Fetch historical logs and state
+      const fetchLogs = async () => {
+        try {
+          console.log('Fetching logs for session:', sessionId);
+          const logData = await processingAPI.getLogs(sessionId);
+          console.log('Logs fetched:', logData);
+          if (logData.logs && logData.logs.length > 0) {
+            // Convert backend logs to LogEntry format with IDs
+            const logEntries: LogEntry[] = logData.logs.map((log) => ({
+              id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              level: log.level,
+              message: log.message,
+              timestamp: log.timestamp,
+              step: log.step,
+            }));
+            console.log('Setting logs:', logEntries.length, 'entries');
+            setLogs(logEntries);
+          } else {
+            console.log('No logs found in response');
+          }
+        } catch (err) {
+          console.error('Failed to fetch historical logs:', err);
+          // Don't ignore - show error in console for debugging
+        }
+      };
+
+      fetchLogs();
     }
-  }, [sessionId, removeRazor, setSessionId, initializeSteps]);
+  }, [sessionId, removeRazor, setSessionId, initializeSteps, setLogs]);
 
   // Note: Processing is started by the analysis page before navigation
   // This page only connects to WebSocket and displays progress
@@ -317,9 +347,9 @@ function ProcessingContent() {
       <SessionManager className="h-screen" />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
+      <div className="flex-1 flex flex-col overflow-auto">
+        {/* Header - reduced z-index to prevent overlay */}
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-4">

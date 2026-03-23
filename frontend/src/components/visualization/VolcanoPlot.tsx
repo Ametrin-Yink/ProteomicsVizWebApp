@@ -245,15 +245,17 @@ export default function VolcanoPlot({
       case 'lasso':
         return 'lasso' as const;
       default:
-        return 'pan' as const; // Use 'pan' instead of 'zoom' to allow clicking
+        return false as const; // Disable dragmode in click mode to allow proper clicking
     }
   }, [selectionMode]);
 
   // Update layout with current dragmode
   const layoutWithDragMode = useMemo(() => ({
     ...layout,
-    dragmode,
-  }), [layout, dragmode]);
+    dragmode: dragmode === false ? undefined : dragmode,
+    // Enable click mode events
+    clickmode: selectionMode === 'click' ? 'event' : undefined,
+  }), [layout, dragmode, selectionMode]);
 
   return (
     <div className="w-full bg-white rounded-lg border border-gray-200 p-4">

@@ -35,22 +35,24 @@ class Msqrob2Wrapper:
         self,
         input_file: Path,
         output_file: Path,
-        gene_mapping_file: Optional[Path] = None
+        gene_mapping_file: Optional[Path] = None,
+        log_callback: Optional[callable] = None
     ) -> Path:
         """
         Step 6: Calculate protein abundance using msqrob2.
-        
+
         Uses R's aggregateFeatures function to aggregate peptide-level
         data to protein level.
-        
+
         Args:
             input_file: Path to PSM_Abundances.tsv
             output_file: Path for Protein_Abundances.tsv output
             gene_mapping_file: Optional protein to gene mapping file
-            
+            log_callback: Optional callback function for real-time log messages (level, message)
+
         Returns:
             Path to output file
-            
+
         Raises:
             RScriptError: If R script fails
         """
@@ -98,28 +100,81 @@ class Msqrob2Wrapper:
         logger.info(f"R command: {' '.join(cmd)}")
 
         try:
-            # Run R script asynchronously using subprocess.run in a thread
-            # This is Windows-compatible (asyncio.create_subprocess_exec doesn't work on Windows)
+            # Run R script asynchronously with real-time output streaming
+            # This allows progress updates to be logged and sent via WebSocket during execution
             import subprocess
+            import sys
 
-            def run_r_script():
-                return subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    timeout=self.timeout
-                )
+            logger.info(f"Starting R script with timeout {self.timeout}s")
 
-            process = await asyncio.to_thread(run_r_script)
+            # Get the current event loop for callback scheduling
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = None
 
-            # Log R script output for debugging
-            stdout_str = process.stdout if process.stdout else ""
-            stderr_str = process.stderr if process.stderr else ""
-            if stdout_str:
-                logger.info(f"R script stdout: {stdout_str[:2000]}")
-            if stderr_str:
-                logger.info(f"R script stderr: {stderr_str[:2000]}")
+            # Use Popen for streaming output
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                bufsize=1  # Line buffered
+            )
+
+            stdout_lines = []
+            stderr_lines = []
+
+            # Read output in real-time
+            import select
+            import threading
+            import time
+
+            def stream_output(pipe, lines_list, log_prefix, log_level="info", log_cb=None, event_loop=None):
+                """Stream output from pipe and log immediately."""
+                try:
+                    for line in iter(pipe.readline, ''):
+                        if not line:
+                            break
+                        line = line.rstrip('\n\r')
+                        lines_list.append(line)
+                        # Log immediately for real-time updates
+                        logger.info(f"{log_prefix}: {line}")
+                        # Send to WebSocket via callback if provided
+                        if log_cb and event_loop:
+                            try:
+                                asyncio.run_coroutine_threadsafe(
+                                    log_cb(log_level, line),
+                                    event_loop
+                                )
+                            except Exception:
+                                pass
+                    pipe.close()
+                except Exception as e:
+                    logger.error(f"Error reading {log_prefix}: {e}")
+
+            # Start threads to read stdout and stderr
+            stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, stdout_lines, "R", "info", log_callback, loop))
+            stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop))
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Wait for process to complete with timeout
+            try:
+                process.wait(timeout=self.timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout_thread.join(timeout=5)
+                stderr_thread.join(timeout=5)
+                raise subprocess.TimeoutExpired(cmd, self.timeout)
+
+            # Wait for output threads to finish
+            stdout_thread.join()
+            stderr_thread.join()
+
+            stdout_str = '\n'.join(stdout_lines)
+            stderr_str = '\n'.join(stderr_lines)
 
             if process.returncode != 0:
                 error_msg = stderr_str if stderr_str else "Unknown error (no stderr)"
@@ -160,23 +215,25 @@ class Msqrob2Wrapper:
         input_file: Path,
         output_file: Path,
         treatment: str,
-        control: str
+        control: str,
+        log_callback: Optional[callable] = None
     ) -> Path:
         """
         Step 7: Differential expression analysis using msqrob2.
-        
+
         Uses R's msqrob function to fit robust linear models and
         calculate differential expression statistics.
-        
+
         Args:
             input_file: Path to Protein_Abundances.tsv
             output_file: Path for Diff_Expression.tsv output
             treatment: Treatment condition name
             control: Control condition name
-            
+            log_callback: Optional callback function for real-time log messages
+
         Returns:
             Path to output file
-            
+
         Raises:
             RScriptError: If R script fails
         """
@@ -208,36 +265,83 @@ class Msqrob2Wrapper:
         ]
         
         try:
-            # Run R script asynchronously using subprocess.run in a thread
-            # This is Windows-compatible (asyncio.create_subprocess_exec doesn't work on Windows)
+            # Run R script asynchronously with real-time output streaming
             import subprocess
+            import threading
 
-            def run_r_script():
-                return subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    timeout=self.timeout
-                )
+            logger.info(f"Starting Step 7 R script with timeout {self.timeout}s")
 
-            process = await asyncio.to_thread(run_r_script)
+            # Get the current event loop for callback scheduling
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = None
 
-            # Log R script output for debugging
-            stdout_str = process.stdout if process.stdout else ""
-            stderr_str = process.stderr if process.stderr else ""
-            if stdout_str:
-                logger.info(f"R script stdout: {stdout_str[:2000]}")
-            if stderr_str:
-                logger.info(f"R script stderr: {stderr_str[:2000]}")
+            # Use Popen for streaming output
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                bufsize=1  # Line buffered
+            )
+
+            stdout_lines = []
+            stderr_lines = []
+
+            def stream_output(pipe, lines_list, log_prefix, log_level="info", log_cb=None, event_loop=None):
+                """Stream output from pipe and log immediately."""
+                try:
+                    for line in iter(pipe.readline, ''):
+                        if not line:
+                            break
+                        line = line.rstrip('\n\r')
+                        lines_list.append(line)
+                        logger.info(f"{log_prefix}: {line}")
+                        if log_cb and event_loop:
+                            try:
+                                asyncio.run_coroutine_threadsafe(
+                                    log_cb(log_level, line),
+                                    event_loop
+                                )
+                            except Exception:
+                                pass
+                    pipe.close()
+                except Exception as e:
+                    logger.error(f"Error reading {log_prefix}: {e}")
+
+            # Start threads to read stdout and stderr
+            stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, stdout_lines, "R", "info", log_callback, loop))
+            stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop))
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Wait for process to complete with timeout
+            try:
+                process.wait(timeout=self.timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout_thread.join(timeout=5)
+                stderr_thread.join(timeout=5)
+                raise subprocess.TimeoutExpired(cmd, self.timeout)
+
+            # Wait for output threads to finish
+            stdout_thread.join()
+            stderr_thread.join()
+
+            stdout_str = '\n'.join(stdout_lines)
+            stderr_str = '\n'.join(stderr_lines)
 
             if process.returncode != 0:
                 error_msg = stderr_str if stderr_str else "Unknown error"
+                logger.error(f"R script failed with return code {process.returncode}: {error_msg}")
                 raise RScriptError(
                     message=f"Differential expression analysis failed: {error_msg}",
                     details={
                         "returncode": process.returncode,
                         "stderr": error_msg[:500],
+                        "stdout": stdout_str[:500],
                         "script": str(script_path)
                     }
                 )
@@ -255,9 +359,12 @@ class Msqrob2Wrapper:
                 details={"timeout": self.timeout}
             )
         except Exception as e:
+            import traceback
+            logger.error(f"Step 7: Exception caught in wrapper: {type(e).__name__}: {e}")
+            logger.error(f"Step 7: Traceback: {traceback.format_exc()}")
             raise RScriptError(
                 message=f"Differential expression analysis failed: {str(e)}",
-                details={"error": str(e)}
+                details={"error": str(e), "traceback": traceback.format_exc()}
             )
     
     async def verify_r_packages(self) -> dict:

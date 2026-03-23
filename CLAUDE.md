@@ -26,16 +26,17 @@ cd frontend && npm run dev
 
 ### Testing
 ```bash
-# Backend tests
-cd backend && pytest
-cd backend && pytest tests/unit/test_file_parser.py::TestFileParser::test_parse_valid_filename
+# Backend tests (run from project root)
+pytest Tests/backend/unit
+pytest Tests/backend/integration
+pytest Tests/backend/unit/test_file_parser.py::TestFileParser::test_parse_valid_filename
 
 # Frontend E2E tests (Playwright)
-cd frontend && npx playwright test
-cd frontend && npx playwright test e2e/04-results.spec.ts --headed
+cd Tests && npx playwright test
+cd Tests && npx playwright test e2e/04-results.spec.ts --headed
 
 # View test report
-cd frontend && npx playwright show-report
+cd Tests && npx playwright show-report
 ```
 
 ### Code Quality
@@ -164,6 +165,14 @@ Output: Results, QC Plots, GSEA
 
 ## Critical Constraints (Absolute Red Lines)
 
+### Test Location (CRITICAL)
+- **ALL test files MUST be in `Tests/` directory** - No exceptions
+- **NEVER create test files in `backend/tests/` or `frontend/tests/`** - These directories should not exist
+- **Python tests:** `Tests/backend/unit/` and `Tests/backend/integration/`
+- **E2E tests:** `Tests/e2e/`
+- **Test data:** `Tests/fixtures/`
+- **R test scripts:** `Tests/backend/r_scripts/`
+
 ### R Integration
 - **NEVER use rpy2** - Always use subprocess
 - **Required packages:** msqrob2, QFeatures, limma (verify with Rscript command)
@@ -226,18 +235,32 @@ interface ApiError {
 
 ## Testing Architecture
 
+**ALL tests MUST be in the `Tests/` directory only.** No test files should exist in `backend/tests/` or `frontend/tests/`.
+
+**Test Directory Structure:**
+```
+Tests/
+├── backend/
+│   ├── unit/              # Python unit tests (pytest)
+│   ├── integration/       # API/integration tests (pytest)
+│   └── r_scripts/         # R script tests
+├── e2e/                   # Playwright E2E tests
+├── fixtures/              # Test data and fixtures
+├── scripts/               # Test utilities
+├── conftest.py            # Pytest configuration
+└── playwright.config.ts   # Playwright configuration
+```
+
 **E2E Tests (Playwright):**
-- Located in `Tests/e2e/` (not `frontend/tests/e2e/`)
+- Located in `Tests/e2e/`
 - 8 test suites: 01-welcome through 08-session-manager
-- Test helpers in `Tests/helpers.ts`
-- Run with: `cd frontend && npx playwright test`
+- Run with: `cd Tests && npx playwright test`
 - Tests preserve sessions in `backend/sessions/{session_id}/` for investigation
-- Clear sessions between runs: `rm -rf backend/sessions/*`
 
 **Backend Tests:**
-- Located in `backend/tests/`
+- Located in `Tests/backend/`
 - pytest with asyncio support
-- Run with: `cd backend && pytest`
+- Run with: `pytest Tests/backend/unit` or `pytest Tests/backend/integration`
 
 ## Session Storage
 

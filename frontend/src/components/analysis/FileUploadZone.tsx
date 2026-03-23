@@ -22,15 +22,18 @@ const ALLOWED_EXTENSIONS = ['.csv'];
 /**
  * Parse PSM filename to extract metadata
  * Pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv
+ *
+ * Note: Uses non-greedy matching to properly handle underscores in condition names
  */
 const parseFilename = (filename: string): ParsedFilename | null => {
-  const pattern = /^PSM_([A-Za-z0-9_-]+)_([A-Za-z0-9_-]+)_(\d+)\.csv$/;
+  // Use non-greedy matching (+?) to properly handle condition names with underscores
+  const pattern = /^PSM_(.+?)_(.+?)_(\d+)\.csv$/i;
   const match = filename.match(pattern);
-  
+
   if (!match) {
     return null;
   }
-  
+
   return {
     filename,
     experiment: match[1],
@@ -113,18 +116,34 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     
     const fileArray = Array.from(files);
     console.log('handleFiles: Processing', fileArray.length, 'files');
-    
-    // Validate files
+
+    // Validate files - collect valid ones and errors separately
+    const validFilesAfterValidation: File[] = [];
+    const validationErrors: { name: string; error: string }[] = [];
+
     for (const file of fileArray) {
       const error = validateFile(file);
       if (error) {
+        validationErrors.push({ name: file.name, error });
+      } else {
+        validFilesAfterValidation.push(file);
+      }
+    }
+
+    // Show validation errors (but don't block valid files)
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(({ name, error }) => {
         addToast({
           type: 'error',
-          message: `${file.name}: ${error}`,
+          message: `${name}: ${error}`,
         });
-        setIsUploading(false);
-        return;
-      }
+      });
+    }
+
+    // If no valid files, stop here
+    if (validFilesAfterValidation.length === 0) {
+      setIsUploading(false);
+      return;
     }
     
     try {
@@ -142,11 +161,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           message: `Compound file uploaded successfully: ${result.compounds.length} compounds`,
         });
       } else {
-        // Handle proteomics files upload - validate all files first
-        console.log('Uploading proteomics files:', fileArray.map(f => f.name));
-        
+        // Handle proteomics files upload - validate filename pattern
+        console.log('Uploading proteomics files:', validFilesAfterValidation.map(f => f.name));
+
         const validFiles: File[] = [];
-        for (const file of fileArray) {
+        for (const file of validFilesAfterValidation) {
           const parsed = parseFilename(file.name);
           if (!parsed) {
             console.error('Invalid filename:', file.name);
@@ -241,8 +260,20 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    // Determine if this is compound upload based on the drop target
+    // The proteomics upload zone click sets isCompoundUpload=false
+    // We use the current isCompoundUpload state since user can only interact with one zone at a time
     handleFiles(e.dataTransfer.files, isCompoundUpload);
   }, [handleFiles, isCompoundUpload]);
+
+  // Separate handler for proteomics drop zone
+  const handleProteomicsDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    setIsCompoundUpload(false);
+    handleFiles(e.dataTransfer.files, false);
+  }, [handleFiles]);
   
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, isCompound: boolean = false) => {
     const files = e.target.files;
@@ -268,8 +299,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onDrop={handleProteomicsDrop}
+          onClick={() => {
+            setIsCompoundUpload(false);
+            fileInputRef.current?.click();
+          }}
           className={`
             relative border-2 border-dashed rounded-xl p-8 cursor-pointer
             transition-all duration-200 ease-in-out

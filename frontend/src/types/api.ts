@@ -135,6 +135,9 @@ export interface GSEAResult {
   fdr: number;
   lead_genes: string[];
   matched_genes: number;
+  // Running enrichment score curve data for plotting
+  running_es_curve?: Array<[number, number]>; // [rank, es] tuples
+  rank_metric_positions?: Array<[string, number, number]>; // [gene_name, rank, metric_value]
 }
 
 export interface GSEAData {

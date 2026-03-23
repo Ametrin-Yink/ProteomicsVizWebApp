@@ -124,6 +124,12 @@ if ("Sample_Origination" %in% names(psm_data)) {
 
 cat("Created QFeatures object with", nrow(pe[["peptide"]]), "peptides\n")
 
+# Count PSMs per protein before aggregation
+# Get the protein assignments from the peptide assay
+peptide_proteins <- rowData(pe[["peptide"]])$Proteins
+protein_psm_counts <- table(peptide_proteins)
+cat("Calculated PSM counts for", length(protein_psm_counts), "proteins\n")
+
 # Log2 transform peptide abundances (required before normalization and aggregation)
 cat("Log2 transforming peptide abundances...\n")
 pe <- logTransform(pe, base = 2, i = "peptide", name = "peptide_log2")
@@ -139,6 +145,27 @@ cat("Normalization complete\n")
 
 # Aggregate to protein level using normalized log2 data
 cat("Aggregating peptides to protein level...\n")
+cat("Using robust summary aggregation (this may take a few minutes for large datasets)...\n")
+cat("Processing", nrow(pe[["peptide_norm"]]), "peptides for", length(unique(rowData(pe[["peptide_norm"]])$Proteins)), "proteins\n")
+
+# Flush output to ensure logs are sent immediately
+flush.console()
+
+# Estimate time based on number of peptides
+num_peptides <- nrow(pe[["peptide_norm"]])
+num_proteins <- length(unique(rowData(pe[["peptide_norm"]])$Proteins))
+cat("Dataset size:", num_peptides, "peptides across", num_proteins, "proteins\n")
+if (num_peptides > 50000) {
+    cat("Large dataset detected - aggregation may take 10-20 minutes\n")
+} else if (num_peptides > 20000) {
+    cat("Medium dataset detected - aggregation may take 5-10 minutes\n")
+} else {
+    cat("Small dataset - aggregation should complete within 5 minutes\n")
+}
+flush.console()
+
+cat("Starting aggregation at", format(Sys.time(), "%H:%M:%S"), "\n")
+flush.console()
 
 pe <- tryCatch({
     aggregateFeatures(
@@ -151,6 +178,7 @@ pe <- tryCatch({
 }, error = function(e) {
     cat("Robust aggregation failed:", conditionMessage(e), "\n")
     cat("Trying median aggregation...\n")
+    flush.console()
     aggregateFeatures(
         object = pe,
         i = "peptide_norm",
@@ -260,10 +288,17 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
 # Handle NA gene names
 gene_names[is.na(gene_names)] <- protein_ids[is.na(gene_names)]
 
+# Get PSM counts for each protein
+psm_counts <- sapply(protein_ids, function(pid) {
+    count <- protein_psm_counts[pid]
+    if (is.na(count)) 0 else as.integer(count)
+})
+
 # Create output data frame
 protein_df <- as.data.frame(protein_matrix)
 protein_df$Master_Protein_Accessions <- protein_ids
 protein_df$Gene_Name <- gene_names
+protein_df$PSM_Count <- psm_counts
 
 # Reorder columns to put IDs first
 cols <- c("Master_Protein_Accessions", "Gene_Name", setdiff(names(protein_df), c("Master_Protein_Accessions", "Gene_Name")))

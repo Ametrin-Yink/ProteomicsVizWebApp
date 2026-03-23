@@ -2,10 +2,18 @@
 Pytest configuration and shared fixtures for backend tests.
 """
 
+import sys
+import os
+from pathlib import Path
+
+# Add backend directory to Python path for imports
+backend_dir = Path(__file__).parent.parent / "backend"
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 import pytest
 import shutil
 import tempfile
-from pathlib import Path
 from typing import Generator
 import pandas as pd
 import numpy as np
@@ -22,7 +30,7 @@ def client():
 @pytest.fixture
 def sample_data_dir() -> Path:
     """Return path to sample data directory."""
-    return Path(__file__).parent.parent.parent / "SampleData"
+    return Path(__file__).parent.parent / "SampleData"
 
 
 @pytest.fixture

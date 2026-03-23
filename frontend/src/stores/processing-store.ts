@@ -36,6 +36,7 @@ interface ProcessingStore {
   setSessionId: (sessionId: string) => void;
   updateStepProgress: (message: ProgressMessage['payload']) => void;
   addLog: (message: LogMessage['payload']) => void;
+  setLogs: (logs: LogEntry[]) => void;
   setError: (message: ErrorMessage['payload']) => void;
   setComplete: (message: CompleteMessage['payload']) => void;
   setConnected: (connected: boolean) => void;
@@ -125,6 +126,13 @@ export const useProcessingStore = create<ProcessingStore>()(
           step: message.step,
         };
         state.logs.push(logEntry);
+      });
+    },
+
+    // Set multiple logs (for loading historical logs)
+    setLogs: (logs: LogEntry[]) => {
+      set((state) => {
+        state.logs = logs;
       });
     },
 

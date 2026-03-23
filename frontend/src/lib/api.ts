@@ -17,7 +17,8 @@ import {
   StartProcessingResponse,
 } from '@/types/processing';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use empty base URL to go through Next.js proxy (avoids CORS)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // API endpoints follow the pattern: /api/sessions, /api/organisms, etc.
 // WebSocket: /ws/sessions/{id}
@@ -165,6 +166,31 @@ export const processingAPI = {
           detail: `HTTP ${response.status}: ${response.statusText}`,
         }));
         throw new Error(error.detail || 'Failed to cancel processing');
+      }
+      return response.json();
+    });
+  },
+
+  getLogs: (sessionId: string): Promise<{
+    logs: Array<{
+      level: 'info' | 'warning' | 'error';
+      message: string;
+      step?: number;
+      timestamp: string;
+    }>;
+    completed_steps: number[];
+    current_step: number;
+    is_complete: boolean;
+    outputs: Record<string, string> | null;
+  }> => {
+    return fetch(`${API_BASE_URL}/api/sessions/${sessionId}/logs`, {
+      headers: { 'Content-Type': 'application/json' },
+    }).then(async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({
+          detail: `HTTP ${response.status}: ${response.statusText}`,
+        }));
+        throw new Error(error.detail || 'Failed to get processing logs');
       }
       return response.json();
     });

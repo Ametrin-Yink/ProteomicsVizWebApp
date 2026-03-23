@@ -67,6 +67,7 @@ def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
             log_fc = row.get("logFC", 0)
             pval = row.get("pval", 1)
             adj_pval = row.get("adjPval", 1)
+            psm_count = row.get("PSM_Count", row.get("psm_count", 0))
 
             # Convert NaN/Inf to None
             import math
@@ -76,6 +77,8 @@ def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
                 pval = None
             if pd.isna(adj_pval) or (isinstance(adj_pval, float) and math.isinf(adj_pval)):
                 adj_pval = None
+            if pd.isna(psm_count):
+                psm_count = 0
 
             result = {
                 "master_protein_accessions": str(row.get("Master_Protein_Accessions", "")),
@@ -84,6 +87,7 @@ def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
                 "pval": float(pval) if pval is not None else 1,
                 "adj_pval": float(adj_pval) if adj_pval is not None else 1,
                 "significant": bool((adj_pval if adj_pval is not None else 1) < 0.05),
+                "psm_count": int(psm_count) if psm_count is not None else 0,
             }
             results.append(result)
         
@@ -327,24 +331,27 @@ def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]
         metadata_cols = ['Master_Protein_Accessions', 'Gene_Name']
         abundance_cols = [col for col in df.columns if col not in metadata_cols]
 
-        # Build arrays for frontend format
+        # Build arrays for frontend format - include ALL samples, even with NA/0 values
         samples = []
         abundances = []
         conditions = []
 
         for col in abundance_cols:
+            samples.append(col)
             value = protein_row.iloc[0].get(col)
-            if pd.notna(value):
-                samples.append(col)
+            # Convert NA to 0, otherwise use the value
+            if pd.isna(value):
+                abundances.append(0.0)
+            else:
                 abundances.append(float(value))
-                # Try to infer condition from sample name (e.g., "Abundance F1 Sample_DMSO_1")
-                # Default to Unknown if can't parse
-                condition = "Unknown"
-                if "DMSO" in col.upper():
-                    condition = "Control"
-                elif "INCZ" in col.upper() or "TREATMENT" in col.upper():
-                    condition = "Treatment"
-                conditions.append(condition)
+            # Try to infer condition from sample name (e.g., "Abundance F1 Sample_DMSO_1")
+            # Default to Unknown if can't parse
+            condition = "Unknown"
+            if "DMSO" in col.upper():
+                condition = "Control"
+            elif "INCZ" in col.upper() or "TREATMENT" in col.upper():
+                condition = "Treatment"
+            conditions.append(condition)
 
         return {
             "samples": samples,

@@ -116,7 +116,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces: [trace], layout };
   }, [data.pvalue_distribution]);
 
-  // 3. PSM CV Variance
+  // 3. PSM CV Variance - no individual points shown
   const psmCVPlot = useMemo(() => {
     if (!data.psm_cv) return null;
 
@@ -128,6 +128,10 @@ export default function QCPlots({ data }: QCPlotsProps) {
       line: { color: condition === 'DMSO' ? '#00ADEF' : '#E73564' },
       fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.5)' : 'rgba(231, 53, 100, 0.5)',
       hovertemplate: 'CV: %{y:.3f}<extra></extra>',
+      // Hide individual points - only show violin and box
+      points: false,
+      jitter: 0,
+      pointpos: 0,
     }));
 
     const layout = {
@@ -148,7 +152,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.psm_cv]);
 
-  // 3b. Protein CV Variance (with different colors)
+  // 3b. Protein CV Variance (with different colors) - no individual points shown
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
 
@@ -160,6 +164,10 @@ export default function QCPlots({ data }: QCPlotsProps) {
       line: { color: condition === 'DMSO' ? '#10B981' : '#F59E0B' },
       fillcolor: condition === 'DMSO' ? 'rgba(16, 185, 129, 0.5)' : 'rgba(245, 158, 11, 0.5)',
       hovertemplate: 'CV: %{y:.3f}<extra></extra>',
+      // Hide individual points - only show violin and box
+      points: false,
+      jitter: 0,
+      pointpos: 0,
     }));
 
     const layout = {
@@ -180,7 +188,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.protein_cv]);
 
-  // 4. PSM Intensity Distribution - Show 90% of data
+  // 4. PSM Intensity Distribution - KDE curves (lines) instead of histogram
   const psmIntensityPlot = useMemo(() => {
     if (!data.intensity_distributions?.psm) return null;
 
@@ -197,30 +205,70 @@ export default function QCPlots({ data }: QCPlotsProps) {
     const p5 = allValues[Math.floor(allValues.length * 0.05)];
     const p95 = allValues[Math.floor(allValues.length * 0.95)];
 
+    // Function to calculate KDE
+    const calculateKDE = (values: number[], numPoints: number = 100) => {
+      if (values.length === 0) return { x: [], y: [] };
+
+      // Filter values to 90% range
+      const filtered = values.filter(v => v >= p5 && v <= p95);
+      if (filtered.length === 0) return { x: [], y: [] };
+
+      const min = Math.min(...filtered);
+      const max = Math.max(...filtered);
+      const range = max - min || 1;
+
+      // Silverman's rule of thumb for bandwidth
+      const std = Math.sqrt(filtered.reduce((sum, v) => sum + Math.pow(v - filtered.reduce((a, b) => a + b) / filtered.length, 2), 0) / filtered.length);
+      const bandwidth = 1.06 * std * Math.pow(filtered.length, -0.2);
+
+      const x: number[] = [];
+      const y: number[] = [];
+
+      for (let i = 0; i < numPoints; i++) {
+        const xi = min + (range * i) / (numPoints - 1);
+        x.push(xi);
+
+        // Gaussian kernel
+        let yi = 0;
+        for (const v of filtered) {
+          const z = (xi - v) / bandwidth;
+          yi += Math.exp(-0.5 * z * z) / (bandwidth * Math.sqrt(2 * Math.PI));
+        }
+        y.push(yi / filtered.length);
+      }
+
+      return { x, y };
+    };
+
     const traces: Array<{
       x: number[];
-      type: 'histogram';
+      y: number[];
+      type: 'scatter';
+      mode: 'lines';
       name: string;
-      opacity: number;
-      marker: { color: string };
+      line: { color: string; width: number };
+      fill?: 'tozeroy';
+      fillcolor?: string;
       hovertemplate: string;
     }> = [];
 
     Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
       Object.entries(replicates).forEach(([replicate, values]) => {
-        // Filter values to 90% range
-        const filteredValues = values.filter(v => v >= p5 && v <= p95);
-
-        traces.push({
-          x: filteredValues,
-          type: 'histogram' as const,
-          name: `${condition} - ${replicate}`,
-          opacity: 0.6,
-          marker: {
-            color: condition === 'DMSO' ? '#00ADEF' : '#E73564',
-          },
-          hovertemplate: 'Intensity: %{x}<br>Count: %{y}<extra></extra>',
-        });
+        const kde = calculateKDE(values);
+        if (kde.x.length > 0) {
+          const color = condition === 'DMSO' ? '#00ADEF' : '#E73564';
+          traces.push({
+            x: kde.x,
+            y: kde.y,
+            type: 'scatter',
+            mode: 'lines',
+            name: `${condition} - ${replicate}`,
+            line: { color, width: 2 },
+            fill: 'tozeroy',
+            fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.2)' : 'rgba(231, 53, 100, 0.2)',
+            hovertemplate: 'Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
+          });
+        }
       });
     });
 
@@ -232,10 +280,9 @@ export default function QCPlots({ data }: QCPlotsProps) {
         gridcolor: '#E5E7EB',
       },
       yaxis: {
-        title: { text: 'Count', font: { size: 12 } },
+        title: { text: 'Density', font: { size: 12 } },
         gridcolor: '#E5E7EB',
       },
-      barmode: 'overlay' as const,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
       margin: { l: 50, r: 30, t: 50, b: 50 },
@@ -246,27 +293,43 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.intensity_distributions?.psm]);
 
-  // 5. Protein Intensity Distribution
+  // 5. Protein Intensity Distribution - Filter to 90% of data to avoid impossible values
   const proteinIntensityPlot = useMemo(() => {
     if (!data.intensity_distributions?.protein) return null;
 
+    // Collect all values to calculate percentiles
+    let allValues: number[] = [];
+    Object.entries(data.intensity_distributions.protein).forEach(([condition, values]) => {
+      allValues = allValues.concat(values);
+    });
+
+    // Sort and calculate 5th and 95th percentiles (90% of data)
+    allValues.sort((a, b) => a - b);
+    const p5 = allValues[Math.floor(allValues.length * 0.05)];
+    const p95 = allValues[Math.floor(allValues.length * 0.95)];
+
+    // Filter values to 90% range to avoid impossible values
     const traces = Object.entries(data.intensity_distributions.protein).map(
-      ([condition, values]) => ({
-        x: values,
-        type: 'histogram' as const,
-        name: condition,
-        opacity: 0.6,
-        marker: {
-          color: condition === 'DMSO' ? '#00ADEF' : '#E73564',
-        },
-        hovertemplate: 'Intensity: %{x}<br>Count: %{y}<extra></extra>',
-      })
+      ([condition, values]) => {
+        const filteredValues = values.filter(v => v >= p5 && v <= p95);
+        return {
+          x: filteredValues,
+          type: 'histogram' as const,
+          name: condition,
+          opacity: 0.6,
+          marker: {
+            color: condition === 'DMSO' ? '#00ADEF' : '#E73564',
+          },
+          hovertemplate: 'Intensity: %{x}<br>Count: %{y}<extra></extra>',
+        };
+      }
     );
 
     const layout = {
-      title: { text: 'Protein Intensity Distribution', font: { size: 14, color: '#111827' } },
+      title: { text: 'Protein Intensity Distribution (90% of data)', font: { size: 14, color: '#111827' } },
       xaxis: {
         title: { text: 'Log2 Intensity', font: { size: 12 } },
+        range: [p5, p95],
         gridcolor: '#E5E7EB',
       },
       yaxis: {

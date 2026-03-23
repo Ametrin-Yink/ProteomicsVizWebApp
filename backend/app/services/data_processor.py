@@ -208,59 +208,57 @@ class DataProcessor:
         df: pd.DataFrame
     ) -> pd.DataFrame:
         """Step 3: Remove razor peptides by selecting best protein match.
-        
+
         For peptides matching multiple proteins, selects the best match based on:
         1. Most peptides matched
         2. Longest sequence (tie-breaker)
         3. First in list (final tie-breaker)
-        
+
+        This is applied globally across all samples (not per-sample) to ensure
+        consistent protein assignments.
+
         Args:
             df: DataFrame from Step 2
-            
+
         Returns:
             DataFrame with razor peptides resolved
         """
         if not self.config.remove_razor:
             logger.info("Step 3: Skipping razor removal (disabled)")
             return df
-        
+
         logger.info("Step 3: Removing razor peptides")
-        
-        # Count peptides per protein
+
+        # Count peptides per protein across ALL samples
         protein_peptide_counts = self._count_peptides_per_protein(df)
-        
-        resolved = []
-        
-        # Group by unique PSM and sample
-        for (unique_psm, sample), group in df.groupby(['Unique_PSM', 'Sample_Origination']):
-            if len(group) == 1:
-                resolved.append(group.iloc[0])
-                continue
-            
-            # Get all protein matches from first row
-            proteins = str(group['Master_Protein_Accessions'].iloc[0]).split('; ')
+
+        # Create a mapping of Unique_PSM to best protein (global, not per-sample)
+        psm_to_best_protein = {}
+
+        # Group by unique PSM only (across all samples)
+        for unique_psm, group in df.groupby('Unique_PSM'):
+            # Get all protein matches from first row (should be same across group)
+            proteins = str(group['Master_Protein_Accessions'].iloc[0]).split(';')
             proteins = [p.strip() for p in proteins if p.strip()]
-            
+
             if len(proteins) <= 1:
-                resolved.append(group.iloc[0])
-                continue
-            
-            # Select best protein
-            best_protein = self._select_best_protein(
-                proteins,
-                protein_peptide_counts,
-                self.config.fasta_db
-            )
-            
-            # Update group with best protein
-            row = group.iloc[0].copy()
-            row['Master_Protein_Accessions'] = best_protein
-            resolved.append(row)
-        
-        result = pd.DataFrame(resolved)
-        logger.info(f"Step 3 complete: {len(result)} rows after razor removal")
-        
-        return result
+                # Single protein - no razor to resolve
+                psm_to_best_protein[unique_psm] = proteins[0] if proteins else ''
+            else:
+                # Multiple proteins - select best one
+                best_protein = self._select_best_protein(
+                    proteins,
+                    protein_peptide_counts,
+                    self.config.fasta_db
+                )
+                psm_to_best_protein[unique_psm] = best_protein
+
+        # Apply the mapping to all rows
+        df['Master_Protein_Accessions'] = df['Unique_PSM'].map(psm_to_best_protein)
+
+        logger.info(f"Step 3 complete: Razor peptides resolved, {len(df)} rows")
+
+        return df
     
     def _count_peptides_per_protein(
         self,

@@ -15,35 +15,82 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
   const plotData = useMemo(() => {
     if (!pathway) return null;
 
-    // Generate running enrichment score data
-    // This is a simplified representation - in production, the backend would provide the actual curve data
-    const numPoints = 100;
-    const xValues = Array.from({ length: numPoints }, (_, i) => i);
+    // Use actual running ES curve if available, otherwise generate synthetic
+    let xValues: number[] = [];
+    let yValues: number[] = [];
+    let hasRealCurve = false;
 
-    // Simulate a running enrichment score curve
-    // Positive NES: curve goes up then down
-    // Negative NES: curve goes down then up
-    const es = pathway.es;
-    const yValues = xValues.map((x) => {
-      const normalizedX = x / numPoints;
-      if (es > 0) {
-        // Upward curve
-        return es * Math.sin(normalizedX * Math.PI) * (1 + Math.random() * 0.1);
-      } else {
-        // Downward curve
-        return es * Math.sin(normalizedX * Math.PI) * (1 + Math.random() * 0.1);
-      }
-    });
+    if (pathway.running_es_curve && pathway.running_es_curve.length > 0) {
+      // Use actual curve data from backend
+      xValues = pathway.running_es_curve.map(([rank]) => rank);
+      yValues = pathway.running_es_curve.map(([, es]) => es);
+      hasRealCurve = true;
+    } else {
+      // Fallback: generate synthetic curve for backwards compatibility
+      const numPoints = 100;
+      xValues = Array.from({ length: numPoints }, (_, i) => i);
+
+      const es = pathway.es;
+      yValues = xValues.map((x) => {
+        const normalizedX = x / numPoints;
+        if (es > 0) {
+          return es * Math.sin(normalizedX * Math.PI) * (1 + Math.random() * 0.1);
+        } else {
+          return es * Math.sin(normalizedX * Math.PI) * (1 + Math.random() * 0.1);
+        }
+      });
+    }
 
     // Generate rank metric distribution (bar chart at bottom)
-    const rankMetrics = xValues.map(() => (Math.random() - 0.5) * 2);
+    // Use actual rank metric positions if available
+    let rankMetrics: number[] = [];
+    if (pathway.rank_metric_positions && pathway.rank_metric_positions.length > 0) {
+      // Create an array aligned with xValues, filling in actual metric values
+      const maxRank = xValues.length > 0 ? Math.max(...xValues) : 100;
+      rankMetrics = new Array(xValues.length).fill(0);
 
-    // Leading edge positions
-    const leadingEdgePositions = pathway.lead_genes.map((_, i) =>
-      Math.floor((i / pathway.lead_genes.length) * numPoints * 0.4 + numPoints * 0.3)
-    );
+      pathway.rank_metric_positions.forEach(([, rank, metric]) => {
+        // Find closest index in xValues
+        const index = Math.floor((rank / maxRank) * (xValues.length - 1));
+        if (index >= 0 && index < rankMetrics.length) {
+          rankMetrics[index] = metric;
+        }
+      });
+    } else {
+      // Fallback: random metrics
+      rankMetrics = xValues.map(() => (Math.random() - 0.5) * 2);
+    }
+
+    // Leading edge positions from actual data
+    let leadingEdgePositions: number[] = [];
+    if (pathway.rank_metric_positions && pathway.rank_metric_positions.length > 0) {
+      const maxRank = xValues.length > 0 ? Math.max(...xValues) : 100;
+      leadingEdgePositions = pathway.rank_metric_positions.map(([, rank]) =>
+        Math.floor((rank / maxRank) * (xValues.length - 1))
+      );
+    } else if (pathway.lead_genes.length > 0) {
+      // Fallback: distribute evenly
+      leadingEdgePositions = pathway.lead_genes.map((_, i) =>
+        Math.floor((i / pathway.lead_genes.length) * xValues.length * 0.4 + xValues.length * 0.3)
+      );
+    }
+
+    // Calculate zero line for the ES curve
+    const zeroLineY = new Array(xValues.length).fill(0);
 
     const traces = [
+      // Zero reference line
+      {
+        x: xValues,
+        y: zeroLineY,
+        type: 'scatter' as const,
+        mode: 'lines' as const,
+        name: 'Zero',
+        line: { color: '#000000', width: 1, dash: 'dash' as const },
+        yaxis: 'y' as const,
+        hoverinfo: 'skip',
+        showlegend: false,
+      },
       // Running Enrichment Score
       {
         x: xValues,
@@ -53,12 +100,12 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         name: 'Running ES',
         line: { color: '#E73564', width: 2 },
         fill: 'tozeroy' as const,
-        fillcolor: 'rgba(231, 53, 100, 0.3)',
+        fillcolor: pathway.es > 0 ? 'rgba(231, 53, 100, 0.3)' : 'rgba(0, 173, 239, 0.3)',
         yaxis: 'y' as const,
         hovertemplate: 'Rank: %{x}<br>ES: %{y:.3f}<extra></extra>',
       },
       // Leading edge markers
-      {
+      ...(leadingEdgePositions.length > 0 ? [{
         x: leadingEdgePositions,
         y: leadingEdgePositions.map(() => 0),
         type: 'scatter' as const,
@@ -73,7 +120,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         yaxis: 'y' as const,
         hovertemplate: 'Leading Edge Gene<extra></extra>',
         showlegend: false,
-      },
+      }] : []),
       // Rank metric distribution
       {
         x: xValues,

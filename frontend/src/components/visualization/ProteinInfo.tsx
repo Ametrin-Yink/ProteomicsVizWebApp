@@ -153,11 +153,13 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
           </div>
         </div>
 
-        {/* Gene Names */}
+        {/* Gene Names - REMOVED as per user request */}
+        {/*
         <div data-testid="gene-name" className="flex justify-between items-center py-2 border-b border-gray-100">
           <span className="text-sm text-gray-500">Gene Name(s)</span>
           <span className="text-sm font-medium text-gray-900">{geneNames.join(', ') || '-'}</span>
         </div>
+        */}
 
         <div className="flex justify-between items-center py-2 border-b border-gray-100">
           <span className="text-sm text-gray-500">Fold Change</span>
@@ -194,7 +196,7 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
         <div className="flex justify-between items-center py-2 border-b border-gray-100">
           <span className="text-sm text-gray-500">Number of PSMs</span>
           <span className="text-sm font-medium text-gray-900">
-            {protein.psm_count || '-'}
+            {protein.psm_count ?? '-'}
           </span>
         </div>
 

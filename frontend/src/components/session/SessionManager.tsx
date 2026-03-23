@@ -230,21 +230,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           className
         )}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#e2e8f0]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E73564] to-[#00ADEF] flex items-center justify-center">
-              <FlaskConical className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-[#1a1a2e]">ProteomicsViz</h1>
-              <p className="text-xs text-[#64748b]">Analysis Platform</p>
-            </div>
-          </div>
-          
-          {/* Collapse button removed - sidebar always visible */}
-        </div>
-
         {/* New session button */}
         <div className="p-4">
           <Button
@@ -367,16 +352,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-[#e2e8f0]">
-          <Button
-            variant="ghost"
-            fullWidth
-            leftIcon={<Settings className="w-4 h-4" />}
-            className="justify-start"
-          >
-            Settings
-          </Button>
+        {/* Footer - Settings removed for now */}
+        <div className="p-4 border-t border-[#e2e8f0] text-center text-xs text-[#94a3b8]">
+          ProteomicsViz Analysis Platform
         </div>
       </div>
 

@@ -166,17 +166,17 @@ class GSEAService:
     ) -> GSEAResults:
         """
         Run GSEA for a single database.
-        
+
         Args:
             rnk: Ranked gene list
             gene_set: Gene set database name
             output_dir: Output directory
-            
+
         Returns:
             GSEAResults object
         """
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         try:
             # Run prerank GSEA
             pre_res = gp.prerank(
@@ -190,10 +190,10 @@ class GSEAService:
                 seed=123,
                 verbose=False
             )
-            
+
             # Parse results
             results_df = pre_res.res2d
-            
+
             if results_df is None or len(results_df) == 0:
                 return GSEAResults(
                     database=gene_set,
@@ -203,13 +203,17 @@ class GSEAService:
                     underrepresented=0,
                     results=[]
                 )
-            
+
+            # Get the full ranked list for curve generation
+            ranked_genes = rnk['gene'].tolist()
+            ranked_metrics = rnk.iloc[:, 1].tolist()  # Second column is the metric
+
             # Convert to GSEAResult objects
             gsea_results = []
             overrepresented = 0
             underrepresented = 0
             significant = 0
-            
+
             for _, row in results_df.iterrows():
                 # Handle different column name formats
                 term = str(row.get('Term', row.get('term', '')))
@@ -217,16 +221,27 @@ class GSEAService:
                 pval = float(row.get('NOM p-val', row.get('pval', 1)))
                 fdr = float(row.get('FDR q-val', row.get('fdr', 1)))
                 es = float(row.get('ES', row.get('es', 0)))
-                
+
                 # Get lead genes if available
                 lead_genes = []
                 if 'Lead_genes' in row:
                     lead_genes_str = str(row['Lead_genes'])
                     lead_genes = [g.strip() for g in lead_genes_str.split(',') if g.strip()]
-                
+
                 # Count matched genes
                 matched_genes = int(row.get('Tag %', '0').split('/')[0]) if 'Tag %' in row else 0
-                
+
+                # Generate running enrichment score curve
+                running_es_curve = self._generate_running_es_curve(
+                    ranked_genes, lead_genes, nes
+                )
+
+                # Generate rank metric positions for leading edge genes
+                rank_metric_positions = []
+                for i, (gene, metric) in enumerate(zip(ranked_genes, ranked_metrics)):
+                    if gene in lead_genes:
+                        rank_metric_positions.append((gene, i, float(metric)))
+
                 result = GSEAResult(
                     term=term,
                     name=term,
@@ -235,18 +250,20 @@ class GSEAService:
                     pval=pval,
                     fdr=fdr,
                     lead_genes=lead_genes,
-                    matched_genes=matched_genes
+                    matched_genes=matched_genes,
+                    running_es_curve=running_es_curve,
+                    rank_metric_positions=rank_metric_positions
                 )
-                
+
                 gsea_results.append(result)
-                
+
                 if result.significant:
                     significant += 1
                     if nes > 0:
                         overrepresented += 1
                     else:
                         underrepresented += 1
-            
+
             return GSEAResults(
                 database=gene_set,
                 total_pathways=len(gsea_results),
@@ -255,7 +272,7 @@ class GSEAService:
                 underrepresented=underrepresented,
                 results=gsea_results
             )
-            
+
         except Exception as e:
             logger.error(f"GSEA analysis failed for {gene_set}: {e}")
             return GSEAResults(
@@ -266,6 +283,66 @@ class GSEAService:
                 underrepresented=0,
                 results=[]
             )
+
+    def _generate_running_es_curve(
+        self,
+        ranked_genes: list[str],
+        lead_genes: list[str],
+        nes: float
+    ) -> list[tuple[int, float]]:
+        """
+        Generate the running enrichment score curve.
+
+        This calculates the actual GSEA running sum statistic:
+        - Increase when encountering a pathway gene (lead gene)
+        - Decrease when encountering a non-pathway gene
+
+        Args:
+            ranked_genes: Full list of genes in ranked order
+            lead_genes: Genes belonging to the pathway
+            nes: Normalized enrichment score (used to scale the curve)
+
+        Returns:
+            List of (rank, es) tuples representing the curve
+        """
+        if not ranked_genes or not lead_genes:
+            return []
+
+        # Create a set for faster lookup
+        lead_gene_set = set(lead_genes)
+
+        N = len(ranked_genes)
+        n = len(lead_genes)
+
+        if n == 0 or N == 0:
+            return []
+
+        # Calculate weights for the running sum
+        # In classic GSEA, hits get weight based on correlation
+        # For preranked GSEA, we use equal weights
+        hit_weight = np.sqrt((N - n) / n)
+        miss_weight = -np.sqrt(n / (N - n))
+
+        # Calculate running sum
+        running_sum = 0
+        max_sum = 0
+        curve = []
+
+        for i, gene in enumerate(ranked_genes):
+            if gene in lead_gene_set:
+                running_sum += hit_weight
+            else:
+                running_sum += miss_weight
+
+            curve.append((i, running_sum))
+            max_sum = max(max_sum, abs(running_sum))
+
+        # Normalize to match the actual ES
+        if max_sum > 0:
+            scale_factor = abs(nes) / max_sum if nes != 0 else 1
+            curve = [(rank, es * scale_factor * (1 if nes > 0 else -1)) for rank, es in curve]
+
+        return curve
     
     def get_results(self, database: Optional[str] = None) -> Optional[GSEAResults]:
         """

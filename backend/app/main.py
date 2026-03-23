@@ -220,16 +220,30 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 if data.startswith('{') and '"type":"subscribe"' in data.replace(' ', ''):
                     # Subscribe message received, connection is ready
                     print(f"Subscribe message received for session {session_id}", flush=True)
-                    
+
                     # Send current processing state if available
                     try:
                         session_store = app.state.session_store
                         pipeline_state = await session_store.load_pipeline_state(session_id)
                         if pipeline_state:
+                            # Send historical logs first
+                            logs = pipeline_state.get("logs", [])
+                            print(f"Sending {len(logs)} historical logs to session {session_id}", flush=True)
+                            for log in logs:
+                                try:
+                                    log_msg = {
+                                        "type": "log",
+                                        "payload": log
+                                    }
+                                    await websocket.send_json(log_msg)
+                                except Exception as e:
+                                    print(f"Error sending log to session {session_id}: {e}", flush=True)
+                                    break
+
                             # Send current step progress
                             current_step = pipeline_state.get("current_step", 0)
                             completed_steps = pipeline_state.get("completed_steps", [])
-                            
+
                             # Send progress for completed steps
                             print(f"Sending {len(completed_steps)} completed steps to session {session_id}: {completed_steps}", flush=True)
                             for step_num in completed_steps:
@@ -250,7 +264,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                 except Exception as e:
                                     print(f"Error sending step {step_num} to session {session_id}: {e}", flush=True)
                                     break
-                            
+
                             # Send completion message if pipeline is done
                             if pipeline_state.get("completed_at"):
                                 complete_msg = {
@@ -265,7 +279,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                 print(f"Sent completion message to session {session_id}", flush=True)
                     except Exception as e:
                         print(f"Error sending current state for session {session_id}: {e}", flush=True)
-                    
+
                     continue
                 
                 # Handle pong from frontend

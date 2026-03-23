@@ -32,6 +32,7 @@ cat("Input file:", input_file, "\n")
 cat("Output file:", output_file, "\n")
 cat("Treatment:", treatment, "\n")
 cat("Control:", control, "\n")
+flush.console()
 
 # Check if input file exists
 if (!file.exists(input_file)) {
@@ -40,19 +41,26 @@ if (!file.exists(input_file)) {
 
 # Read protein abundances
 cat("Reading protein abundances...\n")
+flush.console()
 protein_data <- read.delim(input_file, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
 
 cat("Loaded", nrow(protein_data), "proteins\n")
+flush.console()
 
 # Identify ID columns and abundance columns
-id_cols <- c("Master_Protein_Accessions", "Gene_Name", "Protein")
+id_cols <- c("Master_Protein_Accessions", "Gene_Name", "Protein", "PSM_Count")
 id_cols_present <- intersect(id_cols, names(protein_data))
 abundance_cols <- setdiff(names(protein_data), id_cols_present)
+
+cat("All non-ID columns:", paste(abundance_cols, collapse = ", "), "\n")
+flush.console()
 
 # Filter to only numeric columns
 abundance_cols <- abundance_cols[sapply(protein_data[abundance_cols], is.numeric)]
 
 cat("Found", length(abundance_cols), "abundance columns\n")
+cat("Abundance columns:", paste(abundance_cols, collapse = ", "), "\n")
+flush.console()
 
 if (length(abundance_cols) == 0) {
     stop("No abundance columns found in input file")
@@ -123,21 +131,41 @@ colData(pe) <- colData(se)
 cat("Created QFeatures object with", nrow(pe[["protein"]]), "proteins\n")
 cat("colData in QFeatures:\n")
 print(colData(pe))
+flush.console()
 
 # Fit robust linear model with limma (for protein-level data)
 cat("Fitting robust linear models with limma...\n")
 cat("Note: Protein abundances are already log2 transformed from Step 6\n")
+flush.console()
 
 # Protein abundances from Step 6 are already log2 transformed
 # No additional log2 needed
 protein_matrix_log2 <- protein_matrix
 
 # Create design matrix using the condition factor directly
-design <- model.matrix(~ 0 + col_data$condition)
+cat("Creating design matrix...\n")
+cat("Number of samples:", nrow(col_data), "\n")
+cat("Number of columns in protein matrix:", ncol(protein_matrix_log2), "\n")
+cat("Condition values:\n")
+print(col_data$condition)
+flush.console()
+
+# Ensure the design matrix matches the data dimensions
+design <- model.matrix(~ 0 + condition, data = col_data)
 colnames(design) <- levels(col_data$condition)
 
 cat("Design matrix:\n")
 print(design)
+
+cat("Design matrix dimensions:", nrow(design), "rows x", ncol(design), "columns\n")
+cat("Protein matrix dimensions:", nrow(protein_matrix_log2), "rows x", ncol(protein_matrix_log2), "columns\n")
+flush.console()
+
+# Check dimensions match
+if (nrow(design) != ncol(protein_matrix_log2)) {
+    stop(paste("Dimension mismatch: design has", nrow(design), "rows but protein matrix has",
+               ncol(protein_matrix_log2), "columns"))
+}
 
 # Fit linear model
 fit <- lmFit(protein_matrix_log2, design)
@@ -155,9 +183,11 @@ fit2 <- contrasts.fit(fit, contrast)
 fit2 <- eBayes(fit2)
 
 cat("Model fitting complete\n")
+flush.console()
 
 # Extract results
 cat("Extracting differential expression results...\n")
+flush.console()
 
 # Get topTable results
 results_df <- topTable(fit2, number = Inf, sort.by = "p", adjust.method = "BH")
@@ -226,6 +256,7 @@ results_df <- results_df[, c(cols_present, other_cols)]
 
 # Write output
 cat("Writing differential expression results to:", output_file, "\n")
+flush.console()
 write.table(
     results_df,
     file = output_file,
@@ -240,5 +271,6 @@ cat("Total proteins:", nrow(results_df), "\n")
 cat("Significant proteins (adjPval < 0.05):", sum(results_df$adjPval < 0.05, na.rm = TRUE), "\n")
 cat("Upregulated (logFC > 0 & adjPval < 0.05):", sum(results_df$logFC > 0 & results_df$adjPval < 0.05, na.rm = TRUE), "\n")
 cat("Downregulated (logFC < 0 & adjPval < 0.05):", sum(results_df$logFC < 0 & results_df$adjPval < 0.05, na.rm = TRUE), "\n")
+flush.console()
 
 cat("\nStep 7 complete: Differential expression analysis finished successfully\n")

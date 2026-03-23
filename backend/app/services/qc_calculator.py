@@ -214,32 +214,36 @@ class QCCalculator:
     def _calculate_cv(self, psm_df: pd.DataFrame) -> dict[str, list[float]]:
         """
         Calculate coefficient of variation per condition.
-        
+
+        For each unique PSM, calculate CV across replicates within each condition.
+        CV = std / mean for the abundance values across replicates.
+
         Args:
             psm_df: PSM abundances DataFrame
-            
+
         Returns:
             Dictionary mapping condition to CV values
         """
         if psm_df is None or 'Condition' not in psm_df.columns:
             return {}
-        
+
         cv_by_condition = {}
-        
+
         for condition in psm_df['Condition'].unique():
             condition_df = psm_df[psm_df['Condition'] == condition]
-            
-            # Group by Unique_PSM and calculate CV
+
+            # Group by Unique_PSM and calculate CV across replicates
             cv_values = []
             for unique_psm, group in condition_df.groupby('Unique_PSM'):
+                # Get abundance values across all replicates for this PSM
                 abundances = group['Abundance'].dropna()
-                if len(abundances) > 1:
+                if len(abundances) > 1:  # Need at least 2 values to calculate CV
                     mean = abundances.mean()
                     std = abundances.std()
                     if mean > 0:
                         cv = std / mean
                         cv_values.append(cv)
-            
+
             cv_by_condition[str(condition)] = cv_values
 
         return cv_by_condition
@@ -247,6 +251,9 @@ class QCCalculator:
     def _calculate_protein_cv(self, protein_df: pd.DataFrame) -> dict[str, list[float]]:
         """
         Calculate coefficient of variation per condition for protein abundances.
+
+        For each protein, calculate CV across replicates within each condition.
+        CV = std / mean for the abundance values across replicates.
 
         Args:
             protein_df: Protein abundances DataFrame
@@ -258,13 +265,13 @@ class QCCalculator:
             return {}
 
         # Get abundance columns (exclude ID columns)
-        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein']
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein', 'Master_Protein_Accessions']
         abundance_cols = [
             col for col in protein_df.columns
             if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
         ]
 
-        # Group columns by condition
+        # Group columns by condition (extract condition from sample names)
         condition_cols = {}
         for col in abundance_cols:
             condition = self._extract_condition(col)
@@ -277,8 +284,9 @@ class QCCalculator:
         for condition, cols in condition_cols.items():
             cv_values = []
             for _, row in protein_df.iterrows():
+                # Get abundance values for all replicates in this condition
                 abundances = row[cols].dropna()
-                if len(abundances) > 1:
+                if len(abundances) > 1:  # Need at least 2 replicates to calculate CV
                     mean = abundances.mean()
                     std = abundances.std()
                     if mean > 0:
@@ -314,13 +322,13 @@ class QCCalculator:
             else:
                 sample_name = str(group_name)
 
-            missing = group_df['Abundance'].isna().sum()
-            present = group_df['Abundance'].notna().sum()
+            missing = int(group_df['Abundance'].isna().sum())
+            present = int(group_df['Abundance'].notna().sum())
 
             completeness.append(DataCompleteness(
                 sample=sample_name,
-                missing=int(missing),
-                present=int(present)
+                missing=missing,
+                present=present
             ))
 
         return completeness
