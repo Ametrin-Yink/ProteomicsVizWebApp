@@ -39,9 +39,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const router = useRouter();
   const sessions = useSessions() || [];
   const currentSession = useCurrentSession();
-  const { setCurrentSession, addSession, loadSessions } = useSessionStore();
+  const { setCurrentSession, addSession, loadSessions, deleteSession } = useSessionStore();
   const { sidebar, toggleSidebar, setSidebarCollapsed } = useUIStore();
-  
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'all' | 'recent'>('all');
   const [isLoading, setIsLoading] = React.useState(false);
@@ -51,25 +51,35 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     loadSessions();
   }, [loadSessions]);
 
+  // Sort sessions by creation time (newest first)
+  const sortedSessions = React.useMemo(() => {
+    if (!Array.isArray(sessions)) return [];
+    return [...sessions].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    });
+  }, [sessions]);
+
   // Filter sessions based on active tab
   const filteredSessions = React.useMemo(() => {
-    if (!Array.isArray(sessions)) return [];
+    if (!Array.isArray(sortedSessions)) return [];
     if (activeTab === 'recent') {
-      return sessions.slice(0, 5);
+      return sortedSessions.slice(0, 5);
     }
-    return sessions;
-  }, [sessions, activeTab]);
+    return sortedSessions;
+  }, [sortedSessions, activeTab]);
 
   // Group sessions by status
   const groupedSessions = React.useMemo(() => {
     if (!Array.isArray(filteredSessions)) {
       return { active: [], completed: [], other: [] };
     }
-    const active = filteredSessions.filter((s) => 
+    const active = filteredSessions.filter((s) =>
       ['created', 'uploading', 'uploaded', 'processing'].includes(s.status)
     );
     const completed = filteredSessions.filter((s) => s.status === 'completed');
-    const other = filteredSessions.filter((s) => 
+    const other = filteredSessions.filter((s) =>
       ['error', 'cancelled'].includes(s.status)
     );
     return { active, completed, other };
@@ -83,7 +93,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     if (session.status === 'created' || session.status === 'uploading') {
       router.push(`/analysis?session=${session.id}`);
     } else if (session.status === 'completed') {
-      router.push(`/results/${session.id}`);
+      router.push(`/analysis/visualization?session_id=${session.id}`);
     } else {
       router.push(`/analysis?session=${session.id}`);
     }
@@ -91,19 +101,19 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
   // Handle create session
   const handleCreateSession = async (
-    name: string, 
-    description: string, 
+    name: string,
+    description: string,
     template: AnalysisTemplate
   ) => {
     setIsLoading(true);
-    
+
     try {
       // Create session via backend API
       const newSession = await sessionsApi.create(name, template);
-      
+
       // Add to local store
       addSession(newSession);
-      
+
       // Navigate to analysis page with session ID
       router.push(`/analysis?session=${newSession.id}`);
     } catch (error) {
@@ -111,6 +121,18 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       throw error;
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handle delete session
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      // Delete from backend
+      await sessionsApi.delete(sessionId);
+      // Delete from local store
+      deleteSession(sessionId);
+    } catch (error) {
+      console.error('Failed to delete session:', error);
     }
   };
 
@@ -146,7 +168,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
           {/* Recent sessions */}
           <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
-            {sessions.slice(0, 5).map((session) => (
+            {sortedSessions.slice(0, 5).map((session) => (
               <button
                 key={session.id}
                 onClick={() => handleSessionClick(session)}
@@ -283,6 +305,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                         session={session}
                         isActive={currentSession?.id === session.id}
                         onClick={() => handleSessionClick(session)}
+                        onDelete={() => handleDeleteSession(session.id)}
                       />
                     ))}
                   </div>
@@ -302,6 +325,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                         session={session}
                         isActive={currentSession?.id === session.id}
                         onClick={() => handleSessionClick(session)}
+                        onDelete={() => handleDeleteSession(session.id)}
                       />
                     ))}
                   </div>
@@ -321,6 +345,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                         session={session}
                         isActive={currentSession?.id === session.id}
                         onClick={() => handleSessionClick(session)}
+                        onDelete={() => handleDeleteSession(session.id)}
                       />
                     ))}
                   </div>

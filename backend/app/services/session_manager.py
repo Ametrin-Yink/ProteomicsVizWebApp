@@ -641,6 +641,40 @@ class SessionManager:
         for websocket in disconnected:
             await self.unregister_websocket(session_id, websocket)
 
+    async def send_log_message(self, session_id: str, level: str, message: str, step: int = None) -> None:
+        """Send log message to all WebSocket connections for a session.
+
+        Args:
+            session_id: Session ID
+            level: Log level (info, warning, error)
+            message: Log message
+            step: Optional step number
+        """
+        if session_id not in self._websocket_connections:
+            return
+
+        log_message = {
+            "type": "log",
+            "payload": {
+                "level": level,
+                "message": message,
+                "timestamp": datetime.utcnow().isoformat(),
+                "step": step
+            }
+        }
+
+        disconnected = []
+        for websocket in self._websocket_connections[session_id]:
+            try:
+                await websocket.send_json(log_message)
+            except Exception as e:
+                logger.warning(f"Failed to send log message: {e}")
+                disconnected.append(websocket)
+
+        # Clean up disconnected websockets
+        for websocket in disconnected:
+            await self.unregister_websocket(session_id, websocket)
+
 
 # Global session manager instance
 session_manager = SessionManager()

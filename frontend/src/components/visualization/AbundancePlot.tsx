@@ -24,15 +24,14 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
     data.samples.forEach((sample, i) => {
       const condition = data.conditions?.[i] || 'Unknown';
       const abundance = data.abundances?.[i];
-      // Skip invalid abundance values (0, negative, or undefined)
-      if (abundance === undefined || abundance === null || abundance <= 0) {
-        return;
-      }
+      // Include all values - use 0 for missing/undefined/null values
+      const abundanceValue = abundance === undefined || abundance === null ? 0 : abundance;
+
       if (!conditionData[condition]) {
         conditionData[condition] = { samples: [], abundances: [] };
       }
       conditionData[condition].samples.push(sample);
-      conditionData[condition].abundances.push(Math.log2(abundance));
+      conditionData[condition].abundances.push(abundanceValue);
     });
 
     const colors: Record<string, string> = {
@@ -48,7 +47,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       marker: {
         color: colors[condition] || '#6B7280',
       },
-      hovertemplate: '<b>%{x}</b><br>Log2 Abundance: %{y:.3f}<extra></extra>',
+      hovertemplate: '<b>%{x}</b><br>Abundance: %{y:.3f}<extra></extra>',
     }));
   }, [data]);
 
@@ -64,8 +63,10 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
         gridcolor: '#E5E7EB',
       },
       yaxis: {
-        title: { text: 'Log2 Abundance', font: { size: 12 } },
+        title: { text: 'Protein Abundance', font: { size: 12 } },
         gridcolor: '#E5E7EB',
+        // Ensure y-axis starts at 0 to show missing values clearly
+        rangemode: 'tozero' as const,
       },
       showlegend: true,
       legend: {
@@ -163,6 +164,7 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
       yaxis: {
         title: { text: 'Abundance', font: { size: 12 } },
         gridcolor: '#E5E7EB',
+        rangemode: 'tozero' as const,
       },
       showlegend: true,
       legend: {

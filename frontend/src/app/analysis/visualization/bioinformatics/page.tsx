@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import GSEADashboard from '@/components/visualization/GSEADashboard';
 import PathwayTable from '@/components/visualization/PathwayTable';
@@ -11,10 +11,10 @@ import { getGSEAData } from '@/lib/api';
 
 const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
 
-export default function BioinformaticsPage() {
+function BioinformaticsContent() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session') || 'mock-session-id';
-  
+  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+
   const [selectedDatabase, setSelectedDatabase] = useState<GSEADatabase>('go_bp');
   const [data, setData] = useState<GSEAData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,5 +128,20 @@ export default function BioinformaticsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BioinformaticsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <BioinformaticsContent />
+    </Suspense>
   );
 }

@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { QCData } from '@/types/api';
 import { transformPCARowBased } from '@/lib/utils';
-import Plot from 'react-plotly.js';
 import { Maximize2, Download } from 'lucide-react';
+
+// Dynamically import Plotly to avoid SSR issues
+const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface QCPlotsProps {
   data: QCData;

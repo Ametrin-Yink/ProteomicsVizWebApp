@@ -53,13 +53,21 @@ function ResultsContent() {
     fetchData();
   }, [sessionId]);
 
+  const [selectionMode, setSelectionMode] = useState<'click' | 'box' | 'lasso'>('click');
+
   // Handle protein selection from volcano plot
-  const handleSelectProteins = useCallback((proteins: string[]) => {
-    setSelectedProteins((prev) => {
-      const newSet = new Set(prev);
-      proteins.forEach((p) => newSet.add(p));
-      return newSet;
-    });
+  const handleSelectProteins = useCallback((proteins: string[], mode?: 'click' | 'box' | 'lasso') => {
+    if (mode === 'click') {
+      // Click mode: clear previous selection and select only the clicked protein
+      setSelectedProteins(new Set(proteins));
+    } else {
+      // Box/lasso mode: add to existing selection
+      setSelectedProteins((prev) => {
+        const newSet = new Set(prev);
+        proteins.forEach((p) => newSet.add(p));
+        return newSet;
+      });
+    }
 
     // Set the first selected protein as the active one for info panel
     if (proteins.length > 0 && data) {
@@ -209,64 +217,125 @@ function ResultsContent() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fold Change Threshold: {filters.foldChange}
+                    Fold Change Threshold
                   </label>
-                  <input
-                    data-testid="logfc-threshold"
-                    type="range"
-                    min="0"
-                    max="5"
-                    step="0.5"
-                    value={filters.foldChange}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        foldChange: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid="logfc-threshold-slider"
+                      type="range"
+                      min="0"
+                      max="5"
+                      step="0.5"
+                      value={filters.foldChange}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          foldChange: parseFloat(e.target.value),
+                        }))
+                      }
+                      className="flex-1"
+                    />
+                    <input
+                      data-testid="logfc-threshold-input"
+                      type="number"
+                      min="0"
+                      max="5"
+                      step="0.1"
+                      value={filters.foldChange}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (!isNaN(value) && value >= 0 && value <= 5) {
+                          setFilters((prev) => ({
+                            ...prev,
+                            foldChange: value,
+                          }));
+                        }
+                      }}
+                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    P-value Threshold: {filters.pValue}
+                    P-value Threshold
                   </label>
-                  <input
-                    data-testid="pvalue-threshold"
-                    type="range"
-                    min="0.001"
-                    max="1"
-                    step="0.001"
-                    value={filters.pValue}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        pValue: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid="pvalue-threshold-slider"
+                      type="range"
+                      min="0.001"
+                      max="1"
+                      step="0.001"
+                      value={filters.pValue}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          pValue: parseFloat(e.target.value),
+                        }))
+                      }
+                      className="flex-1"
+                    />
+                    <input
+                      data-testid="pvalue-threshold-input"
+                      type="number"
+                      min="0.001"
+                      max="1"
+                      step="0.001"
+                      value={filters.pValue}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (!isNaN(value) && value >= 0.001 && value <= 1) {
+                          setFilters((prev) => ({
+                            ...prev,
+                            pValue: value,
+                          }));
+                        }
+                      }}
+                      className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Adj P-value Threshold: {filters.adjPValue}
+                    Adj P-value Threshold
                   </label>
-                  <input
-                    type="range"
-                    min="0.001"
-                    max="1"
-                    step="0.001"
-                    value={filters.adjPValue}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        adjPValue: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid="adjpvalue-threshold-slider"
+                      type="range"
+                      min="0.001"
+                      max="1"
+                      step="0.001"
+                      value={filters.adjPValue}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          adjPValue: parseFloat(e.target.value),
+                        }))
+                      }
+                      className="flex-1"
+                    />
+                    <input
+                      data-testid="adjpvalue-threshold-input"
+                      type="number"
+                      min="0.001"
+                      max="1"
+                      step="0.001"
+                      value={filters.adjPValue}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (!isNaN(value) && value >= 0.001 && value <= 1) {
+                          setFilters((prev) => ({
+                            ...prev,
+                            adjPValue: value,
+                          }));
+                        }
+                      }}
+                      className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -277,6 +346,7 @@ function ResultsContent() {
               filters={filters}
               selectedProteins={selectedProteins}
               onSelectProteins={handleSelectProteins}
+              onSelectionModeChange={setSelectionMode}
             />
 
             {/* Protein Table */}
@@ -291,7 +361,27 @@ function ResultsContent() {
 
           {/* Right Column - Protein Info */}
           <div className="lg:col-span-1">
-            <ProteinInfo protein={selectedProteinData} sessionId={sessionId} />
+            {selectedProteins.size === 1 ? (
+              <ProteinInfo protein={selectedProteinData} sessionId={sessionId} />
+            ) : selectedProteins.size > 1 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="text-center text-gray-500 py-8">
+                  <p className="text-lg font-medium">Multiple Proteins Selected</p>
+                  <p className="text-sm mt-2">{selectedProteins.size} proteins selected.</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Select a single protein to view detailed information.
+                  </p>
+                  <button
+                    onClick={clearSelection}
+                    className="mt-4 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <ProteinInfo protein={null} sessionId={sessionId} />
+            )}
           </div>
         </div>
       </div>

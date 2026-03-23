@@ -1,12 +1,12 @@
 /**
  * CompoundDisplay Component
- * Displays compound structures matched to conditions
+ * Displays compound structures matched to conditions using NIH Cactus service
  */
 
 'use client';
 
-import React, { useMemo } from 'react';
-import { Beaker, AlertCircle, Hash } from 'lucide-react';
+import React, { useMemo, useState, useCallback } from 'react';
+import { Beaker, AlertCircle, Hash, ImageOff, RefreshCw } from 'lucide-react';
 import { useAnalysisStore, getConditions } from '@/stores/analysis-store';
 import type { CompoundInfo } from '@/types';
 
@@ -15,16 +15,84 @@ interface MatchedCompound {
   compound: CompoundInfo | null;
 }
 
+// Generate NIH Cactus image URL from SMILES
+function getCactusImageUrl(smiles: string, width: number = 300, height: number = 200): string {
+  if (!smiles) return '';
+  // Encode SMILES for URL
+  const encodedSmiles = encodeURIComponent(smiles);
+  return `https://cactus.nci.nih.gov/chemical/structure/${encodedSmiles}/image?format=png&width=${width}&height=${height}&linewidth=2&bgcolor=transparent&atomcolor=element`;
+}
+
+// Compound structure image component with error handling
+function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string }) {
+  const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const imageUrl = useMemo(() => getCactusImageUrl(smiles), [smiles, retryKey]);
+
+  const handleRetry = useCallback(() => {
+    setImageError(false);
+    setIsLoading(true);
+    setRetryKey(prev => prev + 1);
+  }, []);
+
+  if (!smiles) {
+    return (
+      <div className="bg-gray-100 rounded-lg p-6 text-center">
+        <ImageOff className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+        <p className="text-xs text-gray-500">No SMILES available</p>
+      </div>
+    );
+  }
+
+  if (imageError) {
+    return (
+      <div className="bg-gray-100 rounded-lg p-6 text-center">
+        <ImageOff className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+        <p className="text-xs text-gray-500 mb-2">Failed to load structure</p>
+        <button
+          onClick={handleRetry}
+          className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-2 relative">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 rounded-lg">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      )}
+      <img
+        src={imageUrl}
+        alt={`Chemical structure of ${corpId}`}
+        className={`w-full h-auto max-h-[180px] object-contain transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+        onError={() => {
+          setIsLoading(false);
+          setImageError(true);
+        }}
+        onLoad={() => setIsLoading(false)}
+      />
+    </div>
+  );
+}
+
 export const CompoundDisplay: React.FC = () => {
   const { compoundFile } = useAnalysisStore();
   const conditions = useMemo(() => getConditions(useAnalysisStore.getState()), []);
-  
+
   // Match compounds to conditions
   const matchedCompounds: MatchedCompound[] = useMemo(() => {
     if (!compoundFile || conditions.length === 0) {
       return [];
     }
-    
+
     return conditions.map((condition) => {
       const compound = compoundFile.compounds.find(
         (c) => c.corp_id.toLowerCase() === condition.toLowerCase()
@@ -32,12 +100,12 @@ export const CompoundDisplay: React.FC = () => {
       return { condition, compound: compound ?? null };
     });
   }, [compoundFile, conditions]);
-  
+
   // Find unmatched conditions
   const unmatchedConditions = useMemo(() => {
     return matchedCompounds.filter((m) => m.compound === null).map((m) => m.condition);
   }, [matchedCompounds]);
-  
+
   if (!compoundFile) {
     return (
       <div data-testid="no-available-compound" className="text-center py-8 text-gray-500">
@@ -49,7 +117,7 @@ export const CompoundDisplay: React.FC = () => {
       </div>
     );
   }
-  
+
   if (conditions.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
@@ -61,7 +129,7 @@ export const CompoundDisplay: React.FC = () => {
       </div>
     );
   }
-  
+
   return (
     <div data-testid="compound-info" className="space-y-4">
       {/* Header */}
@@ -71,7 +139,7 @@ export const CompoundDisplay: React.FC = () => {
           {compoundFile.filename}
         </div>
       </div>
-      
+
       {/* Matched Compounds */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {matchedCompounds.map(({ condition, compound }) => (
@@ -79,8 +147,8 @@ export const CompoundDisplay: React.FC = () => {
             key={condition}
             className={`
               border rounded-lg p-4 transition-all
-              ${compound 
-                ? 'bg-white border-gray-200' 
+              ${compound
+                ? 'bg-white border-gray-200'
                 : 'bg-gray-50 border-gray-200 border-dashed'
               }
             `}
@@ -95,18 +163,12 @@ export const CompoundDisplay: React.FC = () => {
                 </span>
               )}
             </div>
-            
+
             {compound ? (
               <div className="space-y-3">
-                {/* Structure Placeholder */}
-                <div className="bg-gray-100 rounded-lg p-6 text-center">
-                  <Beaker className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-                  <p className="text-xs text-gray-500">2D Structure</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Rendering coming soon
-                  </p>
-                </div>
-                
+                {/* Structure Image */}
+                <CompoundStructure smiles={compound.smiles} corpId={compound.corp_id} />
+
                 {/* SMILES */}
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -129,7 +191,7 @@ export const CompoundDisplay: React.FC = () => {
           </div>
         ))}
       </div>
-      
+
       {/* Unmatched Compounds */}
       {compoundFile.compounds.length > matchedCompounds.filter(m => m.compound !== null).length && (
         <div className="mt-4 p-4 bg-blue-50 rounded-lg">
@@ -140,7 +202,7 @@ export const CompoundDisplay: React.FC = () => {
                 Unmatched Compounds
               </p>
               <p className="text-xs text-blue-600 mt-1">
-                {compoundFile.compounds.length - matchedCompounds.filter(m => m.compound !== null).length} 
+                {compoundFile.compounds.length - matchedCompounds.filter(m => m.compound !== null).length}
                 compound(s) in file don&apos;t match any condition
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -159,7 +221,7 @@ export const CompoundDisplay: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* Summary */}
       <div className="flex items-center justify-between pt-4 border-t border-gray-200">
         <div className="text-sm text-gray-600">

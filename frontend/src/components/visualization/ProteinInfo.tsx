@@ -11,6 +11,41 @@ interface ProteinInfoProps {
   sessionId: string;
 }
 
+interface ParsedProteinInfo {
+  accessions: string[];
+  geneNames: string[];
+}
+
+// Parse multiple UniProt IDs and gene names
+function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
+  // Split accessions by comma or semicolon
+  const accessions = protein.master_protein_accessions
+    .split(/[,;]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  // Split gene names by comma or semicolon
+  const geneNames = protein.gene_name
+    ? protein.gene_name
+        .split(/[,;]/)
+        .map(s => s.trim())
+        .filter(Boolean)
+    : [];
+
+  // If no gene names provided, return empty array for each accession
+  if (geneNames.length === 0) {
+    return { accessions, geneNames: accessions.map(() => '-') };
+  }
+
+  // If gene names count doesn't match accessions, pad with '-'
+  const paddedGeneNames = [...geneNames];
+  while (paddedGeneNames.length < accessions.length) {
+    paddedGeneNames.push('-');
+  }
+
+  return { accessions, geneNames: paddedGeneNames };
+}
+
 export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
   const [proteinAbundance, setProteinAbundance] = useState<ProteinAbundance | null>(null);
   const [psmAbundance, setPsmAbundance] = useState<PSMAbundanceData | null>(null);
@@ -55,7 +90,7 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
     );
   }
 
-  const uniprotUrl = `https://www.uniprot.org/uniprotkb/${protein.master_protein_accessions}`;
+  const { accessions, geneNames } = parseProteinInfo(protein);
 
   return (
     <div data-testid="protein-info-panel" className="bg-white rounded-lg border border-gray-200 p-6">
@@ -63,21 +98,32 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
 
       {/* Basic Info */}
       <div className="space-y-3 mb-6">
-        <div data-testid="protein-accession" className="flex justify-between items-center py-2 border-b border-gray-100">
-          <span className="text-sm text-gray-500">Master Protein Accessions</span>
-          <a
-            href={uniprotUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-          >
-            {protein.master_protein_accessions}
-          </a>
+        {/* UniProt Accessions with Links */}
+        <div data-testid="protein-accession" className="py-2 border-b border-gray-100">
+          <div className="flex justify-between items-start">
+            <span className="text-sm text-gray-500">UniProt ID(s)</span>
+          </div>
+          <div className="mt-1 space-y-1">
+            {accessions.map((acc, index) => (
+              <div key={acc} className="flex items-center justify-between">
+                <a
+                  href={`https://www.uniprot.org/uniprotkb/${acc}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  {acc}
+                </a>
+                <span className="text-xs text-gray-500">{geneNames[index] || '-'}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
+        {/* Gene Names */}
         <div data-testid="gene-name" className="flex justify-between items-center py-2 border-b border-gray-100">
-          <span className="text-sm text-gray-500">Gene Name</span>
-          <span className="text-sm font-medium text-gray-900">{protein.gene_name || '-'}</span>
+          <span className="text-sm text-gray-500">Gene Name(s)</span>
+          <span className="text-sm font-medium text-gray-900">{geneNames.join(', ') || '-'}</span>
         </div>
 
         <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -154,10 +200,17 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
         </div>
       )}
 
-      {!loading && !error && psmAbundance && psmAbundance.psms.length > 0 && (
+      {/* Always show PSM Abundance section if data exists */}
+      {!loading && !error && psmAbundance && (
         <div>
           <h4 className="text-sm font-medium text-gray-700 mb-2">PSM Abundance</h4>
-          <PSMAbundancePlot data={psmAbundance} />
+          {psmAbundance.psms.length > 0 ? (
+            <PSMAbundancePlot data={psmAbundance} />
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500 text-sm">
+              No PSM data available for this protein
+            </div>
+          )}
         </div>
       )}
     </div>

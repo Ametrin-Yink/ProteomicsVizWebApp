@@ -14,7 +14,7 @@ import { processingAPI } from '@/lib/api';
 import { StepTracker } from '@/components/processing/StepTracker';
 import { ProgressBar } from '@/components/processing/ProgressBar';
 import { LogPanel } from '@/components/processing/LogPanel';
-import { StatusIndicator } from '@/components/processing/StatusIndicator';
+import { SessionManager } from '@/components/session/SessionManager';
 import { formatDuration } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -41,8 +41,8 @@ const ConnectionStatus: React.FC<{ isConnected: boolean }> = ({
     className={cn(
       'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium',
       isConnected
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+        ? 'bg-emerald-100 text-emerald-700'
+        : 'bg-amber-100 text-amber-700'
     )}
   >
     {isConnected ? (
@@ -63,22 +63,22 @@ const ConnectionStatus: React.FC<{ isConnected: boolean }> = ({
 const CancelledDisplay: React.FC<{
   onBack: () => void;
 }> = ({ onBack }) => (
-  <div data-testid="processing-cancelled" className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-6">
+  <div data-testid="processing-cancelled" className="rounded-xl border border-amber-200 bg-amber-50 p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-full">
-        <X className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+      <div className="p-3 bg-amber-100 rounded-full">
+        <X className="w-6 h-6 text-amber-600" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-2">
+        <h3 className="text-lg font-semibold text-amber-900 mb-2">
           Processing Cancelled
         </h3>
-        <p className="text-amber-700 dark:text-amber-300 mb-4">
+        <p className="text-amber-700 mb-4">
           The processing has been cancelled by the user.
         </p>
         <button
           data-testid="cancel-btn"
           onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Configuration
@@ -100,25 +100,25 @@ const ErrorDisplay: React.FC<{
   onRetry: () => void;
   onBack: () => void;
 }> = ({ error, onRetry, onBack }) => (
-  <div data-testid="processing-error" className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 p-6">
+  <div data-testid="processing-error" className="rounded-xl border border-red-200 bg-red-50 p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
-        <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+      <div className="p-3 bg-red-100 rounded-full">
+        <AlertCircle className="w-6 h-6 text-red-600" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-red-900 dark:text-red-100 mb-2">
+        <h3 className="text-lg font-semibold text-red-900 mb-2">
           Processing Failed
         </h3>
-        <p className="text-red-700 dark:text-red-300 mb-4">
+        <p className="text-red-700 mb-4">
           An error occurred during step {error.step}: {error.stepName}
         </p>
-        <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 mb-4 border border-red-200 dark:border-red-800">
-          <p className="text-sm text-zinc-700 dark:text-zinc-300 font-mono">
+        <div className="bg-white rounded-lg p-4 mb-4 border border-red-200">
+          <p className="text-sm text-gray-700 font-mono">
             {error.message}
           </p>
         </div>
         {error.suggestion && (
-          <p data-testid="error-suggestion" className="text-sm text-amber-600 dark:text-amber-400 mb-4">
+          <p data-testid="error-suggestion" className="text-sm text-amber-600 mb-4">
             <strong>Suggestion:</strong> {error.suggestion}
           </p>
         )}
@@ -136,7 +136,7 @@ const ErrorDisplay: React.FC<{
           <button
             data-testid="cancel-btn"
             onClick={onBack}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Configuration
@@ -152,16 +152,16 @@ const CompletionDisplay: React.FC<{
   duration: number | null;
   onNavigate: () => void;
 }> = ({ duration, onNavigate }) => (
-  <div data-testid="processing-complete" className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-6">
+  <div data-testid="processing-complete" className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-full">
-        <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+      <div className="p-3 bg-emerald-100 rounded-full">
+        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100 mb-2">
+        <h3 className="text-lg font-semibold text-emerald-900 mb-2">
           Processing Complete!
         </h3>
-        <p className="text-emerald-700 dark:text-emerald-300 mb-4">
+        <p className="text-emerald-700 mb-4">
           All 9 steps have been completed successfully.
           {duration && (
             <span className="flex items-center gap-1 mt-1">
@@ -170,7 +170,7 @@ const CompletionDisplay: React.FC<{
             </span>
           )}
         </p>
-        <p className="text-sm text-emerald-600 dark:text-emerald-400 mb-4">
+        <p className="text-sm text-emerald-600 mb-4">
           Redirecting to visualization page in 2 seconds...
         </p>
         <button
@@ -265,7 +265,7 @@ function ProcessingContent() {
 
   const handleConfirmCancel = useCallback(async () => {
     if (!sessionId) return;
-    
+
     setIsCancelling(true);
     try {
       await processingAPI.cancelProcessing(sessionId);
@@ -291,13 +291,13 @@ function ProcessingContent() {
   // Validation
   if (!sessionId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">
             No Session ID
           </h1>
-          <p className="text-zinc-600 dark:text-zinc-400 mb-4">
+          <p className="text-gray-600 mb-4">
             Please start from the data input page.
           </p>
           <button
@@ -312,182 +312,188 @@ function ProcessingContent() {
   }
 
   return (
-    <div data-testid="processing-page" className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBack}
-                className="p-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                    Processing Data
-                  </h1>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Session: {sessionId.slice(0, 8)}...
-                  </p>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Left Sidebar - Session Manager */}
+      <SessionManager className="h-screen" />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleBack}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Activity className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h1 className="text-lg font-semibold text-gray-900">
+                      Processing Data
+                    </h1>
+                    <p className="text-xs text-gray-500">
+                      Session: {sessionId.slice(0, 8)}...
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <ConnectionStatus isConnected={isConnected} />
-              {!isComplete && !isCancelled && !error && (
-                <button
-                  data-testid="cancel-btn"
-                  onClick={handleCancelClick}
-                  disabled={isCancelling}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  <X className="w-4 h-4" />
-                  {isCancelling ? 'Cancelling...' : 'Cancel'}
-                </button>
-              )}
+              <div className="flex items-center gap-4">
+                <ConnectionStatus isConnected={isConnected} />
+                {!isComplete && !isCancelled && !error && (
+                  <button
+                    data-testid="cancel-btn"
+                    onClick={handleCancelClick}
+                    disabled={isCancelling}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                    {isCancelling ? 'Cancelling...' : 'Cancel'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Progress overview */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Overall Progress
-            </h2>
-            <div className="flex items-center gap-4">
-              {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
-                <span data-testid="estimated-time" className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  Est. {formatDuration(estimatedTimeRemaining)} remaining
+        {/* Main content */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Progress overview */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-medium text-gray-700">
+                Overall Progress
+              </h2>
+              <div className="flex items-center gap-4">
+                {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
+                  <span data-testid="estimated-time" className="text-sm text-gray-500 flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    Est. {formatDuration(estimatedTimeRemaining)} remaining
+                  </span>
+                )}
+                <span className="text-sm text-gray-500">
+                  {steps.filter((s) => s.status === 'completed').length} of{' '}
+                  {steps.length} steps completed
                 </span>
-              )}
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                {steps.filter((s) => s.status === 'completed').length} of{' '}
-                {steps.length} steps completed
-              </span>
+              </div>
             </div>
+            <ProgressBar data-testid="progress-bar" progress={overallProgress} size="lg" />
           </div>
-          <ProgressBar data-testid="progress-bar" progress={overallProgress} size="lg" />
-        </div>
 
-        {/* Error state */}
-        {error && (
-          <div className="mb-8">
-            <ErrorDisplay
-              error={error}
-              onRetry={handleRetry}
-              onBack={handleBack}
-            />
-          </div>
-        )}
-
-        {/* Cancelled state */}
-        {isCancelled && !error && (
-          <div className="mb-8">
-            <CancelledDisplay onBack={handleBack} />
-          </div>
-        )}
-
-        {/* Completion state */}
-        {isComplete && !error && (
-          <div className="mb-8">
-            <CompletionDisplay
-              duration={processingDuration}
-              onNavigate={handleNavigateToResults}
-            />
-          </div>
-        )}
-
-        {/* Start error */}
-        {startError && !error && (
-          <div className="mb-8 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-4">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              <p className="text-amber-700 dark:text-amber-300">{startError}</p>
-              <button
-                onClick={handleRetry}
-                className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg transition-colors"
-              >
-                Retry
-              </button>
+          {/* Error state */}
+          {error && (
+            <div className="mb-8">
+              <ErrorDisplay
+                error={error}
+                onRetry={handleRetry}
+                onBack={handleBack}
+              />
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Two-column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left column - Step tracker */}
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-500" />
-              Processing Steps
-            </h2>
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-              <StepTracker steps={steps} />
+          {/* Cancelled state */}
+          {isCancelled && !error && (
+            <div className="mb-8">
+              <CancelledDisplay onBack={handleBack} />
             </div>
-          </div>
+          )}
 
-          {/* Right column - Logs */}
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-500" />
-              Activity Log
-            </h2>
-            <LogPanel logs={logs} maxHeight="600px" />
-          </div>
-        </div>
-        {/* Cancel Confirmation Dialog */}
-        {showCancelDialog && (
-          <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 max-w-md w-full mx-4 shadow-2xl">
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
-                Cancel Processing?
-              </h3>
-              <p className="text-zinc-600 dark:text-zinc-400 mb-6">
-                Are you sure you want to cancel the current processing? This action cannot be undone.
-              </p>
-              <div className="flex items-center justify-end gap-3">
+          {/* Completion state */}
+          {isComplete && !error && (
+            <div className="mb-8">
+              <CompletionDisplay
+                duration={processingDuration}
+                onNavigate={handleNavigateToResults}
+              />
+            </div>
+          )}
+
+          {/* Start error */}
+          {startError && !error && (
+            <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <p className="text-amber-700">{startError}</p>
                 <button
-                  data-testid="dismiss-cancel-btn"
-                  onClick={handleDismissCancelDialog}
-                  disabled={isCancelling}
-                  className="px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  onClick={handleRetry}
+                  className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg transition-colors"
                 >
-                  No, Continue
-                </button>
-                <button
-                  data-testid="confirm-cancel-btn"
-                  onClick={handleConfirmCancel}
-                  disabled={isCancelling}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isCancelling && (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  )}
-                  Yes, Cancel
+                  Retry
                 </button>
               </div>
             </div>
+          )}
+
+          {/* Two-column layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left column - Step tracker */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-blue-500" />
+                Processing Steps
+              </h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <StepTracker steps={steps} />
+              </div>
+            </div>
+
+            {/* Right column - Logs */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-500" />
+                Activity Log
+              </h2>
+              <LogPanel logs={logs} maxHeight="600px" />
+            </div>
           </div>
-        )}
-      </main>
+          {/* Cancel Confirmation Dialog */}
+          {showCancelDialog && (
+            <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-md w-full mx-4 shadow-2xl">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Cancel Processing?
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to cancel the current processing? This action cannot be undone.
+                </p>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    data-testid="dismiss-cancel-btn"
+                    onClick={handleDismissCancelDialog}
+                    disabled={isCancelling}
+                    className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    No, Continue
+                  </button>
+                  <button
+                    data-testid="confirm-cancel-btn"
+                    onClick={handleConfirmCancel}
+                    disabled={isCancelling}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isCancelling && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    )}
+                    Yes, Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
 
 export default function ProcessingPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center">
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         <p className="mt-4 text-gray-600">Loading...</p>

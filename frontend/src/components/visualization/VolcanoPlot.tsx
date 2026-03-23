@@ -1,18 +1,20 @@
 'use client';
 
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import type { DEResult, VolcanoFilters } from '@/types/api';
 import { getVolcanoPointColor } from '@/lib/utils';
 import { MousePointer2, Square, Lasso, RotateCcw } from 'lucide-react';
 
-// Import Plotly directly for client-side rendering
-import Plot from 'react-plotly.js';
+// Dynamically import Plotly to avoid SSR issues
+const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface VolcanoPlotProps {
   data: DEResult[];
   filters: VolcanoFilters;
   selectedProteins: Set<string>;
-  onSelectProteins: (proteins: string[]) => void;
+  onSelectProteins: (proteins: string[], mode?: 'click' | 'box' | 'lasso') => void;
+  onSelectionModeChange?: (mode: 'click' | 'box' | 'lasso') => void;
 }
 
 type SelectionMode = 'click' | 'box' | 'lasso';
@@ -22,8 +24,16 @@ export default function VolcanoPlot({
   filters,
   selectedProteins,
   onSelectProteins,
+  onSelectionModeChange,
 }: VolcanoPlotProps) {
-  const [selectionMode, setSelectionMode] = useState<SelectionMode>('click');
+  const [selectionMode, setSelectionModeState] = useState<SelectionMode>('click');
+
+  // Notify parent when selection mode changes
+  const setSelectionMode = useCallback((mode: SelectionMode) => {
+    setSelectionModeState(mode);
+    onSelectionModeChange?.(mode);
+  }, [onSelectionModeChange]);
+
   // Prepare plot data
   const plotData = useMemo(() => {
     // Calculate -log10(p-value)
@@ -55,15 +65,19 @@ export default function VolcanoPlot({
       selectedProteins.has(d.master_protein_accessions) ? 2 : 0
     );
 
-    // Create hover text
-    const hoverText = data.map(
-      (d) =>
-        `<b>${d.master_protein_accessions}</b><br>` +
-        `Gene: ${d.gene_name || 'N/A'}<br>` +
+    // Create hover text - handle multiple UniProt IDs
+    const hoverText = data.map((d) => {
+      // Parse gene names for multiple accessions
+      const accessions = d.master_protein_accessions.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+      const genes = d.gene_name ? d.gene_name.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [];
+      const geneDisplay = genes.length > 0 ? genes.join(', ') : 'N/A';
+
+      return `<b>${accessions.join(', ')}</b><br>` +
+        `Gene: ${geneDisplay}<br>` +
         `Log2 FC: ${(d.log_fc ?? 0).toFixed(3)}<br>` +
         `P-value: ${(d.pval ?? 1).toExponential(2)}<br>` +
-        `Adj P-value: ${(d.adj_pval ?? 1).toExponential(2)}`
-    );
+        `Adj P-value: ${(d.adj_pval ?? 1).toExponential(2)}`;
+    });
 
     // Sort by selection status (selected on top)
     const indices = data.map((_, i) => i);
@@ -195,23 +209,23 @@ export default function VolcanoPlot({
     []
   );
 
-  // Handle selection events
+  // Handle selection events (box/lasso)
   const handleSelected = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
       if (event.points && event.points.length > 0) {
         const selected = event.points.map((p) => p.customdata);
-        onSelectProteins(selected);
+        onSelectProteins(selected, selectionMode);
       }
     },
-    [onSelectProteins]
+    [onSelectProteins, selectionMode]
   );
 
-  // Handle click events
+  // Handle click events - always clear previous selection
   const handleClick = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
       if (event.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
-        onSelectProteins([protein]);
+        onSelectProteins([protein], 'click');
       }
     },
     [onSelectProteins]
@@ -284,7 +298,7 @@ export default function VolcanoPlot({
             Lasso
           </button>
         </div>
-        
+
         <button
           data-testid="reset-zoom-btn"
           onClick={handleResetZoom}
@@ -313,7 +327,7 @@ export default function VolcanoPlot({
           </div>
         )}
       </div>
-      
+
       {/* Threshold lines indicator */}
       <div data-testid="threshold-lines" className="mt-2 text-xs text-gray-500 text-center">
         Threshold lines: Fold Change = ±{filters.foldChange}, P-value = {filters.pValue}

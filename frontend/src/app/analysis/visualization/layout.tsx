@@ -30,7 +30,7 @@ const tabs = [
 function Navigation() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session') || 'mock-session-id';
+  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
 
   // Determine active tab from pathname
   const getActiveTab = () => {
@@ -53,7 +53,7 @@ function Navigation() {
               return (
                 <Link
                   key={tab.id}
-                  href={`${tab.href}?session=${sessionId}`}
+                  href={`${tab.href}?session_id=${sessionId}`}
                   data-testid={`${tab.id}-tab`}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive

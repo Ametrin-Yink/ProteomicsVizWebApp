@@ -154,6 +154,14 @@ class ProcessingOrchestrator:
             progress: Progress update
         """
         logger.info(f"_send_progress: step {progress.step}, status {progress.status}, callbacks={len(self.progress_callbacks)}")
+
+        # Also send as log message for activity log
+        await self._send_log(
+            level="info",
+            message=f"Step {progress.step}: {progress.step_name} - {progress.status}",
+            step=progress.step
+        )
+
         for callback in self.progress_callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
@@ -163,6 +171,39 @@ class ProcessingOrchestrator:
                 logger.info(f"_send_progress: callback succeeded for step {progress.step}")
             except Exception as e:
                 logger.warning(f"Progress callback failed: {e}", exc_info=True)
+
+    async def _send_log(self, level: str, message: str, step: int = None) -> None:
+        """Send log message to WebSocket.
+
+        Args:
+            level: Log level (info, warning, error)
+            message: Log message
+            step: Optional step number
+        """
+        try:
+            # Get session_id from the current processing context
+            # This is a bit of a hack - we should ideally store session_id in the orchestrator
+            # But for now, we'll skip if session_manager doesn't have the method
+            if hasattr(session_manager, 'send_log_message'):
+                # Find the session_id from the state files
+                for session_dir in settings.sessions_dir.iterdir():
+                    if session_dir.is_dir():
+                        state_file = session_dir / "pipeline_state.json"
+                        if state_file.exists():
+                            try:
+                                with open(state_file, encoding='utf-8') as f:
+                                    state = json.load(f)
+                                    if state.get('current_step', 0) > 0:
+                                        await session_manager.send_log_message(
+                                            session_id=session_dir.name,
+                                            level=level,
+                                            message=message,
+                                            step=step
+                                        )
+                            except Exception:
+                                pass
+        except Exception as e:
+            logger.debug(f"Failed to send log message: {e}")
 
     def _create_progress(
         self,

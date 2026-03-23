@@ -8,11 +8,11 @@
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
-import { 
-  MoreHorizontal, 
-  Play, 
-  CheckCircle2, 
-  AlertCircle, 
+import {
+  MoreHorizontal,
+  Play,
+  CheckCircle2,
+  AlertCircle,
   Clock,
   Trash2,
   Copy,
@@ -250,6 +250,7 @@ export interface MiniSessionCardProps {
   session: Session;
   isActive?: boolean;
   onClick?: () => void;
+  onDelete?: () => void;
   className?: string;
 }
 
@@ -257,10 +258,12 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
   session,
   isActive = false,
   onClick,
+  onDelete,
   className,
 }) => {
   const status = statusConfig[session.status];
   const StatusIcon = status.icon;
+  const [showActions, setShowActions] = React.useState(false);
 
   return (
     <div
@@ -273,9 +276,9 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
         isActive && 'bg-[#E73564]/5 ring-1 ring-[#E73564]',
         className
       )}
-      onClick={onClick}
     >
       <div
+        onClick={onClick}
         className={cn(
           'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
           status.bgColor
@@ -283,8 +286,8 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
       >
         <StatusIcon className={cn('w-4 h-4', status.color)} />
       </div>
-      
-      <div className="flex-1 min-w-0">
+
+      <div className="flex-1 min-w-0" onClick={onClick}>
         <p data-testid="session-name" className="text-sm font-medium text-[#1a1a2e] truncate">
           {session.name}
         </p>
@@ -292,6 +295,22 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
           {status.label}
         </p>
       </div>
+
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm('Are you sure you want to delete this session?')) {
+              onDelete();
+            }
+          }}
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+          title="Delete session"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 };

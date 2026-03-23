@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Play, ArrowLeft, Loader2 } from 'lucide-react';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
@@ -18,7 +18,7 @@ import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, processingApi } from '@/lib/api-client';
 
-export default function AnalysisPage() {
+function AnalysisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sessionId, setSessionId] = useState<string>('');
@@ -337,5 +337,20 @@ export default function AnalysisPage() {
       </main>
       </div>
     </div>
+  );
+}
+
+export default function AnalysisPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 mx-auto mb-4 text-cyan-500 animate-spin" />
+          <h2 className="text-xl font-semibold text-gray-900">Loading...</h2>
+        </div>
+      </div>
+    }>
+      <AnalysisContent />
+    </Suspense>
   );
 }
