@@ -245,7 +245,7 @@ export default function VolcanoPlot({
       case 'lasso':
         return 'lasso' as const;
       default:
-        return 'zoom' as const;
+        return 'pan' as const; // Use 'pan' instead of 'zoom' to allow clicking
     }
   }, [selectionMode]);
 

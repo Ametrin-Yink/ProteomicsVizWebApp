@@ -14,7 +14,7 @@ interface QCPlotsProps {
 }
 
 export default function QCPlots({ data }: QCPlotsProps) {
-  // 1. PCA Plot
+  // 1. PCA Plot - Color by sample
   const pcaPlot = useMemo(() => {
     if (!data.pca) return null;
 
@@ -25,30 +25,35 @@ export default function QCPlots({ data }: QCPlotsProps) {
       data.pca.conditions
     );
 
-    // Group by condition
-    const conditions = [...new Set(rowData.map((d) => d.condition))];
-    const colors: Record<string, string> = {
+    // Create a color map for each sample based on condition
+    // Support both old (Control/Treatment) and new (DMSO/INCZ*) condition names
+    const conditionColors: Record<string, string> = {
       Control: '#00ADEF',
       Treatment: '#E73564',
+      DMSO: '#00ADEF',
+    };
+    // Any condition containing INCZ should use the treatment color
+    const getConditionColor = (condition: string) => {
+      if (condition.includes('INCZ')) return '#E73564';
+      return conditionColors[condition] || '#6B7280';
     };
 
-    const traces = conditions.map((condition) => {
-      const conditionData = rowData.filter((d) => d.condition === condition);
-      return {
-        x: conditionData.map((d) => d.pc1),
-        y: conditionData.map((d) => d.pc2),
-        mode: 'markers+text' as const,
-        type: 'scatter' as const,
-        name: condition,
-        text: conditionData.map((d) => d.sample),
-        textposition: 'top center' as const,
-        marker: {
-          size: 12,
-          color: colors[condition] || '#6B7280',
-        },
-        hovertemplate: '<b>%{text}</b><br>PC1: %{x:.3f}<br>PC2: %{y:.3f}<extra></extra>',
-      };
-    });
+    // Assign colors based on condition but ensure unique colors per sample
+    const sampleColors = rowData.map((d) => getConditionColor(d.condition));
+
+    const trace = {
+      x: rowData.map((d) => d.pc1),
+      y: rowData.map((d) => d.pc2),
+      mode: 'markers+text' as const,
+      type: 'scatter' as const,
+      text: rowData.map((d) => d.sample),
+      textposition: 'top center' as const,
+      marker: {
+        size: 12,
+        color: sampleColors,
+      },
+      hovertemplate: '<b>%{text}</b><br>PC1: %{x:.3f}<br>PC2: %{y:.3f}<extra></extra>',
+    };
 
     const layout = {
       title: {
@@ -65,14 +70,13 @@ export default function QCPlots({ data }: QCPlotsProps) {
         zeroline: true,
         gridcolor: '#E5E7EB',
       },
-      showlegend: true,
-      legend: { orientation: 'h' as const, y: -0.2 },
+      showlegend: false,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
       margin: { l: 50, r: 30, t: 50, b: 80 },
     };
 
-    return { traces, layout };
+    return { traces: [trace], layout };
   }, [data.pca]);
 
   // 2. P-value Distribution
@@ -121,8 +125,8 @@ export default function QCPlots({ data }: QCPlotsProps) {
       type: 'violin' as const,
       name: condition,
       box: { visible: true },
-      line: { color: condition === 'Control' ? '#00ADEF' : '#E73564' },
-      fillcolor: condition === 'Control' ? 'rgba(0, 173, 239, 0.5)' : 'rgba(231, 53, 100, 0.5)',
+      line: { color: condition === 'DMSO' ? '#00ADEF' : '#E73564' },
+      fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.5)' : 'rgba(231, 53, 100, 0.5)',
       hovertemplate: 'CV: %{y:.3f}<extra></extra>',
     }));
 
@@ -144,9 +148,54 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.psm_cv]);
 
-  // 4. PSM Intensity Distribution
+  // 3b. Protein CV Variance (with different colors)
+  const proteinCVPlot = useMemo(() => {
+    if (!data.protein_cv) return null;
+
+    const traces = Object.entries(data.protein_cv).map(([condition, values]) => ({
+      y: values,
+      type: 'violin' as const,
+      name: condition,
+      box: { visible: true },
+      line: { color: condition === 'DMSO' ? '#10B981' : '#F59E0B' },
+      fillcolor: condition === 'DMSO' ? 'rgba(16, 185, 129, 0.5)' : 'rgba(245, 158, 11, 0.5)',
+      hovertemplate: 'CV: %{y:.3f}<extra></extra>',
+    }));
+
+    const layout = {
+      title: { text: 'Protein CV Variance by Condition', font: { size: 14, color: '#111827' } },
+      yaxis: {
+        title: { text: 'Coefficient of Variation', font: { size: 12 } },
+        gridcolor: '#E5E7EB',
+      },
+      xaxis: {
+        title: { text: 'Condition', font: { size: 12 } },
+      },
+      plot_bgcolor: '#FFFFFF',
+      paper_bgcolor: '#FFFFFF',
+      margin: { l: 50, r: 30, t: 50, b: 50 },
+      showlegend: false,
+    };
+
+    return { traces, layout };
+  }, [data.protein_cv]);
+
+  // 4. PSM Intensity Distribution - Show 90% of data
   const psmIntensityPlot = useMemo(() => {
     if (!data.intensity_distributions?.psm) return null;
+
+    // Collect all values to calculate percentiles
+    let allValues: number[] = [];
+    Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
+      Object.entries(replicates).forEach(([replicate, values]) => {
+        allValues = allValues.concat(values);
+      });
+    });
+
+    // Sort and calculate 5th and 95th percentiles (90% of data)
+    allValues.sort((a, b) => a - b);
+    const p5 = allValues[Math.floor(allValues.length * 0.05)];
+    const p95 = allValues[Math.floor(allValues.length * 0.95)];
 
     const traces: Array<{
       x: number[];
@@ -159,13 +208,16 @@ export default function QCPlots({ data }: QCPlotsProps) {
 
     Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
       Object.entries(replicates).forEach(([replicate, values]) => {
+        // Filter values to 90% range
+        const filteredValues = values.filter(v => v >= p5 && v <= p95);
+
         traces.push({
-          x: values,
+          x: filteredValues,
           type: 'histogram' as const,
           name: `${condition} - ${replicate}`,
           opacity: 0.6,
           marker: {
-            color: condition === 'Control' ? '#00ADEF' : '#E73564',
+            color: condition === 'DMSO' ? '#00ADEF' : '#E73564',
           },
           hovertemplate: 'Intensity: %{x}<br>Count: %{y}<extra></extra>',
         });
@@ -173,9 +225,10 @@ export default function QCPlots({ data }: QCPlotsProps) {
     });
 
     const layout = {
-      title: { text: 'PSM Intensity Distribution', font: { size: 14, color: '#111827' } },
+      title: { text: 'PSM Intensity Distribution (90% of data)', font: { size: 14, color: '#111827' } },
       xaxis: {
         title: { text: 'Log2 Intensity', font: { size: 12 } },
+        range: [p5, p95],
         gridcolor: '#E5E7EB',
       },
       yaxis: {
@@ -204,7 +257,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
         name: condition,
         opacity: 0.6,
         marker: {
-          color: condition === 'Control' ? '#00ADEF' : '#E73564',
+          color: condition === 'DMSO' ? '#00ADEF' : '#E73564',
         },
         hovertemplate: 'Intensity: %{x}<br>Count: %{y}<extra></extra>',
       })
@@ -231,7 +284,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.intensity_distributions?.protein]);
 
-  // 6. Data Completeness
+  // 6. Data Completeness - Protein Level
   const completenessPlot = useMemo(() => {
     if (!data.data_completeness) return null;
 
@@ -259,7 +312,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     ];
 
     const layout = {
-      title: { text: 'Data Completeness by Sample', font: { size: 14, color: '#111827' } },
+      title: { text: 'Protein Data Completeness by Sample', font: { size: 14, color: '#111827' } },
       xaxis: {
         title: { text: 'Sample', font: { size: 12 } },
         tickangle: -45,
@@ -280,6 +333,55 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.data_completeness]);
 
+  // 6b. Data Completeness - PSM Level
+  const psmCompletenessPlot = useMemo(() => {
+    if (!data.psm_completeness) return null;
+
+    const samples = Object.keys(data.psm_completeness);
+    const present = samples.map((s) => data.psm_completeness![s].present);
+    const missing = samples.map((s) => data.psm_completeness![s].missing);
+
+    const traces = [
+      {
+        x: samples,
+        y: present,
+        name: 'Present',
+        type: 'bar' as const,
+        marker: { color: '#3B82F6' },
+        hovertemplate: 'Present: %{y}<extra></extra>',
+      },
+      {
+        x: samples,
+        y: missing,
+        name: 'Missing',
+        type: 'bar' as const,
+        marker: { color: '#F59E0B' },
+        hovertemplate: 'Missing: %{y}<extra></extra>',
+      },
+    ];
+
+    const layout = {
+      title: { text: 'PSM Data Completeness by Sample', font: { size: 14, color: '#111827' } },
+      xaxis: {
+        title: { text: 'Sample', font: { size: 12 } },
+        tickangle: -45,
+        gridcolor: '#E5E7EB',
+      },
+      yaxis: {
+        title: { text: 'Count', font: { size: 12 } },
+        gridcolor: '#E5E7EB',
+      },
+      barmode: 'stack' as const,
+      plot_bgcolor: '#FFFFFF',
+      paper_bgcolor: '#FFFFFF',
+      margin: { l: 50, r: 30, t: 50, b: 100 },
+      showlegend: true,
+      legend: { orientation: 'h' as const, y: -0.3 },
+    };
+
+    return { traces, layout };
+  }, [data.psm_completeness]);
+
   const config = {
     displayModeBar: true,
     modeBarButtonsToRemove: ['lasso2d', 'select2d'],
@@ -290,10 +392,12 @@ export default function QCPlots({ data }: QCPlotsProps) {
   const plots = [
     { id: 'pca', data: pcaPlot, title: 'PCA Analysis' },
     { id: 'pvalue', data: pvalueDistPlot, title: 'P-value Distribution' },
-    { id: 'cv', data: psmCVPlot, title: 'PSM CV Variance' },
+    { id: 'psm-cv', data: psmCVPlot, title: 'PSM CV Variance' },
+    { id: 'protein-cv', data: proteinCVPlot, title: 'Protein CV Variance' },
     { id: 'psm-intensity', data: psmIntensityPlot, title: 'PSM Intensity Distribution' },
     { id: 'protein-intensity', data: proteinIntensityPlot, title: 'Protein Intensity Distribution' },
-    { id: 'completeness', data: completenessPlot, title: 'Data Completeness' },
+    { id: 'completeness', data: completenessPlot, title: 'Protein Data Completeness' },
+    { id: 'psm-completeness', data: psmCompletenessPlot, title: 'PSM Data Completeness' },
   ];
 
   // State for expanded plot modal

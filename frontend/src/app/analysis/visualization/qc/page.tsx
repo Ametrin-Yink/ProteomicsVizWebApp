@@ -69,25 +69,42 @@ function QCContent() {
           <div data-testid="qc-summary" className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">QC Summary Statistics</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div data-testid="total-psms" className="bg-gray-50 rounded-lg p-3">
+              {/* PSM Statistics */}
+              <div className="bg-gray-50 rounded-lg p-3">
                 <span className="text-sm text-gray-500">Total PSMs</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
                   {data.total_psms?.toLocaleString() || 'N/A'}
                 </span>
               </div>
-              <div data-testid="total-proteins" className="bg-gray-50 rounded-lg p-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <span className="text-sm text-gray-500">Avg PSMs/Sample</span>
+                <span className="ml-2 text-xl font-semibold text-gray-900">
+                  {data.avg_psms_per_sample?.toLocaleString() || 'N/A'}
+                </span>
+              </div>
+
+              {/* Protein Statistics */}
+              <div className="bg-gray-50 rounded-lg p-3">
                 <span className="text-sm text-gray-500">Total Proteins</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
                   {data.total_proteins?.toLocaleString() || 'N/A'}
                 </span>
               </div>
-              <div data-testid="average-cv" className="bg-gray-50 rounded-lg p-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <span className="text-sm text-gray-500">Avg Proteins/Sample</span>
+                <span className="ml-2 text-xl font-semibold text-gray-900">
+                  {data.avg_proteins_per_sample?.toLocaleString() || 'N/A'}
+                </span>
+              </div>
+
+              {/* CV and Completeness */}
+              <div className="bg-gray-50 rounded-lg p-3">
                 <span className="text-sm text-gray-500">Average CV</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
                   {data.average_cv?.toFixed(1) || 'N/A'}%
                 </span>
               </div>
-              <div data-testid="completeness-rate" className="bg-gray-50 rounded-lg p-3">
+              <div className="bg-gray-50 rounded-lg p-3">
                 <span className="text-sm text-gray-500">Completeness</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
                   {data.completeness_rate?.toFixed(1) || 'N/A'}%
@@ -99,29 +116,7 @@ function QCContent() {
 
         {/* QC Plots Grid */}
         {data ? (
-          <>
-            {/* PCA Variance Info */}
-            {data.pca && (
-              <div data-testid="pca-variance" className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-2">PCA Variance Explained</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm text-gray-500">PC1 Variance:</span>
-                    <span className="ml-2 text-lg font-medium text-blue-600">
-                      {data.pca.pc1_variance.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-500">PC2 Variance:</span>
-                    <span className="ml-2 text-lg font-medium text-blue-600">
-                      {data.pca.pc2_variance.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-            <QCPlots data={data} />
-          </>
+          <QCPlots data={data} />
         ) : (
           <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
             <p className="text-gray-500">No QC data available</p>

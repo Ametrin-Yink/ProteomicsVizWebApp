@@ -98,7 +98,7 @@ function BioinformaticsContent() {
         </div>
 
         {/* Content */}
-        {data ? (
+        {data && data.results && Array.isArray(data.results) && data.results.length > 0 ? (
           <div className="space-y-8">
             {/* GSEA Dashboard */}
             <GSEADashboard

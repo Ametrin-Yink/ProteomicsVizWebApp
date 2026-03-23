@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { BarChart3, Activity, Dna } from 'lucide-react';
 import PDFExport from '@/components/visualization/PDFExport';
+import { SessionManager } from '@/components/session/SessionManager';
 
 const tabs = [
   {
@@ -80,14 +81,20 @@ export default function VisualizationLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navigation Bar */}
-      <Suspense fallback={<div className="bg-white border-b border-gray-200 h-14" />}>
-        <Navigation />
-      </Suspense>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Left Sidebar - Session Manager */}
+      <SessionManager className="h-screen" />
 
-      {/* Page Content */}
-      {children}
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Navigation Bar */}
+        <Suspense fallback={<div className="bg-white border-b border-gray-200 h-14" />}>
+          <Navigation />
+        </Suspense>
+
+        {/* Page Content */}
+        {children}
+      </div>
     </div>
   );
 }

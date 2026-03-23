@@ -131,8 +131,20 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       await sessionsApi.delete(sessionId);
       // Delete from local store
       deleteSession(sessionId);
+      // Show success toast
+      const { addToast } = useUIStore.getState();
+      addToast({
+        type: 'success',
+        message: 'Session deleted successfully',
+      });
     } catch (error) {
       console.error('Failed to delete session:', error);
+      // Show error toast
+      const { addToast } = useUIStore.getState();
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to delete session',
+      });
     }
   };
 

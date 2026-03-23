@@ -219,15 +219,20 @@ export default function ProteinTable({
                 data-testid="protein-table-row"
               >
                 <td className="px-4 py-3 font-medium">
-                  <a
-                    href={`https://www.uniprot.org/uniprotkb/${item.master_protein_accessions}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {item.master_protein_accessions}
-                  </a>
+                  {item.master_protein_accessions.split(/[,;]/).map((acc, idx, arr) => (
+                    <span key={acc.trim()}>
+                      <a
+                        href={`https://www.uniprot.org/uniprotkb/${acc.trim()}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {acc.trim()}
+                      </a>
+                      {idx < arr.length - 1 && '; '}
+                    </span>
+                  ))}
                 </td>
                 <td className="px-4 py-3 text-gray-600">{item.gene_name || '-'}</td>
                 <td

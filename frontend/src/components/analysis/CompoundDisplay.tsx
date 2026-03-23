@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import { Beaker, AlertCircle, Hash, ImageOff, RefreshCw } from 'lucide-react';
-import { useAnalysisStore, getConditions } from '@/stores/analysis-store';
+import { useAnalysisStore } from '@/stores/analysis-store';
 import type { CompoundInfo } from '@/types';
 
 interface MatchedCompound {
@@ -84,19 +84,47 @@ function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string 
 }
 
 export const CompoundDisplay: React.FC = () => {
-  const { compoundFile } = useAnalysisStore();
-  const conditions = useMemo(() => getConditions(useAnalysisStore.getState()), []);
+  const { compoundFile, uploadedFiles, selectedFiles } = useAnalysisStore();
+
+  // Derive conditions dynamically from selected files
+  const conditions = useMemo(() => {
+    const selected = uploadedFiles.filter((file) => selectedFiles.has(file.filename));
+    return Array.from(new Set(selected.map((f) => f.condition)));
+  }, [uploadedFiles, selectedFiles]);
 
   // Match compounds to conditions
   const matchedCompounds: MatchedCompound[] = useMemo(() => {
     if (!compoundFile || conditions.length === 0) {
+      console.log('No compound file or conditions', { compoundFile, conditions });
       return [];
     }
 
+    console.log('Matching compounds:', {
+      compoundFileCompounds: compoundFile.compounds,
+      conditions
+    });
+
     return conditions.map((condition) => {
-      const compound = compoundFile.compounds.find(
-        (c) => c.corp_id.toLowerCase() === condition.toLowerCase()
+      // Try exact match first, then case-insensitive
+      let compound = compoundFile.compounds.find(
+        (c) => c.corp_id === condition
       );
+
+      if (!compound) {
+        compound = compoundFile.compounds.find(
+          (c) => c.corp_id.toLowerCase() === condition.toLowerCase()
+        );
+      }
+
+      // Also try matching by checking if corp_id is contained in condition or vice versa
+      if (!compound) {
+        compound = compoundFile.compounds.find(
+          (c) => condition.toLowerCase().includes(c.corp_id.toLowerCase()) ||
+                 c.corp_id.toLowerCase().includes(condition.toLowerCase())
+        );
+      }
+
+      console.log('Match result:', { condition, compound });
       return { condition, compound: compound ?? null };
     });
   }, [compoundFile, conditions]);

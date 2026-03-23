@@ -123,12 +123,21 @@ class DataCompleteness(BaseModel):
 
 class QCData(BaseModel):
     """Complete QC metrics data."""
-    
+
     pca: Optional[PCAResult] = None
     pvalue_distribution: Optional[PValueDistribution] = None
     psm_cv: Optional[dict[str, list[float]]] = None
+    protein_cv: Optional[dict[str, list[float]]] = None
     intensity_distributions: Optional[IntensityDistribution] = None
     data_completeness: Optional[list[DataCompleteness]] = None
+    psm_completeness: Optional[list[DataCompleteness]] = None
+    # Summary statistics
+    total_psms: Optional[int] = None
+    avg_psms_per_sample: Optional[float] = None
+    total_proteins: Optional[int] = None
+    avg_proteins_per_sample: Optional[int] = None
+    average_cv: Optional[float] = None
+    completeness_rate: Optional[float] = None
 
 
 class GSEAResult(BaseModel):

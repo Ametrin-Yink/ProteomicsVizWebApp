@@ -18,20 +18,23 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       return [];
     }
 
-    // Group by condition
+    // Group by condition, filter out negative values
     const conditionData: { [condition: string]: { samples: string[]; abundances: number[] } } = {};
 
     data.samples.forEach((sample, i) => {
       const condition = data.conditions?.[i] || 'Unknown';
       const abundance = data.abundances?.[i];
-      // Include all values - use 0 for missing/undefined/null values
-      const abundanceValue = abundance === undefined || abundance === null ? 0 : abundance;
+
+      // Filter out negative or undefined values
+      if (abundance === undefined || abundance === null || abundance < 0) {
+        return; // Skip negative values
+      }
 
       if (!conditionData[condition]) {
         conditionData[condition] = { samples: [], abundances: [] };
       }
       conditionData[condition].samples.push(sample);
-      conditionData[condition].abundances.push(abundanceValue);
+      conditionData[condition].abundances.push(abundance);
     });
 
     const colors: Record<string, string> = {
@@ -60,6 +63,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       xaxis: {
         title: { text: 'Sample', font: { size: 12 } },
         tickangle: -45,
+        tickfont: { size: 9 },
         gridcolor: '#E5E7EB',
       },
       yaxis: {
@@ -71,11 +75,13 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       showlegend: true,
       legend: {
         orientation: 'h' as const,
-        y: -0.2,
+        y: -0.35,
+        x: 0.5,
+        xanchor: 'center' as const,
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 40, b: 80 },
+      margin: { l: 50, r: 30, t: 40, b: 100 },
       barmode: 'group' as const,
     }),
     [title]

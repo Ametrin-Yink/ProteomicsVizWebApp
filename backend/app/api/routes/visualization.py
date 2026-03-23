@@ -96,36 +96,51 @@ def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
 
 def load_qc_results(results_dir: Path) -> Dict[str, Any]:
     """Load QC results from JSON file.
-    
+
     Args:
         results_dir: Path to session results directory
-        
+
     Returns:
-        QC results dictionary
+        QC results dictionary with summary statistics
     """
     qc_file = results_dir / "QC_Results.json"
-    
+
+    # Default empty structure with all required fields
+    default_result = {
+        "pca": {"samples": [], "pc1": [], "pc2": [], "conditions": [], "pc1_variance": 0, "pc2_variance": 0},
+        "pvalue_distribution": {"bins": [], "counts": []},
+        "psm_cv": {},
+        "protein_cv": {},
+        "intensity_distributions": {"psm": {}, "protein": {}},
+        "data_completeness": [],
+        "psm_completeness": [],
+        # Summary statistics - will be populated from data or set to None
+        "total_psms": None,
+        "avg_psms_per_sample": None,
+        "total_proteins": None,
+        "avg_proteins_per_sample": None,
+        "average_cv": None,
+        "completeness_rate": None
+    }
+
     if not qc_file.exists():
-        return {
-            "pca": {},
-            "pvalue_distribution": {},
-            "cv_variance": {},
-            "intensity_distributions": {},
-            "data_completeness": {}
-        }
-    
+        return default_result
+
     try:
         with open(qc_file, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+
+        # Merge with defaults to ensure all fields exist
+        result = {**default_result, **data}
+
+        # Handle legacy format: cv_variance -> psm_cv
+        if "cv_variance" in data and not result.get("psm_cv"):
+            result["psm_cv"] = data["cv_variance"]
+
+        return result
     except Exception as e:
         print(f"Error loading QC results: {e}")
-        return {
-            "pca": {},
-            "pvalue_distribution": {},
-            "cv_variance": {},
-            "intensity_distributions": {},
-            "data_completeness": {}
-        }
+        return default_result
 
 
 def load_gsea_results(results_dir: Path, database: str) -> Dict[str, Any]:
@@ -141,25 +156,36 @@ def load_gsea_results(results_dir: Path, database: str) -> Dict[str, Any]:
     gsea_file = results_dir / "GSEA_Results.json"
     
     if not gsea_file.exists():
-        return {"pathways": [], "database": database}
-    
+        return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
+
     try:
         with open(gsea_file, 'r') as f:
             all_results = json.load(f)
-        
+
         # Get results for specific database
         db_results = all_results.get(database, {})
-        pathways = db_results.get("pathways", [])
-        
+        results = db_results.get("results", [])
+
+        # Add significant field to each result (GSEA significance: |NES| >= 1 and FDR < 0.05)
+        for r in results:
+            r["significant"] = abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.05
+
+        # Use summary stats from file if available, otherwise calculate
+        significant_count = db_results.get("significant_pathways", sum(1 for p in results if p.get("significant", False)))
+        overrepresented = db_results.get("overrepresented", sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) > 0))
+        underrepresented = db_results.get("underrepresented", sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) < 0))
+
         return {
-            "pathways": pathways,
+            "results": results,
             "database": database,
-            "total_pathways": len(pathways),
-            "significant_pathways": sum(1 for p in pathways if p.get("significant", False))
+            "total_pathways": db_results.get("total_pathways", len(results)),
+            "significant_pathways": significant_count,
+            "overrepresented": overrepresented,
+            "underrepresented": underrepresented
         }
     except Exception as e:
         print(f"Error loading GSEA results: {e}")
-        return {"pathways": [], "database": database}
+        return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
 
 
 @router.get("/{session_id}/results")
@@ -291,8 +317,8 @@ def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]
     try:
         df = pd.read_csv(abundance_file, sep='\t')
 
-        # Find the protein row
-        protein_row = df[df['Master_Protein_Accessions'] == protein_id]
+        # Find the protein row (handle multiple accessions separated by ;)
+        protein_row = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
 
         if protein_row.empty:
             return {"samples": [], "abundances": [], "conditions": []}
@@ -371,34 +397,32 @@ def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
     try:
         df = pd.read_csv(psm_file, sep='\t')
 
-        # Filter rows for this protein
-        protein_rows = df[df['Master_Protein_Accessions'] == protein_id]
+        # Filter rows for this protein (handle multiple accessions separated by ;)
+        protein_rows = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
 
         if protein_rows.empty:
             return {"psms": []}
 
-        # Get abundance columns (all columns except metadata)
-        metadata_cols = ['Unique_PSM', 'Sequence', 'Modifications', 'Charge', 'Master_Protein_Accessions', 'Quan_Info']
-        abundance_cols = [col for col in df.columns if col not in metadata_cols]
-
-        # Build PSM data for frontend format
+        # Group by Unique_PSM to collect all sample abundances for each PSM
         psms = []
-        for _, row in protein_rows.iterrows():
+        for unique_psm, group in protein_rows.groupby('Unique_PSM'):
             samples = []
             abundances = []
 
-            for col in abundance_cols:
-                value = row.get(col)
-                if pd.notna(value):
-                    samples.append(col)
-                    abundances.append(float(value))
+            for _, row in group.iterrows():
+                sample_name = row.get('Sample_Origination', '')
+                abundance = row.get('Abundance')
+                if pd.notna(abundance) and sample_name:
+                    samples.append(str(sample_name))
+                    abundances.append(float(abundance))
 
-            psms.append({
-                "psm_id": str(row.get('Unique_PSM', '')),
-                "sequence": str(row.get('Sequence', '')),
-                "abundances": abundances,
-                "samples": samples
-            })
+            if samples:  # Only add if we have data
+                psms.append({
+                    "psm_id": str(unique_psm),
+                    "sequence": str(group.iloc[0].get('Sequence', '')),
+                    "abundances": abundances,
+                    "samples": samples
+                })
 
         return {"psms": psms}
     except Exception as e:

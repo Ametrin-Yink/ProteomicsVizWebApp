@@ -71,7 +71,15 @@ function ResultsContent() {
 
     // Set the first selected protein as the active one for info panel
     if (proteins.length > 0 && data) {
-      const protein = data.results.find((r) => r.master_protein_accessions === proteins[0]);
+      // Handle proteins with multiple UniProt IDs (e.g., "P00367; P49448")
+      const clickedProtein = proteins[0];
+      const protein = data.results.find((r) => {
+        // Check if the clicked protein matches the full accessions string
+        // or if the clicked protein is contained within the accessions
+        return r.master_protein_accessions === clickedProtein ||
+               r.master_protein_accessions.split(/[,;]/).map(s => s.trim()).includes(clickedProtein) ||
+               clickedProtein.split(/[,;]/).map(s => s.trim()).some(p => r.master_protein_accessions.includes(p));
+      });
       if (protein) {
         setSelectedProteinData(protein);
       }

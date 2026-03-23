@@ -309,3 +309,21 @@ taskkill //F //PID <PID>
 rm -rf Tests/test-results/ Tests/screenshots/
 rm -rf frontend/playwright-report/
 ```
+
+**Virtual environment Python path invalid:**
+The `backend/.venv` may reference a non-existent Python installation (e.g., `C:\Python314\python.exe`). If you see "executable not found" errors when starting the backend:
+
+```bash
+# Option 1: Use global Python (recommended - all deps pre-installed)
+cd backend && D:/Software/Python/python.exe -m uvicorn app.main:app --reload --port 8000
+
+# Option 2: Recreate venv with correct Python
+rm -rf backend/.venv
+cd backend && D:/Software/Python/python.exe -m venv .venv
+source backend/.venv/Scripts/activate
+pip install -r backend/requirements.txt
+```
+
+**Python locations on this system:**
+- Global Python: `D:/Software/Python/python.exe` (has all dependencies)
+- R installation: `D:/Software/R-4.5.3/bin/x64/R.exe`

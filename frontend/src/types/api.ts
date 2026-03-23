@@ -104,11 +104,15 @@ export interface QCData {
   pca?: PCAData;
   pvalue_distribution?: PValueDistribution;
   psm_cv?: PSMCV;
+  protein_cv?: PSMCV; // Protein CV variance
   intensity_distributions?: IntensityDistributions;
   data_completeness?: DataCompleteness;
+  psm_completeness?: DataCompleteness; // PSM level completeness
   // Summary statistics
   total_psms?: number;
+  avg_psms_per_sample?: number;
   total_proteins?: number;
+  avg_proteins_per_sample?: number;
   average_cv?: number;
   completeness_rate?: number;
 }

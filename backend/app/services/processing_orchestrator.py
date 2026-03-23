@@ -136,6 +136,7 @@ class ProcessingOrchestrator:
     def __init__(self):
         """Initialize orchestrator."""
         self.progress_callbacks: list[Callable[[ProcessingProgress], None]] = []
+        self._current_session_id: Optional[str] = None
 
     def register_progress_callback(
         self, callback: Callable[[ProcessingProgress], None]
@@ -181,27 +182,14 @@ class ProcessingOrchestrator:
             step: Optional step number
         """
         try:
-            # Get session_id from the current processing context
-            # This is a bit of a hack - we should ideally store session_id in the orchestrator
-            # But for now, we'll skip if session_manager doesn't have the method
-            if hasattr(session_manager, 'send_log_message'):
-                # Find the session_id from the state files
-                for session_dir in settings.sessions_dir.iterdir():
-                    if session_dir.is_dir():
-                        state_file = session_dir / "pipeline_state.json"
-                        if state_file.exists():
-                            try:
-                                with open(state_file, encoding='utf-8') as f:
-                                    state = json.load(f)
-                                    if state.get('current_step', 0) > 0:
-                                        await session_manager.send_log_message(
-                                            session_id=session_dir.name,
-                                            level=level,
-                                            message=message,
-                                            step=step
-                                        )
-                            except Exception:
-                                pass
+            # Use the current session_id if available
+            if self._current_session_id and hasattr(session_manager, 'send_log_message'):
+                await session_manager.send_log_message(
+                    session_id=self._current_session_id,
+                    level=level,
+                    message=message,
+                    step=step
+                )
         except Exception as e:
             logger.debug(f"Failed to send log message: {e}")
 
@@ -271,6 +259,9 @@ class ProcessingOrchestrator:
             f"=== ENTERING process_session for session {session_id} ===",
             extra={"session_id": session_id, "config": config.model_dump()},
         )
+
+        # Store session_id for log messages
+        self._current_session_id = session_id
 
         # Register WebSocket callback
         if websocket_callback:
@@ -608,9 +599,14 @@ class ProcessingOrchestrator:
                 },
             )
 
+            # Clear session_id before returning
+            self._current_session_id = None
             return result
 
         except Exception as e:
+            # Clear session_id on error
+            self._current_session_id = None
+
             # Mark step as failed
             current_step = state.data["current_step"]
             error_msg = str(e)

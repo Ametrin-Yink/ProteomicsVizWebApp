@@ -39,10 +39,10 @@ const ConnectionStatus: React.FC<{ isConnected: boolean }> = ({
   <div
     data-testid="connection-status"
     className={cn(
-      'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium',
+      'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border',
       isConnected
-        ? 'bg-emerald-100 text-emerald-700'
-        : 'bg-amber-100 text-amber-700'
+        ? 'bg-green-50 text-green-700 border-green-200'
+        : 'bg-amber-50 text-amber-700 border-amber-200'
     )}
   >
     {isConnected ? (
@@ -63,16 +63,16 @@ const ConnectionStatus: React.FC<{ isConnected: boolean }> = ({
 const CancelledDisplay: React.FC<{
   onBack: () => void;
 }> = ({ onBack }) => (
-  <div data-testid="processing-cancelled" className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+  <div data-testid="processing-cancelled" className="rounded-xl border border-gray-200 bg-gray-50 p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-amber-100 rounded-full">
-        <X className="w-6 h-6 text-amber-600" />
+      <div className="p-3 bg-gray-100 rounded-full">
+        <X className="w-6 h-6 text-gray-600" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-amber-900 mb-2">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">
           Processing Cancelled
         </h3>
-        <p className="text-amber-700 mb-4">
+        <p className="text-gray-600 mb-4">
           The processing has been cancelled by the user.
         </p>
         <button
@@ -152,16 +152,16 @@ const CompletionDisplay: React.FC<{
   duration: number | null;
   onNavigate: () => void;
 }> = ({ duration, onNavigate }) => (
-  <div data-testid="processing-complete" className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
+  <div data-testid="processing-complete" className="rounded-xl border border-green-200 bg-green-50 p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-emerald-100 rounded-full">
-        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+      <div className="p-3 bg-green-100 rounded-full">
+        <CheckCircle2 className="w-6 h-6 text-green-600" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-emerald-900 mb-2">
+        <h3 className="text-lg font-semibold text-green-900 mb-2">
           Processing Complete!
         </h3>
-        <p className="text-emerald-700 mb-4">
+        <p className="text-green-700 mb-4">
           All 9 steps have been completed successfully.
           {duration && (
             <span className="flex items-center gap-1 mt-1">
@@ -170,12 +170,12 @@ const CompletionDisplay: React.FC<{
             </span>
           )}
         </p>
-        <p className="text-sm text-emerald-600 mb-4">
+        <p className="text-sm text-green-600 mb-4">
           Redirecting to visualization page in 2 seconds...
         </p>
         <button
           onClick={onNavigate}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
         >
           <FileText className="w-4 h-4" />
           View Results

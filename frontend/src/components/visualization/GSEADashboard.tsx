@@ -17,8 +17,20 @@ export default function GSEADashboard({
   selectedPathway,
   onSelectPathway,
 }: GSEADashboardProps) {
+  // Defensive: ensure data and data.results exist and are valid
+  const hasValidData = data &&
+    typeof data === 'object' &&
+    'results' in data &&
+    Array.isArray(data.results) &&
+    data.results.length > 0;
+
   // Top enriched pathways bar chart
   const topPathwaysPlot = useMemo(() => {
+    // Defensive: ensure data.results exists and is array
+    if (!hasValidData) {
+      return { traces: [], layout: {}, data: [] };
+    }
+
     // Get top 5 positive and top 5 negative NES
     const sorted = [...data.results].sort((a, b) => b.nes - a.nes);
     const topPositive = sorted.slice(0, 5);

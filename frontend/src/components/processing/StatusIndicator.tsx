@@ -20,9 +20,9 @@ interface StatusIndicatorProps {
   className?: string;
 }
 
-const statusConfig: Record<StepStatus, { 
-  icon: LucideIcon; 
-  color: string; 
+const statusConfig: Record<StepStatus, {
+  icon: LucideIcon;
+  color: string;
   bgColor: string;
   label: string;
 }> = {
@@ -34,8 +34,8 @@ const statusConfig: Record<StepStatus, {
   },
   in_progress: {
     icon: Loader2,
-    color: 'text-blue-500',
-    bgColor: 'bg-blue-50',
+    color: 'text-cyan-500',
+    bgColor: 'bg-cyan-50',
     label: 'In Progress',
   },
   completed: {
@@ -46,8 +46,8 @@ const statusConfig: Record<StepStatus, {
   },
   error: {
     icon: XCircle,
-    color: 'text-red-500',
-    bgColor: 'bg-red-50',
+    color: 'text-rose-500',
+    bgColor: 'bg-rose-50',
     label: 'Error',
   },
 };

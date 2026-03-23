@@ -59,14 +59,36 @@ class QCCalculator:
             psm_df = pd.read_csv(psm_abundances_path, sep='\t')
         
         # Calculate metrics
+        psm_cv = self._calculate_cv(psm_df) if psm_df is not None else None
+        protein_cv = self._calculate_protein_cv(protein_df)
+        data_completeness = self._calculate_data_completeness(protein_df)
+        psm_completeness = self._calculate_psm_completeness(psm_df) if psm_df is not None else None
+
+        # Calculate summary statistics
+        total_psms = len(psm_df) if psm_df is not None else None
+        avg_psms_per_sample = self._calculate_avg_per_sample(total_psms, psm_completeness)
+        total_proteins = len(protein_df)
+        avg_proteins_per_sample = self._calculate_avg_proteins_per_sample(protein_df)
+        average_cv = self._calculate_average_cv(protein_cv)
+        completeness_rate = self._calculate_completeness_rate(data_completeness)
+
         self.qc_data = QCData(
             pca=self._calculate_pca(protein_df),
             pvalue_distribution=self._calculate_pvalue_distribution(diff_df),
-            psm_cv=self._calculate_cv(psm_df) if psm_df is not None else None,
+            psm_cv=psm_cv,
+            protein_cv=protein_cv,
             intensity_distributions=self._calculate_intensity_distributions(
                 protein_df, psm_df
             ),
-            data_completeness=self._calculate_data_completeness(protein_df)
+            data_completeness=data_completeness,
+            psm_completeness=psm_completeness,
+            # Summary statistics
+            total_psms=total_psms,
+            avg_psms_per_sample=avg_psms_per_sample,
+            total_proteins=total_proteins,
+            avg_proteins_per_sample=avg_proteins_per_sample,
+            average_cv=average_cv,
+            completeness_rate=completeness_rate
         )
         
         logger.info("Step 8 complete: QC metrics calculated")
@@ -219,9 +241,90 @@ class QCCalculator:
                         cv_values.append(cv)
             
             cv_by_condition[str(condition)] = cv_values
-        
+
         return cv_by_condition
-    
+
+    def _calculate_protein_cv(self, protein_df: pd.DataFrame) -> dict[str, list[float]]:
+        """
+        Calculate coefficient of variation per condition for protein abundances.
+
+        Args:
+            protein_df: Protein abundances DataFrame
+
+        Returns:
+            Dictionary mapping condition to CV values
+        """
+        if protein_df is None:
+            return {}
+
+        # Get abundance columns (exclude ID columns)
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein']
+        abundance_cols = [
+            col for col in protein_df.columns
+            if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
+        ]
+
+        # Group columns by condition
+        condition_cols = {}
+        for col in abundance_cols:
+            condition = self._extract_condition(col)
+            if condition not in condition_cols:
+                condition_cols[condition] = []
+            condition_cols[condition].append(col)
+
+        # Calculate CV for each protein within each condition
+        cv_by_condition = {}
+        for condition, cols in condition_cols.items():
+            cv_values = []
+            for _, row in protein_df.iterrows():
+                abundances = row[cols].dropna()
+                if len(abundances) > 1:
+                    mean = abundances.mean()
+                    std = abundances.std()
+                    if mean > 0:
+                        cv = std / mean
+                        cv_values.append(cv)
+            cv_by_condition[str(condition)] = cv_values
+
+        return cv_by_condition
+
+    def _calculate_psm_completeness(self, psm_df: pd.DataFrame) -> list[DataCompleteness]:
+        """
+        Calculate data completeness per sample for PSM data.
+
+        Args:
+            psm_df: PSM abundances DataFrame
+
+        Returns:
+            List of DataCompleteness objects
+        """
+        if psm_df is None or 'Abundance' not in psm_df.columns:
+            return []
+
+        # Group by condition and replicate
+        if 'Replicate' in psm_df.columns:
+            grouped = psm_df.groupby(['Condition', 'Replicate'])
+        else:
+            grouped = psm_df.groupby('Condition')
+
+        completeness = []
+        for group_name, group_df in grouped:
+            if isinstance(group_name, tuple):
+                sample_name = f"{group_name[0]}_{group_name[1]}"
+            else:
+                sample_name = str(group_name)
+
+            missing = group_df['Abundance'].isna().sum()
+            present = group_df['Abundance'].notna().sum()
+
+            completeness.append(DataCompleteness(
+                sample=sample_name,
+                missing=int(missing),
+                present=int(present)
+            ))
+
+        return completeness
+
     def _calculate_intensity_distributions(
         self,
         protein_df: pd.DataFrame,
@@ -312,7 +415,47 @@ class QCCalculator:
             ))
         
         return completeness
-    
+
+    def _calculate_avg_per_sample(self, total: Optional[int], completeness: Optional[list]) -> Optional[float]:
+        """Calculate average count per sample."""
+        if total is None or completeness is None or len(completeness) == 0:
+            return None
+        return round(total / len(completeness), 1)
+
+    def _calculate_avg_proteins_per_sample(self, protein_df: pd.DataFrame) -> int:
+        """Calculate average proteins per sample."""
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein']
+        abundance_cols = [
+            col for col in protein_df.columns
+            if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
+        ]
+        if len(abundance_cols) == 0:
+            return 0
+        total_present = sum(protein_df[col].notna().sum() for col in abundance_cols)
+        return total_present // len(abundance_cols)
+
+    def _calculate_average_cv(self, cv_by_condition: Optional[dict]) -> Optional[float]:
+        """Calculate overall average CV across all conditions."""
+        if cv_by_condition is None or len(cv_by_condition) == 0:
+            return None
+        all_cvs = []
+        for cv_list in cv_by_condition.values():
+            all_cvs.extend(cv_list)
+        if len(all_cvs) == 0:
+            return None
+        return round(np.mean(all_cvs) * 100, 1)  # Return as percentage
+
+    def _calculate_completeness_rate(self, completeness: list) -> Optional[float]:
+        """Calculate overall completeness rate across all samples."""
+        if not completeness:
+            return None
+        total_present = sum(c.present for c in completeness)
+        total_missing = sum(c.missing for c in completeness)
+        total = total_present + total_missing
+        if total == 0:
+            return None
+        return round((total_present / total) * 100, 1)
+
     def get_qc_data(self) -> Optional[QCData]:
         """
         Get calculated QC data.
