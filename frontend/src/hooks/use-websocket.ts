@@ -23,6 +23,7 @@ export const useWebSocket = (sessionId: string | null) => {
   const ws = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isManualClose = useRef(false);
 
   const {
     updateStepProgress,
@@ -51,14 +52,34 @@ export const useWebSocket = (sessionId: string | null) => {
       reconnectTimeout.current = null;
     }
 
-    const wsUrl = `${WS_BASE_URL}/ws/sessions/${sessionId}`;
-    
+    // Prevent multiple simultaneous connections
+    if (ws.current?.readyState === WebSocket.CONNECTING) {
+      console.log('WebSocket already connecting, skipping...');
+      return;
+    }
+
+    // Close existing connection before creating new one
+    if (ws.current) {
+      isManualClose.current = true;
+      ws.current.close();
+      ws.current = null;
+    }
+
+    // Use window.location to determine protocol
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/sessions/${sessionId}`;
+
+    console.log(`Connecting to WebSocket: ${wsUrl}`);
+
     try {
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
+        console.log('WebSocket connected successfully');
         setConnected(true);
         reconnectAttempts.current = 0;
+        isManualClose.current = false;
 
         // Subscribe to session updates
         if (ws.current?.readyState === WebSocket.OPEN) {
@@ -83,10 +104,10 @@ export const useWebSocket = (sessionId: string | null) => {
             // Keepalive response - no action needed
             return;
           }
-          
+
           // Try to parse as JSON
           const message: WSMessage = JSON.parse(event.data);
-          
+
           // Handle JSON ping/pong messages
           if (message.type === 'ping') {
             if (ws.current?.readyState === WebSocket.OPEN) {
@@ -98,19 +119,32 @@ export const useWebSocket = (sessionId: string | null) => {
             // Keepalive response - no action needed
             return;
           }
-          
+
           handleMessage(message);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error, 'Data:', event.data);
         }
       };
 
-      ws.current.onclose = () => {
+      ws.current.onclose = (event) => {
         setConnected(false);
+
+        // Don't reconnect if manually closed
+        if (isManualClose.current) {
+          console.log('WebSocket manually closed, not reconnecting');
+          return;
+        }
+
+        // Don't reconnect if connection was closed cleanly (processing complete)
+        if (event.wasClean) {
+          console.log('WebSocket closed cleanly');
+          return;
+        }
 
         // Attempt reconnection if not at max attempts
         if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
           const delay = getReconnectDelay();
+          console.log(`WebSocket closed unexpectedly. Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${MAX_RECONNECT_ATTEMPTS})`);
           reconnectTimeout.current = setTimeout(() => {
             reconnectAttempts.current += 1;
             connect();
@@ -122,6 +156,7 @@ export const useWebSocket = (sessionId: string | null) => {
 
       ws.current.onerror = (error) => {
         console.error('WebSocket error:', error);
+        // Error event doesn't provide much info, let onclose handle reconnection
       };
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
@@ -172,8 +207,10 @@ export const useWebSocket = (sessionId: string | null) => {
 
     // Cleanup on unmount
     return () => {
+      isManualClose.current = true;
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
       }
       if (ws.current) {
         ws.current.close();

@@ -214,6 +214,15 @@ if ("Gene_Name" %in% names(protein_data)) {
     results_df$Gene_Name <- gene_map[rownames(results_df)]
 }
 
+# Add PSM counts from protein_data if available
+if ("PSM_Count" %in% names(protein_data)) {
+    # Create mapping from protein ID to PSM count
+    psm_map <- setNames(protein_data$PSM_Count, protein_data$Master_Protein_Accessions)
+    results_df$PSM_Count <- psm_map[rownames(results_df)]
+    # Handle NA values (proteins not in the map)
+    results_df$PSM_Count[is.na(results_df$PSM_Count)] <- 0
+}
+
 # Rename columns for consistency
 name_mapping <- c(
     "logFC" = "logFC",
@@ -249,7 +258,7 @@ for (col in required_cols) {
 }
 
 # Reorder columns
-col_order <- c("Master_Protein_Accessions", "Gene_Name", "logFC", "pval", "adjPval", "se", "df")
+col_order <- c("Master_Protein_Accessions", "Gene_Name", "PSM_Count", "logFC", "pval", "adjPval", "se", "df")
 cols_present <- intersect(col_order, names(results_df))
 other_cols <- setdiff(names(results_df), cols_present)
 results_df <- results_df[, c(cols_present, other_cols)]

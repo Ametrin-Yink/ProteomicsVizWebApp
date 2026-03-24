@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/ws/:path*',
-        destination: 'http://127.0.0.1:8000/ws/:path*',
+        destination: 'ws://127.0.0.1:8000/ws/:path*',
       },
     ];
   },

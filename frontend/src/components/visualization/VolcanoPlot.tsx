@@ -4,7 +4,7 @@ import React, { useMemo, useCallback, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import type { DEResult, VolcanoFilters } from '@/types/api';
 import { getVolcanoPointColor } from '@/lib/utils';
-import { MousePointer2, Square, Lasso, RotateCcw } from 'lucide-react';
+import { MousePointer2, Square, Lasso, X } from 'lucide-react';
 
 // Dynamically import Plotly to avoid SSR issues
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -15,6 +15,7 @@ interface VolcanoPlotProps {
   selectedProteins: Set<string>;
   onSelectProteins: (proteins: string[], mode?: 'click' | 'box' | 'lasso') => void;
   onSelectionModeChange?: (mode: 'click' | 'box' | 'lasso') => void;
+  onClearSelection?: () => void;
 }
 
 type SelectionMode = 'click' | 'box' | 'lasso';
@@ -25,6 +26,7 @@ export default function VolcanoPlot({
   selectedProteins,
   onSelectProteins,
   onSelectionModeChange,
+  onClearSelection,
 }: VolcanoPlotProps) {
   const [selectionMode, setSelectionModeState] = useState<SelectionMode>('click');
   const plotRef = useRef<HTMLDivElement>(null);
@@ -221,8 +223,8 @@ export default function VolcanoPlot({
     [onSelectProteins, selectionMode]
   );
 
-  // Handle click events - always clear previous selection
-  const handleClick = useCallback(
+  // Handle double-click events - select single protein
+  const handleDoubleClick = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
       if (event.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
@@ -231,17 +233,6 @@ export default function VolcanoPlot({
     },
     [onSelectProteins]
   );
-
-  // Handle reset zoom - use Plotly.relayout to reset axes
-  const handleResetZoom = useCallback(() => {
-    if (plotRef.current && (window as unknown as { Plotly?: { relayout: (el: HTMLElement, update: Record<string, unknown>) => void } }).Plotly) {
-      const Plotly = (window as unknown as { Plotly: { relayout: (el: HTMLElement, update: Record<string, unknown>) => void } }).Plotly;
-      Plotly.relayout(plotRef.current, {
-        'xaxis.autorange': true,
-        'yaxis.autorange': true,
-      });
-    }
-  }, []);
 
   // Get dragmode based on selection mode
   const dragmode = useMemo(() => {
@@ -307,14 +298,15 @@ export default function VolcanoPlot({
           </button>
         </div>
 
-        <button
-          data-testid="reset-zoom-btn"
-          onClick={handleResetZoom}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          <RotateCcw className="w-4 h-4" />
-          Reset Zoom
-        </button>
+          <button
+            data-testid="clear-selection-btn"
+            onClick={onClearSelection}
+            disabled={selectedProteins.size === 0}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <X className="w-4 h-4" />
+            Clear Selection
+          </button>
       </div>
 
       {/* Volcano plot */}
@@ -325,7 +317,8 @@ export default function VolcanoPlot({
             layout={layoutWithDragMode}
             config={config}
             onSelected={selectionMode !== 'click' ? handleSelected : undefined}
-            onClick={handleClick}
+            onClick={undefined}
+            onDoubleClick={handleDoubleClick}
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />

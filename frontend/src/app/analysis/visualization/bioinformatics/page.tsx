@@ -109,7 +109,7 @@ function BioinformaticsContent() {
 
             {/* Pathway Details and Plot */}
             {selectedPathway && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="w-full">
                 <GSEAPlot pathway={selectedPathway} />
               </div>
             )}

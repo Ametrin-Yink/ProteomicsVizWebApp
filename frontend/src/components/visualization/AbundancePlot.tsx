@@ -18,16 +18,16 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       return [];
     }
 
-    // Group by condition, filter out negative values
+    // Group by condition, filter out negative values and zeros (missing data)
     const conditionData: { [condition: string]: { samples: string[]; abundances: number[] } } = {};
 
     data.samples.forEach((sample, i) => {
       const condition = data.conditions?.[i] || 'Unknown';
       const abundance = data.abundances?.[i];
 
-      // Filter out negative or undefined values
-      if (abundance === undefined || abundance === null || abundance < 0) {
-        return; // Skip negative values
+      // Filter out negative, undefined, null, or zero values (treat as missing)
+      if (abundance === undefined || abundance === null || abundance <= 0) {
+        return; // Skip missing/invalid values
       }
 
       if (!conditionData[condition]) {
@@ -53,7 +53,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       // Determine color based on condition name
       let color = colors[condition];
       if (!color) {
-        color = isTreatment(condition) ? '#E73564' : '#6B7280';
+        color = isTreatment(condition) ? '#E73564' : '#00ADEF';
       }
       return {
         x: values.samples,
@@ -81,7 +81,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
         gridcolor: '#E5E7EB',
       },
       yaxis: {
-        title: { text: 'Protein Abundance', font: { size: 12 } },
+        title: { text: 'Abundance', font: { size: 12 } },
         gridcolor: '#E5E7EB',
         // Ensure y-axis starts at 0 to show missing values clearly
         rangemode: 'tozero' as const,
@@ -89,7 +89,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       showlegend: true,
       legend: {
         orientation: 'h' as const,
-        y: -0.35,
+        y: -0.25,
         x: 0.5,
         xanchor: 'center' as const,
       },
@@ -188,13 +188,14 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
       },
       showlegend: true,
       legend: {
-        orientation: 'v' as const,
-        x: 1.05,
-        y: 1,
+        orientation: 'h' as const,
+        x: 0.5,
+        y: -0.3,
+        xanchor: 'center' as const,
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 100, t: 40, b: 80 },
+      margin: { l: 50, r: 30, t: 40, b: 100 },
     }),
     [title]
   );

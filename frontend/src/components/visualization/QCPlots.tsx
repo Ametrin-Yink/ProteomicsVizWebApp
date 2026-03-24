@@ -227,14 +227,27 @@ export default function QCPlots({ data }: QCPlotsProps) {
     const calculateKDE = (values: number[], numPoints: number = 100) => {
       if (values.length === 0) return { x: [], y: [] };
 
-      const localMin = Math.min(...values);
-      const localMax = Math.max(...values);
-      const localRange = localMax - localMin || 1;
+      // Filter out non-finite values
+      const cleanValues = values.filter(v => Number.isFinite(v));
+      if (cleanValues.length === 0) return { x: [], y: [] };
+
+      const localMin = Math.min(...cleanValues);
+      const localMax = Math.max(...cleanValues);
+      const localRange = localMax - localMin;
+
+      // Handle case where all values are the same
+      if (localRange === 0) {
+        return {
+          x: [localMin - 1, localMin, localMin + 1],
+          y: [0, cleanValues.length, 0]
+        };
+      }
 
       // Silverman's rule of thumb for bandwidth
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      const std = Math.sqrt(values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length);
-      const bandwidth = 1.06 * std * Math.pow(values.length, -0.2);
+      const mean = cleanValues.reduce((a, b) => a + b, 0) / cleanValues.length;
+      const std = Math.sqrt(cleanValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / cleanValues.length);
+      // Ensure minimum bandwidth to avoid numerical issues
+      const bandwidth = Math.max(1e-10, 1.06 * std * Math.pow(cleanValues.length, -0.2));
 
       const x: number[] = [];
       const y: number[] = [];
@@ -243,13 +256,13 @@ export default function QCPlots({ data }: QCPlotsProps) {
         const xi = localMin + (localRange * i) / (numPoints - 1);
         x.push(xi);
 
-        // Gaussian kernel
+        // Gaussian kernel - use normalized calculation for numerical stability
         let yi = 0;
-        for (const v of values) {
+        for (const v of cleanValues) {
           const z = (xi - v) / bandwidth;
-          yi += Math.exp(-0.5 * z * z) / (bandwidth * Math.sqrt(2 * Math.PI));
+          yi += Math.exp(-0.5 * z * z);
         }
-        y.push(yi / values.length);
+        y.push(yi / (cleanValues.length * bandwidth * Math.sqrt(2 * Math.PI)));
       }
 
       return { x, y };
@@ -326,14 +339,27 @@ export default function QCPlots({ data }: QCPlotsProps) {
     const calculateKDE = (values: number[], numPoints: number = 100) => {
       if (values.length === 0) return { x: [], y: [] };
 
-      const localMin = Math.min(...values);
-      const localMax = Math.max(...values);
-      const localRange = localMax - localMin || 1;
+      // Filter out non-finite values
+      const cleanValues = values.filter(v => Number.isFinite(v));
+      if (cleanValues.length === 0) return { x: [], y: [] };
+
+      const localMin = Math.min(...cleanValues);
+      const localMax = Math.max(...cleanValues);
+      const localRange = localMax - localMin;
+
+      // Handle case where all values are the same
+      if (localRange === 0) {
+        return {
+          x: [localMin - 1, localMin, localMin + 1],
+          y: [0, cleanValues.length, 0]
+        };
+      }
 
       // Silverman's rule of thumb for bandwidth
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      const std = Math.sqrt(values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length);
-      const bandwidth = 1.06 * std * Math.pow(values.length, -0.2);
+      const mean = cleanValues.reduce((a, b) => a + b, 0) / cleanValues.length;
+      const std = Math.sqrt(cleanValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / cleanValues.length);
+      // Ensure minimum bandwidth to avoid numerical issues
+      const bandwidth = Math.max(1e-10, 1.06 * std * Math.pow(cleanValues.length, -0.2));
 
       const x: number[] = [];
       const y: number[] = [];
@@ -342,13 +368,13 @@ export default function QCPlots({ data }: QCPlotsProps) {
         const xi = localMin + (localRange * i) / (numPoints - 1);
         x.push(xi);
 
-        // Gaussian kernel
+        // Gaussian kernel - use normalized calculation for numerical stability
         let yi = 0;
-        for (const v of values) {
+        for (const v of cleanValues) {
           const z = (xi - v) / bandwidth;
-          yi += Math.exp(-0.5 * z * z) / (bandwidth * Math.sqrt(2 * Math.PI));
+          yi += Math.exp(-0.5 * z * z);
         }
-        y.push(yi / values.length);
+        y.push(yi / (cleanValues.length * bandwidth * Math.sqrt(2 * Math.PI)));
       }
 
       return { x, y };

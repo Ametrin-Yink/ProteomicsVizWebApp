@@ -221,6 +221,54 @@ function ProcessingContent() {
   // Initialize WebSocket connection
   useWebSocket(storeSessionId);
 
+  // Polling fallback when WebSocket is not connected
+  useEffect(() => {
+    if (!sessionId || isComplete || error) return;
+
+    // Only poll if WebSocket is not connected
+    if (isConnected) return;
+
+    console.log('WebSocket not connected, using polling fallback');
+    const pollInterval = setInterval(async () => {
+      try {
+        // Fetch logs and state
+        const logData = await processingAPI.getLogs(sessionId);
+        if (logData) {
+          // Update logs
+          if (logData.logs && logData.logs.length > 0) {
+            const logEntries: LogEntry[] = logData.logs.map((log: {
+              level: 'info' | 'warning' | 'error';
+              message: string;
+              timestamp: string;
+              step?: number;
+            }) => ({
+              id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              level: log.level,
+              message: log.message,
+              timestamp: log.timestamp,
+              step: log.step,
+            }));
+            setLogs(logEntries);
+          }
+
+          // Check if completed
+          if (logData.is_complete) {
+            setComplete({
+              session_id: sessionId,
+              outputs: logData.outputs || {},
+              duration: 0,
+            });
+            clearInterval(pollInterval);
+          }
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [sessionId, isConnected, isComplete, error, setComplete, setLogs]);
+
   // Start processing after WebSocket is connected (to not miss early updates)
   const [hasStarted, setHasStarted] = useState(false);
   useEffect(() => {
@@ -391,7 +439,8 @@ function ProcessingContent() {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <ConnectionStatus isConnected={isConnected} />
+                {/* Connection status - hidden as per user request */}
+              {/* <ConnectionStatus isConnected={isConnected} /> */}
                 {!isComplete && !isCancelled && !error && (
                   <button
                     data-testid="cancel-btn"

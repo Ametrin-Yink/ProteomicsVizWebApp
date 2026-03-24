@@ -23,29 +23,29 @@ interface LogPanelProps {
   maxHeight?: string;
 }
 
-const logLevelConfig: Record<LogLevel, { 
-  icon: React.ReactNode; 
-  color: string; 
+const logLevelConfig: Record<LogLevel, {
+  icon: React.ReactNode;
+  color: string;
   bgColor: string;
   borderColor: string;
 }> = {
   info: {
     icon: <Info className="w-3.5 h-3.5" />,
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'bg-blue-50 dark:bg-blue-950/30',
-    borderColor: 'border-blue-200 dark:border-blue-800',
+    color: 'text-slate-700 dark:text-slate-300',
+    bgColor: 'bg-slate-50 dark:bg-slate-900/30',
+    borderColor: 'border-slate-300 dark:border-slate-700',
   },
   warning: {
     icon: <AlertTriangle className="w-3.5 h-3.5" />,
-    color: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-50 dark:bg-amber-950/30',
-    borderColor: 'border-amber-200 dark:border-amber-800',
+    color: 'text-amber-700 dark:text-amber-400',
+    bgColor: 'bg-amber-50/50 dark:bg-amber-950/20',
+    borderColor: 'border-amber-300 dark:border-amber-800',
   },
   error: {
     icon: <AlertCircle className="w-3.5 h-3.5" />,
-    color: 'text-red-600 dark:text-red-400',
-    bgColor: 'bg-red-50 dark:bg-red-950/30',
-    borderColor: 'border-red-200 dark:border-red-800',
+    color: 'text-red-700 dark:text-red-400',
+    bgColor: 'bg-red-50/50 dark:bg-red-950/20',
+    borderColor: 'border-red-300 dark:border-red-800',
   },
 };
 

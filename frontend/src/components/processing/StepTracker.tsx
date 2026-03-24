@@ -102,13 +102,15 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
           {step.description}
         </p>
 
-        {/* Package/Function info */}
+        {/* Package/Function info - hidden as per user request */}
+        {/*
         <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
           <span className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded">
             {step.package}
           </span>
           <span className="font-mono">{step.function}</span>
         </div>
+        */}
 
         {/* Progress bar for in-progress steps */}
         {isActive && step.progress > 0 && (

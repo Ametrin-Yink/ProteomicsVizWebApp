@@ -86,14 +86,10 @@ function ResultsContent() {
     }
   }, [data]);
 
-  // Handle protein selection from table
+  // Handle protein selection from table - single select only (like double-click)
   const handleSelectProteinFromTable = useCallback((protein: DEResult) => {
     setSelectedProteinData(protein);
-    setSelectedProteins((prev) => {
-      const newSet = new Set(prev);
-      newSet.add(protein.master_protein_accessions);
-      return newSet;
-    });
+    setSelectedProteins(new Set([protein.master_protein_accessions]));
   }, []);
 
   // Clear selection
@@ -355,6 +351,7 @@ function ResultsContent() {
               selectedProteins={selectedProteins}
               onSelectProteins={handleSelectProteins}
               onSelectionModeChange={setSelectionMode}
+              onClearSelection={clearSelection}
             />
 
             {/* Protein Table */}

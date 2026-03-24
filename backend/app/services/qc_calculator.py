@@ -163,10 +163,49 @@ class QCCalculator:
     
     def _extract_condition(self, sample_name: str) -> str:
         """Extract condition from sample name."""
-        # Try common patterns
+        # Handle common patterns like:
+        # - "Abundance F1 Sample_DMSO_1" -> "DMSO"
+        # - "Abundance F2 Sample_INCZ_2" -> "INCZ"
+        # - "Sample_DMSO_1" -> "DMSO"
+        # - "DMSO_1" -> "DMSO"
+        # - "Treatment_1" -> "Treatment"
+        # - "Control_1" -> "Control"
+
+        # First, try to extract from common patterns
+        upper_name = sample_name.upper()
+
+        # Check for DMSO (common control)
+        if 'DMSO' in upper_name:
+            return 'DMSO'
+
+        # Check for INCZ (common treatment pattern)
+        if 'INCZ' in upper_name:
+            # Extract the full INCZ name (e.g., INCZ, INCZ_1uM, etc.)
+            parts = sample_name.split('_')
+            for i, part in enumerate(parts):
+                if 'INCZ' in part.upper():
+                    # Return INCZ with any suffix
+                    return '_'.join(parts[i:])
+            return 'INCZ'
+
+        # Check for Control/Treatment
+        if 'CONTROL' in upper_name:
+            return 'Control'
+        if 'TREATMENT' in upper_name:
+            return 'Treatment'
+
+        # Default: split by underscore and use first part(s)
         parts = sample_name.split('_')
         if len(parts) >= 2:
-            return '_'.join(parts[:-1])  # Everything except last part (replicate)
+            # Try to detect if last part is a replicate number
+            last_part = parts[-1]
+            if last_part.isdigit():
+                # Everything except the last numeric part
+                return '_'.join(parts[:-1])
+            else:
+                # Use first part as condition
+                return parts[0]
+
         return sample_name
     
     def _calculate_pvalue_distribution(
