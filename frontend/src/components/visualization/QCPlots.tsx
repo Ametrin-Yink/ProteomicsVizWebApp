@@ -116,11 +116,20 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces: [trace], layout };
   }, [data.pvalue_distribution]);
 
-  // 3. PSM CV Variance - no individual points shown
+  // 3. PSM CV Variance - show 95th percentile top
   const psmCVPlot = useMemo(() => {
     if (!data.psm_cv) return null;
 
-    const traces = Object.entries(data.psm_cv).map(([condition, values]) => ({
+    // Filter values to 95th percentile
+    const filteredCV: { [condition: string]: number[] } = {};
+    Object.entries(data.psm_cv).forEach(([condition, values]) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const p95Index = Math.floor(sorted.length * 0.95);
+      const p95 = sorted[p95Index];
+      filteredCV[condition] = values.filter(v => v <= p95);
+    });
+
+    const traces = Object.entries(filteredCV).map(([condition, values]) => ({
       y: values,
       type: 'violin' as const,
       name: condition,
@@ -135,7 +144,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     }));
 
     const layout = {
-      title: { text: 'PSM CV Variance by Condition', font: { size: 14, color: '#111827' } },
+      title: { text: 'PSM CV Variance by Condition (95% of data)', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -152,11 +161,20 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.psm_cv]);
 
-  // 3b. Protein CV Variance (with different colors) - no individual points shown
+  // 3b. Protein CV Variance (with different colors) - show 95th percentile top
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
 
-    const traces = Object.entries(data.protein_cv).map(([condition, values]) => ({
+    // Filter values to 95th percentile
+    const filteredCV: { [condition: string]: number[] } = {};
+    Object.entries(data.protein_cv).forEach(([condition, values]) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const p95Index = Math.floor(sorted.length * 0.95);
+      const p95 = sorted[p95Index];
+      filteredCV[condition] = values.filter(v => v <= p95);
+    });
+
+    const traces = Object.entries(filteredCV).map(([condition, values]) => ({
       y: values,
       type: 'violin' as const,
       name: condition,
@@ -171,7 +189,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     }));
 
     const layout = {
-      title: { text: 'Protein CV Variance by Condition', font: { size: 14, color: '#111827' } },
+      title: { text: 'Protein CV Variance by Condition (95% of data)', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -188,11 +206,11 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.protein_cv]);
 
-  // 4. PSM Intensity Distribution - KDE curves (lines) instead of histogram
+  // 4. PSM Intensity Distribution - KDE curves (lines) showing all data
   const psmIntensityPlot = useMemo(() => {
     if (!data.intensity_distributions?.psm) return null;
 
-    // Collect all values to calculate percentiles
+    // Collect all values for range calculation (all data, not 90%)
     let allValues: number[] = [];
     Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
       Object.entries(replicates).forEach(([replicate, values]) => {
@@ -200,41 +218,38 @@ export default function QCPlots({ data }: QCPlotsProps) {
       });
     });
 
-    // Sort and calculate 5th and 95th percentiles (90% of data)
-    allValues.sort((a, b) => a - b);
-    const p5 = allValues[Math.floor(allValues.length * 0.05)];
-    const p95 = allValues[Math.floor(allValues.length * 0.95)];
+    // Calculate min/max for range (use all data)
+    const min = Math.min(...allValues);
+    const max = Math.max(...allValues);
+    const range = max - min || 1;
 
-    // Function to calculate KDE
+    // Function to calculate KDE - use all values, no filtering
     const calculateKDE = (values: number[], numPoints: number = 100) => {
       if (values.length === 0) return { x: [], y: [] };
 
-      // Filter values to 90% range
-      const filtered = values.filter(v => v >= p5 && v <= p95);
-      if (filtered.length === 0) return { x: [], y: [] };
-
-      const min = Math.min(...filtered);
-      const max = Math.max(...filtered);
-      const range = max - min || 1;
+      const localMin = Math.min(...values);
+      const localMax = Math.max(...values);
+      const localRange = localMax - localMin || 1;
 
       // Silverman's rule of thumb for bandwidth
-      const std = Math.sqrt(filtered.reduce((sum, v) => sum + Math.pow(v - filtered.reduce((a, b) => a + b) / filtered.length, 2), 0) / filtered.length);
-      const bandwidth = 1.06 * std * Math.pow(filtered.length, -0.2);
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const std = Math.sqrt(values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length);
+      const bandwidth = 1.06 * std * Math.pow(values.length, -0.2);
 
       const x: number[] = [];
       const y: number[] = [];
 
       for (let i = 0; i < numPoints; i++) {
-        const xi = min + (range * i) / (numPoints - 1);
+        const xi = localMin + (localRange * i) / (numPoints - 1);
         x.push(xi);
 
         // Gaussian kernel
         let yi = 0;
-        for (const v of filtered) {
+        for (const v of values) {
           const z = (xi - v) / bandwidth;
           yi += Math.exp(-0.5 * z * z) / (bandwidth * Math.sqrt(2 * Math.PI));
         }
-        y.push(yi / filtered.length);
+        y.push(yi / values.length);
       }
 
       return { x, y };
@@ -273,10 +288,10 @@ export default function QCPlots({ data }: QCPlotsProps) {
     });
 
     const layout = {
-      title: { text: 'PSM Intensity Distribution (90% of data)', font: { size: 14, color: '#111827' } },
+      title: { text: 'PSM Intensity Distribution', font: { size: 14, color: '#111827' } },
       xaxis: {
-        title: { text: 'Log2 Intensity', font: { size: 12 } },
-        range: [p5, p95],
+        title: { text: 'Intensity', font: { size: 12 } },
+        range: [min, max],
         gridcolor: '#E5E7EB',
       },
       yaxis: {
@@ -293,50 +308,93 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.intensity_distributions?.psm]);
 
-  // 5. Protein Intensity Distribution - Filter to 90% of data to avoid impossible values
+  // 5. Protein Intensity Distribution - Line plots (KDE) showing all data
   const proteinIntensityPlot = useMemo(() => {
     if (!data.intensity_distributions?.protein) return null;
 
-    // Collect all values to calculate percentiles
+    // Collect all values for range calculation (all data, not 90%)
     let allValues: number[] = [];
     Object.entries(data.intensity_distributions.protein).forEach(([condition, values]) => {
       allValues = allValues.concat(values);
     });
 
-    // Sort and calculate 5th and 95th percentiles (90% of data)
-    allValues.sort((a, b) => a - b);
-    const p5 = allValues[Math.floor(allValues.length * 0.05)];
-    const p95 = allValues[Math.floor(allValues.length * 0.95)];
+    // Calculate min/max for range (use all data)
+    const globalMin = Math.min(...allValues);
+    const globalMax = Math.max(...allValues);
 
-    // Filter values to 90% range to avoid impossible values
-    const traces = Object.entries(data.intensity_distributions.protein).map(
-      ([condition, values]) => {
-        const filteredValues = values.filter(v => v >= p5 && v <= p95);
-        return {
-          x: filteredValues,
-          type: 'histogram' as const,
-          name: condition,
-          opacity: 0.6,
-          marker: {
-            color: condition === 'DMSO' ? '#00ADEF' : '#E73564',
-          },
-          hovertemplate: 'Intensity: %{x}<br>Count: %{y}<extra></extra>',
-        };
+    // Function to calculate KDE - use all values, no filtering
+    const calculateKDE = (values: number[], numPoints: number = 100) => {
+      if (values.length === 0) return { x: [], y: [] };
+
+      const localMin = Math.min(...values);
+      const localMax = Math.max(...values);
+      const localRange = localMax - localMin || 1;
+
+      // Silverman's rule of thumb for bandwidth
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const std = Math.sqrt(values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length);
+      const bandwidth = 1.06 * std * Math.pow(values.length, -0.2);
+
+      const x: number[] = [];
+      const y: number[] = [];
+
+      for (let i = 0; i < numPoints; i++) {
+        const xi = localMin + (localRange * i) / (numPoints - 1);
+        x.push(xi);
+
+        // Gaussian kernel
+        let yi = 0;
+        for (const v of values) {
+          const z = (xi - v) / bandwidth;
+          yi += Math.exp(-0.5 * z * z) / (bandwidth * Math.sqrt(2 * Math.PI));
+        }
+        y.push(yi / values.length);
       }
-    );
+
+      return { x, y };
+    };
+
+    const traces: Array<{
+      x: number[];
+      y: number[];
+      type: 'scatter';
+      mode: 'lines';
+      name: string;
+      line: { color: string; width: number };
+      fill?: 'tozeroy';
+      fillcolor?: string;
+      hovertemplate: string;
+    }> = [];
+
+    Object.entries(data.intensity_distributions.protein).forEach(([condition, values]) => {
+      const kde = calculateKDE(values);
+      if (kde.x.length > 0) {
+        const color = condition === 'DMSO' ? '#00ADEF' : '#E73564';
+        traces.push({
+          x: kde.x,
+          y: kde.y,
+          type: 'scatter',
+          mode: 'lines',
+          name: condition,
+          line: { color, width: 2 },
+          fill: 'tozeroy',
+          fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.2)' : 'rgba(231, 53, 100, 0.2)',
+          hovertemplate: 'Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
+        });
+      }
+    });
 
     const layout = {
-      title: { text: 'Protein Intensity Distribution (90% of data)', font: { size: 14, color: '#111827' } },
+      title: { text: 'Protein Intensity Distribution', font: { size: 14, color: '#111827' } },
       xaxis: {
-        title: { text: 'Log2 Intensity', font: { size: 12 } },
-        range: [p5, p95],
+        title: { text: 'Intensity', font: { size: 12 } },
+        range: [globalMin, globalMax],
         gridcolor: '#E5E7EB',
       },
       yaxis: {
-        title: { text: 'Count', font: { size: 12 } },
+        title: { text: 'Density', font: { size: 12 } },
         gridcolor: '#E5E7EB',
       },
-      barmode: 'overlay' as const,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
       margin: { l: 50, r: 30, t: 50, b: 50 },

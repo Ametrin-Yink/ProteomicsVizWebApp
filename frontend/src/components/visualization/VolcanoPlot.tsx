@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import type { DEResult, VolcanoFilters } from '@/types/api';
 import { getVolcanoPointColor } from '@/lib/utils';
@@ -27,6 +27,7 @@ export default function VolcanoPlot({
   onSelectionModeChange,
 }: VolcanoPlotProps) {
   const [selectionMode, setSelectionModeState] = useState<SelectionMode>('click');
+  const plotRef = useRef<HTMLDivElement>(null);
 
   // Notify parent when selection mode changes
   const setSelectionMode = useCallback((mode: SelectionMode) => {
@@ -231,10 +232,15 @@ export default function VolcanoPlot({
     [onSelectProteins]
   );
 
-  // Handle reset zoom
+  // Handle reset zoom - use Plotly.relayout to reset axes
   const handleResetZoom = useCallback(() => {
-    // Plotly will reset to default layout when we force re-render
-    window.dispatchEvent(new Event('resize'));
+    if (plotRef.current && (window as unknown as { Plotly?: { relayout: (el: HTMLElement, update: Record<string, unknown>) => void } }).Plotly) {
+      const Plotly = (window as unknown as { Plotly: { relayout: (el: HTMLElement, update: Record<string, unknown>) => void } }).Plotly;
+      Plotly.relayout(plotRef.current, {
+        'xaxis.autorange': true,
+        'yaxis.autorange': true,
+      });
+    }
   }, []);
 
   // Get dragmode based on selection mode
@@ -245,16 +251,16 @@ export default function VolcanoPlot({
       case 'lasso':
         return 'lasso' as const;
       default:
-        return false as const; // Disable dragmode in click mode to allow proper clicking
+        return 'pan' as const; // Use 'pan' in click mode to allow click interactions
     }
   }, [selectionMode]);
 
   // Update layout with current dragmode
   const layoutWithDragMode = useMemo(() => ({
     ...layout,
-    dragmode: dragmode === false ? undefined : dragmode,
+    dragmode,
     // Enable click mode events
-    clickmode: selectionMode === 'click' ? 'event' : undefined,
+    clickmode: selectionMode === 'click' ? 'event+select' : undefined,
   }), [layout, dragmode, selectionMode]);
 
   return (
@@ -312,7 +318,7 @@ export default function VolcanoPlot({
       </div>
 
       {/* Volcano plot */}
-      <div data-testid="volcano-plot" className="w-full h-[500px]">
+      <div ref={plotRef} data-testid="volcano-plot" className="w-full h-[500px]">
         {data.length > 0 ? (
           <Plot
             data={plotData}

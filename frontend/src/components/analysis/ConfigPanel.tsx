@@ -86,20 +86,10 @@ export const ConfigPanel: React.FC = () => {
         <span
           className={`
             pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-lg ring-0
-            transition duration-200 ease-in-out flex items-center justify-center relative
+            transition duration-200 ease-in-out
             ${checked ? 'translate-x-8' : 'translate-x-0'}
           `}
-        >
-          {checked ? (
-            <svg className="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ display: 'block' }}>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ display: 'block' }}>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-        </span>
+        />
       </button>
     </div>
   );
@@ -247,18 +237,17 @@ export const ConfigPanel: React.FC = () => {
               description="Remove peptides that map to multiple proteins (razor peptides). Recommended for most analyses."
             />
           </div>
-          
+
           {!config.remove_razor && (
             <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
               <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
               <span>
-                <strong>Note:</strong> Bioinformatics analysis will be disabled if razor information is not removed.
-                This may affect pathway enrichment results.
+                <strong>Warning:</strong> Bioinformatics analysis will be less accurate if razor information is not removed.
               </span>
             </div>
           )}
         </div>
-        
+
         {/* Strict Filtering */}
         <div className="space-y-4 mt-4">
           <h4 className="text-sm font-medium text-gray-900 uppercase tracking-wider flex items-center gap-2">

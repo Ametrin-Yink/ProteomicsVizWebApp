@@ -2,6 +2,7 @@
 > frontend@0.1.0 dev
 > next dev
 
+⚠ Port 3000 is in use by process 30888, using available port 3001 instead.
 ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
  We detected multiple lockfiles and selected the directory of D:\CodingWorks\ProteomicsVizWebApp\package-lock.json as the root directory.
  To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
@@ -10,127 +11,10 @@
    * D:\CodingWorks\ProteomicsVizWebApp\frontend\package-lock.json
 
 ▲ Next.js 16.1.6 (Turbopack)
-- Local:         http://localhost:3000
-- Network:       http://10.255.163.200:3000
+- Local:         http://localhost:3001
+- Network:       http://10.0.0.195:3001
 
 ✓ Starting...
-✓ Ready in 11.8s
-○ Compiling / ...
- GET / 200 in 5.8s (compile: 5.5s, render: 278ms)
- GET / 200 in 87ms (compile: 9ms, render: 78ms)
-(node:30132) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
-(Use `node --trace-deprecation ...` to show where the warning was created)
- GET /analysis?session=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 372ms (compile: 331ms, render: 42ms)
-Request body exceeded 10MB for /api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics. Only the first 10MB will be available unless configured. See https://nextjs.org/docs/app/api-reference/config/next-config-js/middlewareClientMaxBodySize for more details.
-Request body exceeded 10MB for /api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics. Only the first 10MB will be available unless configured. See https://nextjs.org/docs/app/api-reference/config/next-config-js/middlewareClientMaxBodySize for more details.
-Request body exceeded 10MB for /api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics. Only the first 10MB will be available unless configured. See https://nextjs.org/docs/app/api-reference/config/next-config-js/middlewareClientMaxBodySize for more details.
-Failed to proxy http://127.0.0.1:8000/api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Failed to proxy http://127.0.0.1:8000/api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Failed to proxy http://127.0.0.1:8000/api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
- GET /analysis/processing?session_id=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 380ms (compile: 303ms, render: 78ms)
-✓ Compiled in 95ms
- GET /analysis/processing?session_id=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 140ms (compile: 5ms, render: 135ms)
- GET /analysis?session=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 176ms (compile: 86ms, render: 90ms)
- GET /analysis?session=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 29ms (compile: 5ms, render: 24ms)
- GET /analysis?session=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 28ms (compile: 5ms, render: 23ms)
-Request body exceeded 10MB for /api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics. Only the first 10MB will be available unless configured. See https://nextjs.org/docs/app/api-reference/config/next-config-js/middlewareClientMaxBodySize for more details.
-Failed to proxy http://127.0.0.1:8000/api/sessions/bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3/upload/proteomics Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-✓ Compiled in 118ms
- GET /analysis/processing?session_id=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 224ms (compile: 113ms, render: 112ms)
- GET /analysis?session=595d3818-0e87-4ecf-bc77-841a1c423be2 200 in 54ms (compile: 7ms, render: 46ms)
- GET /analysis?session=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 28ms (compile: 5ms, render: 23ms)
- GET /analysis/processing?session_id=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 32ms (compile: 5ms, render: 27ms)
- GET /analysis?session=595d3818-0e87-4ecf-bc77-841a1c423be2 200 in 33ms (compile: 5ms, render: 28ms)
- GET /analysis?session=595d3818-0e87-4ecf-bc77-841a1c423be2 200 in 195ms (compile: 4ms, render: 191ms)
- GET /analysis?session=595d3818-0e87-4ecf-bc77-841a1c423be2 200 in 38ms (compile: 6ms, render: 32ms)
- GET /analysis?session=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 27ms (compile: 5ms, render: 22ms)
- GET /analysis?session=bcd1b4fa-fa52-45fc-a9e6-bc0b051298e3 200 in 29ms (compile: 5ms, render: 25ms)
- GET / 200 in 36ms (compile: 6ms, render: 30ms)
- GET / 200 in 60ms (compile: 5ms, render: 55ms)
- GET /analysis?session=a069a09e-50b9-419c-a9d0-40aab6fef35e 200 in 31ms (compile: 5ms, render: 26ms)
- GET /analysis/processing?session_id=a069a09e-50b9-419c-a9d0-40aab6fef35e 200 in 32ms (compile: 5ms, render: 27ms)
- GET /analysis/processing?session_id=a069a09e-50b9-419c-a9d0-40aab6fef35e 200 in 134ms (compile: 5ms, render: 130ms)
- GET /analysis?session=00b0bdd0-eebf-4911-9bcf-12c0be4e10e4 200 in 33ms (compile: 6ms, render: 27ms)
- GET /analysis/processing?session_id=00b0bdd0-eebf-4911-9bcf-12c0be4e10e4 200 in 39ms (compile: 5ms, render: 34ms)
- GET /analysis?session=4f79fd3e-5c3d-451c-96f3-74d38c460448 200 in 32ms (compile: 5ms, render: 27ms)
- GET /analysis/processing?session_id=4f79fd3e-5c3d-451c-96f3-74d38c460448 200 in 35ms (compile: 6ms, render: 30ms)
-Failed to proxy http://127.0.0.1:8000/api/sessions Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Failed to proxy http://127.0.0.1:8000/api/sessions/4f79fd3e-5c3d-451c-96f3-74d38c460448/logs Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
- GET /analysis/processing?session_id=4f79fd3e-5c3d-451c-96f3-74d38c460448 200 in 77ms (compile: 6ms, render: 71ms)
- GET /analysis?session=b2041d8c-1bbb-4fe9-8928-31b6e7804ecb 200 in 26ms (compile: 6ms, render: 20ms)
- GET /analysis/processing?session_id=b2041d8c-1bbb-4fe9-8928-31b6e7804ecb 200 in 35ms (compile: 5ms, render: 31ms)
-Failed to proxy http://127.0.0.1:8000/api/sessions Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Failed to proxy http://127.0.0.1:8000/api/sessions/b2041d8c-1bbb-4fe9-8928-31b6e7804ecb/logs Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Failed to proxy http://127.0.0.1:8000/api/sessions/b2041d8c-1bbb-4fe9-8928-31b6e7804ecb/logs Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Failed to proxy http://127.0.0.1:8000/api/sessions Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
-Error: socket hang up
-    at ignore-listed frames {
-  code: 'ECONNRESET'
-}
- GET /analysis/visualization?session_id=b2041d8c-1bbb-4fe9-8928-31b6e7804ecb 200 in 1349ms (compile: 1322ms, render: 26ms)
+⨯ Unable to acquire lock at D:\CodingWorks\ProteomicsVizWebApp\frontend\.next\dev\lock, is another instance of next dev running?
+  Suggestion: If you intended to restart next dev, terminate the other process, and then try again.
+[?25h

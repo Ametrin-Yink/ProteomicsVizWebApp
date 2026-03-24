@@ -16,7 +16,7 @@ import ConfigPanel from '@/components/analysis/ConfigPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi, processingApi } from '@/lib/api-client';
+import { sessionsApi } from '@/lib/api-client';
 
 function AnalysisContent() {
   const router = useRouter();
@@ -128,9 +128,9 @@ function AnalysisContent() {
   
   const handleStartAnalysis = async () => {
     if (!canStart || !sessionId) return;
-    
+
     setIsStartingAnalysis(true);
-    
+
     try {
       // Try to save configuration, but don't block if it fails (CORS workaround)
       try {
@@ -138,16 +138,9 @@ function AnalysisContent() {
       } catch (configError) {
         console.warn('Config update failed, continuing anyway:', configError);
       }
-      
-      // Start processing
-      await processingApi.start(sessionId);
-      
-      addToast({
-        type: 'success',
-        message: 'Analysis started successfully',
-      });
-      
-      // Navigate to processing page with session_id
+
+      // Navigate to processing page first - processing will start there after WebSocket connects
+      // This ensures we don't miss early progress updates (Steps 1-5)
       router.push(`/analysis/processing?session_id=${sessionId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';

@@ -56,32 +56,41 @@ async def get_processing_logs(
     Returns historical logs, completed steps, and completion status.
     Used by frontend when connecting to an already-running or completed session.
     """
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
+    try:
+        session = await store.get(session_id)
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} not found"
+            )
 
-    # Load pipeline state
-    pipeline_state = await store.load_pipeline_state(session_id)
+        # Load pipeline state
+        pipeline_state = await store.load_pipeline_state(session_id)
 
-    if not pipeline_state:
+        if not pipeline_state:
+            return {
+                "logs": [],
+                "completed_steps": [],
+                "current_step": 0,
+                "is_complete": False,
+                "outputs": None
+            }
+
         return {
-            "logs": [],
-            "completed_steps": [],
-            "current_step": 0,
-            "is_complete": False,
-            "outputs": None
+            "logs": pipeline_state.get("logs", []),
+            "completed_steps": pipeline_state.get("completed_steps", []),
+            "current_step": pipeline_state.get("current_step", 0),
+            "is_complete": pipeline_state.get("completed_at") is not None,
+            "outputs": pipeline_state.get("outputs")
         }
-
-    return {
-        "logs": pipeline_state.get("logs", []),
-        "completed_steps": pipeline_state.get("completed_steps", []),
-        "current_step": pipeline_state.get("current_step", 0),
-        "is_complete": pipeline_state.get("completed_at") is not None,
-        "outputs": pipeline_state.get("outputs")
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting processing logs for {session_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load processing logs: {str(e)}"
+        )
 
 
 @router.post("/{session_id}/retry")

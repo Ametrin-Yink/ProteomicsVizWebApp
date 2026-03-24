@@ -39,7 +39,7 @@ class ProteinAbundance(BaseModel):
 
 class DifferentialExpressionResult(BaseModel):
     """Differential expression analysis result for a single protein."""
-    
+
     master_protein_accessions: str = Field(..., description="Protein accession ID")
     gene_name: Optional[str] = Field(None, description="Gene symbol")
     log_fc: float = Field(..., description="Log2 fold change")
@@ -48,6 +48,7 @@ class DifferentialExpressionResult(BaseModel):
     se: Optional[float] = Field(None, description="Standard error")
     df: Optional[float] = Field(None, description="Degrees of freedom")
     significant: bool = Field(False, description="Whether protein is significant")
+    psm_count: Optional[int] = Field(None, description="Number of PSMs for this protein")
     
     @property
     def regulation(self) -> str:

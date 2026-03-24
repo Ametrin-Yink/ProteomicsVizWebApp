@@ -293,7 +293,8 @@ class GSEAService:
         """
         Generate the running enrichment score curve.
 
-        This calculates the actual GSEA running sum statistic:
+        This calculates the actual GSEA running sum statistic using the
+        classic Kolmogorov-Smirnov style random walk:
         - Increase when encountering a pathway gene (lead gene)
         - Decrease when encountering a non-pathway gene
 
@@ -317,29 +318,42 @@ class GSEAService:
         if n == 0 or N == 0:
             return []
 
-        # Calculate weights for the running sum
-        # In classic GSEA, hits get weight based on correlation
-        # For preranked GSEA, we use equal weights
+        # Calculate weights for the running sum using classic GSEA formula
+        # For preranked GSEA with equal weights:
+        # - Hit increment: sqrt((N-n)/n)
+        # - Miss decrement: -sqrt((N-n)/(N-n)) = -1 * sqrt((N-n)/n) * (n/(N-n))
+        # Actually, the correct formula is:
+        # - Hit: sqrt((N-n)/n) / (N-n) = 1/sqrt(n*(N-n))
+        # - Miss: -sqrt(n/(N-n)) / n = -1/sqrt(n*(N-n))
+        # But simpler: hits increment by (N-n)/N and misses decrement by n/N
+        # For equal weight preranked GSEA, we use:
         hit_weight = np.sqrt((N - n) / n)
         miss_weight = -np.sqrt(n / (N - n))
 
+        # Scale weights to get proper curve shape
+        # The running sum should be: sum(hit_weights) = |sum(miss_weights)|
+        # So we normalize: hit_weight = 1/n and miss_weight = -1/(N-n)
+        # Then scale by sqrt((N-n)/n) for visual consistency
+        hit_increment = 1.0 / n
+        miss_decrement = -1.0 / (N - n)
+
         # Calculate running sum
-        running_sum = 0
-        max_sum = 0
+        running_sum = 0.0
         curve = []
+        max_deviation = 0.0
 
         for i, gene in enumerate(ranked_genes):
             if gene in lead_gene_set:
-                running_sum += hit_weight
+                running_sum += hit_increment
             else:
-                running_sum += miss_weight
+                running_sum += miss_decrement
 
             curve.append((i, running_sum))
-            max_sum = max(max_sum, abs(running_sum))
+            max_deviation = max(max_deviation, abs(running_sum))
 
         # Normalize to match the actual ES
-        if max_sum > 0:
-            scale_factor = abs(nes) / max_sum if nes != 0 else 1
+        if max_deviation > 0:
+            scale_factor = abs(nes) / max_deviation
             curve = [(rank, es * scale_factor * (1 if nes > 0 else -1)) for rank, es in curve]
 
         return curve

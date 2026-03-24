@@ -14,7 +14,8 @@ import {
   CompleteMessage,
 } from '@/types/processing';
 
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+// Use relative URL to go through Next.js proxy
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || '';
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY = 1000; // 1 second
 

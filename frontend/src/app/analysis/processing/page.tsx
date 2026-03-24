@@ -31,6 +31,7 @@ import {
   Clock,
   FileText,
   X,
+  Loader2,
 } from 'lucide-react';
 
 // Connection status component
@@ -211,6 +212,7 @@ function ProcessingContent() {
     sessionId: storeSessionId,
     initializeSteps,
     setSessionId,
+    setFirstStepProcessing,
     setCancelled,
     setLogs,
     retry,
@@ -219,11 +221,26 @@ function ProcessingContent() {
   // Initialize WebSocket connection
   useWebSocket(storeSessionId);
 
+  // Start processing after WebSocket is connected (to not miss early updates)
+  const [hasStarted, setHasStarted] = useState(false);
+  useEffect(() => {
+    if (sessionId && isConnected && !hasStarted && !isComplete && !error) {
+      setHasStarted(true);
+      // Start processing now that WebSocket is connected
+      processingAPI.startProcessing(sessionId).catch((err) => {
+        console.error('Failed to start processing:', err);
+        setStartError(err instanceof Error ? err.message : 'Failed to start');
+      });
+    }
+  }, [sessionId, isConnected, hasStarted, isComplete, error]);
+
   // Initialize on mount
   useEffect(() => {
     if (sessionId) {
       setSessionId(sessionId);
       initializeSteps(removeRazor);
+      // Set first step to processing while waiting for WebSocket
+      setFirstStepProcessing();
 
       // Fetch historical logs and state
       const fetchLogs = async () => {

@@ -34,8 +34,8 @@ const statusConfig: Record<StepStatus, {
   },
   in_progress: {
     icon: Loader2,
-    color: 'text-cyan-500',
-    bgColor: 'bg-cyan-50',
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-50',
     label: 'In Progress',
   },
   completed: {

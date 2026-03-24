@@ -40,18 +40,32 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
     const colors: Record<string, string> = {
       Control: '#00ADEF',
       Treatment: '#E73564',
+      DMSO: '#00ADEF',
     };
 
-    return Object.entries(conditionData).map(([condition, values]) => ({
-      x: values.samples,
-      y: values.abundances,
-      type: 'bar' as const,
-      name: condition,
-      marker: {
-        color: colors[condition] || '#6B7280',
-      },
-      hovertemplate: '<b>%{x}</b><br>Abundance: %{y:.3f}<extra></extra>',
-    }));
+    // Helper to determine if condition is treatment
+    const isTreatment = (condition: string) => {
+      const upper = condition.toUpperCase();
+      return upper.includes('INCZ') || upper.includes('TREATMENT');
+    };
+
+    return Object.entries(conditionData).map(([condition, values]) => {
+      // Determine color based on condition name
+      let color = colors[condition];
+      if (!color) {
+        color = isTreatment(condition) ? '#E73564' : '#6B7280';
+      }
+      return {
+        x: values.samples,
+        y: values.abundances,
+        type: 'bar' as const,
+        name: condition,
+        marker: {
+          color,
+        },
+        hovertemplate: '<b>%{x}</b><br>Abundance: %{y:.3f}<extra></extra>',
+      };
+    });
   }, [data]);
 
   const layout = useMemo(
@@ -97,7 +111,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
   );
 
   return (
-    <div className="w-full h-[250px] bg-white rounded-lg border border-gray-200 p-2">
+    <div className="w-full h-[350px] bg-white rounded-lg border border-gray-200 p-2">
       <Plot
         data={plotData}
         layout={layout}

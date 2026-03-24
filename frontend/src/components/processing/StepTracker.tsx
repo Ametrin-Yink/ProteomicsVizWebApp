@@ -51,7 +51,7 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
       data-testid={`step-${step.id}`}
       className={cn(
         'relative flex items-start gap-4 p-4 rounded-xl transition-all duration-300',
-        isActive && 'bg-cyan-50/50 dark:bg-cyan-950/20 ring-1 ring-cyan-200 dark:ring-cyan-800 in-progress',
+        isActive && 'bg-amber-50/50 dark:bg-amber-950/20 ring-1 ring-amber-200 dark:ring-amber-800 in-progress',
         isCompleted && 'opacity-70 completed',
         isError && 'bg-rose-50/50 dark:bg-rose-950/20 ring-1 ring-rose-200 dark:ring-rose-800 error',
         step.status === 'not_started' && 'opacity-50 not-started'
@@ -63,7 +63,7 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
         <span
           className={cn(
             'text-xs font-medium tabular-nums',
-            isActive && 'text-cyan-600 dark:text-cyan-400',
+            isActive && 'text-amber-600 dark:text-amber-400',
             isCompleted && 'text-emerald-600 dark:text-emerald-400',
             isError && 'text-rose-600 dark:text-rose-400',
             step.status === 'not_started' && 'text-zinc-400'
@@ -80,7 +80,7 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
             className={cn(
               'p-1.5 rounded-md',
               isActive
-                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300'
+                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
                 : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
             )}
           >
@@ -89,7 +89,7 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
           <h3
             className={cn(
               'font-semibold text-sm',
-              isActive && 'text-cyan-900 dark:text-cyan-100',
+              isActive && 'text-amber-900 dark:text-amber-100',
               isError && 'text-rose-900 dark:text-rose-100',
               'text-zinc-900 dark:text-zinc-100'
             )}

@@ -34,6 +34,7 @@ interface ProcessingStore {
   // Actions
   initializeSteps: (removeRazor: boolean) => void;
   setSessionId: (sessionId: string) => void;
+  setFirstStepProcessing: () => void;
   updateStepProgress: (message: ProgressMessage['payload']) => void;
   addLog: (message: LogMessage['payload']) => void;
   setLogs: (logs: LogEntry[]) => void;
@@ -102,8 +103,8 @@ export const useProcessingStore = create<ProcessingStore>()(
         if (stepIndex === -1) return;
 
         const step = state.steps[stepIndex];
-        step.status = message.status === 'completed' ? 'completed' : 
-                      message.status === 'started' ? 'in_progress' : 
+        step.status = message.status === 'completed' ? 'completed' :
+                      message.status === 'started' ? 'in_progress' :
                       message.status as 'in_progress' | 'completed' | 'not_started' | 'error';
         step.progress = message.progress;
         if (message.message) {
@@ -112,6 +113,16 @@ export const useProcessingStore = create<ProcessingStore>()(
 
         // Update overall progress
         state.overallProgress = message.overall_progress;
+      });
+    },
+
+    // Set first step to in_progress (called when waiting for WebSocket)
+    setFirstStepProcessing: () => {
+      set((state) => {
+        if (state.steps.length > 0 && state.steps[0].status === 'not_started') {
+          state.steps[0].status = 'in_progress';
+          state.steps[0].message = 'Waiting for connection...';
+        }
       });
     },
 

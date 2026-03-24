@@ -182,7 +182,7 @@ export const AnalysisWorkflow: React.FC = () => {
           </div>
           
           {activeStep === 3 && (
-            <div className="p-6">
+            <div className="p-6 max-h-[600px] overflow-y-auto">
               <ConfigurationSection />
             </div>
           )}

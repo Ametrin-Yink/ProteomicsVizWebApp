@@ -285,39 +285,53 @@ export const sessionsApi = {
  */
 export const uploadApi = {
   /**
-   * Upload proteomics files
+   * Upload proteomics files in batches to avoid Next.js proxy limitations
+   * Next.js dev server has issues proxying multipart uploads with 6+ files
    */
   uploadProteomics: async (
     sessionId: string,
     files: File[],
     onProgress?: (filename: string, progress: number) => void
   ): Promise<UploadedFile[]> => {
-    const formData = new FormData();
-    
-    // Add all files to the same FormData - backend expects 'files' (plural)
-    for (const file of files) {
-      formData.append('files', file);
-      onProgress?.(file.name, 0);
+    // Batch size of 5 to avoid Next.js proxy multipart issues
+    const BATCH_SIZE = 5;
+    const allResults: UploadedFile[] = [];
+
+    // Process files in batches
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const formData = new FormData();
+
+      // Add batch files to FormData
+      for (const file of batch) {
+        formData.append('files', file);
+        onProgress?.(file.name, 0);
+      }
+
+      // Upload batch
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/proteomics`), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload failed: ${response.status} ${errorText}`);
+      }
+
+      // Mark batch files as complete
+      for (const file of batch) {
+        onProgress?.(file.name, 100);
+      }
+
+      // Parse response
+      const responseData = await response.json();
+      if (responseData.files && responseData.files.length > 0) {
+        allResults.push(...responseData.files);
+      }
     }
 
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/proteomics`), {
-      method: 'POST',
-      body: formData,
-      // Don't set Content-Type header - browser will set it with boundary for FormData
-    });
-
-    // Mark all files as complete
-    for (const file of files) {
-      onProgress?.(file.name, 100);
-    }
-    
-    // Backend returns { message, files: [...] }
-    const responseData = await response.json();
-    if (responseData.files && responseData.files.length > 0) {
-      return responseData.files;
-    }
-    
-    return [];
+    return allResults;
   },
 
   /**

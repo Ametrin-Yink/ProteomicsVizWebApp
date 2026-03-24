@@ -106,7 +106,7 @@ class QCCalculator:
             PCAResult with PCA data
         """
         # Get abundance columns (exclude ID columns)
-        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein']
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein', 'Master_Protein_Accessions', 'PSM_Count', 'psm_count']
         abundance_cols = [
             col for col in protein_df.columns
             if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
@@ -265,7 +265,7 @@ class QCCalculator:
             return {}
 
         # Get abundance columns (exclude ID columns)
-        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein', 'Master_Protein_Accessions']
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein', 'Master_Protein_Accessions', 'PSM_Count', 'psm_count']
         abundance_cols = [
             col for col in protein_df.columns
             if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
@@ -368,7 +368,7 @@ class QCCalculator:
                 result["psm"][str(condition)] = replicates
         
         # Protein intensities
-        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein']
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein', 'Master_Protein_Accessions', 'PSM_Count', 'psm_count']
         abundance_cols = [
             col for col in protein_df.columns
             if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
@@ -397,14 +397,14 @@ class QCCalculator:
     ) -> list[DataCompleteness]:
         """
         Calculate data completeness per sample.
-        
+
         Args:
             protein_df: Protein abundances DataFrame
-            
+
         Returns:
             List of DataCompleteness objects
         """
-        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein']
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein', 'Master_Protein_Accessions', 'PSM_Count', 'psm_count']
         abundance_cols = [
             col for col in protein_df.columns
             if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
@@ -432,7 +432,7 @@ class QCCalculator:
 
     def _calculate_avg_proteins_per_sample(self, protein_df: pd.DataFrame) -> int:
         """Calculate average proteins per sample."""
-        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein']
+        id_cols = ['Master Protein Accessions', 'Gene_Name', 'Protein', 'Master_Protein_Accessions', 'PSM_Count', 'psm_count']
         abundance_cols = [
             col for col in protein_df.columns
             if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
