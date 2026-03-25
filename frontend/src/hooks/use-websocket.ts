@@ -65,10 +65,8 @@ export const useWebSocket = (sessionId: string | null) => {
       ws.current = null;
     }
 
-    // Use window.location to determine protocol
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/sessions/${sessionId}`;
+    // Connect directly to backend WebSocket (Next.js proxy doesn't handle WS well)
+    const wsUrl = `ws://127.0.0.1:8000/ws/sessions/${sessionId}`;
 
     console.log(`Connecting to WebSocket: ${wsUrl}`);
 

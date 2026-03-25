@@ -307,15 +307,15 @@ class ProcessingOrchestrator:
 
         # Store session_id and pipeline state for log messages
         self._current_session_id = session_id
-        self._pipeline_state = state
 
         # Register WebSocket callback
         if websocket_callback:
             self.register_progress_callback(websocket_callback)
             logger.info(f"WebSocket callback registered for session {session_id}")
 
-        # Initialize state
+        # Initialize state - MUST be done before setting _pipeline_state
         state = PipelineState(session_id)
+        self._pipeline_state = state
         logger.info(f"PipelineState initialized: current_step={state.data['current_step']}, completed={state.data['completed_steps']}")
 
         try:

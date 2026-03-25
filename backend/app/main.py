@@ -183,18 +183,29 @@ async def list_organisms():
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for session real-time updates."""
     print(f"WebSocket connection requested for session {session_id}", flush=True)
-    await websocket.accept()
-    print(f"WebSocket connection accepted for session {session_id}", flush=True)
-    
-    session_manager = app.state.session_manager
-    
+    logger.info(f"WebSocket connection requested for session {session_id}")
+
     try:
+        await websocket.accept()
+        print(f"WebSocket connection accepted for session {session_id}", flush=True)
+    except Exception as e:
+        print(f"WebSocket accept failed for session {session_id}: {e}", flush=True)
+        logger.error(f"WebSocket accept failed for session {session_id}: {e}", exc_info=True)
+        return
+
+    try:
+        session_manager = app.state.session_manager
+        if not session_manager:
+            print(f"ERROR: session_manager not initialized for session {session_id}", flush=True)
+            await websocket.close(code=1011, reason="Server not ready")
+            return
+
         print(f"Got session_manager for session {session_id}", flush=True)
-        
+
         # Register connection
         await session_manager.register_websocket(session_id, websocket)
         print(f"WebSocket registered for session {session_id}", flush=True)
-        
+
         # Keep connection alive and handle messages
         print(f"Entering WebSocket message loop for session {session_id}", flush=True)
         while True:

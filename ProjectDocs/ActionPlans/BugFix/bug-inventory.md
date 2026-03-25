@@ -57,6 +57,7 @@ When reporting a bug, include:
 | CRIT-004 | GSEA plot shows straight line curve (calculation wrong) | Critical | Open | 2026-03-24 |
 | CRIT-005 | GSEA plot missing heat map on right side | Critical | Open | 2026-03-24 |
 | CRIT-006 | Protein Abundance plot shows negative log2 values (impossible) | Critical | Open | 2026-03-25 |
+| CRIT-007 | Processing stuck at 0% - WebSocket error prevents analysis from starting | Critical | **Fixed** | 2026-03-25 |
 
 ---
 
@@ -754,3 +755,57 @@ Two separate statistics:
 Single combined 'Average CV' shown
 
 ---
+
+### CRIT-007: Processing stuck at 0% - WebSocket error
+
+**Severity:** Critical
+**Status:** Open
+**Created:** 2026-03-25
+**Component:** Frontend - Processing Page / WebSocket
+**Blocking:** CRIT-004 and CRIT-005 verification (GSEA analysis)
+
+**Description:**
+When starting analysis, the processing page gets stuck at 0% with "Waiting for connection..." message. The WebSocket connection fails with an error, preventing the processing pipeline from starting.
+
+**Error Message:**
+```
+WebSocket error: {}
+    at useWebSocket.useCallback[connect] (src/hooks/use-websocket.ts:158:17)
+```
+
+**Reproduction Steps:**
+1. Create a new analysis session
+2. Upload sample PSM files
+3. Configure treatment/control and organism
+4. Click "Start Analysis"
+5. Processing page loads but stays at 0%
+6. Step 1 shows "In Progress" with "Waiting for connection..."
+7. WebSocket error appears in console
+
+**Expected Behavior:**
+Processing should start and progress through all 9 steps, with real-time updates via WebSocket.
+
+**Actual Behavior:**
+Processing stuck at 0%, WebSocket connection fails, no progress updates received.
+
+**Environment:**
+- Browser: Chrome/Edge (Playwright)
+- Frontend: Next.js 16.1.6 (Turbopack)
+- Backend: FastAPI on port 8000
+- WebSocket endpoint: ws://localhost:3000/_next/webpack-hmr (failing)
+
+**Likely Cause:**
+The WebSocket connection is trying to connect to the wrong endpoint or there's a proxy/configuration issue between the frontend dev server and the backend WebSocket.
+
+**Investigation Findings:**
+1. Fixed frontend to connect directly to backend WebSocket (ws://127.0.0.1:8000) instead of through Next.js proxy
+2. Backend accepts WebSocket connections for some sessions but returns 500 for others
+3. The 500 error happens during WebSocket handshake, before `websocket.accept()` is called
+4. Sessions in "error" state may have corrupted/missing pipeline_state.json causing backend errors
+5. No sessions have completed results directories - all analysis is blocked by this bug
+6. Additional issue: `datetime` serialization error seen in logs: "Object of type datetime is not JSON serializable"
+
+**Impact:**
+- CRITICAL: All analysis is blocked - cannot verify CRIT-004 or CRIT-005 (GSEA fixes)
+- Cannot complete any processing pipeline runs
+- No results files being generated
