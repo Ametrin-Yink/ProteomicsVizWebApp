@@ -6,6 +6,117 @@ Record of fixed bugs with root causes for future reference.
 
 ## 2026-03-25
 
+### CRIT-005: GSEA plot missing heat map on right side
+
+**Root Cause:** The `heatmap_data` field was missing from the `GSEAResult` TypeScript interface in `frontend/src/types/api.ts`. While the backend correctly generated and returned heatmap data in the API response, the frontend type system didn't recognize the field, preventing the GSEAPlot component from properly accessing and rendering the heatmap.
+
+**Lesson:** When adding new data fields to API responses, always update the corresponding TypeScript interfaces to ensure the frontend can properly type-check and access the new data.
+
+**Fix:**
+Added the `heatmap_data` field to the `GSEAResult` interface:
+
+```typescript
+// Before: Missing heatmap_data field
+export interface GSEAResult {
+  term: string;
+  name: string;
+  es: number;
+  nes: number;
+  pval: number;
+  fdr: number;
+  lead_genes: string[];
+  matched_genes: number;
+  running_es_curve?: Array<[number, number]>;
+  rank_metric_positions?: Array<[string, number, number]>;
+}
+
+// After: Added heatmap_data field
+export interface GSEAResult {
+  term: string;
+  name: string;
+  es: number;
+  nes: number;
+  pval: number;
+  fdr: number;
+  lead_genes: string[];
+  matched_genes: number;
+  running_es_curve?: Array<[number, number]>;
+  rank_metric_positions?: Array<[string, number, number]>;
+  heatmap_data?: {
+    genes: string[];
+    samples: string[];
+    z_scores: number[][];
+  };
+}
+```
+
+**Files:**
+- `frontend/src/types/api.ts`
+
+**Verification:** Screenshot `crit005_heatmap_verified.png` confirms the heatmap is now displayed on the right side of the GSEA plot, showing z-score transformed protein intensities for leading edge genes.
+
+---
+
+## 2026-03-25
+
+### CRIT-006: Protein Abundance plot shows negative log2 values
+
+**Root Cause:** The median centering normalization (`method = "center.median"`) in QFeatures centers each sample's median to 0 by subtracting the sample median. For samples with lower abundance, this results in many negative values after normalization.
+
+**Lesson:** When normalizing proteomics data, consider whether centering to 0 is appropriate or if centering to a positive reference (like the highest median) preserves interpretability better.
+
+**Fix:**
+Changed the normalization in `msqrob2_protein.R` to shift all samples to the highest median instead of 0:
+1. Calculate median for each sample
+2. Find the maximum median across all samples
+3. Normalize: `NewValue = Original - sample_median + max_median`
+
+**Code:**
+```r
+# Before: Center to 0 (produces negative values for low-abundance samples)
+pe <- normalize(pe, i = "peptide_log2", name = "peptide_norm", method = "center.median")
+
+# After: Center to highest median (all values remain positive)
+sample_medians <- apply(peptide_log2_assay, 2, median, na.rm = TRUE)
+max_median <- max(sample_medians, na.rm = TRUE)
+peptide_norm_matrix <- peptide_log2_assay
+for (i in seq_along(sample_medians)) {
+    peptide_norm_matrix[, i] <- peptide_log2_assay[, i] - sample_medians[i] + max_median
+}
+```
+
+**Files:**
+- `backend/scripts/msqrob2_protein.R`
+
+---
+
+### CRIT-008: Protein abundance distribution incorrect after CRIT-006 fix
+
+**Root Cause:** The custom normalization code didn't properly add the normalized assay to the QFeatures object. The code tried to add an assay inside another assay and then extracted empty data, causing `aggregateFeatures()` to use non-normalized data.
+
+**Lesson:** When working with QFeatures/SummarizedExperiment objects, create new assays as standalone SummarizedExperiment objects before adding them.
+
+**Fix:**
+Created a proper SummarizedExperiment with the normalized data:
+```r
+# Before: Wrong - tried to add assay inside assay, then extracted empty data
+assay(pe[["peptide_log2"]], "peptide_norm") <- peptide_norm_matrix
+pe <- addAssay(pe, pe[["peptide_log2"]][, , "peptide_norm"], name = "peptide_norm")
+
+# After: Correct - create proper SummarizedExperiment
+peptide_norm_se <- SummarizedExperiment(
+    assays = list(peptide_norm = peptide_norm_matrix),
+    rowData = rowData(pe[["peptide_log2"]]),
+    colData = colData(pe[["peptide_log2"]])
+)
+pe <- addAssay(pe, peptide_norm_se, name = "peptide_norm")
+```
+
+**Files:**
+- `backend/scripts/msqrob2_protein.R`
+
+---
+
 ### CRIT-004: GSEA plot shows straight line curve
 
 **Root Cause:** The `_generate_running_es_curve()` function used an incorrect formula `sqrt((N-n)/n)` for hit/miss increments, which produced a monotonically decreasing linear curve instead of the characteristic GSEA mountain-shaped curve.

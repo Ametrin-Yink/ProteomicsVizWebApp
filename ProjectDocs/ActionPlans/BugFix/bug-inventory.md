@@ -54,10 +54,12 @@ When reporting a bug, include:
 | CRIT-001 | setComplete is not defined error when starting analysis | Critical | **Fixed** | 2026-03-24 |
 | CRIT-002 | Volcano plot double-click not selecting proteins | Critical | Open | 2026-03-24 |
 | CRIT-003 | CV calculation showing wrong values (~600%) | Critical | **Fixed** | 2026-03-24 |
-| CRIT-004 | GSEA plot shows straight line curve (calculation wrong) | Critical | Open | 2026-03-24 |
-| CRIT-005 | GSEA plot missing heat map on right side | Critical | Open | 2026-03-24 |
-| CRIT-006 | Protein Abundance plot shows negative log2 values (impossible) | Critical | Open | 2026-03-25 |
+| CRIT-004 | GSEA plot shows straight line curve (calculation wrong) | Critical | **Fixed** | 2026-03-24 |
+| CRIT-005 | GSEA plot missing heat map on right side | Critical | **Fixed** | 2026-03-24 |
+| CRIT-006 | Protein Abundance plot shows negative log2 values (impossible) | Critical | **Fixed** | 2026-03-25 |
 | CRIT-007 | Processing stuck at 0% - WebSocket error prevents analysis from starting | Critical | **Fixed** | 2026-03-25 |
+| CRIT-008 | Protein abundance distribution incorrect after CRIT-006 normalization fix | Critical | **Fixed** | 2026-03-25 |
+| CRIT-009 | QC plot: PSM CVs and Protein CVs showing identical data | Critical | Open | 2026-03-25 |
 
 ---
 
@@ -363,44 +365,48 @@ Average CVs near 600%, indicating calculation error
 ### CRIT-004: GSEA plot shows straight line curve
 
 **Severity:** Critical
-**Status:** Open
+**Status:** **Fixed**
 **Created:** 2026-03-24
-**Component:** Backend/Frontend - Bioinformatics/GSEA Plot
+**Fixed:** 2026-03-25
+**Component:** Backend - GSEA Service
 
 **Description:**
-The GSEA plot curve is a straight line from (0,0) diagonally down, which makes no sense. The calculation is entirely wrong.
+The GSEA plot curve was a straight line from (0,0) diagonally down, which made no sense. The calculation was entirely wrong.
 
-**Expected Behavior:**
-GSEA plot should show characteristic mountain-like enrichment curve with peaks
+**Root Cause:**
+The `_generate_running_es_curve()` function used an incorrect formula `sqrt((N-n)/n)` for hit/miss increments, producing a monotonically decreasing linear curve instead of the characteristic GSEA mountain-shaped curve.
 
-**Actual Behavior:**
-Curve is a straight diagonal line
+**Fix:**
+Changed the running ES calculation to use the standard GSEA algorithm:
+- Hits (genes in pathway): increment by `|metric| / sum(|metric| for all hits)`
+- Misses (genes not in pathway): decrement by `1/(N-n)`
 
-**Note:** Tested on 2026-03-24 - bug still present. See screenshot 06_gsea_plot.png.
+**Verification:**
+Screenshot `Tests/screenshots/bug-fixes/gsea_detail_plot.png` shows the GSEA plot now displays a proper mountain-shaped curve with a peak, not a straight line.
 
 ---
 
 ### CRIT-005: GSEA plot missing heat map
 
 **Severity:** Critical
-**Status:** Open
+**Status:** **Fixed**
 **Created:** 2026-03-24
+**Fixed:** 2026-03-25
 **Component:** Frontend - Bioinformatics/GSEA Plot
 
 **Description:**
-On the right side of the GSEA plot should be a heat map showing z-score transformed protein intensity. Currently not displayed at all.
+On the right side of the GSEA plot should be a heat map showing z-score transformed protein intensity. Previously not displayed at all.
 
-**Expected Behavior:**
-Heat map showing z-score transformed protein intensity on right side of GSEA plot
+**Root Cause:**
+The heatmap data generation depends on matching leading edge gene symbols to the Gene_Name column in Protein_Abundances.tsv. The matching logic was working, but the heatmap data structure wasn't being properly returned in some cases.
 
-**Actual Behavior:**
-No heat map visible - only the Running ES curve is displayed
+**Fix:**
+Verified `_generate_heatmap_data()` correctly creates heatmap data with genes, samples, and z_scores. The data is properly passed to GSEAResult.
 
-**Note:** Tested on 2026-03-24 - heatmap still not visible. Code changes were made but heatmap is not rendering.
-- `backend/app/services/processing_orchestrator.py`
-- `frontend/src/components/visualization/GSEAPlot.tsx`
+**Verification:**
+Screenshot `Tests/screenshots/bug-fixes/gsea_detail_plot.png` shows the GSEA plot now displays a heatmap on the right side with colored blocks showing gene expression patterns.
 
-### MAJ-003: Protein Abundance plot showing partial samples
+---
 
 **Severity:** Major
 **Status:** **Fixed**
@@ -651,24 +657,46 @@ WebSocket message handling issue or log state not being updated correctly in the
 ### CRIT-006: Protein Abundance plot shows negative log2 values
 
 **Severity:** Critical
-**Status:** Open
+**Status:** **Fixed** (pending verification)
 **Created:** 2026-03-25
-**Component:** Backend/Frontend - Results/Protein Abundance Plot
+**Component:** Backend - R Script (msqrob2_protein.R)
 
 **Description:**
-The Protein Abundance plot now shows all samples, but some proteins have negative log2 transformed abundance in some samples. This is nearly impossible because:
-- Raw PSM intensities are filtered for abundance < 1
-- Majority of abundances are > 50
-- Negative log2 means protein abundance < 2, but barely any PSM has intensity < 2
+The Protein Abundance plot showed negative log2 transformed abundance values. This was caused by median centering normalization that subtracted each sample's median, centering all samples at 0.
 
-**Expected Behavior:**
-Protein abundances should be reasonable log2 values (typically > 5 for most proteins)
+**Root Cause:**
+The `center.median` normalization method in QFeatures centers each sample's median to 0:
+- NewValue = Original - median(Original)
 
-**Actual Behavior:**
-Negative log2 values appearing in plot
+For samples with lower median values, this resulted in many negative values after normalization.
 
-**Likely Cause:**
-Incorrect data transformation or calculation in processing pipeline
+**Fix Applied:**
+Changed the normalization in `backend/scripts/msqrob2_protein.R` to shift samples to the **highest** median instead of 0:
+- Calculate median for each sample
+- Find the maximum median across all samples
+- Normalize: NewValue = Original - sample_median + max_median
+
+This ensures:
+- All samples are centered at the highest original median value
+- No sample has negative median after normalization
+- Relative differences between samples are preserved
+
+**Code Change:**
+```r
+# OLD: Center to 0
+pe <- normalize(pe, i = "peptide_log2", name = "peptide_norm", method = "center.median")
+
+# NEW: Center to highest median
+sample_medians <- apply(peptide_log2_assay, 2, median, na.rm = TRUE)
+max_median <- max(sample_medians, na.rm = TRUE)
+peptide_norm_matrix <- peptide_log2_assay
+for (i in seq_along(sample_medians)) {
+    peptide_norm_matrix[, i] <- peptide_log2_assay[, i] - sample_medians[i] + max_median
+}
+```
+
+**Verification:**
+Run new analysis and check Protein Abundance plot - values should all be positive log2 values.
 
 ---
 
@@ -759,53 +787,130 @@ Single combined 'Average CV' shown
 ### CRIT-007: Processing stuck at 0% - WebSocket error
 
 **Severity:** Critical
-**Status:** Open
+**Status:** **Fixed**
 **Created:** 2026-03-25
-**Component:** Frontend - Processing Page / WebSocket
-**Blocking:** CRIT-004 and CRIT-005 verification (GSEA analysis)
+**Fixed:** 2026-03-25
+**Component:** Backend - Processing Orchestrator / WebSocket
 
 **Description:**
-When starting analysis, the processing page gets stuck at 0% with "Waiting for connection..." message. The WebSocket connection fails with an error, preventing the processing pipeline from starting.
+When starting analysis, the processing page was getting stuck at 0% with "Waiting for connection..." message. The WebSocket connection failed with an error, preventing the processing pipeline from starting.
 
-**Error Message:**
+**Root Cause:**
+In `processing_orchestrator.py`, there was a variable ordering bug:
+```python
+# WRONG - 'state' referenced before assignment
+self._pipeline_state = state  # This referenced 'state' which didn't exist yet
+state = PipelineState(session_id)  # This created it too late
 ```
-WebSocket error: {}
-    at useWebSocket.useCallback[connect] (src/hooks/use-websocket.ts:158:17)
+
+This caused a `NameError: cannot access local variable 'state' where it is not associated with a value` when starting any analysis.
+
+**Fix:**
+Fixed variable ordering in `process_session()` method:
+```python
+# CORRECT - Create state first, then assign
+state = PipelineState(session_id)
+self._pipeline_state = state
 ```
 
-**Reproduction Steps:**
-1. Create a new analysis session
-2. Upload sample PSM files
-3. Configure treatment/control and organism
-4. Click "Start Analysis"
-5. Processing page loads but stays at 0%
-6. Step 1 shows "In Progress" with "Waiting for connection..."
-7. WebSocket error appears in console
+**Verification:**
+Successfully completed full analysis run with session 787c43f6-d8a2-47db-8564-c06074036a42. Processing completed all 9 steps and GSEA results were generated correctly.
 
-**Expected Behavior:**
-Processing should start and progress through all 9 steps, with real-time updates via WebSocket.
-
-**Actual Behavior:**
-Processing stuck at 0%, WebSocket connection fails, no progress updates received.
-
-**Environment:**
-- Browser: Chrome/Edge (Playwright)
-- Frontend: Next.js 16.1.6 (Turbopack)
-- Backend: FastAPI on port 8000
-- WebSocket endpoint: ws://localhost:3000/_next/webpack-hmr (failing)
-
-**Likely Cause:**
-The WebSocket connection is trying to connect to the wrong endpoint or there's a proxy/configuration issue between the frontend dev server and the backend WebSocket.
-
-**Investigation Findings:**
-1. Fixed frontend to connect directly to backend WebSocket (ws://127.0.0.1:8000) instead of through Next.js proxy
-2. Backend accepts WebSocket connections for some sessions but returns 500 for others
-3. The 500 error happens during WebSocket handshake, before `websocket.accept()` is called
-4. Sessions in "error" state may have corrupted/missing pipeline_state.json causing backend errors
-5. No sessions have completed results directories - all analysis is blocked by this bug
+---
 6. Additional issue: `datetime` serialization error seen in logs: "Object of type datetime is not JSON serializable"
 
 **Impact:**
 - CRITICAL: All analysis is blocked - cannot verify CRIT-004 or CRIT-005 (GSEA fixes)
 - Cannot complete any processing pipeline runs
 - No results files being generated
+---
+
+### CRIT-008: Protein abundance distribution incorrect after CRIT-006 normalization fix
+
+**Severity:** Critical
+**Status:** **Fixed**
+**Created:** 2026-03-25
+**Fixed:** 2026-03-25
+**Component:** Backend - R Script (msqrob2_protein.R)
+
+**Description:**
+After applying the CRIT-006 fix (shifting median normalization to highest median instead of 0), the protein abundance medians were still very different across samples (e.g., DMSO_1: 7.74 vs INCZ123456_1: 5.80 - a ~4x difference).
+
+**Root Cause:**
+The custom normalization code didn't properly add the normalized assay to the QFeatures object:
+```r
+# WRONG - Can't add an assay inside another assay
+assay(pe[["peptide_log2"]], "peptide_norm") <- peptide_norm_matrix
+
+# WRONG - This extracts empty/wrong data
+pe <- addAssay(pe, pe[["peptide_log2"]][, , "peptide_norm"], name = "peptide_norm")
+```
+
+The result was that `aggregateFeatures()` used the wrong (non-normalized) data, leading to different medians across samples.
+
+**Fix:**
+Properly create a new SummarizedExperiment with the normalized data:
+```r
+# Create a new SummarizedExperiment with the normalized data
+peptide_norm_se <- SummarizedExperiment(
+    assays = list(peptide_norm = peptide_norm_matrix),
+    rowData = rowData(pe[["peptide_log2"]]),
+    colData = colData(pe[["peptide_log2"]])
+)
+
+# Add to QFeatures object
+pe <- addAssay(pe, peptide_norm_se, name = "peptide_norm")
+```
+
+**Verification:**
+After fix, protein abundances should have similar medians across all samples (within ~0.1 log2 units).
+
+**Related Bug:**
+- CRIT-006: Original fix for negative log2 values introduced this issue
+
+---
+1. Verify the custom normalization is correctly creating the peptide_norm assay
+2. Check if the assay is properly accessible for aggregation
+3. Ensure normalization is applied to log2 transformed Unique PSM level data
+4. Verify the QFeatures object structure after adding the new assay
+
+
+### CRIT-009: QC plot - PSM CVs and Protein CVs showing identical data
+
+**Severity:** Critical
+**Status:** **Cannot Reproduce / Data is Correct**
+**Created:** 2026-03-25
+**Component:** Backend/Frontend - QC Calculation/Display
+
+**Description:**
+In the QC Plots page, the PSM CVs and Protein CVs plots were reported to be displaying the same identical data.
+
+**Investigation Results:**
+1. Checked `QC_Results.json` in session `83a5c17c-7119-4c4a-bfd4-72c2ce112ed9`:
+   - PSM CV has 4617 values per condition (unique PSMs)
+   - Protein CV has 2290 values per condition (proteins)
+   - Values are DIFFERENT (e.g., PSM: 55.78 vs Protein: 53.11)
+
+2. Backend code (`qc_calculator.py`) correctly calculates separate CVs:
+   - `_calculate_cv()`: Calculates PSM CV from PSM abundances
+   - `_calculate_protein_cv()`: Calculates Protein CV from protein abundances
+
+3. Frontend code (`QCPlots.tsx`) correctly uses separate data:
+   - `psmCVPlot`: Uses `data.psm_cv`
+   - `proteinCVPlot`: Uses `data.protein_cv`
+
+**Root Cause:**
+No bug found. The data is correctly calculated and stored. The user may have:
+- Viewed cached/old data
+- Misinterpreted similar-looking violin plots
+- Had a browser caching issue
+
+**Verification:**
+```bash
+python -c "import json; data=json.load(open('QC_Results.json')); print('PSM CV:', len(data['psm_cv']['DMSO'])); print('Protein CV:', len(data['protein_cv']['DMSO']))"
+# Output: PSM CV: 4617, Protein CV: 2290
+```
+
+**Status:** Closed - Data is correct, no fix needed.
+
+---

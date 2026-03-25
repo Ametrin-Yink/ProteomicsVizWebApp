@@ -140,6 +140,12 @@ export interface GSEAResult {
   // Running enrichment score curve data for plotting
   running_es_curve?: Array<[number, number]>; // [rank, es] tuples
   rank_metric_positions?: Array<[string, number, number]>; // [gene_name, rank, metric_value]
+  // CRIT-005: Heatmap data for leading edge genes
+  heatmap_data?: {
+    genes: string[];
+    samples: string[];
+    z_scores: number[][];
+  };
 }
 
 export interface GSEAData {

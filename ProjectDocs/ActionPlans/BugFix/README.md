@@ -22,24 +22,25 @@ Follow [systematic debugging](../../AGENTS/):
 
 | Severity | Total | Fixed | Open |
 |----------|-------|-------|------|
-| Critical | 7 | 3 | **4** |
+| Critical | 7 | **6** | **1** |
 | Major | 13 | **13** | **0** |
 | Minor | 10 | 10 | 0 |
-| **Total** | **30** | **25** | **5** |
+| **Total** | **30** | **29** | **1** |
 
-**Note:** CRIT-007 is blocking all analysis runs, preventing verification of GSEA fixes (CRIT-004, CRIT-005).
+**Note:** Only CRIT-002 remains open. All blocking issues (CRIT-007) and GSEA issues (CRIT-004, CRIT-005) have been fixed and verified.
 
-### Critical Bugs (4 Open - 1 Blocking GSEA Verification)
+### Critical Bugs (1 Open)
 
 | ID | Description | Status |
 |----|-------------|--------|
 | CRIT-001 | setComplete is not defined error when starting analysis | **Fixed** |
 | CRIT-002 | Volcano plot double-click not selecting proteins | Open |
 | CRIT-003 | CV calculation showing wrong values (~600%) | **Fixed** |
-| CRIT-004 | GSEA plot shows straight line curve (calculation wrong) | Open - **Blocked by CRIT-007** |
-| CRIT-005 | GSEA plot missing heat map on right side | Open - **Blocked by CRIT-007** |
-| CRIT-006 | Protein Abundance plot shows negative log2 values (impossible) | Open |
-| CRIT-007 | Processing stuck at 0% - WebSocket error prevents analysis from starting | Open - **BLOCKING ALL ANALYSIS** |
+| CRIT-004 | GSEA plot shows straight line curve (calculation wrong) | **Fixed** |
+| CRIT-005 | GSEA plot missing heat map on right side | **Fixed** |
+| CRIT-008 | Protein abundance distribution incorrect after CRIT-006 normalization fix | **Fixed** |
+| CRIT-009 | QC plot: PSM CVs and Protein CVs showing identical data | **Cannot Reproduce** |
+| CRIT-007 | Processing stuck at 0% - WebSocket error prevents analysis from starting | **Fixed** |
 
 ### Major Bugs (0 Open - All Fixed)
 

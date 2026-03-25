@@ -135,12 +135,49 @@ cat("Log2 transforming peptide abundances...\n")
 pe <- logTransform(pe, base = 2, i = "peptide", name = "peptide_log2")
 cat("Log2 transformation complete\n")
 
-# Median centering normalization
-cat("Applying median centering normalization...\n")
-pe <- normalize(pe,
-                i = "peptide_log2",
-                name = "peptide_norm",
-                method = "center.median")
+# Custom median centering normalization - shift to highest median instead of 0
+cat("Applying median centering normalization (shifting to highest median)...\n")
+
+# Get the log2 transformed assay
+peptide_log2_assay <- assay(pe[["peptide_log2"]])
+
+# Calculate median for each sample (column)
+sample_medians <- apply(peptide_log2_assay, 2, median, na.rm = TRUE)
+cat("Sample medians before normalization:\n")
+for (i in seq_along(sample_medians)) {
+    cat("  ", colnames(peptide_log2_assay)[i], ":", round(sample_medians[i], 4), "\n")
+}
+
+# Find the maximum median across all samples
+max_median <- max(sample_medians, na.rm = TRUE)
+cat("Maximum median across all samples:", round(max_median, 4), "\n")
+
+# Normalize: subtract sample median, then add max median
+# This centers all samples at the highest median instead of 0
+peptide_norm_matrix <- peptide_log2_assay
+for (i in seq_along(sample_medians)) {
+    peptide_norm_matrix[, i] <- peptide_log2_assay[, i] - sample_medians[i] + max_median
+}
+
+# Create a new SummarizedExperiment with the normalized data
+# Copy the rowData and colData from the original assay
+peptide_norm_se <- SummarizedExperiment(
+    assays = list(peptide_norm = peptide_norm_matrix),
+    rowData = rowData(pe[["peptide_log2"]]),
+    colData = colData(pe[["peptide_log2"]])
+)
+
+# Add to QFeatures object
+pe <- addAssay(pe, peptide_norm_se, name = "peptide_norm")
+
+# Verify normalization
+peptide_norm_assay <- assay(pe[["peptide_norm"]])
+norm_medians <- apply(peptide_norm_assay, 2, median, na.rm = TRUE)
+cat("Sample medians after normalization (should all be ~", round(max_median, 4), "):\n")
+for (i in seq_along(norm_medians)) {
+    cat("  ", colnames(peptide_norm_assay)[i], ":", round(norm_medians[i], 4), "\n")
+}
+
 cat("Normalization complete\n")
 
 # Aggregate to protein level using normalized log2 data
