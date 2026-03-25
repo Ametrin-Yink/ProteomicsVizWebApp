@@ -297,3 +297,4 @@ api_keys.json
 # Local test data
 local/
 
+.worktrees/
