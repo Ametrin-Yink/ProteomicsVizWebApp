@@ -116,7 +116,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces: [trace], layout };
   }, [data.pvalue_distribution]);
 
-  // 3. PSM CV Variance - show 95th percentile top
+  // 3. PSM CVs - show 95th percentile top
   const psmCVPlot = useMemo(() => {
     if (!data.psm_cv) return null;
 
@@ -136,7 +136,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
       box: { visible: true },
       line: { color: condition === 'DMSO' ? '#00ADEF' : '#E73564' },
       fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.5)' : 'rgba(231, 53, 100, 0.5)',
-      hovertemplate: 'CV: %{y:.3f}<extra></extra>',
+      hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
       // Hide individual points - only show violin and box
       points: false,
       jitter: 0,
@@ -144,7 +144,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     }));
 
     const layout = {
-      title: { text: 'PSM CV Variance by Condition (95% of data)', font: { size: 14, color: '#111827' } },
+      title: { text: 'PSM CVs by Condition (95% of data)', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -161,7 +161,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     return { traces, layout };
   }, [data.psm_cv]);
 
-  // 3b. Protein CV Variance (with different colors) - show 95th percentile top
+  // 3b. Protein CVs (with different colors) - show 95th percentile top
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
 
@@ -181,7 +181,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
       box: { visible: true },
       line: { color: condition === 'DMSO' ? '#10B981' : '#F59E0B' },
       fillcolor: condition === 'DMSO' ? 'rgba(16, 185, 129, 0.5)' : 'rgba(245, 158, 11, 0.5)',
-      hovertemplate: 'CV: %{y:.3f}<extra></extra>',
+      hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
       // Hide individual points - only show violin and box
       points: false,
       jitter: 0,
@@ -189,7 +189,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     }));
 
     const layout = {
-      title: { text: 'Protein CV Variance by Condition (95% of data)', font: { size: 14, color: '#111827' } },
+      title: { text: 'Protein CVs by Condition (95% of data)', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -280,11 +280,19 @@ export default function QCPlots({ data }: QCPlotsProps) {
       hovertemplate: string;
     }> = [];
 
+    // MAJ-007: Generate distinct colors for each sample
+    const sampleColors = [
+      '#00ADEF', '#E73564', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
+      '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#D946EF',
+    ];
+    let colorIndex = 0;
+
     Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
       Object.entries(replicates).forEach(([replicate, values]) => {
         const kde = calculateKDE(values);
         if (kde.x.length > 0) {
-          const color = condition === 'DMSO' ? '#00ADEF' : '#E73564';
+          const color = sampleColors[colorIndex % sampleColors.length];
+          colorIndex++;
           traces.push({
             x: kde.x,
             y: kde.y,
@@ -293,8 +301,8 @@ export default function QCPlots({ data }: QCPlotsProps) {
             name: `${condition} - ${replicate}`,
             line: { color, width: 2 },
             fill: 'tozeroy',
-            fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.2)' : 'rgba(231, 53, 100, 0.2)',
-            hovertemplate: 'Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
+            fillcolor: color + '33', // 20% opacity hex
+            hovertemplate: 'Log2 Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
           });
         }
       });
@@ -303,7 +311,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     const layout = {
       title: { text: 'PSM Intensity Distribution', font: { size: 14, color: '#111827' } },
       xaxis: {
-        title: { text: 'Intensity', font: { size: 12 } },
+        title: { text: 'Log2 Intensity', font: { size: 12 } },
         range: [min, max],
         gridcolor: '#E5E7EB',
       },
@@ -392,19 +400,27 @@ export default function QCPlots({ data }: QCPlotsProps) {
       hovertemplate: string;
     }> = [];
 
-    Object.entries(data.intensity_distributions.protein).forEach(([condition, values]) => {
+    // MAJ-008: Generate distinct colors for each sample
+    const sampleColors = [
+      '#00ADEF', '#E73564', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
+      '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#D946EF',
+    ];
+    let colorIndex = 0;
+
+    Object.entries(data.intensity_distributions.protein).forEach(([sampleName, values]) => {
       const kde = calculateKDE(values);
       if (kde.x.length > 0) {
-        const color = condition === 'DMSO' ? '#00ADEF' : '#E73564';
+        const color = sampleColors[colorIndex % sampleColors.length];
+        colorIndex++;
         traces.push({
           x: kde.x,
           y: kde.y,
           type: 'scatter',
           mode: 'lines',
-          name: condition,
+          name: sampleName,
           line: { color, width: 2 },
           fill: 'tozeroy',
-          fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.2)' : 'rgba(231, 53, 100, 0.2)',
+          fillcolor: color + '33', // 20% opacity hex
           hovertemplate: 'Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
         });
       }
@@ -539,8 +555,8 @@ export default function QCPlots({ data }: QCPlotsProps) {
   const plots = [
     { id: 'pca', data: pcaPlot, title: 'PCA Analysis' },
     { id: 'pvalue', data: pvalueDistPlot, title: 'P-value Distribution' },
-    { id: 'psm-cv', data: psmCVPlot, title: 'PSM CV Variance' },
-    { id: 'protein-cv', data: proteinCVPlot, title: 'Protein CV Variance' },
+    { id: 'psm-cv', data: psmCVPlot, title: 'PSM CVs' },
+    { id: 'protein-cv', data: proteinCVPlot, title: 'Protein CVs' },
     { id: 'psm-intensity', data: psmIntensityPlot, title: 'PSM Intensity Distribution' },
     { id: 'protein-intensity', data: proteinIntensityPlot, title: 'Protein Intensity Distribution' },
     { id: 'completeness', data: completenessPlot, title: 'Protein Data Completeness' },

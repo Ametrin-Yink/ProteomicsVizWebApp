@@ -146,19 +146,32 @@ export default function GSEADashboard({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-500">Pathway Name</span>
-                <span className="text-sm font-medium text-gray-900 text-right max-w-xs">
-                  {selectedPathway.name}
-                </span>
-              </div>
+              {/* MIN-008: Split Pathway Name and Term ID */}
+              {(() => {
+                // Parse term to extract name and ID
+                const fullTerm = selectedPathway.term || '';
+                const match = fullTerm.match(/^(.+)\s*\((GO:\d+)\)$/);
+                const pathwayName = match ? match[1].trim() : selectedPathway.name;
+                const termId = match ? match[2] : fullTerm;
 
-              <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-500">Term ID</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {selectedPathway.term}
-                </span>
-              </div>
+                return (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-500">Pathway Name</span>
+                      <span className="text-sm font-medium text-gray-900 text-right max-w-xs">
+                        {pathwayName}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-500">Term ID</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {termId}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
 
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <span className="text-sm text-gray-500">NES</span>

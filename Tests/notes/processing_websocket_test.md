@@ -1,0 +1,224 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "ProteomicsViz" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+        - generic [ref=e7]: ProteomicsViz
+      - generic [ref=e8]:
+        - link "Home" [ref=e9] [cursor=pointer]:
+          - /url: /
+        - link "About" [ref=e10] [cursor=pointer]:
+          - /url: /about
+        - link "Documentation" [ref=e11] [cursor=pointer]:
+          - /url: /documentation
+  - generic [ref=e1199]:
+    - generic [ref=e1200]:
+      - button "New Analysis" [ref=e1202]:
+        - img [ref=e1203]
+        - text: New Analysis
+      - generic [ref=e1205]:
+        - button "All (5)" [ref=e1206]:
+          - img [ref=e1207]
+          - text: All (5)
+        - button "Recent" [ref=e1209]:
+          - img [ref=e1210]
+          - text: Recent
+      - generic [ref=e1214]:
+        - generic [ref=e1215]:
+          - heading "Active" [level=3] [ref=e1216]
+          - generic [ref=e1217]:
+            - generic [ref=e1218] [cursor=pointer]:
+              - img [ref=e1220]
+              - generic [ref=e1223]:
+                - paragraph [ref=e1224]: WebSocket Test Session
+                - paragraph [ref=e1225]: Created
+              - generic [ref=e1226]:
+                - button "Rename session" [ref=e1227]:
+                  - img [ref=e1228]
+                - button "Delete session" [ref=e1230]:
+                  - img [ref=e1231]
+            - generic [ref=e1234] [cursor=pointer]:
+              - img [ref=e1236]
+              - generic [ref=e1239]:
+                - paragraph [ref=e1240]: Analysis 3/24/2026, 4:14:10 PM
+                - paragraph [ref=e1241]: Created
+              - generic [ref=e1242]:
+                - button "Rename session" [ref=e1243]:
+                  - img [ref=e1244]
+                - button "Delete session" [ref=e1246]:
+                  - img [ref=e1247]
+        - generic [ref=e1250]:
+          - heading "Completed" [level=3] [ref=e1251]
+          - generic [ref=e1252]:
+            - generic [ref=e1253] [cursor=pointer]:
+              - img [ref=e1255]
+              - generic [ref=e1258]:
+                - paragraph [ref=e1259]: Analysis 3/24/2026, 11:08:55 PM
+                - paragraph [ref=e1260]: Completed
+              - generic [ref=e1261]:
+                - button "Rename session" [ref=e1262]:
+                  - img [ref=e1263]
+                - button "Delete session" [ref=e1265]:
+                  - img [ref=e1266]
+            - generic [ref=e1269] [cursor=pointer]:
+              - img [ref=e1271]
+              - generic [ref=e1274]:
+                - paragraph [ref=e1275]: Test Session
+                - paragraph [ref=e1276]: Completed
+              - generic [ref=e1277]:
+                - button "Rename session" [ref=e1278]:
+                  - img [ref=e1279]
+                - button "Delete session" [ref=e1281]:
+                  - img [ref=e1282]
+            - generic [ref=e1285] [cursor=pointer]:
+              - img [ref=e1287]
+              - generic [ref=e1290]:
+                - paragraph [ref=e1291]: Analysis 3/24/2026, 4:06:34 PM
+                - paragraph [ref=e1292]: Completed
+              - generic [ref=e1293]:
+                - button "Rename session" [ref=e1294]:
+                  - img [ref=e1295]
+                - button "Delete session" [ref=e1297]:
+                  - img [ref=e1298]
+      - generic [ref=e1301]: ProteomicsViz Analysis Platform
+    - generic [ref=e1302]:
+      - banner [ref=e1303]:
+        - generic [ref=e1305]:
+          - generic [ref=e1306]:
+            - button [ref=e1307]:
+              - img [ref=e1308]
+            - generic [ref=e1310]:
+              - img [ref=e1312]
+              - generic [ref=e1314]:
+                - heading "Processing Data" [level=1] [ref=e1315]
+                - paragraph [ref=e1316]: "Session: 86dea224..."
+          - button "Cancel" [ref=e1318]:
+            - img [ref=e1319]
+            - text: Cancel
+      - main [ref=e1322]:
+        - generic [ref=e1323]:
+          - generic [ref=e1324]:
+            - heading "Overall Progress" [level=2] [ref=e1325]
+            - generic [ref=e1327]: 0 of 9 steps completed
+          - generic [ref=e1329]:
+            - progressbar "Processing progress" [ref=e1330]
+            - generic [ref=e1331]: 0%
+        - generic [ref=e1332]:
+          - generic [ref=e1333]:
+            - heading "Processing Steps" [level=2] [ref=e1334]:
+              - img [ref=e1335]
+              - text: Processing Steps
+            - generic [ref=e1338]:
+              - generic [ref=e1339]:
+                - generic [ref=e1340]:
+                  - status "In Progress" [ref=e1341]:
+                    - img [ref=e1342]
+                  - generic [ref=e1344]: "1"
+                - generic [ref=e1345]:
+                  - generic [ref=e1346]:
+                    - img [ref=e1348]
+                    - heading "Combine Replicates" [level=3] [ref=e1352]
+                  - paragraph [ref=e1353]: Merge replicate data files into a single dataset
+                  - paragraph [ref=e1354]: Waiting for connection...
+              - generic [ref=e1356]:
+                - generic [ref=e1357]:
+                  - status "Not Started" [ref=e1358]:
+                    - img [ref=e1359]
+                  - generic [ref=e1361]: "2"
+                - generic [ref=e1362]:
+                  - generic [ref=e1363]:
+                    - img [ref=e1365]
+                    - heading "Generate Unique PSM" [level=3] [ref=e1377]
+                  - paragraph [ref=e1378]: Create unique identifiers for each peptide-spectrum match
+              - generic [ref=e1380]:
+                - generic [ref=e1381]:
+                  - status "Not Started" [ref=e1382]:
+                    - img [ref=e1383]
+                  - generic [ref=e1385]: "3"
+                - generic [ref=e1386]:
+                  - generic [ref=e1387]:
+                    - img [ref=e1389]
+                    - heading "Remove Razor Information" [level=3] [ref=e1391]
+                  - paragraph [ref=e1392]: Filter out razor peptide assignments
+              - generic [ref=e1394]:
+                - generic [ref=e1395]:
+                  - status "Not Started" [ref=e1396]:
+                    - img [ref=e1397]
+                  - generic [ref=e1399]: "4"
+                - generic [ref=e1400]:
+                  - generic [ref=e1401]:
+                    - img [ref=e1403]
+                    - heading "Remove Low Quality PSM" [level=3] [ref=e1405]
+                  - paragraph [ref=e1406]: Filter low-quality peptide-spectrum matches
+              - generic [ref=e1408]:
+                - generic [ref=e1409]:
+                  - status "Not Started" [ref=e1410]:
+                    - img [ref=e1411]
+                  - generic [ref=e1413]: "5"
+                - generic [ref=e1414]:
+                  - generic [ref=e1415]:
+                    - img [ref=e1417]
+                    - heading "Filter Based on Configuration" [level=3] [ref=e1419]
+                  - paragraph [ref=e1420]: Apply user-defined filtering criteria
+              - generic [ref=e1422]:
+                - generic [ref=e1423]:
+                  - status "Not Started" [ref=e1424]:
+                    - img [ref=e1425]
+                  - generic [ref=e1427]: "6"
+                - generic [ref=e1428]:
+                  - generic [ref=e1429]:
+                    - img [ref=e1431]
+                    - heading "Calculate Protein Abundance" [level=3] [ref=e1433]
+                  - paragraph [ref=e1434]: Aggregate peptide abundances to protein level using msqrob2
+              - generic [ref=e1436]:
+                - generic [ref=e1437]:
+                  - status "Not Started" [ref=e1438]:
+                    - img [ref=e1439]
+                  - generic [ref=e1441]: "7"
+                - generic [ref=e1442]:
+                  - generic [ref=e1443]:
+                    - img [ref=e1445]
+                    - heading "Differential Expression Analysis" [level=3] [ref=e1447]
+                  - paragraph [ref=e1448]: Perform differential expression analysis using msqrob2
+              - generic [ref=e1450]:
+                - generic [ref=e1451]:
+                  - status "Not Started" [ref=e1452]:
+                    - img [ref=e1453]
+                  - generic [ref=e1455]: "8"
+                - generic [ref=e1456]:
+                  - generic [ref=e1457]:
+                    - img [ref=e1459]
+                    - heading "Calculate QC Metrics" [level=3] [ref=e1461]
+                  - paragraph [ref=e1462]: Compute quality control metrics and PCA
+              - generic [ref=e1464]:
+                - generic [ref=e1465]:
+                  - status "Not Started" [ref=e1466]:
+                    - img [ref=e1467]
+                  - generic [ref=e1469]: "9"
+                - generic [ref=e1470]:
+                  - generic [ref=e1471]:
+                    - img [ref=e1473]
+                    - heading "Perform GSEA Analysis" [level=3] [ref=e1475]
+                  - paragraph [ref=e1476]: Run Gene Set Enrichment Analysis using gseapy
+          - generic [ref=e1477]:
+            - heading "Activity Log" [level=2] [ref=e1478]:
+              - img [ref=e1479]
+              - text: Activity Log
+            - generic [ref=e1482]:
+              - generic [ref=e1483]:
+                - generic [ref=e1484]:
+                  - img [ref=e1485]
+                  - heading "Processing Logs" [level=3] [ref=e1487]
+                  - generic [ref=e1488]: "0"
+                - generic [ref=e1489]:
+                  - button "Export logs" [ref=e1490]:
+                    - img [ref=e1491]
+                  - button "Collapse" [ref=e1494]:
+                    - img [ref=e1495]
+              - generic [ref=e1499]:
+                - img [ref=e1500]
+                - generic [ref=e1502]: No logs yet. Waiting for processing to start...
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]

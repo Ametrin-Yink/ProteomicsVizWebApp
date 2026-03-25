@@ -9,6 +9,13 @@ import { MousePointer2, Square, Lasso, X } from 'lucide-react';
 // Dynamically import Plotly to avoid SSR issues
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
+// CSS to disable drag layer pointer events in click mode
+const CLICK_MODE_CSS = `
+  .volcano-plot-click-mode .js-plotly-plot .draglayer {
+    pointer-events: none !important;
+  }
+`;
+
 interface VolcanoPlotProps {
   data: DEResult[];
   filters: VolcanoFilters;
@@ -223,15 +230,30 @@ export default function VolcanoPlot({
     [onSelectProteins, selectionMode]
   );
 
-  // Handle double-click events - select single protein
-  const handleDoubleClick = useCallback(
+  // Handle click events - select single protein (replaces any existing selection)
+  const handleClick = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
-      if (event.points && event.points.length > 0) {
+      console.log('Plotly click event:', event, 'selectionMode:', selectionMode);
+      if (selectionMode === 'click' && event.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
+        console.log('Selecting protein:', protein);
         onSelectProteins([protein], 'click');
       }
     },
-    [onSelectProteins]
+    [onSelectProteins, selectionMode]
+  );
+
+  // Handle double-click events - select single protein (same as single click)
+  const handleDoubleClick = useCallback(
+    (event: { points?: Array<{ customdata: string }> }) => {
+      console.log('Plotly doubleClick event:', event, 'selectionMode:', selectionMode);
+      if (selectionMode === 'click' && event.points && event.points.length > 0) {
+        const protein = event.points[0].customdata;
+        console.log('Selecting protein on double-click:', protein);
+        onSelectProteins([protein], 'click');
+      }
+    },
+    [onSelectProteins, selectionMode]
   );
 
   // Get dragmode based on selection mode
@@ -242,7 +264,7 @@ export default function VolcanoPlot({
       case 'lasso':
         return 'lasso' as const;
       default:
-        return 'pan' as const; // Use 'pan' in click mode to allow click interactions
+        return false as const; // Disable drag/selection in click mode to allow point clicking
     }
   }, [selectionMode]);
 
@@ -250,12 +272,21 @@ export default function VolcanoPlot({
   const layoutWithDragMode = useMemo(() => ({
     ...layout,
     dragmode,
-    // Enable click mode events
-    clickmode: selectionMode === 'click' ? 'event+select' : undefined,
+    xaxis: {
+      ...layout.xaxis,
+      fixedrange: selectionMode === 'click', // Disable zoom/pan in click mode
+    },
+    yaxis: {
+      ...layout.yaxis,
+      fixedrange: selectionMode === 'click', // Disable zoom/pan in click mode
+    },
   }), [layout, dragmode, selectionMode]);
 
   return (
     <div className="w-full bg-white rounded-lg border border-gray-200 p-4">
+      {/* Inject CSS for click mode */}
+      {selectionMode === 'click' && <style>{CLICK_MODE_CSS}</style>}
+
       {/* Selection mode buttons */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -310,15 +341,19 @@ export default function VolcanoPlot({
       </div>
 
       {/* Volcano plot */}
-      <div ref={plotRef} data-testid="volcano-plot" className="w-full h-[500px]">
+      <div
+        ref={plotRef}
+        data-testid="volcano-plot"
+        className={`w-full h-[500px] ${selectionMode === 'click' ? 'volcano-plot-click-mode' : ''}`}
+      >
         {data.length > 0 ? (
           <Plot
             data={plotData}
             layout={layoutWithDragMode}
             config={config}
             onSelected={selectionMode !== 'click' ? handleSelected : undefined}
-            onClick={undefined}
-            onDoubleClick={handleDoubleClick}
+            onClick={selectionMode === 'click' ? handleClick : undefined}
+            onDoubleClick={selectionMode === 'click' ? handleDoubleClick : undefined}
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />

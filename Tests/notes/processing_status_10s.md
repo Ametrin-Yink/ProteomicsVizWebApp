@@ -1,0 +1,203 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "ProteomicsViz" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+        - generic [ref=e7]: ProteomicsViz
+      - generic [ref=e8]:
+        - link "Home" [ref=e9] [cursor=pointer]:
+          - /url: /
+        - link "About" [ref=e10] [cursor=pointer]:
+          - /url: /about
+        - link "Documentation" [ref=e11] [cursor=pointer]:
+          - /url: /documentation
+  - generic [ref=e912]:
+    - generic [ref=e913]:
+      - button "New Analysis" [ref=e915]:
+        - img [ref=e916]
+        - text: New Analysis
+      - generic [ref=e918]:
+        - button "All (3)" [ref=e919]:
+          - img [ref=e920]
+          - text: All (3)
+        - button "Recent" [ref=e922]:
+          - img [ref=e923]
+          - text: Recent
+      - generic [ref=e927]:
+        - generic [ref=e928]:
+          - heading "Active" [level=3] [ref=e929]
+          - generic [ref=e930]:
+            - generic [ref=e931] [cursor=pointer]:
+              - img [ref=e933]
+              - generic [ref=e936]:
+                - paragraph [ref=e937]: Test Session
+                - paragraph [ref=e938]: Created
+              - generic [ref=e939]:
+                - button "Rename session" [ref=e940]:
+                  - img [ref=e941]
+                - button "Delete session" [ref=e943]:
+                  - img [ref=e944]
+            - generic [ref=e947] [cursor=pointer]:
+              - img [ref=e949]
+              - generic [ref=e952]:
+                - paragraph [ref=e953]: Analysis 3/24/2026, 4:14:10 PM
+                - paragraph [ref=e954]: Created
+              - generic [ref=e955]:
+                - button "Rename session" [ref=e956]:
+                  - img [ref=e957]
+                - button "Delete session" [ref=e959]:
+                  - img [ref=e960]
+        - generic [ref=e963]:
+          - heading "Completed" [level=3] [ref=e964]
+          - generic [ref=e966] [cursor=pointer]:
+            - img [ref=e968]
+            - generic [ref=e971]:
+              - paragraph [ref=e972]: Analysis 3/24/2026, 4:06:34 PM
+              - paragraph [ref=e973]: Completed
+            - generic [ref=e974]:
+              - button "Rename session" [ref=e975]:
+                - img [ref=e976]
+              - button "Delete session" [ref=e978]:
+                - img [ref=e979]
+      - generic [ref=e982]: ProteomicsViz Analysis Platform
+    - generic [ref=e983]:
+      - banner [ref=e984]:
+        - generic [ref=e986]:
+          - generic [ref=e987]:
+            - button [ref=e988]:
+              - img [ref=e989]
+            - generic [ref=e991]:
+              - img [ref=e993]
+              - generic [ref=e995]:
+                - heading "Processing Data" [level=1] [ref=e996]
+                - paragraph [ref=e997]: "Session: 91b23e59..."
+          - button "Cancel" [ref=e999]:
+            - img [ref=e1000]
+            - text: Cancel
+      - main [ref=e1003]:
+        - generic [ref=e1004]:
+          - generic [ref=e1005]:
+            - heading "Overall Progress" [level=2] [ref=e1006]
+            - generic [ref=e1008]: 0 of 9 steps completed
+          - generic [ref=e1010]:
+            - progressbar "Processing progress" [ref=e1011]
+            - generic [ref=e1012]: 0%
+        - generic [ref=e1013]:
+          - generic [ref=e1014]:
+            - heading "Processing Steps" [level=2] [ref=e1015]:
+              - img [ref=e1016]
+              - text: Processing Steps
+            - generic [ref=e1019]:
+              - generic [ref=e1020]:
+                - generic [ref=e1021]:
+                  - status "In Progress" [ref=e1022]:
+                    - img [ref=e1023]
+                  - generic [ref=e1025]: "1"
+                - generic [ref=e1026]:
+                  - generic [ref=e1027]:
+                    - img [ref=e1029]
+                    - heading "Combine Replicates" [level=3] [ref=e1033]
+                  - paragraph [ref=e1034]: Merge replicate data files into a single dataset
+                  - paragraph [ref=e1035]: Waiting for connection...
+              - generic [ref=e1037]:
+                - generic [ref=e1038]:
+                  - status "Not Started" [ref=e1039]:
+                    - img [ref=e1040]
+                  - generic [ref=e1042]: "2"
+                - generic [ref=e1043]:
+                  - generic [ref=e1044]:
+                    - img [ref=e1046]
+                    - heading "Generate Unique PSM" [level=3] [ref=e1058]
+                  - paragraph [ref=e1059]: Create unique identifiers for each peptide-spectrum match
+              - generic [ref=e1061]:
+                - generic [ref=e1062]:
+                  - status "Not Started" [ref=e1063]:
+                    - img [ref=e1064]
+                  - generic [ref=e1066]: "3"
+                - generic [ref=e1067]:
+                  - generic [ref=e1068]:
+                    - img [ref=e1070]
+                    - heading "Remove Razor Information" [level=3] [ref=e1072]
+                  - paragraph [ref=e1073]: Filter out razor peptide assignments
+              - generic [ref=e1075]:
+                - generic [ref=e1076]:
+                  - status "Not Started" [ref=e1077]:
+                    - img [ref=e1078]
+                  - generic [ref=e1080]: "4"
+                - generic [ref=e1081]:
+                  - generic [ref=e1082]:
+                    - img [ref=e1084]
+                    - heading "Remove Low Quality PSM" [level=3] [ref=e1086]
+                  - paragraph [ref=e1087]: Filter low-quality peptide-spectrum matches
+              - generic [ref=e1089]:
+                - generic [ref=e1090]:
+                  - status "Not Started" [ref=e1091]:
+                    - img [ref=e1092]
+                  - generic [ref=e1094]: "5"
+                - generic [ref=e1095]:
+                  - generic [ref=e1096]:
+                    - img [ref=e1098]
+                    - heading "Filter Based on Configuration" [level=3] [ref=e1100]
+                  - paragraph [ref=e1101]: Apply user-defined filtering criteria
+              - generic [ref=e1103]:
+                - generic [ref=e1104]:
+                  - status "Not Started" [ref=e1105]:
+                    - img [ref=e1106]
+                  - generic [ref=e1108]: "6"
+                - generic [ref=e1109]:
+                  - generic [ref=e1110]:
+                    - img [ref=e1112]
+                    - heading "Calculate Protein Abundance" [level=3] [ref=e1114]
+                  - paragraph [ref=e1115]: Aggregate peptide abundances to protein level using msqrob2
+              - generic [ref=e1117]:
+                - generic [ref=e1118]:
+                  - status "Not Started" [ref=e1119]:
+                    - img [ref=e1120]
+                  - generic [ref=e1122]: "7"
+                - generic [ref=e1123]:
+                  - generic [ref=e1124]:
+                    - img [ref=e1126]
+                    - heading "Differential Expression Analysis" [level=3] [ref=e1128]
+                  - paragraph [ref=e1129]: Perform differential expression analysis using msqrob2
+              - generic [ref=e1131]:
+                - generic [ref=e1132]:
+                  - status "Not Started" [ref=e1133]:
+                    - img [ref=e1134]
+                  - generic [ref=e1136]: "8"
+                - generic [ref=e1137]:
+                  - generic [ref=e1138]:
+                    - img [ref=e1140]
+                    - heading "Calculate QC Metrics" [level=3] [ref=e1142]
+                  - paragraph [ref=e1143]: Compute quality control metrics and PCA
+              - generic [ref=e1145]:
+                - generic [ref=e1146]:
+                  - status "Not Started" [ref=e1147]:
+                    - img [ref=e1148]
+                  - generic [ref=e1150]: "9"
+                - generic [ref=e1151]:
+                  - generic [ref=e1152]:
+                    - img [ref=e1154]
+                    - heading "Perform GSEA Analysis" [level=3] [ref=e1156]
+                  - paragraph [ref=e1157]: Run Gene Set Enrichment Analysis using gseapy
+          - generic [ref=e1158]:
+            - heading "Activity Log" [level=2] [ref=e1159]:
+              - img [ref=e1160]
+              - text: Activity Log
+            - generic [ref=e1163]:
+              - generic [ref=e1164]:
+                - generic [ref=e1165]:
+                  - img [ref=e1166]
+                  - heading "Processing Logs" [level=3] [ref=e1168]
+                  - generic [ref=e1169]: "0"
+                - generic [ref=e1170]:
+                  - button "Export logs" [ref=e1171]:
+                    - img [ref=e1172]
+                  - button "Collapse" [ref=e1175]:
+                    - img [ref=e1176]
+              - generic [ref=e1180]:
+                - img [ref=e1181]
+                - generic [ref=e1183]: No logs yet. Waiting for processing to start...
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]

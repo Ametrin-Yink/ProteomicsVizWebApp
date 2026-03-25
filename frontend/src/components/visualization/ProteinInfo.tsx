@@ -196,7 +196,7 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
         <div className="flex justify-between items-center py-2 border-b border-gray-100">
           <span className="text-sm text-gray-500">Number of PSMs</span>
           <span className="text-sm font-medium text-gray-900">
-            {protein.psm_count ?? '-'}
+            {protein.psm_count && protein.psm_count > 0 ? protein.psm_count : '-'}
           </span>
         </div>
 

@@ -202,18 +202,9 @@ function ResultsContent() {
                 </div>
 
                 {selectedProteins.size > 0 && (
-                  <div data-testid="selection-count" className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600">
-                      {selectedProteins.size} selected
-                    </span>
-                    <button
-                      onClick={clearSelection}
-                      className="flex items-center gap-1 text-sm text-red-600 hover:text-red-800"
-                    >
-                      <X className="w-4 h-4" />
-                      Clear
-                    </button>
-                  </div>
+                  <span data-testid="selection-count" className="text-sm text-gray-600">
+                    {selectedProteins.size} selected
+                  </span>
                 )}
               </div>
 

@@ -79,9 +79,9 @@ col_data <- data.frame(
 # Determine condition for each sample based on column names
 col_data$condition <- sapply(abundance_cols, function(x) {
     # Check if treatment or control is in the sample name
-    if (grepl(treatment, x, ignore.case = TRUE)) {
+    if (grepl(treatment, x, ignore.case = TRUE, fixed = TRUE)) {
         return("Treatment")
-    } else if (grepl(control, x, ignore.case = TRUE)) {
+    } else if (grepl(control, x, ignore.case = TRUE, fixed = TRUE)) {
         return("Control")
     } else {
         # Try to extract from pattern

@@ -138,6 +138,8 @@ class QCData(BaseModel):
     total_proteins: Optional[int] = None
     avg_proteins_per_sample: Optional[int] = None
     average_cv: Optional[float] = None
+    average_protein_cv: Optional[float] = None
+    average_psm_cv: Optional[float] = None
     completeness_rate: Optional[float] = None
 
 
@@ -160,6 +162,11 @@ class GSEAResult(BaseModel):
     rank_metric_positions: Optional[list[tuple[str, int, float]]] = Field(
         default=None,
         description="Gene positions in ranked list: (gene_name, rank, metric_value)"
+    )
+    # Heatmap data for z-score transformed protein intensities
+    heatmap_data: Optional[dict] = Field(
+        default=None,
+        description="Heatmap data for leading edge genes: {genes: [], samples: [], z_scores: [[],...]}"
     )
 
     @property

@@ -4,7 +4,9 @@ Visualization API routes.
 Plot data endpoints for results, QC, and bioinformatics.
 """
 
+import asyncio
 import json
+import math
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -42,23 +44,23 @@ def get_session_store() -> SessionStore:
     return SessionStore(settings.sessions_dir)
 
 
-def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
+async def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
     """Load differential expression results from TSV file.
-    
+
     Args:
         results_dir: Path to session results directory
-        
+
     Returns:
         List of protein results dictionaries
     """
     diff_file = results_dir / "Diff_Expression.tsv"
-    
+
     if not diff_file.exists():
         return []
-    
+
     try:
-        df = pd.read_csv(diff_file, sep='\t')
-        
+        df = await asyncio.to_thread(pd.read_csv, diff_file, sep='\t')
+
         # Convert to list of dictionaries
         # Field names must match frontend DEResult interface
         results = []
@@ -70,7 +72,6 @@ def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
             psm_count = row.get("PSM_Count", row.get("psm_count", 0))
 
             # Convert NaN/Inf to None
-            import math
             if pd.isna(log_fc) or (isinstance(log_fc, float) and math.isinf(log_fc)):
                 log_fc = None
             if pd.isna(pval) or (isinstance(pval, float) and math.isinf(pval)):
@@ -90,7 +91,7 @@ def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
                 "psm_count": int(psm_count) if psm_count is not None else 0,
             }
             results.append(result)
-        
+
         return results
     except Exception as e:
         # Log error but return empty list
@@ -140,6 +141,35 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
         # Handle legacy format: cv_variance -> psm_cv
         if "cv_variance" in data and not result.get("psm_cv"):
             result["psm_cv"] = data["cv_variance"]
+
+        # MAJ-006: Filter out PSM_Count from PCA samples (legacy cached data)
+        if "pca" in result and result["pca"]:
+            pca = result["pca"]
+            if "samples" in pca and "PSM_Count" in pca["samples"]:
+                # Find index of PSM_Count
+                psm_count_idx = pca["samples"].index("PSM_Count")
+                # Remove from all PCA arrays
+                pca["samples"].pop(psm_count_idx)
+                pca["pc1"].pop(psm_count_idx)
+                pca["pc2"].pop(psm_count_idx)
+                pca["conditions"].pop(psm_count_idx)
+
+        # MAJ-005: Correct total_psms if it was calculated as total rows instead of unique PSMs
+        # The bug showed ~49,000 (total rows) instead of ~4,600 (unique PSMs)
+        # If total_psms is unreasonably high (>20,000), flag it as potentially wrong
+        if result.get("total_psms") and result.get("total_psms") > 20000:
+            # This is likely the bug - total rows were counted instead of unique PSMs
+            # We can't fix it without re-reading the PSM file, but we can add a note
+            # or try to estimate from psm_completeness if available
+            psm_completeness = result.get("psm_completeness", [])
+            if psm_completeness and len(psm_completeness) > 0:
+                # Estimate from first sample's present count
+                first_sample = psm_completeness[0]
+                if hasattr(first_sample, 'get'):
+                    estimated_unique = first_sample.get("present", 0)
+                    if estimated_unique > 0 and estimated_unique < result["total_psms"]:
+                        # Use the estimated unique count as a hint
+                        result["total_psms_note"] = f"Estimated ~{estimated_unique:,} unique PSMs (cached value may include duplicates)"
 
         return result
     except Exception as e:
@@ -215,7 +245,7 @@ async def get_results(
     results_dir = settings.sessions_dir / session_id / "results"
     
     # Load results from file
-    all_results = load_diff_expression_results(results_dir)
+    all_results = await load_diff_expression_results(results_dir)
     
     # Apply filters
     if significant_only:
@@ -273,10 +303,24 @@ async def get_qc_plots(
     
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
-    
+
     # Load QC results from file
     qc_data = load_qc_results(results_dir)
-    
+
+    # MAJ-005: Recalculate total_psms from PSM file if cached value looks wrong
+    # The bug showed total rows (~49k) instead of unique PSMs (~4k)
+    if qc_data.get("total_psms") and qc_data.get("total_psms") > 20000:
+        psm_file = results_dir / "PSM_Abundances.tsv"
+        if psm_file.exists():
+            try:
+                import pandas as pd
+                psm_df = pd.read_csv(psm_file, sep='\t')
+                if 'Unique_PSM' in psm_df.columns:
+                    correct_total = psm_df['Unique_PSM'].nunique()
+                    qc_data["total_psms"] = int(correct_total)
+            except Exception as e:
+                print(f"Error recalculating total_psms: {e}")
+
     return create_response(qc_data)
 
 
@@ -303,7 +347,7 @@ async def get_gsea_results(
     return create_response(gsea_data)
 
 
-def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
+async def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
     """Load protein abundance data from TSV file.
 
     Args:
@@ -319,7 +363,7 @@ def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]
         return {"samples": [], "abundances": [], "conditions": []}
 
     try:
-        df = pd.read_csv(abundance_file, sep='\t')
+        df = await asyncio.to_thread(pd.read_csv, abundance_file, sep='\t')
 
         # Find the protein row (handle multiple accessions separated by ;)
         protein_row = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
@@ -328,7 +372,7 @@ def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]
             return {"samples": [], "abundances": [], "conditions": []}
 
         # Get abundance columns (all columns except metadata)
-        metadata_cols = ['Master_Protein_Accessions', 'Gene_Name']
+        metadata_cols = ['Master_Protein_Accessions', 'Gene_Name', 'PSM_Count', 'psm_count', 'Protein']
         abundance_cols = [col for col in df.columns if col not in metadata_cols]
 
         # Build arrays for frontend format - include ALL samples, even with NA/0 values
@@ -381,12 +425,12 @@ async def get_protein_abundance(
     results_dir = settings.sessions_dir / session_id / "results"
     
     # Load protein abundance from file
-    abundance_data = load_protein_abundance(results_dir, protein_id)
+    abundance_data = await load_protein_abundance(results_dir, protein_id)
     
     return create_response(abundance_data)
 
 
-def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
+async def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
     """Load PSM abundance data from TSV file.
 
     Args:
@@ -402,7 +446,7 @@ def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
         return {"psms": []}
 
     try:
-        df = pd.read_csv(psm_file, sep='\t')
+        df = await asyncio.to_thread(pd.read_csv, psm_file, sep='\t')
 
         # Filter rows for this protein (handle multiple accessions separated by ;)
         protein_rows = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
@@ -455,6 +499,6 @@ async def get_protein_psm(
     results_dir = settings.sessions_dir / session_id / "results"
     
     # Load PSM data from file
-    psm_data = load_psm_abundance(results_dir, protein_id)
+    psm_data = await load_psm_abundance(results_dir, protein_id)
     
     return create_response(psm_data)

@@ -167,26 +167,13 @@ flush.console()
 cat("Starting aggregation at", format(Sys.time(), "%H:%M:%S"), "\n")
 flush.console()
 
-pe <- tryCatch({
-    aggregateFeatures(
-        object = pe,
-        i = "peptide_norm",
-        fcol = "Proteins",
-        name = "protein",
-        fun = MsCoreUtils::robustSummary
-    )
-}, error = function(e) {
-    cat("Robust aggregation failed:", conditionMessage(e), "\n")
-    cat("Trying median aggregation...\n")
-    flush.console()
-    aggregateFeatures(
-        object = pe,
-        i = "peptide_norm",
-        fcol = "Proteins",
-        name = "protein",
-        fun = colMedians
-    )
-})
+pe <- aggregateFeatures(
+    object = pe,
+    i = "peptide_norm",
+    fcol = "Proteins",
+    name = "protein",
+    fun = MsCoreUtils::robustSummary
+)
 
 cat("Aggregation complete:", nrow(pe[["protein"]]), "proteins\n")
 cat("Protein abundances are on log2 scale\n")

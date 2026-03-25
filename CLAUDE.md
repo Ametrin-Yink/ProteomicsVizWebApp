@@ -202,6 +202,11 @@ Output: Results, QC Plots, GSEA
 - **API:** Column-based from R → Row-based for frontend
 - **Required CSV columns:** Sequence, Modifications, Charge, Contaminant, Master Protein Accessions, Quan Info, Abundance
 
+### Service Management (CRITICAL)
+- **NEVER use `killall`, `taskkill /IM`, or global cleanup commands** - These can kill the Claude process itself
+- **ALWAYS target specific PID or port only** - Use `netstat -ano | findstr :PORT` then `taskkill //F //PID <PID>`
+- **Verify PID is not Claude's** - Check that the PID being killed belongs to uvicorn/node, not the current Python process
+
 ## API Contract
 
 **Base URL:** `http://localhost:8000/api/v1`
@@ -300,8 +305,10 @@ created → configuring → processing → completed/error
 
 **Backend won't start:**
 ```bash
-# Kill existing uvicorn processes
-taskkill /F /IM python.exe  # Windows
+# Find the specific PID using port 8000 (do NOT use killall)
+netstat -ano | findstr :8000
+# Kill only that specific PID (use double slashes in bash)
+taskkill //F //PID <PID>
 # Check session scanning timeout (30s max in main.py)
 ```
 
@@ -350,3 +357,51 @@ pip install -r backend/requirements.txt
 **Python locations on this system:**
 - Global Python: `D:/Software/Python/python.exe` (has all dependencies)
 - R installation: `D:/Software/R-4.5.3/bin/x64/R.exe`
+
+## Quick Start (Windows)
+
+If you get "executable not found" errors when starting the backend, the virtual environment may reference a non-existent Python installation. Use the global Python instead:
+
+```bash
+# Use global Python (recommended - all deps pre-installed)
+cd backend && D:/Software/Python/python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+## Common Bug Patterns to Avoid
+
+### Python Async Code
+- **Always wrap `pd.read_csv()` in `asyncio.to_thread()`** in async functions
+  ```python
+  # CORRECT
+  df = await asyncio.to_thread(pd.read_csv, path, sep='\t')
+
+  # WRONG - blocks event loop
+  df = pd.read_csv(path, sep='\t')
+  ```
+- **Never use blocking file I/O in async route handlers** - Always use `asyncio.to_thread()`
+
+### R Scripts
+- **Use `fixed=TRUE` in `grepl()`** when matching user-provided strings to avoid regex injection
+  ```r
+  # CORRECT
+  if (grepl(treatment, x, ignore.case = TRUE, fixed = TRUE))
+
+  # WRONG - regex special chars will be interpreted
+  if (grepl(treatment, x, ignore.case = TRUE))
+  ```
+- **Don't use `colMedians`** (not in base R) - If needed, use `apply(x, 2, median, na.rm=TRUE)`
+
+### TypeScript/React
+- **Never use `as any` or `@ts-ignore`** - strict mode requirement
+- **Use Zustand selectors** to prevent re-renders:
+  ```typescript
+  // CORRECT - only re-renders when sessions change
+  const sessions = useSessionStore((state) => state.sessions);
+
+  // WRONG - causes re-renders on any store change
+  const store = useSessionStore();
+  ```
+
+### Testing
+- **Always run tests from project root** - `pytest Tests/backend/unit` not `cd backend && pytest`
+- **E2E tests are in `Tests/`** - Run with `cd Tests && npx playwright test`

@@ -278,6 +278,20 @@ export const sessionsApi = {
       await handleResponse<never>(response);
     }
   },
+
+  /**
+   * Rename a session
+   */
+  rename: async (sessionId: string, newName: string): Promise<void> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName }),
+    });
+    if (!response.ok) {
+      await handleResponse<never>(response);
+    }
+  },
 };
 
 /**

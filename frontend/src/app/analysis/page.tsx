@@ -16,7 +16,7 @@ import ConfigPanel from '@/components/analysis/ConfigPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi } from '@/lib/api-client';
+import { sessionsApi, processingApi } from '@/lib/api-client';
 
 function AnalysisContent() {
   const router = useRouter();
@@ -132,15 +132,28 @@ function AnalysisContent() {
     setIsStartingAnalysis(true);
 
     try {
-      // Try to save configuration, but don't block if it fails (CORS workaround)
+      // Save configuration first
       try {
         await sessionsApi.updateConfig(sessionId, config);
       } catch (configError) {
         console.warn('Config update failed, continuing anyway:', configError);
       }
 
-      // Navigate to processing page first - processing will start there after WebSocket connects
-      // This ensures we don't miss early progress updates (Steps 1-5)
+      // Start processing before navigating - backend will wait for WebSocket
+      try {
+        await processingApi.start(sessionId);
+        console.log('Processing started successfully');
+      } catch (processingError) {
+        console.error('Failed to start processing:', processingError);
+        addToast({
+          type: 'error',
+          message: 'Failed to start processing. Please try again.',
+        });
+        setIsStartingAnalysis(false);
+        return;
+      }
+
+      // Navigate to processing page - WebSocket will connect and receive updates
       router.push(`/analysis/processing?session_id=${sessionId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';
@@ -285,7 +298,7 @@ function AnalysisContent() {
           
           {/* Right Column - Configuration */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 sticky top-24">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-900">Configuration</h2>
                 <p className="text-sm text-gray-500 mt-1">

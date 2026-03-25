@@ -71,13 +71,13 @@ function QCContent() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {/* PSM Statistics */}
               <div className="bg-gray-50 rounded-lg p-3">
-                <span className="text-sm text-gray-500">Total PSMs</span>
+                <span className="text-sm text-gray-500">Total Unique PSMs</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
                   {data.total_psms?.toLocaleString() || 'N/A'}
                 </span>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
-                <span className="text-sm text-gray-500">Avg PSMs/Sample</span>
+                <span className="text-sm text-gray-500">Avg Unique PSMs/Sample</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
                   {data.avg_psms_per_sample?.toLocaleString() || 'N/A'}
                 </span>
@@ -97,17 +97,17 @@ function QCContent() {
                 </span>
               </div>
 
-              {/* CV and Completeness */}
+              {/* CV Statistics - MIN-010: Show separate Protein and PSM CV */}
               <div className="bg-gray-50 rounded-lg p-3">
-                <span className="text-sm text-gray-500">Average CV</span>
+                <span className="text-sm text-gray-500">Avg Protein CV</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
-                  {data.average_cv?.toFixed(1) || 'N/A'}%
+                  {data.average_protein_cv?.toFixed(1) || data.average_cv?.toFixed(1) || 'N/A'}%
                 </span>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
-                <span className="text-sm text-gray-500">Completeness</span>
+                <span className="text-sm text-gray-500">Avg PSM CV</span>
                 <span className="ml-2 text-xl font-semibold text-gray-900">
-                  {data.completeness_rate?.toFixed(1) || 'N/A'}%
+                  {data.average_psm_cv?.toFixed(1) || 'N/A'}%
                 </span>
               </div>
             </div>

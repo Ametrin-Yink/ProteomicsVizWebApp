@@ -14,13 +14,14 @@ import { SessionManager } from '@/components/session/SessionManager';
 import { useSessionStore } from '@/stores/sessionStore';
 import { sessionsApi } from '@/lib/api-client';
 import { useUIStore } from '@/stores/uiStore';
-import { 
-  FlaskConical, 
-  Beaker, 
-  Microscope, 
-  Dna,
+import {
+  GitCompare,
+  Layers,
+  Timer,
+  Route,
   ChevronRight,
-  Info
+  Info,
+  FlaskConical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,7 +31,7 @@ const templates = [
     id: 'protein-pairwise',
     name: 'Protein Pair-wise Comparison Analysis',
     description: 'Compare protein abundance between two experimental conditions using statistical testing and visualization.',
-    icon: FlaskConical,
+    icon: GitCompare,
     color: 'from-[#E73564] to-[#00ADEF]',
     available: true,
   },
@@ -38,7 +39,7 @@ const templates = [
     id: 'multi-condition',
     name: 'Multi-Condition Analysis',
     description: 'Analyze protein expression across multiple experimental conditions.',
-    icon: Beaker,
+    icon: Layers,
     color: 'from-gray-400 to-gray-500',
     available: false,
   },
@@ -46,7 +47,7 @@ const templates = [
     id: 'time-course',
     name: 'Time Course Analysis',
     description: 'Track protein abundance changes over time.',
-    icon: Microscope,
+    icon: Timer,
     color: 'from-gray-400 to-gray-500',
     available: false,
   },
@@ -54,7 +55,7 @@ const templates = [
     id: 'pathway-enrichment',
     name: 'Pathway Enrichment Analysis',
     description: 'Identify enriched biological pathways from differential expression results.',
-    icon: Dna,
+    icon: Route,
     color: 'from-gray-400 to-gray-500',
     available: false,
   },

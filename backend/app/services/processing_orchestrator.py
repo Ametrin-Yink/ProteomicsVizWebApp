@@ -160,6 +160,7 @@ class ProcessingOrchestrator:
         """Initialize orchestrator."""
         self.progress_callbacks: list[Callable[[ProcessingProgress], None]] = []
         self._current_session_id: Optional[str] = None
+        self._pipeline_state: Optional[PipelineState] = None
 
     def register_progress_callback(
         self, callback: Callable[[ProcessingProgress], None]
@@ -180,7 +181,7 @@ class ProcessingOrchestrator:
         logger.info(f"_send_progress: step {progress.step}, status {progress.status}, callbacks={len(self.progress_callbacks)}")
 
         # Also send as log message for activity log
-        await self._send_log(
+        self._send_log(
             level="info",
             message=f"Step {progress.step}: {progress.step_name} - {progress.status}",
             step=progress.step
@@ -196,8 +197,11 @@ class ProcessingOrchestrator:
             except Exception as e:
                 logger.warning(f"Progress callback failed: {e}", exc_info=True)
 
-    async def _send_log(self, level: str, message: str, step: int = None) -> None:
+    def _send_log(self, level: str, message: str, step: int = None) -> None:
         """Send log message to WebSocket and store in state.
+
+        This method is designed to be called from synchronous code (like R script callbacks).
+        It schedules the async WebSocket sending using asyncio.create_task().
 
         Args:
             level: Log level (info, warning, error)
@@ -205,21 +209,34 @@ class ProcessingOrchestrator:
             step: Optional step number
         """
         try:
-            # Store log in pipeline state
-            state = PipelineState(self._current_session_id) if self._current_session_id else None
-            if state:
-                state.add_log(level, message, step)
+            # Store log in pipeline state using the existing instance
+            if not self._current_session_id:
+                logger.warning(f"_send_log: No current session ID, cannot save log: {message}")
+                return
 
-            # Use the current session_id if available
-            if self._current_session_id and hasattr(session_manager, 'send_log_message'):
-                await session_manager.send_log_message(
-                    session_id=self._current_session_id,
-                    level=level,
-                    message=message,
-                    step=step
-                )
+            if self._pipeline_state:
+                logger.debug(f"_send_log: Saving log to session {self._current_session_id}: {message[:50]}...")
+                self._pipeline_state.add_log(level, message, step)
+            else:
+                logger.warning(f"_send_log: No pipeline state, cannot save log: {message}")
+
+            # Schedule async WebSocket sending
+            if hasattr(session_manager, 'send_log_message'):
+                try:
+                    # Get the current event loop and schedule the async task
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(
+                        session_manager.send_log_message(
+                            session_id=self._current_session_id,
+                            level=level,
+                            message=message,
+                            step=step
+                        )
+                    )
+                except RuntimeError as e:
+                    logger.debug(f"_send_log: No event loop running, can't send WebSocket: {e}")
         except Exception as e:
-            logger.debug(f"Failed to send log message: {e}")
+            logger.error(f"_send_log: Failed to send log message: {e}", exc_info=True)
 
     def _create_progress(
         self,
@@ -288,8 +305,9 @@ class ProcessingOrchestrator:
             extra={"session_id": session_id, "config": config.model_dump()},
         )
 
-        # Store session_id for log messages
+        # Store session_id and pipeline state for log messages
         self._current_session_id = session_id
+        self._pipeline_state = state
 
         # Register WebSocket callback
         if websocket_callback:
@@ -511,9 +529,7 @@ class ProcessingOrchestrator:
             result.protein_abundances_path = str(protein_output)
 
             # Count proteins
-            import pandas as pd
-
-            protein_df = pd.read_csv(protein_output, sep="\t")
+            protein_df = await asyncio.to_thread(pd.read_csv, protein_output, sep="\t")
             result.total_proteins = len(protein_df)
 
             await self._send_progress(
@@ -543,7 +559,7 @@ class ProcessingOrchestrator:
             result.diff_expression_path = str(de_output)
 
             # Count significant proteins
-            de_df = pd.read_csv(de_output, sep="\t")
+            de_df = await asyncio.to_thread(pd.read_csv, de_output, sep="\t")
             significant = de_df[de_df["adjPval"] < config.pvalue_threshold]
             result.significant_proteins = len(significant)
 
@@ -588,6 +604,7 @@ class ProcessingOrchestrator:
             gsea_results = await gsea_service.run_gsea_analysis(
                 diff_expression_path=de_output,
                 output_dir=results_dir / "gsea",
+                protein_abundance_path=protein_output if protein_output.exists() else None
             )
 
             gsea_service.save_results(gsea_output)
@@ -631,11 +648,13 @@ class ProcessingOrchestrator:
 
             # Clear session_id before returning
             self._current_session_id = None
+            self._pipeline_state = None
             return result
 
         except Exception as e:
             # Clear session_id on error
             self._current_session_id = None
+            self._pipeline_state = None
 
             # Mark step as failed
             current_step = state.data["current_step"]

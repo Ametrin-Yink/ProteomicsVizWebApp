@@ -18,23 +18,27 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       return [];
     }
 
-    // Group by condition, filter out negative values and zeros (missing data)
+    // Group by condition, include ALL samples (even with zero/missing values)
+    // Filter out metadata columns like PSM_Count
     const conditionData: { [condition: string]: { samples: string[]; abundances: number[] } } = {};
 
     data.samples.forEach((sample, i) => {
+      // Skip metadata columns
+      if (sample === 'PSM_Count' || sample === 'psm_count' || sample === 'Protein') {
+        return;
+      }
+
       const condition = data.conditions?.[i] || 'Unknown';
       const abundance = data.abundances?.[i];
 
-      // Filter out negative, undefined, null, or zero values (treat as missing)
-      if (abundance === undefined || abundance === null || abundance <= 0) {
-        return; // Skip missing/invalid values
-      }
+      // Include all values, treating undefined/null as 0
+      const validAbundance = abundance === undefined || abundance === null ? 0 : abundance;
 
       if (!conditionData[condition]) {
         conditionData[condition] = { samples: [], abundances: [] };
       }
       conditionData[condition].samples.push(sample);
-      conditionData[condition].abundances.push(abundance);
+      conditionData[condition].abundances.push(validAbundance);
     });
 
     const colors: Record<string, string> = {
@@ -75,7 +79,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
         font: { size: 14, color: '#111827' },
       },
       xaxis: {
-        title: { text: 'Sample', font: { size: 12 } },
+        title: { text: 'Sample', font: { size: 12 }, standoff: 20 },
         tickangle: -45,
         tickfont: { size: 9 },
         gridcolor: '#E5E7EB',
@@ -89,13 +93,13 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       showlegend: true,
       legend: {
         orientation: 'h' as const,
-        y: -0.25,
+        y: 1.1,
         x: 0.5,
         xanchor: 'center' as const,
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 40, b: 100 },
+      margin: { l: 60, r: 30, t: 80, b: 100 },
       barmode: 'group' as const,
     }),
     [title]
@@ -177,9 +181,10 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
         font: { size: 14, color: '#111827' },
       },
       xaxis: {
-        title: { text: 'Sample', font: { size: 12 } },
+        title: { text: 'Sample', font: { size: 12 }, standoff: 20 },
         tickangle: -45,
         gridcolor: '#E5E7EB',
+        type: 'category' as const,
       },
       yaxis: {
         title: { text: 'Abundance', font: { size: 12 } },
@@ -190,12 +195,12 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
       legend: {
         orientation: 'h' as const,
         x: 0.5,
-        y: -0.3,
+        y: 1.1,
         xanchor: 'center' as const,
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 40, b: 100 },
+      margin: { l: 50, r: 30, t: 80, b: 100 },
     }),
     [title]
   );

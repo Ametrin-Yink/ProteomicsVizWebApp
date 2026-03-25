@@ -4,6 +4,7 @@ GSEA analysis service (Step 9).
 Performs Gene Set Enrichment Analysis using gseapy.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -34,7 +35,8 @@ class GSEAService:
         self,
         diff_expression_path: Path,
         output_dir: Path,
-        databases: Optional[list[DatabaseType]] = None
+        databases: Optional[list[DatabaseType]] = None,
+        protein_abundance_path: Optional[Path] = None
     ) -> dict[str, GSEAResults]:
         """
         Run GSEA analysis on all databases.
@@ -50,7 +52,16 @@ class GSEAService:
         logger.info("Step 9: Running GSEA analysis")
         
         # Load differential expression data
-        diff_df = pd.read_csv(diff_expression_path, sep='\t')
+        diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_path, sep='\t')
+
+        # Load protein abundance data for heatmap (if available)
+        protein_df = None
+        if protein_abundance_path and protein_abundance_path.exists():
+            try:
+                protein_df = await asyncio.to_thread(pd.read_csv, protein_abundance_path, sep='\t')
+                logger.info(f"Loaded protein abundance data: {len(protein_df)} proteins")
+            except Exception as e:
+                logger.warning(f"Could not load protein abundance data: {e}")
         
         # Prepare ranked list
         rnk = self._prepare_ranked_list(diff_df)
@@ -78,7 +89,8 @@ class GSEAService:
                 result = await self._run_single_gsea(
                     rnk=rnk,
                     gene_set=db_name,
-                    output_dir=output_dir / db_type.value
+                    output_dir=output_dir / db_type.value,
+                    protein_df=protein_df
                 )
                 
                 self.results[db_type.value] = result
@@ -162,7 +174,8 @@ class GSEAService:
         self,
         rnk: pd.DataFrame,
         gene_set: str,
-        output_dir: Path
+        output_dir: Path,
+        protein_df: Optional[pd.DataFrame] = None
     ) -> GSEAResults:
         """
         Run GSEA for a single database.
@@ -226,14 +239,15 @@ class GSEAService:
                 lead_genes = []
                 if 'Lead_genes' in row:
                     lead_genes_str = str(row['Lead_genes'])
-                    lead_genes = [g.strip() for g in lead_genes_str.split(',') if g.strip()]
+                    # gseapy output uses semicolons to separate genes
+                    lead_genes = [g.strip() for g in lead_genes_str.split(';') if g.strip()]
 
                 # Count matched genes
                 matched_genes = int(row.get('Tag %', '0').split('/')[0]) if 'Tag %' in row else 0
 
                 # Generate running enrichment score curve
                 running_es_curve = self._generate_running_es_curve(
-                    ranked_genes, lead_genes, nes
+                    ranked_genes, lead_genes, nes, ranked_metrics
                 )
 
                 # Generate rank metric positions for leading edge genes
@@ -241,6 +255,11 @@ class GSEAService:
                 for i, (gene, metric) in enumerate(zip(ranked_genes, ranked_metrics)):
                     if gene in lead_genes:
                         rank_metric_positions.append((gene, i, float(metric)))
+
+                # Generate heatmap data for leading edge genes
+                heatmap_data = None
+                if protein_df is not None and len(lead_genes) > 0:
+                    heatmap_data = self._generate_heatmap_data(protein_df, lead_genes)
 
                 result = GSEAResult(
                     term=term,
@@ -252,7 +271,8 @@ class GSEAService:
                     lead_genes=lead_genes,
                     matched_genes=matched_genes,
                     running_es_curve=running_es_curve,
-                    rank_metric_positions=rank_metric_positions
+                    rank_metric_positions=rank_metric_positions,
+                    heatmap_data=heatmap_data
                 )
 
                 gsea_results.append(result)
@@ -288,20 +308,27 @@ class GSEAService:
         self,
         ranked_genes: list[str],
         lead_genes: list[str],
-        nes: float
+        nes: float,
+        ranked_metrics: Optional[list[float]] = None
     ) -> list[tuple[int, float]]:
         """
-        Generate the running enrichment score curve.
+        Generate the running enrichment score curve using the classic GSEA algorithm.
 
-        This calculates the actual GSEA running sum statistic using the
-        classic Kolmogorov-Smirnov style random walk:
-        - Increase when encountering a pathway gene (lead gene)
-        - Decrease when encountering a non-pathway gene
+        This implements the standard GSEA running sum statistic:
+        - For hits (genes in pathway): increment by |r|^p / sum(|r|^p for hits)
+        - For misses (genes not in pathway): decrement by 1/(N-n)
+
+        Where:
+        - N = total number of genes
+        - n = number of hits (genes in pathway)
+        - r = ranking metric value
+        - p = exponent (usually 1 for preranked)
 
         Args:
             ranked_genes: Full list of genes in ranked order
             lead_genes: Genes belonging to the pathway
             nes: Normalized enrichment score (used to scale the curve)
+            ranked_metrics: Optional ranking metric values for weighted calculation
 
         Returns:
             List of (rank, es) tuples representing the curve
@@ -315,49 +342,161 @@ class GSEAService:
         N = len(ranked_genes)
         n = len(lead_genes)
 
-        if n == 0 or N == 0:
+        if n == 0 or N == 0 or n >= N:
             return []
 
-        # Calculate weights for the running sum using classic GSEA formula
-        # For preranked GSEA with equal weights:
-        # - Hit increment: sqrt((N-n)/n)
-        # - Miss decrement: -sqrt((N-n)/(N-n)) = -1 * sqrt((N-n)/n) * (n/(N-n))
-        # Actually, the correct formula is:
-        # - Hit: sqrt((N-n)/n) / (N-n) = 1/sqrt(n*(N-n))
-        # - Miss: -sqrt(n/(N-n)) / n = -1/sqrt(n*(N-n))
-        # But simpler: hits increment by (N-n)/N and misses decrement by n/N
-        # For equal weight preranked GSEA, we use:
-        hit_weight = np.sqrt((N - n) / n)
-        miss_weight = -np.sqrt(n / (N - n))
+        # Classic GSEA running sum calculation
+        # For preranked analysis with equal weights (p=0), each hit contributes 1/n
+        # For weighted analysis (p=1), hits are weighted by |metric|
 
-        # Scale weights to get proper curve shape
-        # The running sum should be: sum(hit_weights) = |sum(miss_weights)|
-        # So we normalize: hit_weight = 1/n and miss_weight = -1/(N-n)
-        # Then scale by sqrt((N-n)/n) for visual consistency
-        hit_increment = 1.0 / n
-        miss_decrement = -1.0 / (N - n)
+        # Use equal weights if no metrics provided
+        if ranked_metrics is None or len(ranked_metrics) != N:
+            # Equal weighting: each hit = 1/n, each miss = -1/(N-n)
+            hit_weight = 1.0 / n
+            miss_weight = -1.0 / (N - n)
 
-        # Calculate running sum
-        running_sum = 0.0
-        curve = []
-        max_deviation = 0.0
+            running_sum = 0.0
+            curve = []
+            max_es = 0.0
+            max_es_sign = 1
 
-        for i, gene in enumerate(ranked_genes):
-            if gene in lead_gene_set:
-                running_sum += hit_increment
-            else:
-                running_sum += miss_decrement
+            for i, gene in enumerate(ranked_genes):
+                if gene in lead_gene_set:
+                    running_sum += hit_weight
+                else:
+                    running_sum += miss_weight
 
-            curve.append((i, running_sum))
-            max_deviation = max(max_deviation, abs(running_sum))
+                curve.append((i, running_sum))
 
-        # Normalize to match the actual ES
-        if max_deviation > 0:
-            scale_factor = abs(nes) / max_deviation
-            curve = [(rank, es * scale_factor * (1 if nes > 0 else -1)) for rank, es in curve]
+                # Track maximum deviation
+                if abs(running_sum) > abs(max_es):
+                    max_es = running_sum
+                    max_es_sign = 1 if running_sum >= 0 else -1
+        else:
+            # Weighted by ranking metric
+            # Calculate sum of |metric| for all hits
+            hit_metrics_sum = 0.0
+            for i, gene in enumerate(ranked_genes):
+                if gene in lead_gene_set:
+                    hit_metrics_sum += abs(ranked_metrics[i])
+
+            if hit_metrics_sum == 0:
+                hit_metrics_sum = 1.0  # Avoid division by zero
+
+            running_sum = 0.0
+            curve = []
+            max_es = 0.0
+            max_es_sign = 1
+
+            for i, gene in enumerate(ranked_genes):
+                if gene in lead_gene_set:
+                    # Weighted hit increment
+                    running_sum += abs(ranked_metrics[i]) / hit_metrics_sum
+                else:
+                    # Miss decrement
+                    running_sum -= 1.0 / (N - n)
+
+                curve.append((i, running_sum))
+
+                # Track maximum deviation
+                if abs(running_sum) > abs(max_es):
+                    max_es = running_sum
+                    max_es_sign = 1 if running_sum >= 0 else -1
+
+        # Normalize to match the actual ES from gseapy
+        # The maximum deviation should equal the reported ES
+        if max_es != 0 and nes != 0:
+            scale_factor = abs(nes) / abs(max_es)
+            target_sign = 1 if nes > 0 else -1
+            sign_correction = target_sign * max_es_sign
+            curve = [(rank, es * scale_factor * sign_correction) for rank, es in curve]
 
         return curve
-    
+
+    def _generate_heatmap_data(
+        self,
+        protein_df: pd.DataFrame,
+        lead_genes: list[str]
+    ) -> Optional[dict]:
+        """
+        Generate heatmap data for leading edge genes.
+
+        Creates z-score transformed protein abundance matrix for heatmap visualization.
+
+        Args:
+            protein_df: Protein abundance DataFrame
+            lead_genes: List of leading edge gene names
+
+        Returns:
+            Dictionary with genes, samples, and z_score matrix, or None if data unavailable
+        """
+        try:
+            # Identify gene column and abundance columns
+            id_cols = ['Master Protein Accessions', 'Gene_Name', 'Gene', 'Protein', 'Master_Protein_Accessions']
+            gene_col = None
+            for col in id_cols:
+                if col in protein_df.columns:
+                    gene_col = col
+                    break
+
+            if gene_col is None:
+                # Try first column as gene column
+                gene_col = protein_df.columns[0]
+
+            # Get abundance columns (numeric columns excluding ID columns)
+            abundance_cols = [
+                col for col in protein_df.columns
+                if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
+            ]
+
+            if len(abundance_cols) == 0:
+                return None
+
+            # Filter to leading edge genes that are in the protein data
+            available_genes = protein_df[gene_col].astype(str).str.upper().tolist()
+            lead_genes_upper = [g.upper() for g in lead_genes]
+
+            # Find matching genes (allowing for partial matches)
+            matched_genes = []
+            matched_indices = []
+            for lead_gene in lead_genes_upper:
+                for i, available in enumerate(available_genes):
+                    if lead_gene in available or available in lead_gene:
+                        matched_genes.append(protein_df.iloc[i][gene_col])
+                        matched_indices.append(i)
+                        break
+
+            if len(matched_genes) == 0:
+                return None
+
+            # Extract abundance data for matched genes
+            heatmap_df = protein_df.iloc[matched_indices][abundance_cols].copy()
+
+            # Calculate z-scores for each gene (row) across samples
+            z_scores = []
+            for _, row in heatmap_df.iterrows():
+                values = row.dropna().values
+                if len(values) > 1:
+                    mean = np.mean(values)
+                    std = np.std(values)
+                    if std > 0:
+                        z_row = [(v - mean) / std if not np.isnan(v) else 0 for v in row.values]
+                    else:
+                        z_row = [0] * len(row)
+                else:
+                    z_row = [0] * len(row)
+                z_scores.append(z_row)
+
+            return {
+                'genes': matched_genes[:50],  # Limit to top 50 genes for display
+                'samples': abundance_cols,
+                'z_scores': z_scores[:50]
+            }
+
+        except Exception as e:
+            logger.warning(f"Could not generate heatmap data: {e}")
+            return None
+
     def get_results(self, database: Optional[str] = None) -> Optional[GSEAResults]:
         """
         Get GSEA results.

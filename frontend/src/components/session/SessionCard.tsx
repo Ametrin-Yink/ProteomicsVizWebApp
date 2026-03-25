@@ -16,7 +16,10 @@ import {
   Clock,
   Trash2,
   Copy,
-  FileText
+  FileText,
+  Edit3,
+  X,
+  Check,
 } from 'lucide-react';
 import type { Session } from '@/types/session';
 import { Button } from '@/components/ui/Button';
@@ -251,6 +254,7 @@ export interface MiniSessionCardProps {
   isActive?: boolean;
   onClick?: () => void;
   onDelete?: () => void;
+  onRename?: (newName: string) => void;
   className?: string;
 }
 
@@ -259,11 +263,46 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
   isActive = false,
   onClick,
   onDelete,
+  onRename,
   className,
 }) => {
   const status = statusConfig[session.status];
   const StatusIcon = status.icon;
   const [showActions, setShowActions] = React.useState(false);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editName, setEditName] = React.useState(session.name);
+
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(true);
+    setEditName(session.name);
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(false);
+    setEditName(session.name);
+  };
+
+  const handleSaveEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (editName.trim() && editName.trim() !== session.name) {
+      onRename?.(editName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (editName.trim() && editName.trim() !== session.name) {
+        onRename?.(editName.trim());
+      }
+      setIsEditing(false);
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setEditName(session.name);
+    }
+  };
 
   return (
     <div
@@ -288,28 +327,71 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
       </div>
 
       <div className="flex-1 min-w-0" onClick={onClick}>
-        <p data-testid="session-name" className="text-sm font-medium text-[#1a1a2e] truncate">
-          {session.name}
-        </p>
-        <p data-testid="session-status" className={cn('text-xs', status.color)}>
-          {status.label}
-        </p>
+        {isEditing ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 min-w-0 px-2 py-1 text-sm border border-cyan-500 rounded focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+              autoFocus
+            />
+            <button
+              onClick={handleSaveEdit}
+              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+              title="Save"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+              title="Cancel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <p data-testid="session-name" className="text-sm font-medium text-[#1a1a2e] truncate">
+              {session.name}
+            </p>
+            <p data-testid="session-status" className={cn('text-xs', status.color)}>
+              {status.label}
+            </p>
+          </>
+        )}
       </div>
 
-      {/* Delete button */}
-      {onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm('Are you sure you want to delete this session?')) {
-              onDelete();
-            }
-          }}
-          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-          title="Delete session"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+      {/* Action buttons */}
+      {!isEditing && (
+        <div className="flex items-center gap-1">
+          {onRename && (
+            <button
+              onClick={handleStartEdit}
+              className="p-1.5 text-gray-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-colors"
+              title="Rename session"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm('Are you sure you want to delete this session?')) {
+                  onDelete();
+                }
+              }}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+              title="Delete session"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

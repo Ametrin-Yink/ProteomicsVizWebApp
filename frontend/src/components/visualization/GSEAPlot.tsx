@@ -78,7 +78,16 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
     // Calculate zero line for the ES curve
     const zeroLineY = new Array(xValues.length).fill(0);
 
-    const traces = [
+    // CRIT-005: Add heatmap data if available
+    const hasHeatmap = pathway.heatmap_data &&
+                       pathway.heatmap_data.genes &&
+                       pathway.heatmap_data.genes.length > 0;
+
+    // Define domain for main plot - leave room for heatmap on right if available
+    const mainPlotDomain = hasHeatmap ? [0, 0.7] : [0, 1];
+    const heatmapDomain = hasHeatmap ? [0.75, 1] : [0, 0];
+
+    const traces: any[] = [
       // Zero reference line
       {
         x: xValues,
@@ -88,6 +97,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         name: 'Zero',
         line: { color: '#000000', width: 1, dash: 'dash' as const },
         yaxis: 'y' as const,
+        xaxis: 'x' as const,
         hoverinfo: 'skip',
         showlegend: false,
       },
@@ -102,6 +112,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         fill: 'tozeroy' as const,
         fillcolor: pathway.es > 0 ? 'rgba(231, 53, 100, 0.3)' : 'rgba(0, 173, 239, 0.3)',
         yaxis: 'y' as const,
+        xaxis: 'x' as const,
         hovertemplate: 'Rank: %{x}<br>ES: %{y:.3f}<extra></extra>',
       },
       // Leading edge markers
@@ -118,6 +129,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
           line: { width: 2 },
         },
         yaxis: 'y' as const,
+        xaxis: 'x' as const,
         hovertemplate: 'Leading Edge Gene<extra></extra>',
         showlegend: false,
       }] : []),
@@ -131,19 +143,48 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
           color: rankMetrics.map((v) => (v > 0 ? '#10B981' : '#EF4444')),
         },
         yaxis: 'y2' as const,
+        xaxis: 'x' as const,
         hovertemplate: 'Rank: %{x}<br>Metric: %{y:.3f}<extra></extra>',
         showlegend: false,
       },
     ];
 
-    const layout = {
+    // Add heatmap trace if data is available
+    if (hasHeatmap) {
+      const heatmapData = pathway.heatmap_data!;
+      traces.push({
+        z: heatmapData.z_scores,
+        x: heatmapData.samples,
+        y: heatmapData.genes,
+        type: 'heatmap',
+        colorscale: 'RdBu',
+        reversescale: true,
+        zmid: 0,
+        zmin: -3,
+        zmax: 3,
+        showscale: true,
+        colorbar: {
+          title: 'Z-score',
+          titleside: 'right',
+          thickness: 15,
+          len: 0.5,
+          y: 0.5,
+          x: 1.02,
+        },
+        yaxis: 'y3',
+        xaxis: 'x2',
+        hovertemplate: 'Gene: %{y}<br>Sample: %{x}<br>Z-score: %{z:.2f}<extra></extra>',
+      });
+    }
+
+    const layout: any = {
       title: {
         text: pathway.name,
         font: { size: 14, color: '#111827' },
       },
       xaxis: {
         title: { text: 'Gene Rank', font: { size: 12 } },
-        domain: [0, 1],
+        domain: mainPlotDomain,
         showgrid: false,
       },
       yaxis: {
@@ -160,9 +201,26 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         zeroline: false,
         showticklabels: false,
       },
+      // Heatmap axes
+      ...(hasHeatmap ? {
+        xaxis2: {
+          domain: heatmapDomain,
+          showgrid: false,
+          tickangle: -45,
+          tickfont: { size: 8 },
+          matches: 'x',
+        },
+        yaxis3: {
+          domain: [0.3, 1],
+          anchor: 'x2',
+          showgrid: false,
+          tickfont: { size: 8 },
+          autorange: 'reversed',
+        },
+      } : {}),
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 60, r: 30, t: 50, b: 50 },
+      margin: { l: 60, r: hasHeatmap ? 100 : 30, t: 50, b: 50 },
       showlegend: true,
       legend: { orientation: 'h' as const, y: 1.1 },
       annotations: [
@@ -175,6 +233,15 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
           showarrow: false,
           font: { size: 11, color: '#6B7280' },
         },
+        ...(hasHeatmap ? [{
+          x: 0.875,
+          y: 1.05,
+          xref: 'paper',
+          yref: 'paper',
+          text: 'Leading Edge Genes (Z-score)',
+          showarrow: false,
+          font: { size: 11, color: '#111827' },
+        }] : []),
       ],
     };
 

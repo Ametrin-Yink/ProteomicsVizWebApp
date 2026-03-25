@@ -118,7 +118,6 @@ async def retry_processing(
     await store.save(session)
 
     # Start processing in background using asyncio.create_task
-    import asyncio
     asyncio.create_task(run_processing_pipeline_async(session_id, session))
 
     return {
@@ -191,7 +190,6 @@ async def start_processing(
 
     # Start processing in background using asyncio.create_task
     # This properly schedules the async function to run
-    import asyncio
     asyncio.create_task(run_processing_pipeline_async(session_id, session))
 
     logger.info(f"Processing started for session {session_id} (async task created)")

@@ -215,6 +215,7 @@ function ProcessingContent() {
     setFirstStepProcessing,
     setCancelled,
     setLogs,
+    setComplete,
     retry,
   } = useProcessingStore();
 
@@ -269,18 +270,27 @@ function ProcessingContent() {
     return () => clearInterval(pollInterval);
   }, [sessionId, isConnected, isComplete, error, setComplete, setLogs]);
 
-  // Start processing after WebSocket is connected (to not miss early updates)
+  // Note: Processing is now started by the analysis page BEFORE navigation
+  // This ensures we don't miss early progress updates (Steps 1-5)
+  // The WebSocket connects after navigation and receives all updates
+  // This useEffect is kept for backward compatibility with retry functionality
   const [hasStarted, setHasStarted] = useState(false);
   useEffect(() => {
+    // Only start processing if we're in a retry scenario (not initial load)
+    // This is detected by checking if steps have been reset
     if (sessionId && isConnected && !hasStarted && !isComplete && !error) {
-      setHasStarted(true);
-      // Start processing now that WebSocket is connected
-      processingAPI.startProcessing(sessionId).catch((err) => {
-        console.error('Failed to start processing:', err);
-        setStartError(err instanceof Error ? err.message : 'Failed to start');
-      });
+      const currentStep = steps[0]?.status;
+      // If all steps are not_started, we might need to start processing
+      // (this would happen on a retry or manual refresh)
+      if (currentStep === 'not_started' && steps.every(s => s.status === 'not_started')) {
+        setHasStarted(true);
+        processingAPI.startProcessing(sessionId).catch((err) => {
+          console.error('Failed to start processing:', err);
+          setStartError(err instanceof Error ? err.message : 'Failed to start');
+        });
+      }
     }
-  }, [sessionId, isConnected, hasStarted, isComplete, error]);
+  }, [sessionId, isConnected, hasStarted, isComplete, error, steps]);
 
   // Initialize on mount
   useEffect(() => {

@@ -114,6 +114,8 @@ export interface QCData {
   total_proteins?: number;
   avg_proteins_per_sample?: number;
   average_cv?: number;
+  average_protein_cv?: number;
+  average_psm_cv?: number;
   completeness_rate?: number;
 }
 

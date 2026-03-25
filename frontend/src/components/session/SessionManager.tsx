@@ -10,14 +10,14 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { 
-  Plus, 
-  ChevronLeft, 
+import {
+  Plus,
+  ChevronLeft,
   ChevronRight,
+  FlaskConical,
   FolderOpen,
   History,
   Settings,
-  FlaskConical
 } from 'lucide-react';
 import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessionStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -39,7 +39,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const router = useRouter();
   const sessions = useSessions() || [];
   const currentSession = useCurrentSession();
-  const { setCurrentSession, addSession, loadSessions, deleteSession } = useSessionStore();
+  const { setCurrentSession, addSession, loadSessions, deleteSession, updateSession } = useSessionStore();
   const { sidebar, toggleSidebar, setSidebarCollapsed } = useUIStore();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
@@ -148,6 +148,30 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     }
   };
 
+  // Handle rename session
+  const handleRenameSession = async (sessionId: string, newName: string) => {
+    try {
+      // Rename on backend
+      await sessionsApi.rename(sessionId, newName);
+      // Update local store
+      updateSession(sessionId, { name: newName });
+      // Show success toast
+      const { addToast } = useUIStore.getState();
+      addToast({
+        type: 'success',
+        message: 'Session renamed successfully',
+      });
+    } catch (error) {
+      console.error('Failed to rename session:', error);
+      // Show error toast
+      const { addToast } = useUIStore.getState();
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to rename session',
+      });
+    }
+  };
+
   // Collapsed sidebar view
   if (sidebar.isCollapsed) {
     return (
@@ -193,7 +217,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 )}
                 title={session.name}
               >
-                <FolderOpen className="w-5 h-5" />
+                <FlaskConical className="w-5 h-5" />
               </button>
             ))}
           </div>
@@ -278,7 +302,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           {sessions.length === 0 ? (
             <div data-testid="no-sessions-message" className="text-center py-8">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#f8f9fc] flex items-center justify-center">
-                <FolderOpen className="w-8 h-8 text-[#94a3b8]" />
+                <FlaskConical className="w-8 h-8 text-[#94a3b8]" />
               </div>
               <p className="text-sm text-[#64748b]">
                 No sessions yet
@@ -303,6 +327,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                         isActive={currentSession?.id === session.id}
                         onClick={() => handleSessionClick(session)}
                         onDelete={() => handleDeleteSession(session.id)}
+                        onRename={(newName) => handleRenameSession(session.id, newName)}
                       />
                     ))}
                   </div>
@@ -323,6 +348,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                         isActive={currentSession?.id === session.id}
                         onClick={() => handleSessionClick(session)}
                         onDelete={() => handleDeleteSession(session.id)}
+                        onRename={(newName) => handleRenameSession(session.id, newName)}
                       />
                     ))}
                   </div>
@@ -343,6 +369,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                         isActive={currentSession?.id === session.id}
                         onClick={() => handleSessionClick(session)}
                         onDelete={() => handleDeleteSession(session.id)}
+                        onRename={(newName) => handleRenameSession(session.id, newName)}
                       />
                     ))}
                   </div>
