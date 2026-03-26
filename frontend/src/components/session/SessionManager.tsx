@@ -316,7 +316,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               {/* Active sessions */}
               {groupedSessions.active.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2 px-1">
+                  <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                     Active
                   </h3>
                   <div className="space-y-2">
@@ -337,7 +338,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               {/* Completed sessions */}
               {groupedSessions.completed.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2 px-1">
+                  <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
                     Completed
                   </h3>
                   <div className="space-y-2">
@@ -358,7 +360,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               {/* Other sessions */}
               {groupedSessions.other.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2 px-1">
+                  <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-gray-500"></span>
                     Other
                   </h3>
                   <div className="space-y-2">
