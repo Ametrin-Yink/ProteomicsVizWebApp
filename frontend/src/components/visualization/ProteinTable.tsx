@@ -240,7 +240,7 @@ export default function ProteinTable({
                     item.log_fc > 0 ? 'text-pink-600' : 'text-blue-600'
                   }`}
                 >
-                  {formatNumber(item.log_fc, 3)}
+                  {item.log_fc > 0 ? '+' : ''}{formatNumber(item.log_fc, 3)}
                 </td>
                 <td className="px-4 py-3 text-right text-gray-600">
                   {formatPValue(item.pval)}
