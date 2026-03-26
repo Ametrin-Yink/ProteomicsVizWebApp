@@ -7,11 +7,13 @@ import { getProteinAbundance, getPSMAbundance } from '@/lib/api';
 import { fetchGeneNames } from '@/lib/uniprot';
 import { ProteinAbundancePlot, PSMAbundancePlot } from './AbundancePlot';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ProteinInfoSkeleton } from '@/components/ui/Skeleton';
 import { Microscope } from 'lucide-react';
 
 interface ProteinInfoProps {
   protein: DEResult | null;
   sessionId: string;
+  isLoading?: boolean;
 }
 
 interface ParsedProteinInfo {
@@ -49,7 +51,7 @@ function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
   return { accessions, geneNames: paddedGeneNames };
 }
 
-export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
+export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinInfoProps) {
   const [proteinAbundance, setProteinAbundance] = useState<ProteinAbundance | null>(null);
   const [psmAbundance, setPsmAbundance] = useState<PSMAbundanceData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,6 +100,10 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
       });
     }
   }, [protein]);
+
+  if (isLoading) {
+    return <ProteinInfoSkeleton />;
+  }
 
   if (!protein) {
     return (
