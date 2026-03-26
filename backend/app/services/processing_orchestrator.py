@@ -161,6 +161,11 @@ class ProcessingOrchestrator:
         self.progress_callbacks: list[Callable[[ProcessingProgress], None]] = []
         self._current_session_id: Optional[str] = None
         self._pipeline_state: Optional[PipelineState] = None
+        # Batching state for progress updates
+        self._pending_progress: Optional[ProcessingProgress] = None
+        self._last_send_time: float = 0
+        self._min_interval: float = 1.0  # Minimum 1 second between updates
+        self._flush_task: Optional[asyncio.Task] = None
 
     def register_progress_callback(
         self, callback: Callable[[ProcessingProgress], None]
@@ -173,11 +178,48 @@ class ProcessingOrchestrator:
         self.progress_callbacks.append(callback)
 
     async def _send_progress(self, progress: ProcessingProgress) -> None:
-        """Send progress update to all registered callbacks.
+        """Send progress update to all registered callbacks with batching.
 
         Args:
             progress: Progress update
         """
+        # Store as pending
+        self._pending_progress = progress
+
+        # Check if we should send now
+        current_time = asyncio.get_event_loop().time()
+        time_since_last = current_time - self._last_send_time
+
+        if time_since_last >= self._min_interval:
+            # Send immediately
+            if self._flush_task:
+                self._flush_task.cancel()
+                self._flush_task = None
+            await self._flush_progress()
+        else:
+            # Schedule flush after remaining interval
+            delay = self._min_interval - time_since_last
+            if self._flush_task:
+                self._flush_task.cancel()
+            self._flush_task = asyncio.create_task(self._delayed_flush(delay))
+
+    async def _delayed_flush(self, delay: float) -> None:
+        """Flush progress after delay, unless superseded."""
+        try:
+            await asyncio.sleep(delay)
+            await self._flush_progress()
+        except asyncio.CancelledError:
+            pass
+
+    async def _flush_progress(self) -> None:
+        """Send pending progress update to all registered callbacks."""
+        if self._pending_progress is None:
+            return
+
+        progress = self._pending_progress
+        self._pending_progress = None
+        self._last_send_time = asyncio.get_event_loop().time()
+
         logger.info(f"_send_progress: step {progress.step}, status {progress.status}, callbacks={len(self.progress_callbacks)}")
 
         # Also send as log message for activity log
