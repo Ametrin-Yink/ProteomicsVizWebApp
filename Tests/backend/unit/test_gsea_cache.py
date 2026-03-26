@@ -3,6 +3,10 @@ from app.services.gsea_cache_service import gsea_cache_service, GSEACacheKey
 
 
 class TestGSEACacheService:
+    def setup_method(self):
+        """Clear cache before each test."""
+        gsea_cache_service.clear()
+
     def test_cache_key_generation(self):
         """Test that cache keys are generated consistently."""
         proteins = ["P123", "P456", "P789"]
@@ -18,7 +22,7 @@ class TestGSEACacheService:
         """Test storing and retrieving cached results."""
         from app.models.data import GSEAResults, GSEAResult
 
-        key = GSEACacheKey.create(["P1"], ["G1"], ("T", "C"), "GO_BP")
+        key = GSEACacheKey.create(["P1_STORE"], ["G1_STORE"], ("T", "C"), "GO_BP_STORE")
         result = GSEAResults(
             database="GO_BP",
             total_pathways=10,
@@ -36,7 +40,7 @@ class TestGSEACacheService:
 
     def test_cache_miss_returns_none(self):
         """Test that cache miss returns None."""
-        key = GSEACacheKey.create(["P1"], ["G1"], ("T", "C"), "GO_BP")
+        key = GSEACacheKey.create(["P1_MISS"], ["G1_MISS"], ("T", "C"), "GO_BP_MISS")
 
         result = gsea_cache_service.get(key)
 
