@@ -94,6 +94,35 @@ class Settings(BaseSettings):
         description="WebSocket ping timeout in seconds",
     )
 
+    # Performance optimization settings
+    use_parquet: bool = Field(
+        default=True,
+        description="Use Parquet format for intermediate files (faster I/O)",
+    )
+
+    parquet_compression: str = Field(
+        default="zstd",
+        description="Parquet compression codec (zstd, snappy, gzip)",
+    )
+
+    # GSEA cache settings
+    gsea_cache_enabled: bool = Field(
+        default=True,
+        description="Enable GSEA result caching",
+    )
+
+    gsea_cache_ttl_hours: int = Field(
+        default=168,  # 7 days
+        description="GSEA cache time-to-live in hours",
+        ge=1,
+        le=720,  # Max 30 days
+    )
+
+    @property
+    def gsea_cache_dir(self) -> Path:
+        """Directory for GSEA cache files."""
+        return self.sessions_dir / ".cache" / "gsea"
+
     @field_validator("sessions_dir", "protein_database_dir", mode="before")
     @classmethod
     def resolve_path(cls, v: Optional[Path | str]) -> Path:
@@ -108,6 +137,9 @@ class Settings(BaseSettings):
         """Ensure required directories exist."""
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.protein_database_dir.mkdir(parents=True, exist_ok=True)
+        # Create GSEA cache directory if caching is enabled
+        if self.gsea_cache_enabled:
+            self.gsea_cache_dir.mkdir(parents=True, exist_ok=True)
 
 
 # Global settings instance
