@@ -25,21 +25,32 @@ This document outlines the workflow for the Performance Optimization phase of th
 
 ---
 
-## Phase 2: Vectorized Operations + Batch WebSocket (Current)
+## Phase 2: Vectorized Operations + Batch WebSocket ✅ COMPLETE
 
 **Goal:** Optimize Python data processing and reduce WebSocket overhead.
 
-### Tasks:
+**Completed:**
+- ✅ Vectorized Step 3 Razor Removal (`backend/app/services/data_processor.py`)
+- ✅ Batch WebSocket Updates (`backend/app/services/processing_orchestrator.py`)
 
-1. **Vectorize Step 3 (Razor Removal)**
-   - File: `backend/app/services/data_processor.py`
-   - Replace `iterrows()` with vectorized pandas operations
-   - Add performance regression test
+**Commits:**
+- `94aa1d3` - perf: vectorize Step 3 razor removal
+- `4a3c3dc` - perf: batch WebSocket progress updates
 
-2. **Batch WebSocket Updates**
-   - File: `backend/app/services/processing_orchestrator.py`
-   - Minimum 1-second interval between updates
-   - Queue rapid updates and flush periodically
+**Expected Savings:** ~1-5 seconds (Step 3) + reduced WebSocket overhead
+
+---
+
+## Phase 3: Combined R Script (Next)
+
+**Goal:** Eliminate R cold start overhead by combining Steps 6+7.
+
+**Planned Tasks:**
+1. Create combined R script (`backend/scripts/msqrob2_combined.R`)
+2. Add wrapper support (`backend/app/services/msqrob2_wrapper.py`)
+3. Integration tests
+
+**Expected Savings:** 10-15 seconds (one less R cold start)
 
 ---
 
