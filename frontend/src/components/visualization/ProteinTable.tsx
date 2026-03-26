@@ -213,7 +213,7 @@ export default function ProteinTable({
                 onClick={() => onSelectProtein(item)}
                 className={`cursor-pointer hover:bg-blue-50 transition-colors ${
                   selectedProteins.has(item.master_protein_accessions)
-                    ? 'bg-blue-50'
+                    ? 'bg-[#E73564]/10 ring-2 ring-[#E73564] ring-inset'
                     : ''
                 }`}
                 data-testid="protein-table-row"
