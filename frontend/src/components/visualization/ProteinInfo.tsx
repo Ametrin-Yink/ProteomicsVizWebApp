@@ -6,6 +6,8 @@ import { formatNumber, formatPValue } from '@/lib/utils';
 import { getProteinAbundance, getPSMAbundance } from '@/lib/api';
 import { fetchGeneNames } from '@/lib/uniprot';
 import { ProteinAbundancePlot, PSMAbundancePlot } from './AbundancePlot';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Microscope } from 'lucide-react';
 
 interface ProteinInfoProps {
   protein: DEResult | null;
@@ -99,12 +101,11 @@ export default function ProteinInfo({ protein, sessionId }: ProteinInfoProps) {
 
   if (!protein) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="text-center text-gray-500 py-8">
-          <p className="text-lg font-medium">No Protein Selected</p>
-          <p className="text-sm mt-2">Click on a point in the volcano plot or a row in the table to view protein details.</p>
-        </div>
-      </div>
+      <EmptyState
+        title="No Protein Selected"
+        description="Click on a point in the volcano plot or a row in the table to view protein details."
+        icon={<Microscope className="w-8 h-8 text-gray-400" />}
+      />
     );
   }
 
