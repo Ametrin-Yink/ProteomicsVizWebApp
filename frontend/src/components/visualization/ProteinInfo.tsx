@@ -67,6 +67,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinIn
     }
 
     async function fetchAbundanceData() {
+      if (!protein) return;
       setLoading(true);
       setError(null);
       try {
