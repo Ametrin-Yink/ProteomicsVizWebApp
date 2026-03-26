@@ -7,7 +7,8 @@ import ProteinInfo from '@/components/visualization/ProteinInfo';
 import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
 import { getDEResults } from '@/lib/api';
-import { SlidersHorizontal, X } from 'lucide-react';
+import { FilterPanel } from '@/components/visualization/FilterPanel';
+
 
 // Mock session ID - in production this would come from context or URL
 const SESSION_ID = 'mock-session-id';
@@ -194,146 +195,12 @@ function ResultsContent() {
           {/* Left Column - Volcano Plot */}
           <div className="lg:col-span-2 space-y-6">
             {/* Filters */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <SlidersHorizontal className="w-4 h-4" />
-                  <span className="font-medium">Filters</span>
-                </div>
-
-                {selectedProteins.size > 0 && (
-                  <span data-testid="selection-count" className="text-sm text-gray-600">
-                    {selectedProteins.size} selected
-                  </span>
-                )}
-              </div>
-
-              {/* Filter controls - always visible */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fold Change Threshold
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      data-testid="logfc-threshold-slider"
-                      type="range"
-                      min="0"
-                      max="5"
-                      step="0.5"
-                      value={filters.foldChange}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          foldChange: parseFloat(e.target.value),
-                        }))
-                      }
-                      className="flex-1"
-                    />
-                    <input
-                      data-testid="logfc-threshold-input"
-                      type="number"
-                      min="0"
-                      max="5"
-                      step="0.1"
-                      value={filters.foldChange}
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value);
-                        if (!isNaN(value) && value >= 0 && value <= 5) {
-                          setFilters((prev) => ({
-                            ...prev,
-                            foldChange: value,
-                          }));
-                        }
-                      }}
-                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    P-value Threshold
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      data-testid="pvalue-threshold-slider"
-                      type="range"
-                      min="0.001"
-                      max="1"
-                      step="0.001"
-                      value={filters.pValue}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          pValue: parseFloat(e.target.value),
-                        }))
-                      }
-                      className="flex-1"
-                    />
-                    <input
-                      data-testid="pvalue-threshold-input"
-                      type="number"
-                      min="0.001"
-                      max="1"
-                      step="0.001"
-                      value={filters.pValue}
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value);
-                        if (!isNaN(value) && value >= 0.001 && value <= 1) {
-                          setFilters((prev) => ({
-                            ...prev,
-                            pValue: value,
-                          }));
-                        }
-                      }}
-                      className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Adj P-value Threshold
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      data-testid="adjpvalue-threshold-slider"
-                      type="range"
-                      min="0.001"
-                      max="1"
-                      step="0.001"
-                      value={filters.adjPValue}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          adjPValue: parseFloat(e.target.value),
-                        }))
-                      }
-                      className="flex-1"
-                    />
-                    <input
-                      data-testid="adjpvalue-threshold-input"
-                      type="number"
-                      min="0.001"
-                      max="1"
-                      step="0.001"
-                      value={filters.adjPValue}
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value);
-                        if (!isNaN(value) && value >= 0.001 && value <= 1) {
-                          setFilters((prev) => ({
-                            ...prev,
-                            adjPValue: value,
-                          }));
-                        }
-                      }}
-                      className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <FilterPanel
+              foldChange={filters.foldChange}
+              pValue={filters.pValue}
+              adjPValue={filters.adjPValue}
+              onChange={(newFilters) => setFilters(newFilters)}
+            />
 
             {/* Volcano Plot */}
             <VolcanoPlot
