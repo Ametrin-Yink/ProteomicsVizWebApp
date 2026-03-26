@@ -167,8 +167,8 @@ export async function uploadCompoundFile(page: Page, filePath: string): Promise<
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles(absolutePath);
 
-  // Wait for upload to complete
-  await expect(page.locator('[data-testid="compound-upload-success"]')).toBeVisible({ timeout: 10000 });
+  // Wait for upload to complete - use specific locator within compound info section
+  await expect(page.locator('[data-testid="compound-info"] [data-testid="compound-upload-success"]').first()).toBeVisible({ timeout: 10000 });
 }
 
 /**

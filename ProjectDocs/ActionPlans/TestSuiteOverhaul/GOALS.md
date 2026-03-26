@@ -1,261 +1,372 @@
 # Test Suite Goals: ProteomicsViz WebApp
 
-## What "Functional" Means
-
-A test suite that gives **real confidence** the webapp works. Tests must:
-1. **Fail** when functionality is broken
-2. **Pass** only when functionality actually works
-3. **Never** give false confidence
+**Practical Standard: Tests Prove The WebApp Works for Real Users**
 
 ---
 
-## Critical User Workflows (Must Be Tested)
+## What "Functional WebApp" Means
 
-### Workflow 1: Complete Analysis Pipeline
-**User journey:** Upload → Configure → Process → View Results
+The test suite passes when a user can successfully:
 
-**Success Criteria:**
-- User can upload 6+ PSM CSV files (3 treatment + 3 control)
-- Files are validated (correct columns, filename format)
-- Analysis config is saved (treatment, control, organism)
-- Processing starts and completes all 9 steps
-- Results are generated (protein abundance, differential expression)
-- QC plots are viewable (PCA, volcano)
-- GSEA results are available
+### Critical User Story 1: New Analysis
+1. Land on welcome page → See session list
+2. Click template → Get new session → Redirected to analysis page
+3. Upload 6 CSV files → See files in table with correct condition names
+4. Set treatment/control/organism → See green checkmarks/validation
+5. Configure razor/filtering options → See summary update
+6. Click Start → Redirected to processing page
+7. See progress bar moving, steps completing (1→9), logs streaming
+8. Auto-redirect to results when complete → See volcano plot with points
+9. Click points in volcano → See protein details panel
+10. Navigate to QC → See PCA plot with samples separated by condition
+11. Navigate to GSEA → See heatmap with pathways
 
-**Test Type:** E2E with real browser, real backend, real R processing
+### Critical User Story 2: Resume Analysis
+1. Return to welcome page → See previous session in list
+2. Click session → Back to results → Data still there
+3. Refresh page → Session restored
 
----
-
-### Workflow 2: Session Lifecycle
-**User journey:** Create → Configure → Process → Results → Delete
-
-**Success Criteria:**
-- Session is created with unique ID
-- Session persists across page reloads
-- Session survives browser restart (stored in backend)
-- Session can be deleted and removed from list
-- Sessions display correct status (created/configuring/processing/completed)
-
-**Test Type:** Integration tests + E2E
+### Critical User Story 3: Error Recovery
+1. Upload invalid file → See specific error message (what's wrong + how to fix)
+2. Set treatment=control → See validation error before start
+3. Processing fails → See error message with step number → Can retry
+4. Session deleted → 404 page with clear message
 
 ---
 
-### Workflow 3: File Upload & Validation
-**User journey:** Select files → Validation feedback → Success/Error
+## The Testing Standard
 
-**Success Criteria:**
-- Valid PSM files accepted (correct filename pattern: `PSM_*_*_*.csv`)
-- Invalid filenames rejected with clear error
-- CSV columns validated (Sequence, Modifications, Charge, Contaminant, Master Protein Accessions, Quan Info, Abundance)
-- Missing required columns detected
-- Multiple files uploaded simultaneously
+### Test Pass Criteria
 
-**Test Type:** Unit tests (parsing) + Integration tests (API) + E2E (UI flow)
+A test **PASSES** only when:
+1. **UI elements render** (visual confirmation - screenshots)
+2. **User interactions work** (clicks, uploads, selections)
+3. **Data is correct** (specific values, not just "not null")
+4. **State persists** (reload page, data still there)
 
----
+A test **FAILS** when:
+1. Any assertion fails (specific, no ranges)
+2. Console has errors
+3. Network request fails (4xx/5xx)
+4. UI element missing or wrong content
 
-### Workflow 4: Analysis Configuration
-**User journey:** Set treatment → Set control → Select organism → Configure Razor Peptide Handling → Configure Data Quality Filtering → Validate
+### What's NOT Acceptable (Unreliable Tests)
 
-**Success Criteria:**
-- Config saved to session
-- Treatment ≠ Control (validation error if same)
-- Organism must be valid (human, mouse, rat)
-- **Razor Peptide Handling option configured (remove_razor: true/false)**
-  - When true: Peptides mapping to multiple proteins are resolved to single best protein (Step 3 executed)
-  - When false: Razor peptides kept as-is, may map to multiple proteins (Step 3 skipped)
-  - Best protein selected by: most peptides matched → longest sequence → first in list
-  - Results in more consistent protein quantification when enabled
-- **Data Quality Filtering options configured (strict_filtering: true/false)**
-  - When strict (true):
-    - Remove PSMs with >20% missing values per condition
-    - Remove proteins with only 1 PSM (single-peptide proteins excluded)
-  - When lenient (false):
-    - Remove PSMs with >40% missing values per condition
-    - Single-peptide proteins allowed
-  - Both modes apply: remove contaminants, "No Value" quan, abundance < 1
-- All required fields enforced before processing
-- Processing pipeline respects all configuration options
+```typescript
+// ❌ BAD - Multiple acceptable outcomes
+test('upload works', async () => {
+  const response = await uploadFiles();
+  expect([200, 201, 204]).toContain(response.status); // GIVES FALSE CONFIDENCE
+});
 
-**Test Type:** Integration tests + E2E
+// ❌ BAD - No data verification
+test('results load', async () => {
+  await page.goto('/analysis/visualization');
+  await expect(page.locator('[data-testid="results"]')).toBeVisible(); // ANYTHING PASSES
+});
 
-**Test Cases - Config Combinations:**
-| Config | remove_razor | strict_filtering | Expected Behavior |
-|--------|--------------|------------------|-------------------|
-| Conservative | true | true | Razor resolved, 20% missing threshold, no single-PSM proteins |
-| Balanced | true | false | Razor resolved, 40% missing threshold, single-PSM proteins allowed |
-| Inclusive | false | true | Razor kept, 20% missing threshold, no single-PSM proteins |
-| Permissive | false | false | Razor kept, 40% missing threshold, single-PSM proteins allowed |
-
-**Key Test Assertions:**
-1. **Config persistence:** All 5 settings saved and retrieved correctly
-2. **Razor handling impact:** Protein counts differ between remove_razor=true/false
-3. **Filtering impact:** PSM counts differ between strict_filtering=true/false
-4. **Validation:** Cannot start processing without all required fields
-5. **UI state:** Checkbox states persist on page reload
-
----
-
-### Workflow 5: Real-Time Processing
-**User journey:** Start → See progress → Completion notification → Auto-redirect
-
-**Success Criteria:**
-- WebSocket connects and shows "Connected"
-- Progress bar updates for each of 9 steps
-- Log messages display in real-time
-- All steps complete without error
-- Auto-redirect to results page on completion
-- Estimated time remaining is shown
-
-**Test Type:** E2E (requires running backend + browser)
-
----
-
-### Workflow 6: Results Display
-**User journey:** Navigate to results → View tables → View plots → Export
-
-**Success Criteria:**
-- DE results table displays with correct columns
-- Volcano plot renders with interactive points
-- PCA plot shows sample clustering
-- GSEA heatmap displays
-- CSV export downloads correct data
-- PDF report generates
-
-**Test Type:** E2E (with seeded/known results data)
-
----
-
-### Workflow 7: Error Handling
-**User journey:** Encounter error → See clear message → Recovery path
-
-**Success Criteria:**
-- Insufficient replicates error (need ≥3 per condition)
-- Invalid file format error
-- R processing error (missing packages, data issues)
-- Network errors handled gracefully
-- Validation errors show before processing starts
-- Error messages include actionable suggestions
-
-**Test Type:** Integration tests + E2E
-
----
-
-## Test Pyramid Structure
-
-```
-       /\
-      /  \      E2E Tests (8 suites) - Full workflows
-     /    \     - Real browser + real backend
-    /______\    - Verify end-to-end functionality
-   /        \
-  /__________\  Integration Tests (API + Services)
- /            \ - Real backend, test DB/session store
-/______________\ - HTTP endpoints, R subprocess, file I/O
-
-   Unit Tests (Pure Functions)
-   - File parsing (no I/O)
-   - Data validation
-   - Utility functions
+// ❌ BAD - Tests mocks
+test('processing starts', async () => {
+  const mockStart = jest.fn();
+  await startProcessing(mockStart);
+  expect(mockStart).toHaveBeenCalled(); // DOESN'T TEST REAL FUNCTIONALITY
+});
 ```
 
-### Distribution
-- **Unit tests:** ~20% - Fast, isolated, reliable
-- **Integration tests:** ~30% - API endpoints, services
-- **E2E tests:** ~50% - Critical user workflows
+---
+
+## Bug Discovery Protocol (CRITICAL)
+
+When tests reveal a bug, **DO NOT FIX IT IMMEDIATELY**. Follow this process:
+
+### Step 1: Log the Bug (Required)
+Add the bug to the BugFix action plan files **before** attempting any fix:
+
+1. **Add to bug-inventory.md** - Include:
+   - Bug ID (auto-increment from existing, e.g., CRIT-010, MAJ-011, MIN-010)
+   - Severity (Critical/Major/Minor)
+   - Description - What fails in the test
+   - Reproduction steps - The exact test that fails
+   - Expected behavior - What the test asserts should happen
+   - Actual behavior - What actually happens
+   - Evidence - Screenshot path, error message, console log
+
+2. **Update README.md** - Add bug to the summary table
+
+**Bug File Locations:**
+- `ProjectDocs/ActionPlans/BugFix/bug-inventory.md` - Full bug details
+- `ProjectDocs/ActionPlans/BugFix/README.md` - Bug status summary
+- `ProjectDocs/ActionPlans/BugFix/fixed-bugs.md` - After fix is verified
+
+### Step 2: Continue Testing
+- Mark the failing test as `test.skip()` or `test.fixme()`
+- Document the skip reason with bug ID
+- Continue with other tests
+- Do NOT let one bug block the entire test suite
+
+### Step 3: Fix During BugFix Phase
+- Only fix bugs after inventory is complete
+- Follow the systematic debugging process in `AGENTS/`
+- Verify fix with browser test + screenshot
+- Mark as fixed in bug-inventory.md
+- Move to fixed-bugs.md with root cause
+
+### Why This Rule Exists
+
+1. **Prevents context switching** - Fix bugs in batches, not one-by-one
+2. **Maintains test suite integrity** - Skipped tests document known issues
+3. **Enables prioritization** - All bugs visible for triage
+4. **Prevents half-fixes** - Bugs get proper root cause analysis
+5. **Creates audit trail** - Every bug tracked from discovery to resolution
+
+### Example: Test Finds a Bug
+
+```typescript
+// Test discovers volcano plot not rendering
+test('volcano plot displays data points', async () => {
+  // ... test code ...
+
+  // BUG FOUND: No data points visible
+  // await expect(points).toHaveCount(2847); // FAILS
+
+  test.skip(true, 'MAJ-011: Volcano plot data points not rendering - see bug-inventory.md');
+});
+```
+
+Then immediately add to `bug-inventory.md`:
+```markdown
+| MAJ-011 | Volcano plot not rendering data points after processing completes | Open |
+```
+
+With full details in the file.
 
 ---
 
-## What Makes a Test "Reliable"
+## Minimal Test Coverage (What's Actually Required)
 
-### ✅ Reliable Test Characteristics
+### E2E Tests (Playwright) - The Core 5 Workflows
 
-1. **Deterministic:** Same input → Same output, every time
-2. **Isolated:** No dependencies on other tests or test order
-3. **Verifies actual behavior, not implementation details:**
-   ```python
-   # GOOD - verifies behavior
-   assert response.json()['data']['total_proteins'] > 0
+These are **non-negotiable** - without these, we don't know if the app works.
 
-   # BAD - verifies implementation detail
-   assert mock_function.called_once()
-   ```
-4. **Fails fast with clear error messages**
-5. **No "acceptable" status code ranges:**
-   ```python
-   # GOOD - specific assertion
-   assert response.status_code == 200
+#### E2E Test 1: Complete Analysis Flow
+**User:** Researcher wants to run differential expression analysis
 
-   # BAD - gives false confidence
-   assert response.status_code in [200, 404]
-   ```
+**Steps:**
+1. Navigate to welcome page → Verify title, template cards visible
+2. Click "Protein Pair-wise Comparison" → Verify redirect to /analysis?session=XXX
+3. Upload 6 PSM files → Verify files appear in table with correct conditions
+4. Configure: treatment=INCZ123456, control=DMSO, organism=human, remove_razor=true, strict_filtering=true
+5. Click Start → Verify redirect to /analysis/processing
+6. Verify WebSocket connects → Progress bar moves → Steps 1-9 complete
+7. Auto-redirect to /analysis/visualization → Verify volcano plot renders with data points
+8. Click point on volcano → Verify protein info panel shows data
+9. Navigate to QC tab → Verify PCA plot shows sample separation
+10. Navigate to GSEA tab → Verify heatmap displays
 
-### ❌ Unreliable Test Characteristics
-
-1. **Accepts multiple outcomes** (`in [200, 404]`)
-2. **Tests mocks instead of real behavior**
-3. **Depends on timing/sleep** (`await page.waitForTimeout(5000)`)
-4. **No assertions on data** (only checks element exists)
-5. **Catches and swallows errors** (`.catch()` or try/except that doesn't assert)
+**Success Criteria:**
+- All UI assertions pass (visible, correct text)
+- Processing completes (state === 'completed')
+- Results have actual data (protein count > 0)
+- Screenshots captured at key steps
 
 ---
 
-## Test Data Strategy
+#### E2E Test 2: Session Persistence
+**User:** Researcher returns to previous analysis
 
-### For E2E Tests
-- Use real SampleData files (PSM_SampleData_*.csv)
-- Create sessions with predictable names
-- Clean up sessions after tests (via API)
+**Steps:**
+1. Create session, upload files, configure
+2. Navigate back to welcome page → Verify session appears in list
+3. Click session → Verify back to analysis page with files/config intact
+4. Refresh page → Verify session restored from URL
+5. Close browser, reopen, go to session URL → Verify still works
 
-### For Integration Tests
-- Use TestClient with temp session store
-- Create test fixtures with minimal data
-- Reset state between tests
-
-### For Unit Tests
-- Mock file inputs (DataFrames)
-- No external dependencies
-- Parametrize edge cases
+**Success Criteria:**
+- Session data persists across navigation
+- Config values preserved
+- File list preserved
 
 ---
 
-## Success Criteria for Test Overhaul
+#### E2E Test 3: Configuration Variations
+**User:** Researcher wants to test different filtering settings
 
-1. **All critical workflows have E2E coverage**
-2. **No test accepts multiple status codes** (except genuine redirects)
-3. **Every API test verifies response data, not just status**
-4. **Unit tests only test pure functions** (no I/O, no mocks of internal code)
-5. **Integration tests use real backend, not mocked services**
-6. **Tests fail when functionality breaks** (verified by temporarily breaking code)
-7. **Test suite runs in < 10 minutes** (parallel where possible)
-8. **No flaky tests** (run 5 times, same results)
+**Steps (4 separate test runs):**
+1. Config A: remove_razor=false, strict_filtering=false → Run → Check results
+2. Config B: remove_razor=false, strict_filtering=true → Run → Check results (fewer proteins)
+3. Config C: remove_razor=true, strict_filtering=false → Run → Check results (different proteins)
+4. Config D: remove_razor=true, strict_filtering=true → Run → Check results (most filtered)
 
----
-
-## Out of Scope (Not Testing)
-
-These are intentionally NOT tested (or tested minimally):
-
-1. **Visual regression** - Pixel-perfect UI matching (too brittle)
-2. **Performance benchmarks** - Load testing (separate effort)
-3. **Third-party R packages** - Assume msqrob2/QFeatures work (test our integration only)
-4. **Browser-specific quirks** - Test Chrome only (Playwright default)
-5. **Mobile responsiveness** - Basic smoke test only (not full workflow)
+**Success Criteria:**
+- Different configs produce measurably different results
+- PSM counts differ between strict/lenient
+- Protein counts differ between razor on/off
 
 ---
 
-## Definition of Done
+#### E2E Test 4: Error Handling
+**User:** Researcher makes mistakes, needs clear feedback
+
+**Steps:**
+1. Upload invalid filename → Verify error message explains required format
+2. Upload file with missing columns → Verify error lists missing columns
+3. Set treatment=control → Verify validation error before processing
+4. Start without enough files → Verify "at least 6 files" error
+5. Delete session → Verify 404 on subsequent access
+
+**Success Criteria:**
+- Error messages are specific and actionable
+- UI prevents invalid actions where possible
+- Errors don't crash the app
+
+---
+
+#### E2E Test 5: Processing Recovery
+**User:** Researcher handles processing failure
+
+**Steps:**
+1. Start processing → Simulate/cause failure at step 3
+2. Verify error displayed with step number
+3. Click Retry → Verify processing restarts
+4. Complete successfully → Verify results available
+
+**Success Criteria:**
+- Failed state is clear
+- Retry works
+- No data corruption
+
+---
+
+### Integration Tests (pytest) - API Contract Verification
+
+These verify backend endpoints work in isolation.
+
+#### Required Integration Tests:
+
+1. **Session CRUD**
+   - POST /api/sessions → Returns 201, has id, name, state='created'
+   - GET /api/sessions/{id} → Returns 200 with same data
+   - PUT /api/sessions/{id}/config → Validates treatment≠control
+   - DELETE /api/sessions/{id} → Returns 204, subsequent GET returns 404
+
+2. **File Upload**
+   - POST /api/sessions/{id}/upload/proteomics → 200, file stored, metadata correct
+   - Invalid filename → 400 with specific error message
+   - Session not found → 404
+
+3. **Processing Control**
+   - POST /api/analysis/{id}/start → 202, state changes to 'processing'
+   - Without config → 400
+   - Without files → 400
+   - Cancel → state changes to 'cancelled'
+
+4. **Results Retrieval**
+   - GET /api/viz/{id}/results → Returns array with log_fc, pval, adj_pval
+   - GET /api/viz/{id}/qc/plots → Returns pca, pvalue_distribution
+   - GET /api/viz/{id}/gsea/go_bp → Returns results array
+   - No results yet → 404 (not empty 200)
+
+---
+
+### Unit Tests - Pure Functions Only
+
+These test data transformation logic without I/O.
+
+#### Required Unit Tests:
+
+1. **file_parser.py**
+   - `parse_psm_filename("PSM_Exp_Cond_1.csv")` → Returns correct experiment/condition/replicate
+   - Invalid filenames → Raises InvalidFileFormatError
+
+2. **data_processor.py**
+   - `step3_remove_razor(data, config)` → Removes razor peptides when config.remove_razor=true
+   - `step5_filter_by_criteria(data, strict=true)` → Filters more aggressively
+   - Edge cases: empty data, all NaN, single protein
+
+3. **validators.py** (if exists)
+   - Treatment≠control validation
+   - Organism enum validation
+
+---
+
+## What's NOT Required (Over-testing)
+
+Don't write tests for:
+
+1. **Internal implementation details**
+   - Function call order
+   - Private method behavior
+   - Store implementation
+
+2. **Third-party libraries**
+   - R/msqrob2 correctness (test our integration only)
+   - Pandas operations
+   - Plotly rendering
+
+3. **Visual perfection**
+   - Pixel-perfect matching
+   - Animation timings
+   - Responsive breakpoints
+
+4. **Every error case**
+   - Focus on user-facing errors
+   - Skip "should never happen" internal errors
+
+---
+
+## Test Data Requirements
+
+### For E2E Tests:
+- **6 real PSM files** from SampleData/ (3 DMSO + 3 treatment)
+- Each file ~1000+ rows
+- Valid columns present
+
+### For Integration Tests:
+- **Minimal CSV fixtures** (10-20 rows)
+- Stored in Tests/fixtures/
+- Same format as real files
+
+### For Unit Tests:
+- **Mock DataFrames**
+- Created in test code
+- No file I/O
+
+---
+
+## Success Metrics
 
 The test overhaul is complete when:
 
-- [ ] All 7 critical workflows have automated E2E tests
-- [ ] Razor Peptide Handling configuration tested with both settings (true/false)
-- [ ] Data Quality Filtering configuration tested with both settings (strict/lenient)
-- [ ] Configuration combinations tested (4 combinations table above)
-- [ ] All API endpoints have integration tests with data verification
-- [ ] All pure functions have unit tests
-- [ ] Running the test suite catches the bugs we've already fixed
-- [ ] No test gives false confidence (verified by code review)
-- [ ] Test documentation exists (this file + README)
-- [ ] CI can run the full suite and it passes
+- [ ] E2E Test 1 passes (full analysis flow)
+- [ ] E2E Test 2 passes (session persistence)
+- [ ] E2E Test 3 passes (all 4 config combinations)
+- [ ] E2E Test 4 passes (error handling)
+- [ ] E2E Test 5 passes (processing recovery)
+- [ ] Integration tests cover all API endpoints
+- [ ] Unit tests cover file_parser and data_processor
+- [ ] Tests catch real bugs (verified by breaking code temporarily)
+- [ ] Tests run in < 10 minutes total
+- [ ] No flaky tests (5 consecutive runs, all pass)
+
+---
+
+## Out of Scope
+
+1. **Load testing** - Not required for functional verification
+2. **Security testing** - Separate concern
+3. **Accessibility testing** - Nice to have, not critical
+4. **Cross-browser testing** - Chrome only is fine
+5. **Mobile testing** - Desktop focus only
+
+---
+
+## The "Golden Rule"
+
+> If a user can't do it through the UI, don't test it.
+> If a user CAN do it and it breaks, the test must fail.
+
+This means:
+- ✅ Test: Upload → Process → Results (user does this)
+- ❌ Don't test: Internal function returns correct dict (user never sees this)
+- ✅ Test: Error message displays (user sees this)
+- ❌ Don't test: Exception is raised internally (user doesn't see this)

@@ -61,20 +61,20 @@ class TestRScripts:
     def test_verify_r_packages_script_exists(self):
         """Verify R package verification script exists."""
         from pathlib import Path
-        script_path = Path(__file__).parent.parent.parent / "scripts" / "verify_r_packages.R"
+        script_path = Path(__file__).parent.parent.parent.parent / "backend" / "scripts" / "verify_r_packages.R"
 
         assert script_path.exists()
 
     def test_msqrob2_protein_script_exists(self):
         """Verify protein abundance script exists."""
         from pathlib import Path
-        script_path = Path(__file__).parent.parent.parent / "scripts" / "msqrob2_protein.R"
+        script_path = Path(__file__).parent.parent.parent.parent / "backend" / "scripts" / "msqrob2_protein.R"
 
         assert script_path.exists()
 
     def test_msqrob2_de_script_exists(self):
         """Verify DE analysis script exists."""
         from pathlib import Path
-        script_path = Path(__file__).parent.parent.parent / "scripts" / "msqrob2_de.R"
+        script_path = Path(__file__).parent.parent.parent.parent / "backend" / "scripts" / "msqrob2_de.R"
 
         assert script_path.exists()

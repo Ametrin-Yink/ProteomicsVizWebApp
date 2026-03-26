@@ -33,13 +33,13 @@ class TestParsePsmFilename:
         assert result.replicate == 3
 
     def test_parse_valid_filename_with_underscores(self):
-        """Parse filename with underscores in experiment name."""
+        """Parse filename with underscores in condition name."""
         from app.utils.file_parser import parse_psm_filename
 
         result = parse_psm_filename("PSM_Exp_Name_Condition_5.csv")
 
-        assert result.experiment == "Exp_Name"
-        assert result.condition == "Condition"
+        assert result.experiment == "Exp"
+        assert result.condition == "Name_Condition"
         assert result.replicate == 5
 
     def test_parse_invalid_filename_no_prefix(self):

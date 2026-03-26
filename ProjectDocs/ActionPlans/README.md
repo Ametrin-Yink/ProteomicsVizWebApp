@@ -31,7 +31,7 @@ This directory contains prioritized action plans for improving the ProteomicsViz
 
 ## Phase 1: BugFix
 
-**Status:** Ready to start
+**Status:** Done
 **Next step:** Create bug inventory with reproduction steps
 
 See [BugFix/README.md](BugFix/README.md) for details.
@@ -40,7 +40,7 @@ See [BugFix/README.md](BugFix/README.md) for details.
 
 ## Phase 2: TestSuiteOverhaul
 
-**Status:** Blocked until bugs are fixed
+**Status:** Done
 **Goal:** Replace unreliable tests with trustworthy integration tests
 
 See [TestSuiteOverhaul/README.md](TestSuiteOverhaul/README.md) for details.
@@ -49,7 +49,7 @@ See [TestSuiteOverhaul/README.md](TestSuiteOverhaul/README.md) for details.
 
 ## Phase 3: PerformanceOptimization
 
-**Status:** Blocked until tests are reliable
+**Status:** Ready to go
 **Goal:** Profile bottlenecks, optimize processing pipeline
 
 See [PerformanceOptimization/README.md](PerformanceOptimization/README.md) for details.

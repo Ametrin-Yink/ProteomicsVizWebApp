@@ -417,7 +417,7 @@ function ProcessingContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div data-testid="processing-page" className="min-h-screen bg-gray-50 flex">
       {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-screen" />
 
