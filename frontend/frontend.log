@@ -731,3 +731,85 @@ Error: socket hang up
  GET /analysis?session=94a80026-934a-457f-b609-ebd6675b1e73 200 in 30ms (compile: 4ms, render: 26ms)
  GET / 200 in 52ms (compile: 4ms, render: 48ms)
  GET /analysis?session=7c9b9d0d-3cd3-467d-bd77-460216e04af5 200 in 26ms (compile: 4ms, render: 23ms)
+ GET / 200 in 189ms (compile: 40ms, render: 149ms)
+ GET /analysis?session=ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5 200 in 31ms (compile: 6ms, render: 25ms)
+ GET /analysis/processing?session_id=ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5 200 in 47ms (compile: 6ms, render: 40ms)
+Failed to proxy http://127.0.0.1:8000/api/sessions Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://127.0.0.1:8000/api/sessions/ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5/logs Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+ GET /analysis/visualization?session_id=ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5 200 in 54ms (compile: 7ms, render: 47ms)
+ GET /analysis/visualization/qc?session_id=ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5 200 in 33ms (compile: 6ms, render: 27ms)
+ GET /analysis/visualization/bioinformatics?session_id=ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5 200 in 33ms (compile: 6ms, render: 27ms)
+ GET /analysis/visualization/bioinformatics?session_id=ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5 200 in 96ms (compile: 6ms, render: 90ms)
+ GET /analysis/visualization/bioinformatics?session_id=ea4fe1cd-ac23-4723-a1aa-fd9f20e71ad5 200 in 197ms (compile: 51ms, render: 146ms)
+ GET /analysis/visualization?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 37ms (compile: 9ms, render: 28ms)
+ GET /analysis/visualization/qc?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 32ms (compile: 7ms, render: 25ms)
+ GET /analysis/visualization/bioinformatics?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 27ms (compile: 4ms, render: 23ms)
+ GET / 200 in 71ms (compile: 7ms, render: 64ms)
+ GET /analysis 200 in 77ms (compile: 7ms, render: 70ms)
+ GET /analysis?session=3bc164fc-f90b-4cfd-abc8-b3069ff3fb74 200 in 39ms (compile: 9ms, render: 30ms)
+ GET / 200 in 24ms (compile: 5ms, render: 19ms)
+ GET /analysis/visualization?session_id=3bc164fc-f90b-4cfd-abc8-b3069ff3fb74 200 in 48ms (compile: 5ms, render: 43ms)
+ GET /analysis/visualization?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 29ms (compile: 5ms, render: 24ms)
+ GET / 200 in 58ms (compile: 5ms, render: 53ms)
+ GET /analysis?session=04ddd849-0a9f-4b36-b553-eaecaa464cc9 200 in 20ms (compile: 4ms, render: 16ms)
+ GET /analysis/visualization?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 25ms (compile: 4ms, render: 21ms)
+ GET /analysis/visualization/qc?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 25ms (compile: 4ms, render: 20ms)
+ GET /analysis/visualization/bioinformatics?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 24ms (compile: 4ms, render: 20ms)
+ GET / 200 in 55ms (compile: 4ms, render: 51ms)
+ GET /analysis?session=41c18e0f-6aa1-4957-b92f-b90a5ddf8ecc 200 in 20ms (compile: 4ms, render: 16ms)
+ GET /analysis/visualization?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 23ms (compile: 3ms, render: 20ms)
+ GET /analysis/visualization?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 64ms (compile: 4ms, render: 61ms)
+✓ Compiled in 254ms
+✓ Compiled in 62ms
+✓ Compiled in 110ms
+
+thread 'tokio-runtime-worker' (11580) panicked at turbopack\crates\turbo-persistence\src\static_sorted_file.rs:586:26:
+slice index starts at 5619964 but ends at 41322
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\44506\AppData\Local\Temp\next-panic-d82d17695bda2868735b2550179cc47d.log.
+
+To help make Turbopack better, report this error by ]8;;https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A%0ACaused%20by%3A%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%0ADebug%20info%3A%0A-%20Execution%20of%20hmr_update_with_issues_operation%20failed%0A-%20Execution%20of%20Project%3A%3Ahmr_update%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget_asset%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Acompute_entry%20failed%0A-%20Execution%20of%20%2Aemit_assets%20failed%0A-%20Execution%20of%20all_assets_from_entries_operation%20failed%0A-%20Execution%20of%20%2Aall_assets_from_entries%20failed%0A-%20Execution%20of%20endpoint_output_assets_operation%20failed%0A-%20Execution%20of%20%3CAppEndpoint%20as%20Endpoint%3E%3A%3Aoutput%20failed%0A-%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A-%20Execution%20of%20all_server_paths%20failed%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace\clicking here.]8;;\
+-----
+
+✓ Compiled in 180ms
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\44506\AppData\Local\Temp\next-panic-d82d17695bda2868735b2550179cc47d.log.
+
+To help make Turbopack better, report this error by ]8;;https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A%0ACaused%20by%3A%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%0ADebug%20info%3A%0A-%20Execution%20of%20Project%3A%3Ahmr_version_state%20failed%0A-%20Execution%20of%20Project%3A%3Ahmr_version%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget_asset%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Acompute_entry%20failed%0A-%20Execution%20of%20%2Aemit_assets%20failed%0A-%20Execution%20of%20all_assets_from_entries_operation%20failed%0A-%20Execution%20of%20%2Aall_assets_from_entries%20failed%0A-%20Execution%20of%20endpoint_output_assets_operation%20failed%0A-%20Execution%20of%20%3CAppEndpoint%20as%20Endpoint%3E%3A%3Aoutput%20failed%0A-%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A-%20Execution%20of%20all_server_paths%20failed%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace\clicking here.]8;;\
+-----
+
+ GET /analysis/visualization?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 463ms (compile: 156ms, render: 307ms)
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\44506\AppData\Local\Temp\next-panic-d82d17695bda2868735b2550179cc47d.log.
+
+To help make Turbopack better, report this error by ]8;;https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A%0ACaused%20by%3A%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%0ADebug%20info%3A%0A-%20Execution%20of%20Project%3A%3Ahmr_version_state%20failed%0A-%20Execution%20of%20Project%3A%3Ahmr_version%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget_asset%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Acompute_entry%20failed%0A-%20Execution%20of%20%2Aemit_assets%20failed%0A-%20Execution%20of%20all_assets_from_entries_operation%20failed%0A-%20Execution%20of%20%2Aall_assets_from_entries%20failed%0A-%20Execution%20of%20endpoint_output_assets_operation%20failed%0A-%20Execution%20of%20%3CAppEndpoint%20as%20Endpoint%3E%3A%3Aoutput%20failed%0A-%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A-%20Execution%20of%20all_server_paths%20failed%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace\clicking here.]8;;\
+-----
+
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\44506\AppData\Local\Temp\next-panic-d82d17695bda2868735b2550179cc47d.log.
+
+To help make Turbopack better, report this error by ]8;;https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A%0ACaused%20by%3A%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%0ADebug%20info%3A%0A-%20Execution%20of%20Project%3A%3Ahmr_version_state%20failed%0A-%20Execution%20of%20Project%3A%3Ahmr_version%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Aget_asset%20failed%0A-%20Execution%20of%20VersionedContentMap%3A%3Acompute_entry%20failed%0A-%20Execution%20of%20%2Aemit_assets%20failed%0A-%20Execution%20of%20all_assets_from_entries_operation%20failed%0A-%20Execution%20of%20%2Aall_assets_from_entries%20failed%0A-%20Execution%20of%20endpoint_output_assets_operation%20failed%0A-%20Execution%20of%20%3CAppEndpoint%20as%20Endpoint%3E%3A%3Aoutput%20failed%0A-%20Failed%20to%20write%20app%20endpoint%20%2Fanalysis%2Fvisualization%2Fqc%2Fpage%0A-%20Execution%20of%20all_server_paths%20failed%0A-%20slice%20index%20starts%20at%205619964%20but%20ends%20at%2041322%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace\clicking here.]8;;\
+-----
+
+ GET /analysis/visualization?session_id=85be7501-69e9-4561-b69c-ba69c12aeb0e 200 in 51ms (compile: 3ms, render: 48ms)
+ GET /analysis?session=5bc85776-3907-483a-b31f-daba40bd7776 200 in 175ms (compile: 102ms, render: 73ms)
+[?25h
