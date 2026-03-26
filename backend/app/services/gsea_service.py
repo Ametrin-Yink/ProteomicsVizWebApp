@@ -16,6 +16,7 @@ import gseapy as gp
 from app.core.exceptions import ProcessingError
 from app.models.data import GSEAResults, GSEAResult
 from app.models.analysis import DatabaseType, DATABASE_NAMES
+from app.services.gsea_cache_service import gsea_cache_service, GSEACacheKey
 
 logger = logging.getLogger("proteomics")
 
@@ -39,18 +40,19 @@ class GSEAService:
         protein_abundance_path: Optional[Path] = None
     ) -> dict[str, GSEAResults]:
         """
-        Run GSEA analysis on all databases.
-        
+        Run GSEA analysis on all databases in parallel with caching.
+
         Args:
             diff_expression_path: Path to Diff_Expression.tsv
             output_dir: Directory for GSEA output
             databases: List of databases to analyze (defaults to all)
-            
+            protein_abundance_path: Optional path to protein abundances for heatmap
+
         Returns:
             Dictionary mapping database name to GSEAResults
         """
-        logger.info("Step 9: Running GSEA analysis")
-        
+        logger.info("Step 9: Running GSEA analysis (parallel with caching)")
+
         # Load differential expression data
         diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_path, sep='\t')
 
@@ -62,48 +64,61 @@ class GSEAService:
                 logger.info(f"Loaded protein abundance data: {len(protein_df)} proteins")
             except Exception as e:
                 logger.warning(f"Could not load protein abundance data: {e}")
-        
+
         # Prepare ranked list
         rnk = self._prepare_ranked_list(diff_df)
-        
+
         if rnk is None or len(rnk) == 0:
             logger.warning("No valid data for GSEA analysis")
             return {}
-        
+
+        # Extract cache key components
+        protein_ids = diff_df['Master_Protein_Accessions'].tolist() if 'Master_Protein_Accessions' in diff_df.columns else []
+        gene_names = diff_df['Gene_Name'].tolist() if 'Gene_Name' in diff_df.columns else []
+
         # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Determine databases to analyze
         if databases is None:
             databases = list(DatabaseType)
-        
-        # Run GSEA for each database
+
+        # Run GSEA for each database in parallel
         self.results = {}
-        
-        for db_type in databases:
+
+        async def run_single_db(db_type: DatabaseType) -> tuple[str, GSEAResults]:
+            """Run GSEA for a single database with caching."""
             db_name = DATABASE_NAMES.get(db_type, db_type.value)
-            
+
+            # Check cache first
+            cache_key = GSEACacheKey.create(protein_ids, gene_names, ("Treatment", "Control"), db_type.value)
+            cached_result = gsea_cache_service.get(cache_key)
+
+            if cached_result is not None:
+                logger.info(f"GSEA cache HIT for {db_name}")
+                return (db_type.value, cached_result)
+
+            # Run analysis
             try:
                 logger.info(f"Running GSEA for {db_name}")
-                
+
                 result = await self._run_single_gsea(
                     rnk=rnk,
                     gene_set=db_name,
                     output_dir=output_dir / db_type.value,
                     protein_df=protein_df
                 )
-                
-                self.results[db_type.value] = result
-                
-                logger.info(
-                    f"GSEA complete for {db_name}: "
-                    f"{result.significant_pathways} significant pathways"
-                )
-                
+
+                # Cache result
+                gsea_cache_service.store(cache_key, result)
+
+                logger.info(f"GSEA complete for {db_name}: {result.significant_pathways} significant pathways")
+
+                return (db_type.value, result)
+
             except Exception as e:
                 logger.error(f"GSEA failed for {db_name}: {e}")
-                # Continue with other databases
-                self.results[db_type.value] = GSEAResults(
+                result = GSEAResults(
                     database=db_name,
                     total_pathways=0,
                     significant_pathways=0,
@@ -111,9 +126,18 @@ class GSEAService:
                     underrepresented=0,
                     results=[]
                 )
-        
-        logger.info("Step 9 complete: GSEA analysis finished")
-        
+                return (db_type.value, result)
+
+        # Run all databases in parallel
+        tasks = [run_single_db(db) for db in databases]
+        results_list = await asyncio.gather(*tasks)
+
+        # Combine results
+        self.results = dict(results_list)
+
+        total_pathways = sum(r.significant_pathways for r in self.results.values())
+        logger.info(f"Step 9 complete: GSEA analysis finished, {total_pathways} total significant pathways")
+
         return self.results
     
     def _prepare_ranked_list(self, diff_df: pd.DataFrame) -> Optional[pd.DataFrame]:
