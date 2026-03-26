@@ -207,7 +207,7 @@ class DataProcessor:
         self,
         df: pd.DataFrame
     ) -> pd.DataFrame:
-        """Step 3: Remove razor peptides by selecting best protein match.
+        """Step 3: Remove razor peptides by selecting best protein match (vectorized).
 
         For peptides matching multiple proteins, selects the best match based on:
         1. Most peptides matched
@@ -227,33 +227,27 @@ class DataProcessor:
             logger.info("Step 3: Skipping razor removal (disabled)")
             return df
 
-        logger.info("Step 3: Removing razor peptides")
+        logger.info("Step 3: Removing razor peptides (vectorized)")
 
         # Count peptides per protein across ALL samples
         protein_peptide_counts = self._count_peptides_per_protein(df)
 
-        # Create a mapping of Unique_PSM to best protein (global, not per-sample)
-        psm_to_best_protein = {}
+        # Get unique PSMs with their protein lists (first occurrence)
+        unique_psm_df = df.drop_duplicates(subset=['Unique_PSM'])[['Unique_PSM', 'Master_Protein_Accessions']]
 
-        # Group by unique PSM only (across all samples)
-        for unique_psm, group in df.groupby('Unique_PSM'):
-            # Get all protein matches from first row (should be same across group)
-            proteins = str(group['Master_Protein_Accessions'].iloc[0]).split(';')
-            proteins = [p.strip() for p in proteins if p.strip()]
-
+        # Vectorized selection of best protein for each unique PSM
+        def select_best_for_psm(proteins_str: str) -> str:
+            proteins = [p.strip() for p in proteins_str.split(';') if p.strip()]
             if len(proteins) <= 1:
-                # Single protein - no razor to resolve
-                psm_to_best_protein[unique_psm] = proteins[0] if proteins else ''
-            else:
-                # Multiple proteins - select best one
-                best_protein = self._select_best_protein(
-                    proteins,
-                    protein_peptide_counts,
-                    self.config.fasta_db
-                )
-                psm_to_best_protein[unique_psm] = best_protein
+                return proteins[0] if proteins else ''
+            # Multiple proteins - select best one
+            return self._select_best_protein(proteins, protein_peptide_counts, self.config.fasta_db)
 
-        # Apply the mapping to all rows
+        # Apply vectorized function to get best protein for each unique PSM
+        unique_psm_df['Best_Protein'] = unique_psm_df['Master_Protein_Accessions'].apply(select_best_for_psm)
+
+        # Create mapping and apply to all rows
+        psm_to_best_protein = unique_psm_df.set_index('Unique_PSM')['Best_Protein'].to_dict()
         df['Master_Protein_Accessions'] = df['Unique_PSM'].map(psm_to_best_protein)
 
         logger.info(f"Step 3 complete: Razor peptides resolved, {len(df)} rows")
@@ -264,24 +258,26 @@ class DataProcessor:
         self,
         df: pd.DataFrame
     ) -> Dict[str, int]:
-        """Count peptides per protein across all samples.
-        
+        """Count peptides per protein across all samples (vectorized).
+
         Args:
             df: DataFrame with protein accessions
-            
+
         Returns:
             Dictionary mapping protein ID to peptide count
         """
-        counts = {}
-        
-        for _, row in df.iterrows():
-            proteins = str(row['Master_Protein_Accessions']).split('; ')
-            for protein in proteins:
-                protein = protein.strip()
-                if protein:
-                    counts[protein] = counts.get(protein, 0) + 1
-        
-        return counts
+        # Vectorized: split and explode all protein accessions at once
+        protein_counts = (
+            df['Master_Protein_Accessions']
+            .str.split(';')
+            .explode()
+            .str.strip()
+            .loc[lambda x: x != '']
+            .value_counts()
+            .to_dict()
+        )
+
+        return protein_counts
     
     def _select_best_protein(
         self,
