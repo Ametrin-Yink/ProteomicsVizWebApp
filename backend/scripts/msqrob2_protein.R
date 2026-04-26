@@ -105,8 +105,13 @@ if ("Sample_Origination" %in% names(psm_data)) {
 
     # Reshape to wide format using data.table::dcast (much faster than base reshape)
     cat("Reshaping to wide format with data.table::dcast...\n")
-    psm_wide_dt <- dcast(psm_dt[, .(Unique_PSM, Sample_Origination, Abundance, Master_Protein_Accessions)],
-                         Unique_PSM + Master_Protein_Accessions ~ Sample_Origination, value.var = "Abundance")
+    # Aggregate by Unique_PSM + Master_Protein_Accessions per sample
+    # Use sum to handle any remaining duplicates (same PSM mapping to same protein)
+    psm_for_cast <- psm_agg[, .(Abundance = sum(Abundance, na.rm = TRUE)),
+                             by = .(Unique_PSM, Master_Protein_Accessions, Sample_Origination)]
+    psm_wide_dt <- dcast(psm_for_cast,
+                         Unique_PSM + Master_Protein_Accessions ~ Sample_Origination,
+                         value.var = "Abundance", fun.aggregate = sum)
     psm_wide <- as.data.frame(psm_wide_dt)
     names(psm_wide) <- gsub("Abundance\\.", "", names(psm_wide))
     
@@ -222,11 +227,10 @@ flush.console()
 cat("Starting aggregation at", format(Sys.time(), "%H:%M:%S"), "\n")
 flush.console()
 
-# Use BiocParallel for parallel per-protein aggregation (Windows-compatible SnowParam)
+# Use BiocParallel for aggregation (SerialParam for stability, parallel can cause issues with rlm)
 library(BiocParallel)
-n_workers <- max(1, parallel::detectCores() - 1)
-param <- SnowParam(workers = min(n_workers, 4), progressbar = FALSE)
-cat("Using BiocParallel with", min(n_workers, 4), "workers for aggregation\n")
+param <- SerialParam()
+cat("Using BiocParallel SerialParam for aggregation\n")
 
 pe <- aggregateFeatures(
     object = pe,
