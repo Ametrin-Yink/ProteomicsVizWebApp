@@ -70,6 +70,23 @@ if (length(abundance_cols) == 0) {
 protein_matrix <- as.matrix(protein_data[, abundance_cols, drop = FALSE])
 rownames(protein_matrix) <- protein_data$Master_Protein_Accessions
 
+# Pre-filter: remove proteins with zero variance (no DE signal, wastes compute)
+cat("Checking for zero-variance proteins...\n")
+var_per_protein <- apply(protein_matrix, 1, function(x) {
+    valid <- x[!is.na(x)]
+    if (length(valid) < 2) return(NA)
+    var(valid)
+})
+zero_var <- which(!is.na(var_per_protein) & var_per_protein == 0)
+if (length(zero_var) > 0) {
+    cat("Pre-filtering", length(zero_var), "zero-variance proteins (will be added back to output)\n")
+    zero_var_ids <- rownames(protein_matrix)[zero_var]
+    protein_matrix <- protein_matrix[-zero_var, , drop = FALSE]
+} else {
+    zero_var_ids <- character(0)
+}
+cat("Matrix after filtering:", nrow(protein_matrix), "proteins x", ncol(protein_matrix), "samples\n")
+
 # Create column data with condition information
 col_data <- data.frame(
     sample = abundance_cols,
@@ -262,6 +279,37 @@ col_order <- c("Master_Protein_Accessions", "Gene_Name", "PSM_Count", "logFC", "
 cols_present <- intersect(col_order, names(results_df))
 other_cols <- setdiff(names(results_df), cols_present)
 results_df <- results_df[, c(cols_present, other_cols)]
+
+# Add back zero-variance proteins with default values (logFC=0, pval=NA, adjPval=NA)
+if (length(zero_var_ids) > 0) {
+    cat("Adding back", length(zero_var_ids), "zero-variance proteins to output\n")
+    zero_var_df <- data.frame(
+        Master_Protein_Accessions = zero_var_ids,
+        stringsAsFactors = FALSE
+    )
+    # Add gene names if available
+    if ("Gene_Name" %in% names(results_df)) {
+        gene_map <- setNames(protein_data$Gene_Name, protein_data$Master_Protein_Accessions)
+        zero_var_df$Gene_Name <- gene_map[zero_var_ids]
+    }
+    # Add PSM counts if available
+    if ("PSM_Count" %in% names(results_df)) {
+        psm_map <- setNames(protein_data$PSM_Count, protein_data$Master_Protein_Accessions)
+        zero_var_df$PSM_Count <- psm_map[zero_var_ids]
+        zero_var_df$PSM_Count[is.na(zero_var_df$PSM_Count)] <- 0
+    }
+    # Set DE values to defaults
+    zero_var_df$logFC <- 0
+    zero_var_df$pval <- NA
+    zero_var_df$adjPval <- NA
+    # Add any other columns that exist in results_df
+    for (col in setdiff(names(results_df), names(zero_var_df))) {
+        zero_var_df[[col]] <- NA
+    }
+    # Reorder to match results_df
+    zero_var_df <- zero_var_df[, names(results_df)]
+    results_df <- rbind(results_df, zero_var_df)
+}
 
 # Write output
 cat("Writing differential expression results to:", output_file, "\n")

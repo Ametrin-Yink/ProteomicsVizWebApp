@@ -42,10 +42,16 @@ if (!file.exists(input_file)) {
     stop(paste("Input file not found:", input_file))
 }
 
-# Read PSM data
+# Read PSM data (detect Parquet vs TSV)
 cat("Reading PSM data...\n")
-psm_data <- read.delim(input_file, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
-cat("Loaded", nrow(psm_data), "PSMs\n")
+if (grepl("\\.parquet$", input_file, ignore.case = TRUE)) {
+    library(arrow)
+    psm_data <- read_parquet(input_file)
+    cat("Loaded", nrow(psm_data), "PSMs from Parquet\n")
+} else {
+    psm_data <- read.delim(input_file, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
+    cat("Loaded", nrow(psm_data), "PSMs from TSV\n")
+}
 
 # Filter out rows with empty Master_Protein_Accessions
 psm_data <- psm_data[psm_data$Master_Protein_Accessions != '' & !is.na(psm_data$Master_Protein_Accessions), ]
@@ -57,9 +63,12 @@ metadata_cols <- c("Sequence", "Modifications", "Charge", "Contaminant",
                    "Condition", "Replicate", "Unique_PSM")
 abundance_cols <- setdiff(names(psm_data), metadata_cols)
 
-# Convert all abundance columns to numeric (they may be read as strings from TSV)
+# Convert all abundance columns to numeric (they may be read as strings from TSV;
+# Parquet preserves types so this is a no-op for Parquet input)
 for (col in abundance_cols) {
-    psm_data[[col]] <- suppressWarnings(as.numeric(psm_data[[col]]))
+    if (!is.numeric(psm_data[[col]])) {
+        psm_data[[col]] <- suppressWarnings(as.numeric(psm_data[[col]]))
+    }
 }
 cat("Converted", length(abundance_cols), "abundance columns to numeric\n")
 
@@ -71,25 +80,33 @@ if (length(abundance_cols) == 0) {
     stop("No abundance columns found in input file")
 }
 
+# Remove proteins where ALL abundance values are NA (would produce NA results regardless)
+if (nrow(psm_data) > 0) {
+    all_na_mask <- rowSums(is.na(psm_data[, abundance_cols, drop = FALSE])) == length(abundance_cols)
+    n_removed <- sum(all_na_mask)
+    if (n_removed > 0) {
+        cat("Removing", n_removed, "proteins with no abundance data\n")
+        psm_data <- psm_data[!all_na_mask, ]
+    }
+}
+
 # Check if data is in long format (has Sample_Origination column) or wide format
 if ("Sample_Origination" %in% names(psm_data)) {
     cat("Data is in long format, reshaping to wide format...\n")
     
-    # Aggregate duplicate PSMs within each sample (sum abundances)
+    # Aggregate duplicate PSMs within each sample (sum abundances) using data.table
     cat("Aggregating duplicate PSMs within each sample...\n")
-    psm_agg <- aggregate(Abundance ~ Unique_PSM + Sample_Origination + Master_Protein_Accessions + Sequence + Modifications + Charge, 
-                         data = psm_data,
-                         FUN = sum)
+    psm_dt <- as.data.table(psm_data)
+    psm_agg <- psm_dt[, .(Abundance = sum(Abundance, na.rm = TRUE)),
+                       by = .(Unique_PSM, Sample_Origination, Master_Protein_Accessions, Sequence, Modifications, Charge)]
+    psm_agg <- as.data.frame(psm_agg)
     cat("Aggregated from", nrow(psm_data), "to", nrow(psm_agg), "rows\n")
-    
-    # Reshape to wide format (samples as columns)
-    cat("Reshaping to wide format...\n")
-    psm_wide <- reshape(psm_agg[, c("Unique_PSM", "Sample_Origination", "Abundance", "Master_Protein_Accessions")],
-                        idvar = c("Unique_PSM", "Master_Protein_Accessions"),
-                        timevar = "Sample_Origination",
-                        direction = "wide")
-    
-    # Rename columns to remove "Abundance." prefix
+
+    # Reshape to wide format using data.table::dcast (much faster than base reshape)
+    cat("Reshaping to wide format with data.table::dcast...\n")
+    psm_wide_dt <- dcast(psm_dt[, .(Unique_PSM, Sample_Origination, Abundance, Master_Protein_Accessions)],
+                         Unique_PSM + Master_Protein_Accessions ~ Sample_Origination, value.var = "Abundance")
+    psm_wide <- as.data.frame(psm_wide_dt)
     names(psm_wide) <- gsub("Abundance\\.", "", names(psm_wide))
     
     cat("Reshaped to wide format:", nrow(psm_wide), "rows x", ncol(psm_wide), "columns\n")
@@ -204,12 +221,19 @@ flush.console()
 cat("Starting aggregation at", format(Sys.time(), "%H:%M:%S"), "\n")
 flush.console()
 
+# Use BiocParallel for parallel per-protein aggregation (Windows-compatible SnowParam)
+library(BiocParallel)
+n_workers <- max(1, parallel::detectCores() - 1)
+param <- SnowParam(workers = min(n_workers, 4), progressbar = FALSE)
+cat("Using BiocParallel with", min(n_workers, 4), "workers for aggregation\n")
+
 pe <- aggregateFeatures(
     object = pe,
     i = "peptide_norm",
     fcol = "Proteins",
     name = "protein",
-    fun = MsCoreUtils::robustSummary
+    fun = MsCoreUtils::robustSummary,
+    BPPARAM = param
 )
 
 cat("Aggregation complete:", nrow(pe[["protein"]]), "proteins\n")

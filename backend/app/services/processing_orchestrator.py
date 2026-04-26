@@ -478,18 +478,25 @@ class ProcessingOrchestrator:
             psm_df = processor.step5_filter_by_criteria(psm_df)
 
             # Save output after Step 5
-            logger.info(f"Step 5: About to save PSM data. DataFrame shape: {psm_df.shape}, output path: {psm_output}")
-            logger.info(f"Step 5: Parent directory exists before mkdir: {psm_output.parent.exists()}")
+            # Determine file format based on config (Parquet for speed, TSV for compatibility)
+            use_parquet = settings.use_parquet
+            if use_parquet:
+                psm_output_parquet = results_dir / "PSM_Abundances.parquet"
+                psm_input_for_r = psm_output_parquet
+                psm_df.to_parquet(
+                    psm_output_parquet,
+                    engine='pyarrow',
+                    compression=settings.parquet_compression,
+                    index=False
+                )
+                logger.info(f"Step 5: Saved Parquet file at {psm_output_parquet}, size: {psm_output_parquet.stat().st_size} bytes")
+            else:
+                psm_input_for_r = psm_output
+                psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
+                logger.info(f"Step 5: Saved TSV file at {psm_output}, size: {psm_output.stat().st_size} bytes")
 
-            psm_output.parent.mkdir(parents=True, exist_ok=True)
-
-            logger.info(f"Step 5: Parent directory exists after mkdir: {psm_output.parent.exists()}")
-
+            # Always save TSV as fallback/debug output
             psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
-
-            logger.info(f"Step 5: File exists after to_csv: {psm_output.exists()}, size: {psm_output.stat().st_size if psm_output.exists() else 'N/A'}")
-
-            # VERIFY FILE WAS ACTUALLY SAVED
             if not psm_output.exists():
                 logger.error(f"Step 5: CRITICAL - File does not exist after save attempt: {psm_output}")
                 raise ProcessingError(
@@ -497,7 +504,6 @@ class ProcessingOrchestrator:
                     step=5,
                     recoverable=False
                 )
-            logger.info(f"Step 5: VERIFIED - File exists at {psm_output}, size: {psm_output.stat().st_size} bytes")
 
             state.mark_step_completed(5, psm_output)
 
@@ -510,9 +516,9 @@ class ProcessingOrchestrator:
             # Step 6: Protein Abundance (R)
             protein_output = results_dir / "Protein_Abundances.tsv"
 
-            logger.info(f"Step 6: About to run protein abundance. Input file exists: {psm_output.exists()}, path: {psm_output}")
-            if psm_output.exists():
-                logger.info(f"Step 6: Input file size: {psm_output.stat().st_size} bytes")
+            logger.info(f"Step 6: About to run protein abundance. Input file exists: {psm_input_for_r.exists()}, path: {psm_input_for_r}")
+            if psm_input_for_r.exists():
+                logger.info(f"Step 6: Input file size: {psm_input_for_r.stat().st_size} bytes")
                 # Log first few lines of input file for debugging
                 try:
                     with open(psm_output, 'r') as f:
@@ -557,7 +563,7 @@ class ProcessingOrchestrator:
                     gene_mapping_file = None
 
                 await msqrob2_wrapper.step6_protein_abundance(
-                    input_file=psm_output,
+                    input_file=psm_input_for_r,
                     output_file=protein_output,
                     gene_mapping_file=gene_mapping_file,
                     log_callback=lambda level, msg: self._send_log(level, msg, step=6)
@@ -614,17 +620,18 @@ class ProcessingOrchestrator:
                 )
             )
 
-            # Step 8: QC Metrics (Python)
+            # Step 8: QC Metrics (Python) - use Parquet if available for faster I/O
             qc_output = results_dir / "QC_Results.json"
 
             await self._send_progress(
                 self._create_progress(8, "started", 0, "Calculating QC metrics...")
             )
 
+            psm_qc_path = psm_input_for_r  # Use Parquet if available
             qc_data = await qc_calculator.calculate_all_metrics(
                 protein_abundances_path=protein_output,
                 diff_expression_path=de_output,
-                psm_abundances_path=psm_output,
+                psm_abundances_path=psm_qc_path,
             )
 
             qc_calculator.save_qc_data(qc_output)
