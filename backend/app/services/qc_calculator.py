@@ -57,13 +57,28 @@ class QCCalculator:
 
         psm_df = None
         if psm_abundances_path and psm_abundances_path.exists():
-            psm_df = await asyncio.to_thread(pd.read_csv, psm_abundances_path, sep='\t')
+            if str(psm_abundances_path).endswith('.parquet'):
+                psm_df = await asyncio.to_thread(pd.read_parquet, psm_abundances_path)
+            else:
+                psm_df = await asyncio.to_thread(pd.read_csv, psm_abundances_path, sep='\t')
         
-        # Calculate metrics
-        psm_cv = self._calculate_cv(psm_df) if psm_df is not None else None
-        protein_cv = self._calculate_protein_cv(protein_df)
-        data_completeness = self._calculate_data_completeness(protein_df)
-        psm_completeness = self._calculate_psm_completeness(psm_df) if psm_df is not None else None
+        # Calculate all independent metrics concurrently on thread pool
+        tasks = [
+            asyncio.to_thread(self._calculate_protein_cv, protein_df),
+            asyncio.to_thread(self._calculate_data_completeness, protein_df),
+            asyncio.to_thread(self._calculate_pca, protein_df),
+            asyncio.to_thread(self._calculate_intensity_distributions, protein_df, psm_df),
+        ]
+        if psm_df is not None:
+            tasks.append(asyncio.to_thread(self._calculate_cv, psm_df))
+            tasks.append(asyncio.to_thread(self._calculate_psm_completeness, psm_df))
+        else:
+            tasks.append(asyncio.to_thread(lambda: None))
+            tasks.append(asyncio.to_thread(lambda: None))
+
+        protein_cv, data_completeness, pca_result, intensity_dist, psm_cv, psm_completeness = (
+            await asyncio.gather(*tasks)
+        )
 
         # Calculate summary statistics
         # MAJ-004: Count unique PSMs, not total rows
@@ -77,13 +92,11 @@ class QCCalculator:
         completeness_rate = self._calculate_completeness_rate(data_completeness)
 
         self.qc_data = QCData(
-            pca=self._calculate_pca(protein_df),
+            pca=pca_result,
             pvalue_distribution=self._calculate_pvalue_distribution(diff_df),
             psm_cv=psm_cv,
             protein_cv=protein_cv,
-            intensity_distributions=self._calculate_intensity_distributions(
-                protein_df, psm_df
-            ),
+            intensity_distributions=intensity_dist,
             data_completeness=data_completeness,
             psm_completeness=psm_completeness,
             # Summary statistics
@@ -336,22 +349,19 @@ class QCCalculator:
                 condition_cols[condition] = []
             condition_cols[condition].append(col)
 
-        # Calculate CV for each protein within each condition
+        # Calculate CV for each protein within each condition (vectorized)
         cv_by_condition = {}
         for condition, cols in condition_cols.items():
-            cv_values = []
-            for _, row in protein_df.iterrows():
-                # Get abundance values for all replicates in this condition
-                log_abundances = row[cols].dropna()
-                if len(log_abundances) > 1:  # Need at least 2 replicates to calculate CV
-                    # Convert log2 abundances back to raw values for CV calculation
-                    raw_abundances = np.power(2, log_abundances)
-                    mean = raw_abundances.mean()
-                    std = raw_abundances.std()
-                    if mean > 0:
-                        cv = (std / mean) * 100  # CV as percentage
-                        cv_values.append(cv)
-            cv_by_condition[str(condition)] = cv_values
+            # Extract matrix: (n_proteins, n_replicates)
+            mat = protein_df[cols].values.astype(float)
+            # Convert log2 abundances back to raw values
+            raw = np.power(2, mat)
+            # Row-wise mean and std (ddof=1 for sample std, matching pandas .std())
+            means = np.nanmean(raw, axis=1)
+            stds = np.nanstd(raw, axis=1, ddof=1)
+            # CV = (std / mean) * 100, filter out invalid values
+            cv_values = np.where(means > 0, (stds / means) * 100, np.nan)
+            cv_by_condition[str(condition)] = cv_values[~np.isnan(cv_values)].tolist()
 
         return cv_by_condition
 

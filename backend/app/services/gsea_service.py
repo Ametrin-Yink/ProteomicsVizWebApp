@@ -4,6 +4,7 @@ GSEA analysis service (Step 9).
 Performs Gene Set Enrichment Analysis using gseapy.
 """
 
+import os
 import asyncio
 import logging
 from pathlib import Path
@@ -86,6 +87,12 @@ class GSEAService:
         # Run GSEA for each database in parallel
         self.results = {}
 
+        # Determine threads per database (avoid oversubscription)
+        n_cores = os.cpu_count() or 4
+        n_dbs = len(databases)
+        threads_per_db = max(1, n_cores // n_dbs)
+        logger.info(f"Allocating {threads_per_db} threads per database ({n_cores} cores / {n_dbs} databases)")
+
         async def run_single_db(db_type: DatabaseType) -> tuple[str, GSEAResults]:
             """Run GSEA for a single database with caching."""
             db_name = DATABASE_NAMES.get(db_type, db_type.value)
@@ -106,7 +113,8 @@ class GSEAService:
                     rnk=rnk,
                     gene_set=db_name,
                     output_dir=output_dir / db_type.value,
-                    protein_df=protein_df
+                    protein_df=protein_df,
+                    threads=threads_per_db
                 )
 
                 # Cache result
@@ -199,7 +207,8 @@ class GSEAService:
         rnk: pd.DataFrame,
         gene_set: str,
         output_dir: Path,
-        protein_df: Optional[pd.DataFrame] = None
+        protein_df: Optional[pd.DataFrame] = None,
+        threads: int = 4
     ) -> GSEAResults:
         """
         Run GSEA for a single database.
@@ -208,6 +217,8 @@ class GSEAService:
             rnk: Ranked gene list
             gene_set: Gene set database name
             output_dir: Output directory
+            protein_df: Optional protein abundance data for heatmap
+            threads: Number of threads for gseapy
 
         Returns:
             GSEAResults object
@@ -215,18 +226,21 @@ class GSEAService:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Run prerank GSEA
-            pre_res = gp.prerank(
-                rnk=rnk,
-                gene_sets=gene_set,
-                outdir=str(output_dir),
-                permutation_num=1000,
-                min_size=15,
-                max_size=500,
-                threads=4,
-                seed=123,
-                verbose=False
-            )
+            # Run prerank GSEA (CPU-intensive, offload to thread)
+            def _run_prerank():
+                return gp.prerank(
+                    rnk=rnk,
+                    gene_sets=gene_set,
+                    outdir=str(output_dir),
+                    permutation_num=1000,
+                    min_size=15,
+                    max_size=500,
+                    threads=threads,
+                    seed=123,
+                    verbose=False
+                )
+
+            pre_res = await asyncio.to_thread(_run_prerank)
 
             # Parse results
             results_df = pre_res.res2d
