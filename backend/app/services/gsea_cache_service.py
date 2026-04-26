@@ -6,6 +6,7 @@ Caches GSEA results keyed by input data hash to avoid redundant computations.
 import hashlib
 import json
 import logging
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Optional
 
@@ -57,15 +58,13 @@ class GSEACacheService:
     def __init__(self, max_size: int = 100):
         """Initialize cache with max size."""
         self._max_size = max_size
-        self._cache: dict[str, GSEAResults] = {}
-        self._access_order: list[str] = []
+        self._cache: OrderedDict[str, GSEAResults] = OrderedDict()
 
     def get(self, key: GSEACacheKey) -> Optional[GSEAResults]:
         """Get cached result if exists."""
         if key.key_hash in self._cache:
-            # Update access order (LRU)
-            self._access_order.remove(key.key_hash)
-            self._access_order.append(key.key_hash)
+            # Update access order (move to end = most recently used)
+            self._cache.move_to_end(key.key_hash)
             logger.debug(f"GSEA cache HIT: {key.key_hash[:16]}...")
             return self._cache[key.key_hash]
 
@@ -76,22 +75,18 @@ class GSEACacheService:
         """Store result in cache."""
         # Evict oldest if at capacity
         if len(self._cache) >= self._max_size and key.key_hash not in self._cache:
-            oldest = self._access_order.pop(0)
-            del self._cache[oldest]
-            logger.debug(f"GSEA cache EVICT: {oldest[:16]}...")
+            oldest_key, _ = self._cache.popitem(last=False)
+            logger.debug(f"GSEA cache EVICT: {oldest_key[:16]}...")
 
-        # Store new result
+        # Store new result (move_to_end if already exists)
         self._cache[key.key_hash] = result
-        if key.key_hash in self._access_order:
-            self._access_order.remove(key.key_hash)
-        self._access_order.append(key.key_hash)
+        self._cache.move_to_end(key.key_hash)
 
         logger.debug(f"GSEA cache STORE: {key.key_hash[:16]}...")
 
     def clear(self) -> None:
         """Clear all cached results."""
         self._cache.clear()
-        self._access_order.clear()
 
     def get_stats(self) -> dict:
         """Get cache statistics."""

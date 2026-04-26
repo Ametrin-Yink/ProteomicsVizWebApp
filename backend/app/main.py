@@ -7,7 +7,7 @@ Initializes the FastAPI application with all routers, middleware, and WebSocket 
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -73,7 +73,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["Content-Type"],
     max_age=3600,
 )
 
@@ -139,7 +139,7 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.app_version,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 

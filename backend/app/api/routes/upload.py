@@ -48,7 +48,7 @@ async def upload_proteomics_files(
         content = await file.read()
         if len(content) > settings.max_upload_size_bytes:
             raise ValidationError(
-                f"File {file.filename} exceeds maximum size of {settings.max_upload_size_mb}MB"
+                message=f"File {file.filename} exceeds maximum size of {settings.max_upload_size_mb}MB"
             )
         
         # Parse and validate
@@ -62,7 +62,7 @@ async def upload_proteomics_files(
             )
             uploaded_files.append(file_info)
         except Exception as e:
-            raise ValidationError(f"Error parsing {file.filename}: {str(e)}")
+            raise ValidationError(message=f"Error parsing {file.filename}: {str(e)}")
     
     # Convert UploadedFileMetadata to ProteomicsFileInfo and update session
     for file_metadata in uploaded_files:
@@ -106,7 +106,7 @@ async def upload_compound_file(
     content = await file.read()
     if len(content) > settings.max_upload_size_bytes:
         raise ValidationError(
-            f"File exceeds maximum size of {settings.max_upload_size_mb}MB"
+            message=f"File exceeds maximum size of {settings.max_upload_size_mb}MB"
         )
     
     # Parse and validate
@@ -118,7 +118,7 @@ async def upload_compound_file(
             session_dir=Path(settings.sessions_dir) / session_id
         )
     except Exception as e:
-        raise ValidationError(f"Error parsing compound file: {str(e)}")
+        raise ValidationError(message=f"Error parsing compound file: {str(e)}")
     
     # Parse compounds using CompoundService
     compound_service = CompoundService()

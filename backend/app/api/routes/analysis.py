@@ -6,7 +6,7 @@ Analysis orchestration and control.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.config import settings
+from app.core.config import settings, MIN_PROTEOMICS_FILES
 from app.db.session_store import SessionStore
 from app.models.session import SessionState
 
@@ -38,7 +38,7 @@ async def start_analysis(
             detail="Session configuration required"
         )
     
-    if len(session.files.proteomics) < 6:  # At least 3 per condition, 2 conditions
+    if len(session.files.proteomics) < MIN_PROTEOMICS_FILES:  # At least 3 per condition, 2 conditions
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least 6 proteomics files required (3 per condition)"

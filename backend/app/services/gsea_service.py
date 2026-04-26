@@ -563,7 +563,7 @@ class GSEAService:
         }
         
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(results_dict, f, indent=2)
+            json.dump(results_dict, f, indent=2, default=str)
 
 
 # Global service instance

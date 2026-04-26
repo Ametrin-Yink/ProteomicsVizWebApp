@@ -7,7 +7,7 @@ Manages state persistence and error recovery.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -86,7 +86,7 @@ class PipelineState:
             "level": level,
             "message": message,
             "step": step,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         self.save()
 
@@ -96,7 +96,7 @@ class PipelineState:
 
     def mark_started(self) -> None:
         """Mark pipeline as started."""
-        self.data["started_at"] = datetime.utcnow().isoformat()
+        self.data["started_at"] = datetime.now(timezone.utc).isoformat()
         self.save()
 
     def mark_step_started(self, step: int) -> None:
@@ -136,7 +136,7 @@ class PipelineState:
 
     def mark_completed(self) -> None:
         """Mark pipeline as completed."""
-        self.data["completed_at"] = datetime.utcnow().isoformat()
+        self.data["completed_at"] = datetime.now(timezone.utc).isoformat()
         self.save()
 
     def can_resume(self) -> bool:
@@ -495,15 +495,16 @@ class ProcessingOrchestrator:
                 psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
                 logger.info(f"Step 5: Saved TSV file at {psm_output}, size: {psm_output.stat().st_size} bytes")
 
-            # Always save TSV as fallback/debug output
-            psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
-            if not psm_output.exists():
-                logger.error(f"Step 5: CRITICAL - File does not exist after save attempt: {psm_output}")
-                raise ProcessingError(
-                    message=f"Failed to save PSM_Abundances.tsv to {psm_output}",
-                    step=5,
-                    recoverable=False
-                )
+            # Save TSV only when Parquet is not being used (compatibility fallback)
+            if not use_parquet:
+                psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
+                if not psm_output.exists():
+                    logger.error(f"Step 5: CRITICAL - File does not exist after save attempt: {psm_output}")
+                    raise ProcessingError(
+                        message=f"Failed to save PSM_Abundances.tsv to {psm_output}",
+                        step=5,
+                        recoverable=False
+                    )
 
             state.mark_step_completed(5, psm_output)
 
@@ -680,7 +681,7 @@ class ProcessingOrchestrator:
             if state.data["started_at"]:
                 start_time = datetime.fromisoformat(state.data["started_at"])
                 result.processing_time_seconds = (
-                    datetime.utcnow() - start_time
+                    datetime.now(timezone.utc) - start_time
                 ).total_seconds()
 
             result.steps_completed = state.data["completed_steps"]

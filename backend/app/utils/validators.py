@@ -16,6 +16,7 @@ from app.core.exceptions import (
     FileTooLargeError,
     InvalidFileFormatError
 )
+from app.utils.file_parser import PSM_FILENAME_PATTERN
 
 
 def validate_session_id(session_id: str) -> str:
@@ -104,8 +105,6 @@ def validate_psm_filename_pattern(filename: str) -> None:
     Raises:
         InvalidFileFormatError: If filename doesn't match pattern
     """
-    from app.utils.file_parser import PSM_FILENAME_PATTERN
-    
     if not PSM_FILENAME_PATTERN.match(filename):
         raise InvalidFileFormatError(
             message=f"Invalid PSM filename format: {filename}",
@@ -272,46 +271,6 @@ def validate_directory_exists(dir_path: Path, description: str = "directory") ->
             message=f"{description.capitalize()} is not a directory: {dir_path}",
             details={"path": str(dir_path)}
         )
-
-
-def validate_pagination_params(
-    page: int,
-    per_page: int,
-    max_per_page: int = 100
-) -> tuple[int, int]:
-    """
-    Validate pagination parameters.
-    
-    Args:
-        page: Page number (1-indexed)
-        per_page: Items per page
-        max_per_page: Maximum items per page allowed
-        
-    Returns:
-        Tuple of (validated_page, validated_per_page)
-        
-    Raises:
-        ValidationError: If parameters are invalid
-    """
-    if page < 1:
-        raise ValidationError(
-            message="Page must be at least 1",
-            details={"page": page}
-        )
-    
-    if per_page < 1:
-        raise ValidationError(
-            message="Items per page must be at least 1",
-            details={"per_page": per_page}
-        )
-    
-    if per_page > max_per_page:
-        raise ValidationError(
-            message=f"Items per page cannot exceed {max_per_page}",
-            details={"per_page": per_page, "max_per_page": max_per_page}
-        )
-    
-    return page, per_page
 
 
 def validate_sort_column(

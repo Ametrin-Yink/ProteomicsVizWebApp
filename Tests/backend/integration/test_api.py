@@ -222,8 +222,13 @@ class TestSessionConfigAPI:
 
 
 class TestFileUploadAPI:
-    """Test file upload endpoints."""
+    """Test file upload endpoints.
 
+    These tests use real PSM CSV files from SampleData/.
+    They are skipped if SampleData/ is not present (not shipped in git).
+    """
+
+    @pytest.mark.needs_sample_data
     def test_upload_proteomics_files_success(self, client, sample_data_dir):
         """Upload proteomics files successfully."""
         # Create session
@@ -249,6 +254,7 @@ class TestFileUploadAPI:
         assert "size" in data["files"][0]
         assert "uploaded_at" in data["files"][0]
 
+    @pytest.mark.needs_sample_data
     def test_upload_multiple_proteomics_files(self, client, sample_data_dir):
         """Upload multiple proteomics files."""
         # Create session
@@ -295,6 +301,7 @@ class TestFileUploadAPI:
         error = response.json()
         assert "error" in error
 
+    @pytest.mark.needs_sample_data
     def test_upload_file_session_not_found(self, client, sample_data_dir):
         """Return 404 when uploading to non-existent session."""
         file_path = sample_data_dir / "PSM_SampleData_DMSO_1.csv"

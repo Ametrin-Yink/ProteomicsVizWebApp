@@ -238,6 +238,10 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Sample data (large real-world PSM files — not needed for repo functionality)
+# Clone users can use Tests/fixtures/ for testing or add their own data
+SampleData/
+
 # Temporary files
 tmp/
 temp/
@@ -248,6 +252,7 @@ temp/
 
 # Test screenshots (generated during test runs)
 Tests/screenshots/
+Tests/downloads/
 test-screenshots/
 
 # Backend logs

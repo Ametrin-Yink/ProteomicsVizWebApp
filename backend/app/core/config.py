@@ -11,6 +11,10 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Pipeline constants
+MIN_PROTEOMICS_FILES = 6  # At least 3 per condition, 2 conditions
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
 

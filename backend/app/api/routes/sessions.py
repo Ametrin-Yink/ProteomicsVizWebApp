@@ -5,7 +5,7 @@ CRUD operations for analysis sessions.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -37,8 +37,8 @@ async def create_session(
         state=SessionState.CREATED,
         config=None,
         files=SessionFiles(),
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
     )
     
     await store.create(session)

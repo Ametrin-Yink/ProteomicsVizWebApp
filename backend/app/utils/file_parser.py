@@ -5,6 +5,7 @@ Handles parsing of PSM CSV files and extraction of metadata from filenames.
 """
 
 import re
+import asyncio
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
@@ -83,7 +84,7 @@ class FileParser:
         
         # Validate CSV content
         try:
-            df = pd.read_csv(file_path)
+            df = await asyncio.to_thread(pd.read_csv, file_path)
             validate_psm_columns(df, filename)
         except Exception as e:
             # Clean up saved file on validation error
@@ -135,7 +136,7 @@ class FileParser:
         
         # Validate CSV content
         try:
-            df = pd.read_csv(file_path)
+            df = await asyncio.to_thread(pd.read_csv, file_path)
             # Check for required columns (case-insensitive, space/underscore agnostic)
             columns_normalized = [col.lower().replace(' ', '_').replace('-', '_') for col in df.columns]
             if 'corp_id' not in columns_normalized and 'compound_id' not in columns_normalized:

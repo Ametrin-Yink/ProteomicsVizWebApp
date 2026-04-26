@@ -8,7 +8,7 @@ import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 
-from app.core.config import settings
+from app.core.config import settings, MIN_PROTEOMICS_FILES
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
 from app.models.session import ProcessingStatus, SessionState, Session
@@ -177,7 +177,7 @@ async def start_processing(
         )
 
     # Validate minimum file count (at least 3 per condition, 2 conditions = 6 minimum)
-    if len(session.files.proteomics) < 6:
+    if len(session.files.proteomics) < MIN_PROTEOMICS_FILES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"At least 6 proteomics files required (3 per condition). Current: {len(session.files.proteomics)}"

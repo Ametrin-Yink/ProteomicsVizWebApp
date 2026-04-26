@@ -165,18 +165,14 @@ class CompoundService:
         Returns:
             Matching column name or None
         """
-        columns_lower = {col.lower().replace('_', ' ').replace('-', ' '): col 
+        columns_lower = {col.lower().replace('_', ' ').replace('-', ' '): col
                         for col in columns}
-        
+
         for name in possible_names:
             name_normalized = name.lower().replace('_', ' ').replace('-', ' ')
             if name_normalized in columns_lower:
                 return columns_lower[name_normalized]
-            # Also check exact match
-            for col in columns:
-                if col.lower() == name.lower():
-                    return col
-        
+
         return None
     
     def get_compound_for_condition(

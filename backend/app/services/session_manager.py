@@ -5,6 +5,7 @@ Provides high-level operations for session lifecycle management.
 """
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, List
 
@@ -416,48 +417,24 @@ class SessionManager:
     async def is_session_ready_for_processing(self, session_id: str) -> bool:
         """
         Check if session is ready for processing.
-        
+
         Requirements:
         - Has configuration
         - Has at least 2 proteomics files
         - Has at least 2 conditions
         - Has at least 1 replicate per condition
-        
+
         Args:
             session_id: Session ID
-            
+
         Returns:
             True if session is ready
         """
         try:
-            session = await self.store.get(session_id)
-        except SessionNotFoundError:
+            await self.validate_session_for_processing(session_id)
+            return True
+        except (SessionNotFoundError, ValidationError):
             return False
-        
-        # Check config
-        if not session.config:
-            return False
-        
-        # Check files
-        if not session.files or not session.files.proteomics:
-            return False
-        
-        # Need at least 2 files
-        if len(session.files.proteomics) < 2:
-            return False
-        
-        # Check conditions
-        conditions = set(f.condition for f in session.files.proteomics)
-        if len(conditions) < 2:
-            return False
-        
-        # Check that treatment and control are present
-        if session.config.treatment not in conditions:
-            return False
-        if session.config.control not in conditions:
-            return False
-        
-        return True
     
     async def validate_session_for_processing(self, session_id: str) -> None:
         """
@@ -658,7 +635,7 @@ class SessionManager:
             "payload": {
                 "level": level,
                 "message": message,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "step": step
             }
         }

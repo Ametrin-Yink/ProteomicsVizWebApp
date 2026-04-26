@@ -11,12 +11,25 @@ Proteomics Visualization Web App - A full-stack scientific data analysis platfor
 - Backend: FastAPI, Python 3.11+, Pydantic, asyncio
 - Analysis: R 4.3+, msqrob2, QFeatures, limma, gseapy
 
+## Environment Setup
+
+```bash
+# Backend dependencies (use existing venv)
+cd backend && .venv/Scripts/python.exe -m pip install -r requirements.txt
+
+# Frontend dependencies
+cd frontend && npm install
+
+# Test dependencies
+cd Tests && npm install
+```
+
 ## Common Commands
 
 ### Development (Start Both Services)
 ```bash
-# Terminal 1 - Backend
-cd backend && uvicorn app.main:app --reload --port 8000
+# Terminal 1 - Backend (use backend venv)
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
 
 # Terminal 2 - Frontend
 cd frontend && npm run dev
@@ -27,13 +40,16 @@ cd frontend && npm run dev
 ### Testing
 ```bash
 # Backend tests (run from project root)
-pytest Tests/backend/unit
-pytest Tests/backend/integration
-pytest Tests/backend/unit/test_file_parser.py::TestFileParser::test_parse_valid_filename
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -v
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration -v
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit/test_file_parser.py -v
 
 # Frontend E2E tests (Playwright)
 cd Tests && npx playwright test
-cd Tests && npx playwright test e2e/04-results.spec.ts --headed
+cd Tests && npx playwright test e2e/04-error-handling.spec.ts --headed
+
+# List E2E tests (dry run)
+cd Tests && npx playwright test --list
 
 # View test report
 cd Tests && npx playwright show-report
@@ -52,8 +68,19 @@ cd backend && ruff format .
 
 ### R Package Verification (Critical)
 ```bash
-Rscript -e "library(msqrob2); library(QFeatures); library(limma); cat('OK\n')"
+"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "library(msqrob2); library(QFeatures); library(limma); cat('OK\n')"
 ```
+
+## System Paths (This Machine)
+
+**Python:**
+- Backend venv: `backend/.venv/Scripts/python.exe` (Python 3.12.10, has all deps)
+- **Always use the venv Python** for running backend code and tests
+
+**R:**
+- Installation: `C:/Program Files/R/R-4.5.1/`
+- Rscript: `C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe` (also on PATH)
+- Use full path if `Rscript` not found in PATH
 
 ## High-Level Architecture
 
@@ -98,10 +125,12 @@ content = open(file_path).read()  # Blocks event loop!
 **State Management (Zustand with Immer):**
 ```
 stores/
-├── session-store.ts    # Session data (persisted)
-├── ui-store.ts         # UI state (modals, toasts, selections)
-├── data-store.ts       # Cached analysis results
-└── processing-store.ts # Real-time processing status
+├── sessionStore.ts     # Session data (persisted)
+├── uiStore.ts          # UI state (modals, toasts, selections)
+├── analysisStore.ts    # Cached analysis results
+├── analysis-store.ts   # Additional analysis state
+├── processing-store.ts # Real-time processing status
+└── ui-store.ts         # Additional UI state
 ```
 
 **Pattern - Store Usage:**
@@ -171,7 +200,6 @@ Output: Results, QC Plots, GSEA
 - **Python tests:** `Tests/backend/unit/` and `Tests/backend/integration/`
 - **E2E tests:** `Tests/e2e/`
 - **Test data:** `Tests/fixtures/`
-- **R test scripts:** `Tests/backend/r_scripts/`
 
 ### R Integration
 - **NEVER use rpy2** - Always use subprocess
@@ -209,15 +237,17 @@ Output: Results, QC Plots, GSEA
 
 ## API Contract
 
-**Base URL:** `http://localhost:8000/api/v1`
+**Base URL:** `http://localhost:8000/api/sessions`
 
 **Key Endpoints:**
-- `POST /sessions` - Create session
-- `POST /sessions/{id}/upload/proteomics` - Upload PSM files
-- `POST /sessions/{id}/process` - Start processing pipeline
-- `GET /sessions/{id}/results` - Get DE results
-- `GET /sessions/{id}/qc/plots` - Get QC data (NOT `/qc/data`)
-- `GET /sessions/{id}/gsea/{database}` - Get GSEA results
+- `POST /api/sessions` - Create session
+- `GET /api/sessions` - List sessions
+- `POST /api/sessions/{id}/upload/proteomics` - Upload PSM files
+- `DELETE /api/sessions/{id}` - Delete session
+- `POST /api/sessions/{id}/process` - Start processing pipeline
+- `GET /api/sessions/{id}/results` - Get DE results
+- `GET /api/sessions/{id}/qc/plots` - Get QC data
+- `GET /api/sessions/{id}/gsea/{database}` - Get GSEA results
 - `WS /ws/sessions/{id}` - WebSocket for real-time updates
 
 **Response Format:**
@@ -247,25 +277,25 @@ interface ApiError {
 Tests/
 ├── backend/
 │   ├── unit/              # Python unit tests (pytest)
-│   ├── integration/       # API/integration tests (pytest)
-│   └── r_scripts/         # R script tests
-├── e2e/                   # Playwright E2E tests
+│   └── integration/       # API/integration tests (pytest)
+├── e2e/                   # Playwright E2E tests (6 suites + helpers)
 ├── fixtures/              # Test data and fixtures
-├── scripts/               # Test utilities
-├── conftest.py            # Pytest configuration
-└── playwright.config.ts   # Playwright configuration
+├── screenshots/           # Generated during E2E tests (gitignored)
+├── downloads/             # Generated during E2E tests (gitignored)
+├── conftest.py            # Pytest configuration and fixtures
+└── package.json           # Playwright config
 ```
 
 **E2E Tests (Playwright):**
 - Located in `Tests/e2e/`
-- 8 test suites: 01-welcome through 08-session-manager
+- 6 test suites: 01-complete-analysis-flow through 06-pdf-export
 - Run with: `cd Tests && npx playwright test`
-- Tests preserve sessions in `backend/sessions/{session_id}/` for investigation
+- Tests preserve sessions in `backend/sessions/{session_id}/` for debugging (set `PRESERVE_TEST_SESSIONS=false` to clean up)
 
 **Backend Tests:**
 - Located in `Tests/backend/`
 - pytest with asyncio support
-- Run with: `pytest Tests/backend/unit` or `pytest Tests/backend/integration`
+- Run with: `backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit` or `backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration`
 
 ## Session Storage
 
@@ -295,9 +325,10 @@ created → configuring → processing → completed/error
 - `backend/scripts/msqrob2_protein.R` - Step 6 (protein abundance)
 - `backend/scripts/msqrob2_de.R` - Step 7 (differential expression)
 - `backend/app/services/processing_orchestrator.py` - Pipeline orchestration
+- R integration: Always via `subprocess.run(['Rscript', ...])` — never rpy2
 
 **Documentation:**
-- `AGENTS/` - 14 comprehensive guides
+- `AGENTS/` - 15 comprehensive guides
 - `docs/openapi.yaml` - API specification
 - `PROJECT_STRUCTURE.md` - Folder organization
 
@@ -314,8 +345,8 @@ taskkill //F //PID <PID>
 
 **R script errors:**
 ```bash
-# Verify packages
-Rscript -e "library(msqrob2); library(QFeatures); library(limma)"
+# Verify packages (use full path if Rscript not on PATH)
+"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "library(msqrob2); library(QFeatures); library(limma)"
 ```
 
 **Python code changes not picked up:**
@@ -340,31 +371,35 @@ rm -rf Tests/test-results/ Tests/screenshots/
 rm -rf frontend/playwright-report/
 ```
 
-**Virtual environment Python path invalid:**
-The `backend/.venv` may reference a non-existent Python installation (e.g., `C:\Python314\python.exe`). If you see "executable not found" errors when starting the backend:
-
+**Virtual environment issues:**
+The backend venv is at `backend/.venv/` and contains Python 3.12.10 with all dependencies. Always use it:
 ```bash
-# Option 1: Use global Python (recommended - all deps pre-installed)
-cd backend && D:/Software/Python/python.exe -m uvicorn app.main:app --reload --port 8000
+# Start backend
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
 
-# Option 2: Recreate venv with correct Python
-rm -rf backend/.venv
-cd backend && D:/Software/Python/python.exe -m venv .venv
-source backend/.venv/Scripts/activate
-pip install -r backend/requirements.txt
+# Run tests
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -v
 ```
 
-**Python locations on this system:**
-- Global Python: `D:/Software/Python/python.exe` (has all dependencies)
-- R installation: `D:/Software/R-4.5.3/bin/x64/R.exe`
+If the venv is corrupted or missing packages:
+```bash
+# Recreate venv (use system Python)
+rm -rf backend/.venv
+cd backend && python -m venv .venv
+cd backend && .venv/Scripts/activate
+pip install -r requirements.txt
+```
 
 ## Quick Start (Windows)
 
-If you get "executable not found" errors when starting the backend, the virtual environment may reference a non-existent Python installation. Use the global Python instead:
+See **System Paths** section above for Python and R locations.
 
 ```bash
-# Use global Python (recommended - all deps pre-installed)
-cd backend && D:/Software/Python/python.exe -m uvicorn app.main:app --reload --port 8000
+# Terminal 1 - Backend
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+
+# Terminal 2 - Frontend
+cd frontend && npm run dev
 ```
 
 ## Common Bug Patterns to Avoid
@@ -403,5 +438,5 @@ cd backend && D:/Software/Python/python.exe -m uvicorn app.main:app --reload --p
   ```
 
 ### Testing
-- **Always run tests from project root** - `pytest Tests/backend/unit` not `cd backend && pytest`
+- **Always run tests from project root** - `backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit` not `cd backend && pytest`
 - **E2E tests are in `Tests/`** - Run with `cd Tests && npx playwright test`

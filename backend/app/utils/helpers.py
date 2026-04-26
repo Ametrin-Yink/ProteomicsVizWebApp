@@ -4,10 +4,11 @@ General utility helpers.
 Provides common utility functions used across the application.
 """
 
+import re
 import uuid
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 import logging
@@ -56,7 +57,7 @@ def format_datetime(dt: Optional[datetime] = None) -> str:
         ISO 8601 formatted string
     """
     if dt is None:
-        dt = datetime.utcnow()
+        dt = datetime.now(timezone.utc)
     return dt.isoformat() + "Z"
 
 
@@ -351,19 +352,9 @@ def is_valid_email(email: str) -> bool:
     Returns:
         True if valid email format
     """
-    import re
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
 
-
-def get_timestamp() -> str:
-    """
-    Get current timestamp string.
-    
-    Returns:
-        ISO 8601 timestamp
-    """
-    return datetime.utcnow().isoformat()
 
 
 class Timer:
@@ -375,12 +366,12 @@ class Timer:
         self.end_time: Optional[datetime] = None
     
     def __enter__(self):
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
         logger.info(f"{self.name} started")
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.end_time = datetime.utcnow()
+        self.end_time = datetime.now(timezone.utc)
         duration = (self.end_time - self.start_time).total_seconds()
         logger.info(f"{self.name} completed in {duration:.2f}s")
     
@@ -389,5 +380,5 @@ class Timer:
         """Get elapsed time in seconds."""
         if self.start_time is None:
             return 0.0
-        end = self.end_time or datetime.utcnow()
+        end = self.end_time or datetime.now(timezone.utc)
         return (end - self.start_time).total_seconds()

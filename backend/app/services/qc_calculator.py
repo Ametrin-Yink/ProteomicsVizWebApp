@@ -63,22 +63,21 @@ class QCCalculator:
                 psm_df = await asyncio.to_thread(pd.read_csv, psm_abundances_path, sep='\t')
         
         # Calculate all independent metrics concurrently on thread pool
-        tasks = [
+        protein_cv, data_completeness, pca_result, intensity_dist = await asyncio.gather(
             asyncio.to_thread(self._calculate_protein_cv, protein_df),
             asyncio.to_thread(self._calculate_data_completeness, protein_df),
             asyncio.to_thread(self._calculate_pca, protein_df),
             asyncio.to_thread(self._calculate_intensity_distributions, protein_df, psm_df),
-        ]
-        if psm_df is not None:
-            tasks.append(asyncio.to_thread(self._calculate_cv, psm_df))
-            tasks.append(asyncio.to_thread(self._calculate_psm_completeness, psm_df))
-        else:
-            tasks.append(asyncio.to_thread(lambda: None))
-            tasks.append(asyncio.to_thread(lambda: None))
-
-        protein_cv, data_completeness, pca_result, intensity_dist, psm_cv, psm_completeness = (
-            await asyncio.gather(*tasks)
         )
+
+        if psm_df is not None:
+            psm_cv, psm_completeness = await asyncio.gather(
+                asyncio.to_thread(self._calculate_cv, psm_df),
+                asyncio.to_thread(self._calculate_psm_completeness, psm_df),
+            )
+        else:
+            psm_cv = None
+            psm_completeness = None
 
         # Calculate summary statistics
         # MAJ-004: Count unique PSMs, not total rows
@@ -247,7 +246,7 @@ class QCCalculator:
         Returns:
             PValueDistribution with bins and counts
         """
-        pval_col = 'pval' if 'pval' in diff_df.columns else 'pval' if 'pval' in diff_df.columns else None
+        pval_col = 'pval' if 'pval' in diff_df.columns else None
         
         if pval_col is None or pval_col not in diff_df.columns:
             # Try alternative column names

@@ -141,16 +141,24 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "slow: marks tests as slow")
     config.addinivalue_line("markers", "integration: marks tests as integration tests")
     config.addinivalue_line("markers", "unit: marks tests as unit tests")
+    config.addinivalue_line("markers", "needs_sample_data: requires real-world SampleData/ files not shipped in git")
 
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection."""
     # Add markers based on test location
+    sample_data_dir = Path(__file__).parent.parent / "SampleData"
+    sample_data_exists = any(sample_data_dir.glob("*.csv"))
+
     for item in items:
         if "integration" in item.nodeid:
             item.add_marker(pytest.mark.integration)
         elif "unit" in item.nodeid:
             item.add_marker(pytest.mark.unit)
+
+        # Skip tests that need SampleData when the directory is missing
+        if item.get_closest_marker("needs_sample_data") and not sample_data_exists:
+            item.add_marker(pytest.mark.skip(reason="SampleData/ not found — add real PSM files to run this test"))
 
 
 def pytest_runtest_makereport(item, call):

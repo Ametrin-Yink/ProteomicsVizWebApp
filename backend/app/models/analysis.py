@@ -5,7 +5,7 @@ Defines Pydantic models for analysis configuration, processing parameters,
 and various analysis results.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
@@ -154,7 +154,7 @@ class AnalysisResult(BaseModel):
     """Complete analysis result."""
     
     session_id: str
-    completed_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # File paths
     psm_abundances_path: Optional[str] = None
@@ -182,7 +182,7 @@ class ProcessingProgress(BaseModel):
     progress: int = Field(..., ge=0, le=100)
     message: Optional[str] = None
     overall_progress: int = Field(..., ge=0, le=100)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ReportRequest(BaseModel):
@@ -208,7 +208,7 @@ class ReportStatus(BaseModel):
     report_id: str
     status: str = Field(..., pattern=r'^(pending|generating|completed|failed)$')
     progress: int = Field(default=0, ge=0, le=100)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
     download_url: Optional[str] = None

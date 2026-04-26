@@ -5,7 +5,7 @@ Defines all session-related data structures including configuration,
 file metadata, and session state.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
@@ -65,7 +65,7 @@ class FileInfo(BaseModel):
     
     filename: str = Field(..., description="Original filename")
     size: int = Field(..., ge=0, description="File size in bytes")
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     columns: list[str] = Field(default_factory=list, description="CSV columns")
 
 
@@ -93,8 +93,8 @@ class Session(BaseModel):
     state: SessionState = Field(default=SessionState.CREATED)
     config: Optional[SessionConfig] = None
     files: SessionFiles = Field(default_factory=SessionFiles)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     error_message: Optional[str] = None
     
     model_config = {

@@ -6,6 +6,7 @@ Plot data endpoints for results, QC, and bioinformatics.
 
 import asyncio
 import json
+import logging
 import math
 import uuid
 from datetime import datetime
@@ -19,6 +20,7 @@ from app.core.config import settings
 from app.db.session_store import SessionStore
 
 router = APIRouter()
+logger = logging.getLogger("proteomics")
 
 
 def create_response(data: Any) -> Dict[str, Any]:
@@ -95,7 +97,7 @@ async def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]
         return results
     except Exception as e:
         # Log error but return empty list
-        print(f"Error loading diff expression results: {e}")
+        logger.error(f"Error loading diff expression results: {e}")
         return []
 
 
@@ -173,7 +175,7 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
 
         return result
     except Exception as e:
-        print(f"Error loading QC results: {e}")
+        logger.error(f"Error loading QC results: {e}")
         return default_result
 
 
@@ -218,7 +220,7 @@ def load_gsea_results(results_dir: Path, database: str) -> Dict[str, Any]:
             "underrepresented": underrepresented
         }
     except Exception as e:
-        print(f"Error loading GSEA results: {e}")
+        logger.error(f"Error loading GSEA results: {e}")
         return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
 
 
@@ -313,13 +315,12 @@ async def get_qc_plots(
         psm_file = results_dir / "PSM_Abundances.tsv"
         if psm_file.exists():
             try:
-                import pandas as pd
                 psm_df = pd.read_csv(psm_file, sep='\t')
                 if 'Unique_PSM' in psm_df.columns:
                     correct_total = psm_df['Unique_PSM'].nunique()
                     qc_data["total_psms"] = int(correct_total)
             except Exception as e:
-                print(f"Error recalculating total_psms: {e}")
+                logger.error(f"Error recalculating total_psms: {e}")
 
     return create_response(qc_data)
 
@@ -403,7 +404,7 @@ async def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str
             "conditions": conditions
         }
     except Exception as e:
-        print(f"Error loading protein abundance: {e}")
+        logger.error(f"Error loading protein abundance: {e}")
         return {"samples": [], "abundances": [], "conditions": []}
 
 
@@ -477,7 +478,7 @@ async def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, An
 
         return {"psms": psms}
     except Exception as e:
-        print(f"Error loading PSM abundance: {e}")
+        logger.error(f"Error loading PSM abundance: {e}")
         return {"psms": []}
 
 

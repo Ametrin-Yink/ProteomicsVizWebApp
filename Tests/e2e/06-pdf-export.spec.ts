@@ -171,7 +171,7 @@ test.describe('PDF Export', () => {
       expect(filename).toMatch(/\.(pdf|zip)$/);
 
       // Save to verify content
-      const downloadPath = path.join('D:', 'CodingWorks', 'ProteomicsVizWebApp', 'Tests', 'downloads', filename);
+      const downloadPath = path.join(__dirname, '..', 'downloads', filename);
       await download.saveAs(downloadPath);
 
       // Verify file exists and has content

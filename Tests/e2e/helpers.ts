@@ -13,8 +13,8 @@ import { Page, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Screenshot directory
-const SCREENSHOT_DIR = 'D:/CodingWorks/ProteomicsVizWebApp/Tests/screenshots';
+// Screenshot directory (relative to project root)
+const SCREENSHOT_DIR = path.join(__dirname, '..', 'screenshots');
 
 /**
  * Purge legacy screenshots from previous test runs

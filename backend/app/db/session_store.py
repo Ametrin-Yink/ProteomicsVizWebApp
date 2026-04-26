@@ -6,7 +6,7 @@ Provides CRUD operations for session data stored as JSON files.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -115,7 +115,7 @@ class SessionStore:
         await self.get(session.id)
         
         # Update timestamp
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
         
         await self._save_session(session)
         
@@ -185,8 +185,12 @@ class SessionStore:
                             extra={"error": str(e)}
                         )
         
-        # Sort by updated_at descending
-        sessions.sort(key=lambda s: s.updated_at, reverse=True)
+        # Sort by updated_at descending (handle mixed naive/aware datetimes)
+        from datetime import timezone as tz
+        sessions.sort(
+            key=lambda s: s.updated_at.replace(tzinfo=tz.utc) if s.updated_at.tzinfo is None else s.updated_at,
+            reverse=True
+        )
         
         return sessions
     

@@ -42,8 +42,8 @@ class OrganismScanner:
             
             # Check for _Sequence suffix
             if filename.endswith("_Sequence"):
-                organism_id = filename[:-9].lower()  # Remove _Sequence and lowercase
-                organism_name = filename[:-9]  # Keep original case for display
+                organism_id = filename.removesuffix("_Sequence").lower()
+                organism_name = filename.removesuffix("_Sequence")
             else:
                 organism_id = filename.lower()
                 organism_name = filename.capitalize()
@@ -98,23 +98,12 @@ class OrganismScanner:
     def organism_exists(self, organism_id: str) -> bool:
         """
         Check if an organism exists in the database.
-        
+
         Args:
             organism_id: Organism identifier
-            
+
         Returns:
             True if organism exists
         """
-        # Check both naming conventions
-        organism_capitalized = organism_id.capitalize()
-        
-        # New naming convention: {Organism}_Sequence.fasta and {Organism}_GeneName.tsv
-        fasta_v2 = self.protein_database_dir / f"{organism_capitalized}_Sequence.fasta"
-        gene_v2 = self.protein_database_dir / f"{organism_capitalized}_GeneName.tsv"
-        
-        if fasta_v2.exists() and gene_v2.exists():
-            return True
-        
-        # Original naming convention: {organism}.fasta and {organism}_uniprot_gene.tsv
         paths = self.get_organism_path(organism_id)
         return paths["fasta"].exists() and paths["gene_mapping"].exists()

@@ -225,39 +225,6 @@ class TestValidateTreatmentControlPair:
         assert "must be different" in str(exc_info.value.message).lower()
 
 
-class TestValidatePaginationParams:
-    """Test pagination parameter validation."""
-
-    def test_valid_params(self):
-        """Accept valid pagination params."""
-        from app.utils.validators import validate_pagination_params
-
-        page, per_page = validate_pagination_params(1, 25)
-
-        assert page == 1
-        assert per_page == 25
-
-    def test_invalid_page(self):
-        """Reject page less than 1."""
-        from app.utils.validators import validate_pagination_params
-        from app.core.exceptions import ValidationError
-
-        with pytest.raises(ValidationError) as exc_info:
-            validate_pagination_params(0, 25)
-
-        assert "Page must be at least 1" in str(exc_info.value.message)
-
-    def test_invalid_per_page(self):
-        """Reject per_page less than 1."""
-        from app.utils.validators import validate_pagination_params
-        from app.core.exceptions import ValidationError
-
-        with pytest.raises(ValidationError) as exc_info:
-            validate_pagination_params(1, 0)
-
-        assert "at least 1" in str(exc_info.value.message)
-
-
 class TestValidateSortColumn:
     """Test sort column validation."""
 

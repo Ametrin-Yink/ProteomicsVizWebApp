@@ -5,9 +5,11 @@ Generates comprehensive PDF reports from analysis results using HTML → PDF
 conversion via Playwright for professional styling.
 """
 
+import asyncio
 import base64
 import json
 import logging
+import numpy as np
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -225,7 +227,7 @@ class ReportGenerator:
         if analysis_result.diff_expression_path:
             diff_path = Path(analysis_result.diff_expression_path)
             if diff_path.exists():
-                df = pd.read_csv(diff_path, sep='\t')
+                df = await asyncio.to_thread(pd.read_csv, diff_path, sep='\t')
                 
                 # Prepare volcano plot data
                 if report_request.include_volcano_plot:
@@ -247,7 +249,7 @@ class ReportGenerator:
         
         # Calculate -log10(p-value)
         df = df.copy()
-        df['neg_log_pval'] = -df[pval_col].apply(lambda x: max(x, 1e-300)).apply(lambda x: __import__('numpy').log10(x))
+        df['neg_log_pval'] = -df[pval_col].apply(lambda x: np.log10(max(x, 1e-300)))
         
         # Determine significance
         df['significant'] = (df[pval_col] < 0.05) & (abs(df[logfc_col]) > 1)
