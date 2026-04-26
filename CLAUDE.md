@@ -328,7 +328,7 @@ created → configuring → processing → completed/error
 - R integration: Always via `subprocess.run(['Rscript', ...])` — never rpy2
 
 **Documentation:**
-- `AGENTS/` - 15 comprehensive guides
+- `AGENTS/` - 8 developer guides (overview, red lines, coding standards, API, state management, errors, testing, pipeline, lessons learned)
 - `docs/openapi.yaml` - API specification
 - `PROJECT_STRUCTURE.md` - Folder organization
 
