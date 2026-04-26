@@ -9,10 +9,12 @@
 # Usage: Rscript msqrob2_de.R <input_file> <output_file> <treatment> <control>
 
 suppressPackageStartupMessages({
+    library(data.table)
     library(msqrob2)
     library(QFeatures)
     library(limma)
     library(SummarizedExperiment)
+    library(matrixStats)
 })
 
 # Parse command line arguments
@@ -42,7 +44,7 @@ if (!file.exists(input_file)) {
 # Read protein abundances
 cat("Reading protein abundances...\n")
 flush.console()
-protein_data <- read.delim(input_file, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
+protein_data <- fread(input_file, sep = "\t", header = TRUE, stringsAsFactors = FALSE, data.table = TRUE)
 
 cat("Loaded", nrow(protein_data), "proteins\n")
 flush.console()
@@ -55,8 +57,8 @@ abundance_cols <- setdiff(names(protein_data), id_cols_present)
 cat("All non-ID columns:", paste(abundance_cols, collapse = ", "), "\n")
 flush.console()
 
-# Filter to only numeric columns
-abundance_cols <- abundance_cols[sapply(protein_data[abundance_cols], is.numeric)]
+# Filter to only numeric columns (vectorized with vapply)
+abundance_cols <- abundance_cols[vapply(protein_data[abundance_cols], is.numeric, logical(1))]
 
 cat("Found", length(abundance_cols), "abundance columns\n")
 cat("Abundance columns:", paste(abundance_cols, collapse = ", "), "\n")
@@ -72,11 +74,12 @@ rownames(protein_matrix) <- protein_data$Master_Protein_Accessions
 
 # Pre-filter: remove proteins with zero variance (no DE signal, wastes compute)
 cat("Checking for zero-variance proteins...\n")
-var_per_protein <- apply(protein_matrix, 1, function(x) {
-    valid <- x[!is.na(x)]
-    if (length(valid) < 2) return(NA)
-    var(valid)
-})
+# Use matrixStats::rowVars for speed (avoids R-level loop over rows)
+valid_mask <- rowSums(!is.na(protein_matrix)) >= 2
+var_per_protein <- rep(NA, nrow(protein_matrix))
+if (any(valid_mask)) {
+    var_per_protein[valid_mask] <- rowVars(protein_matrix[valid_mask, , drop = FALSE], na.rm = TRUE)
+}
 zero_var <- which(!is.na(var_per_protein) & var_per_protein == 0)
 if (length(zero_var) > 0) {
     cat("Pre-filtering", length(zero_var), "zero-variance proteins (will be added back to output)\n")

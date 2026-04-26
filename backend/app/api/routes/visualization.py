@@ -5,6 +5,7 @@ Plot data endpoints for results, QC, and bioinformatics.
 """
 
 import asyncio
+from functools import lru_cache
 import json
 import logging
 import math
@@ -22,13 +23,23 @@ from app.db.session_store import SessionStore
 router = APIRouter()
 logger = logging.getLogger("proteomics")
 
+# In-memory LRU cache for visualization results
+# Cache is keyed by session_id and file path, max 50 entries per type
+# Results are cached per session since files are immutable once written
+_cache_hits = {"hits": 0, "misses": 0}
+
+
+def _cache_key(session_id: str, *args) -> str:
+    """Generate a cache key from session_id and additional args."""
+    return f"{session_id}:{':'.join(str(a) for a in args)}"
+
 
 def create_response(data: Any) -> Dict[str, Any]:
     """Create standardized API response wrapper.
-    
+
     Args:
         data: Response data
-        
+
     Returns:
         Wrapped response with metadata
     """
@@ -41,20 +52,60 @@ def create_response(data: Any) -> Dict[str, Any]:
     }
 
 
+class FileCache:
+    """Simple TTL-based file result cache for visualization endpoints."""
+
+    def __init__(self, max_size: int = 50):
+        self._max_size = max_size
+        self._cache: Dict[str, tuple] = {}  # key -> (timestamp, result)
+
+    def get(self, key: str) -> Any:
+        if key in self._cache:
+            _cache_hits["hits"] += 1
+            return self._cache[key][1]
+        _cache_hits["misses"] += 1
+        return None
+
+    def set(self, key: str, value: Any) -> None:
+        # Evict oldest entries if at capacity
+        if len(self._cache) >= self._max_size:
+            oldest_key = min(self._cache, key=lambda k: self._cache[k][0])
+            del self._cache[oldest_key]
+        self._cache[key] = (datetime.utcnow(), value)
+
+    def invalidate(self, session_id: str) -> None:
+        """Remove all cached entries for a session."""
+        prefix = f"{session_id}:"
+        self._cache = {k: v for k, v in self._cache.items() if not k.startswith(prefix)}
+
+    def clear(self) -> None:
+        self._cache.clear()
+
+
+# Global cache instance
+viz_cache = FileCache(max_size=50)
+
+
 def get_session_store() -> SessionStore:
     """Dependency to get session store."""
     return SessionStore(settings.sessions_dir)
 
 
-async def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]]:
+async def load_diff_expression_results(results_dir: Path, session_id: str = "") -> List[Dict[str, Any]]:
     """Load differential expression results from TSV file.
 
     Args:
         results_dir: Path to session results directory
+        session_id: Session ID for cache keying
 
     Returns:
         List of protein results dictionaries
     """
+    cache_key = _cache_key(session_id, "diff_expression")
+    cached = viz_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     diff_file = results_dir / "Diff_Expression.tsv"
 
     if not diff_file.exists():
@@ -94,6 +145,7 @@ async def load_diff_expression_results(results_dir: Path) -> List[Dict[str, Any]
             }
             results.append(result)
 
+        viz_cache.set(cache_key, results)
         return results
     except Exception as e:
         # Log error but return empty list
@@ -247,7 +299,7 @@ async def get_results(
     results_dir = settings.sessions_dir / session_id / "results"
     
     # Load results from file
-    all_results = await load_diff_expression_results(results_dir)
+    all_results = await load_diff_expression_results(results_dir, session_id)
     
     # Apply filters
     if significant_only:
@@ -348,16 +400,22 @@ async def get_gsea_results(
     return create_response(gsea_data)
 
 
-async def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
+async def load_protein_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
     """Load protein abundance data from TSV file.
 
     Args:
         results_dir: Path to session results directory
         protein_id: Protein accession ID
+        session_id: Session ID for cache keying
 
     Returns:
         Protein abundance data dictionary matching frontend ProteinAbundance interface
     """
+    cache_key = _cache_key(session_id, "protein", protein_id)
+    cached = viz_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     abundance_file = results_dir / "Protein_Abundances.tsv"
 
     if not abundance_file.exists():
@@ -398,11 +456,13 @@ async def load_protein_abundance(results_dir: Path, protein_id: str) -> Dict[str
                 condition = "Treatment"
             conditions.append(condition)
 
-        return {
+        result = {
             "samples": samples,
             "abundances": abundances,
             "conditions": conditions
         }
+        viz_cache.set(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"Error loading protein abundance: {e}")
         return {"samples": [], "abundances": [], "conditions": []}
@@ -424,23 +484,29 @@ async def get_protein_abundance(
     
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
-    
+
     # Load protein abundance from file
-    abundance_data = await load_protein_abundance(results_dir, protein_id)
-    
+    abundance_data = await load_protein_abundance(results_dir, protein_id, session_id)
+
     return create_response(abundance_data)
 
 
-async def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, Any]:
+async def load_psm_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
     """Load PSM abundance data from TSV file.
 
     Args:
         results_dir: Path to session results directory
         protein_id: Protein accession ID
+        session_id: Session ID for cache keying
 
     Returns:
         PSM abundance data dictionary matching frontend PSMAbundanceData interface
     """
+    cache_key = _cache_key(session_id, "psm", protein_id)
+    cached = viz_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     psm_file = results_dir / "PSM_Abundances.tsv"
 
     if not psm_file.exists():
@@ -476,7 +542,9 @@ async def load_psm_abundance(results_dir: Path, protein_id: str) -> Dict[str, An
                     "samples": samples
                 })
 
-        return {"psms": psms}
+        result = {"psms": psms}
+        viz_cache.set(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"Error loading PSM abundance: {e}")
         return {"psms": []}
@@ -500,6 +568,6 @@ async def get_protein_psm(
     results_dir = settings.sessions_dir / session_id / "results"
     
     # Load PSM data from file
-    psm_data = await load_psm_abundance(results_dir, protein_id)
+    psm_data = await load_psm_abundance(results_dir, protein_id, session_id)
     
     return create_response(psm_data)

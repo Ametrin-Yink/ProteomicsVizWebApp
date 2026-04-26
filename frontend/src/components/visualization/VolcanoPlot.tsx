@@ -89,42 +89,25 @@ export default function VolcanoPlot({
         `Adj P-value: ${(d.adj_pval ?? 1).toExponential(2)}`;
     });
 
-    // Sort by selection status (selected on top)
-    const indices = data.map((_, i) => i);
-    indices.sort((a, b) => {
-      const aSelected = selectedProteins.has(data[a].master_protein_accessions);
-      const bSelected = selectedProteins.has(data[b].master_protein_accessions);
-      return aSelected === bSelected ? 0 : aSelected ? 1 : -1;
-    });
-
-    const sortedX = indices.map((i) => xValues[i]);
-    const sortedY = indices.map((i) => yValues[i]);
-    const sortedColors = indices.map((i) => colors[i]);
-    const sortedSizes = indices.map((i) => sizes[i]);
-    const sortedOpacities = indices.map((i) => opacities[i]);
-    const sortedLineColors = indices.map((i) => lineColors[i]);
-    const sortedLineWidths = indices.map((i) => lineWidths[i]);
-    const sortedHoverText = indices.map((i) => hoverText[i]);
-    const sortedProteins = indices.map((i) => data[i].master_protein_accessions);
-
+    // Use arrays directly (WebGL handles rendering order efficiently)
     return [
       {
-        x: sortedX,
-        y: sortedY,
+        x: xValues,
+        y: yValues,
         mode: 'markers' as const,
-        type: 'scatter' as const,
+        type: 'scattergl' as const,
         marker: {
-          color: sortedColors,
-          size: sortedSizes,
-          opacity: sortedOpacities,
+          color: colors,
+          size: sizes,
+          opacity: opacities,
           line: {
-            color: sortedLineColors,
-            width: sortedLineWidths,
+            color: lineColors,
+            width: lineWidths,
           },
         },
-        text: sortedHoverText,
+        text: hoverText,
         hoverinfo: 'text',
-        customdata: sortedProteins,
+        customdata: data.map((d) => d.master_protein_accessions),
         name: 'Proteins',
       },
     ];

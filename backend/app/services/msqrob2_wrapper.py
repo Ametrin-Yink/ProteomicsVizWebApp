@@ -7,6 +7,7 @@ using R's msqrob2 package through subprocess calls (NEVER rpy2).
 
 import asyncio
 import logging
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -65,7 +66,8 @@ class Msqrob2Wrapper:
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            bufsize=1  # Line buffered
+            bufsize=1,  # Line buffered
+            env={**os.environ, "R_NCORES": str(settings.r_n_cores)}
         )
 
         stdout_lines: list[str] = []
