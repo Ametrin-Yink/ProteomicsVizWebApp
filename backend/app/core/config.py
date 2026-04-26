@@ -87,6 +87,12 @@ class Settings(BaseSettings):
         le=7200,  # Max 2 hours
     )
 
+    r_n_cores: int = Field(
+        default=1,
+        description="Number of CPU cores for parallel R processing (Steps 6-7). Set > 1 for parallel BiocParallel.",
+        ge=1,
+    )
+
     # WebSocket settings
     websocket_ping_interval: int = Field(
         default=20,

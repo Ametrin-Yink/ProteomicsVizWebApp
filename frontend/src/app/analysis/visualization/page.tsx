@@ -39,6 +39,8 @@ function ResultsContent() {
       setLoading(true);
       setError(null);
       try {
+        // Load all results for client-side filtering (VolcanoPlot, table search)
+        // Backend caching makes subsequent loads instant
         const results = await getDEResults(sessionId, {
           page: 1,
           per_page: 20000, // Get all for client-side filtering

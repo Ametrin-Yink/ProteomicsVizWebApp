@@ -5,6 +5,7 @@ Manages state persistence and error recovery.
 """
 
 import asyncio
+import gc
 import json
 import logging
 from datetime import datetime, timezone
@@ -390,6 +391,7 @@ class ProcessingOrchestrator:
             ]
 
             # Step 1-5: Data Processing (Python) - Individual steps with progress updates
+            # Offloaded to thread pool to avoid blocking the event loop
             psm_output = results_dir / "PSM_Abundances.tsv"
 
             processing_config = ProcessingConfig(
@@ -402,9 +404,9 @@ class ProcessingOrchestrator:
             await self._send_progress(
                 self._create_progress(1, "started", 0, "Combining replicates...")
             )
-            
-            psm_df = processor.step1_combine_replicates(file_paths)
-            
+
+            psm_df = await asyncio.to_thread(processor.step1_combine_replicates, file_paths)
+
             state.mark_step_completed(1, psm_output)
             result.psm_abundances_path = str(psm_output)
             result.total_psms = len(psm_df)
@@ -419,9 +421,9 @@ class ProcessingOrchestrator:
             await self._send_progress(
                 self._create_progress(2, "started", 0, "Generating unique PSM identifiers...")
             )
-            
-            psm_df = processor.step2_generate_unique_psm(psm_df)
-            
+
+            psm_df = await asyncio.to_thread(processor.step2_generate_unique_psm, psm_df)
+
             state.mark_step_completed(2)
 
             await self._send_progress(
@@ -434,9 +436,9 @@ class ProcessingOrchestrator:
             await self._send_progress(
                 self._create_progress(3, "started", 0, "Removing razor peptides..." if config.remove_razor else "Skipping razor removal...")
             )
-            
-            psm_df = processor.step3_remove_razor(psm_df)
-            
+
+            psm_df = await asyncio.to_thread(processor.step3_remove_razor, psm_df)
+
             state.mark_step_completed(3)
 
             await self._send_progress(
@@ -454,7 +456,7 @@ class ProcessingOrchestrator:
                 self._create_progress(4, "started", 0, "Removing low quality PSMs...")
             )
 
-            psm_df = processor.step4_remove_low_quality(psm_df)
+            psm_df = await asyncio.to_thread(processor.step4_remove_low_quality, psm_df)
 
             logger.info(f"Step 4: Completed with DataFrame shape: {psm_df.shape}")
             if len(psm_df) == 0:
@@ -474,8 +476,8 @@ class ProcessingOrchestrator:
             await self._send_progress(
                 self._create_progress(5, "started", 0, f"Applying {'strict' if config.strict_filtering else 'lenient'} filtering criteria...")
             )
-            
-            psm_df = processor.step5_filter_by_criteria(psm_df)
+
+            psm_df = await asyncio.to_thread(processor.step5_filter_by_criteria, psm_df)
 
             # Save output after Step 5
             # Determine file format based on config (Parquet for speed, TSV for compatibility)
@@ -513,6 +515,11 @@ class ProcessingOrchestrator:
                     5, "completed", 100, f"Filtering complete, {len(psm_df)} PSMs remaining"
                 )
             )
+
+            # Release PSM DataFrame from memory before R steps
+            del psm_df
+            gc.collect()
+            logger.info("Released PSM DataFrame from memory before R steps")
 
             # Step 6: Protein Abundance (R)
             protein_output = results_dir / "Protein_Abundances.tsv"

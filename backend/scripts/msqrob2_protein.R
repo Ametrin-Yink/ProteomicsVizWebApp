@@ -15,6 +15,7 @@ suppressPackageStartupMessages({
     library(QFeatures)
     library(limma)
     library(SummarizedExperiment)
+    library(matrixStats)
 })
 cat("R packages loaded successfully\n")
 
@@ -47,11 +48,11 @@ if (!file.exists(input_file)) {
 cat("Reading PSM data...\n")
 if (grepl("\\.parquet$", input_file, ignore.case = TRUE)) {
     library(arrow)
-    psm_data <- read_parquet(input_file)
+    psm_data <- as.data.table(read_parquet(input_file))
     cat("Loaded", nrow(psm_data), "PSMs from Parquet\n")
 } else {
-    psm_data <- read.delim(input_file, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
-    cat("Loaded", nrow(psm_data), "PSMs from TSV\n")
+    psm_data <- fread(input_file, sep = "\t", header = TRUE, stringsAsFactors = FALSE, data.table = TRUE)
+    cat("Loaded", nrow(psm_data), "PSMs from TSV (fread)\n")
 }
 
 # Filter out rows with empty Master_Protein_Accessions
@@ -64,8 +65,7 @@ metadata_cols <- c("Sequence", "Modifications", "Charge", "Contaminant",
                    "Condition", "Replicate", "Unique_PSM")
 abundance_cols <- setdiff(names(psm_data), metadata_cols)
 
-# Convert all abundance columns to numeric (they may be read as strings from TSV;
-# Parquet preserves types so this is a no-op for Parquet input)
+# Convert all abundance columns to numeric (vectorized)
 for (col in abundance_cols) {
     if (!is.numeric(psm_data[[col]])) {
         psm_data[[col]] <- suppressWarnings(as.numeric(psm_data[[col]]))
@@ -73,8 +73,8 @@ for (col in abundance_cols) {
 }
 cat("Converted", length(abundance_cols), "abundance columns to numeric\n")
 
-# Filter to only numeric abundance columns (that successfully converted)
-abundance_cols <- abundance_cols[sapply(psm_data[abundance_cols], function(x) is.numeric(x) && !all(is.na(x)))]
+# Filter to only numeric abundance columns (vectorized with vapply)
+abundance_cols <- abundance_cols[vapply(psm_data[abundance_cols], function(x) is.numeric(x) && !all(is.na(x)), logical(1))]
 cat("Found", length(abundance_cols), "valid abundance columns\n")
 
 if (length(abundance_cols) == 0) {
@@ -94,39 +94,37 @@ if (nrow(psm_data) > 0) {
 # Check if data is in long format (has Sample_Origination column) or wide format
 if ("Sample_Origination" %in% names(psm_data)) {
     cat("Data is in long format, reshaping to wide format...\n")
-    
-    # Aggregate duplicate PSMs within each sample (sum abundances) using data.table
-    cat("Aggregating duplicate PSMs within each sample...\n")
-    psm_dt <- as.data.table(psm_data)
-    psm_dt_agg <- psm_dt[, .(Abundance = sum(Abundance, na.rm = TRUE)),
-                         by = .(Unique_PSM, Sample_Origination, Master_Protein_Accessions, Sequence, Modifications, Charge)]
+
+    # Aggregate and reshape in one pass using data.table
+    cat("Aggregating duplicate PSMs and reshaping to wide format...\n")
+    setDT(psm_data)
+
+    # Single aggregation: sum abundance by PSM+protein+sample
+    psm_dt_agg <- psm_data[, .(Abundance = sum(Abundance, na.rm = TRUE)),
+                           by = .(Unique_PSM, Master_Protein_Accessions, Sample_Origination)]
     cat("Aggregated from", nrow(psm_data), "to", nrow(psm_dt_agg), "rows\n")
 
     # Reshape to wide format using data.table::dcast (much faster than base reshape)
     cat("Reshaping to wide format with data.table::dcast...\n")
-    # Aggregate by Unique_PSM + Master_Protein_Accessions per sample
-    # Use sum to handle any remaining duplicates (same PSM mapping to same protein)
-    psm_for_cast <- psm_dt_agg[, .(Abundance = sum(Abundance, na.rm = TRUE)),
-                                by = .(Unique_PSM, Master_Protein_Accessions, Sample_Origination)]
-    psm_wide_dt <- dcast(psm_for_cast,
+    psm_wide_dt <- dcast(psm_dt_agg,
                          Unique_PSM + Master_Protein_Accessions ~ Sample_Origination,
                          value.var = "Abundance", fun.aggregate = sum)
-    psm_wide <- as.data.frame(psm_wide_dt)
-    names(psm_wide) <- gsub("Abundance\\.", "", names(psm_wide))
-    
-    cat("Reshaped to wide format:", nrow(psm_wide), "rows x", ncol(psm_wide), "columns\n")
-    
+    # Keep as data.table - readQFeatures accepts both types
+    names(psm_wide_dt) <- gsub("Abundance\\.", "", names(psm_wide_dt))
+
+    cat("Reshaped to wide format:", nrow(psm_wide_dt), "rows x", ncol(psm_wide_dt), "columns\n")
+
     # Use readQFeatures to create QFeatures object from wide format
-    quant_col_indices <- which(!names(psm_wide) %in% c("Unique_PSM", "Master_Protein_Accessions"))
-    
+    quant_col_indices <- which(!names(psm_wide_dt) %in% c("Unique_PSM", "Master_Protein_Accessions"))
+
     pe <- readQFeatures(
-        assayData = psm_wide,
+        assayData = psm_wide_dt,
         quantCols = quant_col_indices,
         name = "peptide"
     )
-    
+
     # Add protein annotations
-    rowData(pe[["peptide"]])$Proteins <- psm_wide$Master_Protein_Accessions
+    rowData(pe[["peptide"]])$Proteins <- psm_wide_dt$Master_Protein_Accessions
     
 } else {
     cat("Data is in wide format, using readQFeatures...\n")
@@ -163,8 +161,8 @@ cat("Applying median centering normalization (shifting to highest median)...\n")
 # Get the log2 transformed assay
 peptide_log2_assay <- assay(pe[["peptide_log2"]])
 
-# Calculate median for each sample (column)
-sample_medians <- apply(peptide_log2_assay, 2, median, na.rm = TRUE)
+# Calculate median for each sample (column) - use matrixStats::colMedians for speed
+sample_medians <- colMedians(peptide_log2_assay, na.rm = TRUE)
 cat("Sample medians before normalization:\n")
 for (i in seq_along(sample_medians)) {
     cat("  ", colnames(peptide_log2_assay)[i], ":", round(sample_medians[i], 4), "\n")
@@ -174,12 +172,8 @@ for (i in seq_along(sample_medians)) {
 max_median <- max(sample_medians, na.rm = TRUE)
 cat("Maximum median across all samples:", round(max_median, 4), "\n")
 
-# Normalize: subtract sample median, then add max median
-# This centers all samples at the highest median instead of 0
-peptide_norm_matrix <- peptide_log2_assay
-for (i in seq_along(sample_medians)) {
-    peptide_norm_matrix[, i] <- peptide_log2_assay[, i] - sample_medians[i] + max_median
-}
+# Normalize: subtract sample median, then add max median (vectorized with sweep)
+peptide_norm_matrix <- sweep(peptide_log2_assay, 2, sample_medians, "-") + max_median
 
 # Create a new SummarizedExperiment with the normalized data
 # Copy the rowData and colData from the original assay
@@ -194,7 +188,7 @@ pe <- addAssay(pe, peptide_norm_se, name = "peptide_norm")
 
 # Verify normalization
 peptide_norm_assay <- assay(pe[["peptide_norm"]])
-norm_medians <- apply(peptide_norm_assay, 2, median, na.rm = TRUE)
+norm_medians <- colMedians(peptide_norm_assay, na.rm = TRUE)
 cat("Sample medians after normalization (should all be ~", round(max_median, 4), "):\n")
 for (i in seq_along(norm_medians)) {
     cat("  ", colnames(peptide_norm_assay)[i], ":", round(norm_medians[i], 4), "\n")
@@ -226,19 +220,53 @@ flush.console()
 cat("Starting aggregation at", format(Sys.time(), "%H:%M:%S"), "\n")
 flush.console()
 
-# Use BiocParallel for aggregation (SerialParam for stability, parallel can cause issues with rlm)
+# Use BiocParallel for aggregation
+# SnowParam for parallel processing on large datasets, with SerialParam fallback
+# Parallel can cause issues with rlm on some systems, so we try parallel first and fall back
 library(BiocParallel)
-param <- SerialParam()
-cat("Using BiocParallel SerialParam for aggregation\n")
+n_cores <- as.integer(Sys.getenv("R_NCORES", unset = "1"))
+if (n_cores > 1) {
+    cat("Attempting parallel aggregation with", n_cores, "workers (SnowParam)\n")
+    param <- tryCatch({
+        SnowParam(workers = n_cores, progressbar = TRUE)
+    }, error = function(e) {
+        cat("SnowParam creation failed:", conditionMessage(e), "\n")
+        NULL
+    })
+    if (is.null(param)) {
+        cat("Falling back to SerialParam\n")
+        param <- SerialParam()
+    }
+} else {
+    cat("Using BiocParallel SerialParam for aggregation (R_NCORES not set or = 1)\n")
+    param <- SerialParam()
+}
 
-pe <- aggregateFeatures(
-    object = pe,
-    i = "peptide_norm",
-    fcol = "Proteins",
-    name = "protein",
-    fun = MsCoreUtils::robustSummary,
-    BPPARAM = param
-)
+pe <- tryCatch({
+    aggregateFeatures(
+        object = pe,
+        i = "peptide_norm",
+        fcol = "Proteins",
+        name = "protein",
+        fun = MsCoreUtils::robustSummary,
+        BPPARAM = param
+    )
+}, error = function(e) {
+    if (inherits(param, "SnowParam")) {
+        cat("Parallel aggregation failed:", conditionMessage(e), "\n")
+        cat("Retrying with SerialParam...\n")
+        aggregateFeatures(
+            object = pe,
+            i = "peptide_norm",
+            fcol = "Proteins",
+            name = "protein",
+            fun = MsCoreUtils::robustSummary,
+            BPPARAM = SerialParam()
+        )
+    } else {
+        stop(e)
+    }
+})
 
 cat("Aggregation complete:", nrow(pe[["protein"]]), "proteins\n")
 cat("Protein abundances are on log2 scale\n")
@@ -303,23 +331,16 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
         })
         mapping <- setNames(first_gene, gene_map[[entry_col]])
 
-        # Handle multi-ID proteins by looking up each ID and taking first match
-        gene_names <- sapply(protein_ids, function(pid) {
-            # Check if this is a multi-ID protein (contains semicolon)
-            if (grepl(";", pid)) {
-                # Split by semicolon and try each ID
-                ids <- strsplit(pid, ";")[[1]]
-                ids <- trimws(ids)  # Remove whitespace
-                for (id in ids) {
-                    if (!is.na(mapping[id])) {
-                        return(mapping[id])
-                    }
-                }
-                return(NA)  # No match found for any ID
-            } else {
-                # Single ID - direct lookup
-                return(mapping[pid])
-            }
+        # Vectorized gene lookup for multi-ID proteins
+        # Split all protein IDs by semicolon, lookup each, take first non-NA per protein
+        all_ids <- strsplit(protein_ids, ";")
+        flat_ids <- trimws(unlist(all_ids))
+        flat_mapped <- mapping[flat_ids]
+        # Re-group by original protein and take first non-NA
+        group_idx <- rep(seq_along(protein_ids), lengths(all_ids))
+        gene_names <- tapply(flat_mapped, group_idx, function(x) {
+            non_na <- x[!is.na(x)]
+            if (length(non_na) > 0) non_na[1] else NA
         })
 
         cat("Loaded gene mapping for", sum(!is.na(gene_names)), "of", length(protein_ids), "proteins\n")
@@ -340,11 +361,9 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
 # Handle NA gene names
 gene_names[is.na(gene_names)] <- protein_ids[is.na(gene_names)]
 
-# Get PSM counts for each protein
-psm_counts <- sapply(protein_ids, function(pid) {
-    count <- protein_psm_counts[pid]
-    if (is.na(count)) 0 else as.integer(count)
-})
+# Get PSM counts for each protein (vectorized named-vector lookup)
+psm_counts <- as.integer(protein_psm_counts[protein_ids])
+psm_counts[is.na(psm_counts)] <- 0
 
 # Create output data frame
 protein_df <- as.data.frame(protein_matrix)
