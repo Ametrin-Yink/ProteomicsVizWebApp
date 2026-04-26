@@ -10,6 +10,7 @@
 
 cat("Loading R packages...\n")
 suppressPackageStartupMessages({
+    library(data.table)
     library(msqrob2)
     library(QFeatures)
     library(limma)
