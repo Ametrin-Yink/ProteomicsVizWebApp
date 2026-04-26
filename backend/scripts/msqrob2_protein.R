@@ -98,17 +98,16 @@ if ("Sample_Origination" %in% names(psm_data)) {
     # Aggregate duplicate PSMs within each sample (sum abundances) using data.table
     cat("Aggregating duplicate PSMs within each sample...\n")
     psm_dt <- as.data.table(psm_data)
-    psm_agg <- psm_dt[, .(Abundance = sum(Abundance, na.rm = TRUE)),
-                       by = .(Unique_PSM, Sample_Origination, Master_Protein_Accessions, Sequence, Modifications, Charge)]
-    psm_agg <- as.data.frame(psm_agg)
-    cat("Aggregated from", nrow(psm_data), "to", nrow(psm_agg), "rows\n")
+    psm_dt_agg <- psm_dt[, .(Abundance = sum(Abundance, na.rm = TRUE)),
+                         by = .(Unique_PSM, Sample_Origination, Master_Protein_Accessions, Sequence, Modifications, Charge)]
+    cat("Aggregated from", nrow(psm_data), "to", nrow(psm_dt_agg), "rows\n")
 
     # Reshape to wide format using data.table::dcast (much faster than base reshape)
     cat("Reshaping to wide format with data.table::dcast...\n")
     # Aggregate by Unique_PSM + Master_Protein_Accessions per sample
     # Use sum to handle any remaining duplicates (same PSM mapping to same protein)
-    psm_for_cast <- psm_agg[, .(Abundance = sum(Abundance, na.rm = TRUE)),
-                             by = .(Unique_PSM, Master_Protein_Accessions, Sample_Origination)]
+    psm_for_cast <- psm_dt_agg[, .(Abundance = sum(Abundance, na.rm = TRUE)),
+                                by = .(Unique_PSM, Master_Protein_Accessions, Sample_Origination)]
     psm_wide_dt <- dcast(psm_for_cast,
                          Unique_PSM + Master_Protein_Accessions ~ Sample_Origination,
                          value.var = "Abundance", fun.aggregate = sum)
