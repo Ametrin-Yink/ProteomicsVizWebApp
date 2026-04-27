@@ -526,7 +526,7 @@ async def get_gsea_plot_data(
     nes = pathway.get("nes", 0)
 
     # Use existing method to compute curve
-    running_es_curve = gsea_service._generate_running_es_curve(
+    running_es_curve = gsea_service.generate_running_es_curve(
         ranked_genes, lead_genes, nes, ranked_metrics
     )
 
@@ -582,6 +582,12 @@ async def get_gsea_heatmap_data(
             detail=f"Pathway '{term}' not found in {database}"
         )
 
+    # Check cache first
+    cache_key = _cache_key(session_id, "gsea_heatmap", database, term)
+    cached = viz_cache.get(cache_key)
+    if cached is not None:
+        return create_response(cached)
+
     lead_genes = pathway.get("lead_genes", [])
     if not lead_genes:
         return create_response({"genes": [], "samples": [], "z_scores": []})
@@ -598,10 +604,13 @@ async def get_gsea_heatmap_data(
         return create_response({"genes": [], "samples": [], "z_scores": []})
 
     # Use existing method to generate heatmap data (PSM_Count already excluded)
-    heatmap_data = gsea_service._generate_heatmap_data(protein_df, lead_genes)
+    heatmap_data = gsea_service.generate_heatmap_data(protein_df, lead_genes)
 
     if heatmap_data is None:
         return create_response({"genes": [], "samples": [], "z_scores": []})
+
+    # Cache the result
+    viz_cache.set(cache_key, heatmap_data)
 
     return create_response(heatmap_data)
 

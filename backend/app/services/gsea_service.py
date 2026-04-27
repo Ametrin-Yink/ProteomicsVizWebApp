@@ -378,7 +378,7 @@ class GSEAService:
                 results=[]
             )
 
-    def _generate_running_es_curve(
+    def generate_running_es_curve(
         self,
         ranked_genes: list[str],
         lead_genes: list[str],
@@ -487,7 +487,7 @@ class GSEAService:
 
         return curve
 
-    def _generate_heatmap_data(
+    def generate_heatmap_data(
         self,
         protein_df: pd.DataFrame,
         lead_genes: list[str]
