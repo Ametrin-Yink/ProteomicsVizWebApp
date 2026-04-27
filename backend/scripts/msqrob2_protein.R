@@ -74,7 +74,7 @@ for (col in abundance_cols) {
 cat("Converted", length(abundance_cols), "abundance columns to numeric\n")
 
 # Filter to only numeric abundance columns (vectorized with vapply)
-abundance_cols <- abundance_cols[vapply(psm_data[abundance_cols], function(x) is.numeric(x) && !all(is.na(x)), logical(1))]
+abundance_cols <- abundance_cols[vapply(psm_data[, ..abundance_cols], function(x) is.numeric(x) && !all(is.na(x)), logical(1))]
 cat("Found", length(abundance_cols), "valid abundance columns\n")
 
 if (length(abundance_cols) == 0) {
@@ -83,7 +83,7 @@ if (length(abundance_cols) == 0) {
 
 # Remove proteins where ALL abundance values are NA (would produce NA results regardless)
 if (nrow(psm_data) > 0) {
-    all_na_mask <- rowSums(is.na(psm_data[, abundance_cols, drop = FALSE])) == length(abundance_cols)
+    all_na_mask <- rowSums(is.na(psm_data[, ..abundance_cols])) == length(abundance_cols)
     n_removed <- sum(all_na_mask)
     if (n_removed > 0) {
         cat("Removing", n_removed, "proteins with no abundance data\n")
@@ -113,6 +113,16 @@ if ("Sample_Origination" %in% names(psm_data)) {
     names(psm_wide_dt) <- gsub("Abundance\\.", "", names(psm_wide_dt))
 
     cat("Reshaped to wide format:", nrow(psm_wide_dt), "rows x", ncol(psm_wide_dt), "columns\n")
+
+    # Convert zeros to NA — dcast fills missing peptide-sample combos with 0 from sum(),
+    # but these represent missing observations, not true zero abundance.
+    # log2(0) = -Inf would crash msqrob2 aggregation.
+    sample_cols <- setdiff(names(psm_wide_dt), c("Unique_PSM", "Master_Protein_Accessions"))
+    for (col in sample_cols) {
+        psm_wide_dt[[col]] <- fifelse(psm_wide_dt[[col]] == 0, NA_real_, psm_wide_dt[[col]])
+    }
+    n_zeros <- sum(is.na(psm_wide_dt[, ..sample_cols]))
+    cat("Converted", n_zeros, "zero values to NA (missing peptide observations)\n")
 
     # Use readQFeatures to create QFeatures object from wide format
     quant_col_indices <- which(!names(psm_wide_dt) %in% c("Unique_PSM", "Master_Protein_Accessions"))

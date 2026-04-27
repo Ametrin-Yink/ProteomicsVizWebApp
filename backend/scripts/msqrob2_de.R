@@ -58,7 +58,7 @@ cat("All non-ID columns:", paste(abundance_cols, collapse = ", "), "\n")
 flush.console()
 
 # Filter to only numeric columns (vectorized with vapply)
-abundance_cols <- abundance_cols[vapply(protein_data[abundance_cols], is.numeric, logical(1))]
+abundance_cols <- abundance_cols[vapply(protein_data[, ..abundance_cols], is.numeric, logical(1))]
 
 cat("Found", length(abundance_cols), "abundance columns\n")
 cat("Abundance columns:", paste(abundance_cols, collapse = ", "), "\n")
@@ -69,7 +69,7 @@ if (length(abundance_cols) == 0) {
 }
 
 # Create matrix
-protein_matrix <- as.matrix(protein_data[, abundance_cols, drop = FALSE])
+protein_matrix <- as.matrix(protein_data[, ..abundance_cols])
 rownames(protein_matrix) <- protein_data$Master_Protein_Accessions
 
 # Pre-filter: remove proteins with zero variance (no DE signal, wastes compute)
