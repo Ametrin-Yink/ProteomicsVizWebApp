@@ -553,7 +553,7 @@ async def get_gsea_plot_data(
     # Check cache first
     cache_key = _cache_key(session_id, "gsea_plot", database, term)
     cached = viz_cache.get(cache_key)
-    if cached is not None:
+    if cached is not None and 'pathway_gene_set_size' in cached:
         return create_response(cached)
 
     # Use full pathway gene set from GMT for curve generation (not just lead_genes)

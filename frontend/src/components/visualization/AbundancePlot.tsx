@@ -84,19 +84,19 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       yaxis: {
         title: { text: 'Abundance', font: { size: 12 } },
         gridcolor: '#E5E7EB',
-        // Ensure y-axis starts at 0 to show missing values clearly
         rangemode: 'tozero' as const,
       },
       showlegend: true,
       legend: {
         orientation: 'h' as const,
-        y: 1.1,
+        y: -0.5,
         x: 0.5,
         xanchor: 'center' as const,
+        yanchor: 'top' as const,
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 60, r: 30, t: 80, b: 100 },
+      margin: { l: 60, r: 30, t: 50, b: 170 },
       barmode: 'group' as const,
     }),
     [title]
@@ -112,7 +112,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
   );
 
   return (
-    <div className="w-full h-[350px] bg-white rounded-lg border border-gray-200 p-2">
+    <div className="w-full h-[450px] bg-white rounded-lg border border-gray-200 p-2">
       <Plot
         data={plotData}
         layout={layout}
@@ -150,15 +150,31 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
     const colors = ['#E73564', '#00ADEF', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
 
     data.psms.forEach((psm, index) => {
-      // Defensive: ensure psm has required arrays
       if (!psm || !psm.samples || !psm.abundances) {
         return;
       }
 
+      // Aggregate abundances by sample (multiple rows per sample from different charge states)
+      const aggregated = new Map<string, number>();
+      psm.samples.forEach((s, i) => {
+        aggregated.set(s, (aggregated.get(s) || 0) + psm.abundances[i]);
+      });
+
+      // Sort by sample name for consistent ordering
+      const sorted = [...aggregated.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      const sortedSamples = sorted.map(([s]) => s);
+      const sortedAbundances = sorted.map(([, v]) => v);
+
+      // Min-max normalize to 0-1
+      const minVal = Math.min(...sortedAbundances);
+      const maxVal = Math.max(...sortedAbundances);
+      const range = maxVal - minVal || 1;
+      const normalizedY = sortedAbundances.map(v => (v - minVal) / range);
+
       const color = colors[index % colors.length];
       traces.push({
-        x: psm.samples,
-        y: psm.abundances,
+        x: sortedSamples,
+        y: normalizedY,
         mode: 'lines+markers' as const,
         name: psm.sequence || psm.psm_id || `PSM ${index + 1}`,
         line: { color, width: 2 },
@@ -172,7 +188,7 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
   }, [data]);
 
   const psmCount = data?.psms?.length ?? 0;
-  const plotHeight = Math.max(250, 150 + psmCount * 25);
+  const plotHeight = 450 + psmCount * 12;
 
   const layout = useMemo(
     () => ({
@@ -188,22 +204,22 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
         type: 'category' as const,
       },
       yaxis: {
-        title: { text: 'Abundance', font: { size: 12 } },
+        title: { text: 'Relative Abundance', font: { size: 12 } },
         gridcolor: '#E5E7EB',
-        rangemode: 'tozero' as const,
+        range: [-0.05, 1.05],
       },
       showlegend: true,
       legend: {
         orientation: 'h' as const,
         x: 0.5,
-        y: -0.35,
+        y: -0.7,
         xanchor: 'center' as const,
         yanchor: 'top' as const,
         font: { size: 10 },
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: Math.max(100, 80 + psmCount * 15) },
+      margin: { l: 50, r: 30, t: 50, b: 200 + psmCount * 10 },
     }),
     [title, psmCount]
   );
