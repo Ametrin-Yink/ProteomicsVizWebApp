@@ -11,6 +11,8 @@ import type {
   GSEADatabase,
   ProteinAbundance,
   PSMAbundanceData,
+  GSEAPlotData,
+  GSEAHeatmapData,
 } from '@/types/api';
 import {
   ProcessingStatusResponse,
@@ -95,6 +97,24 @@ export async function getGSEAData(
 
   const query = queryParams.toString();
   return fetchApi<GSEAData>(`/api/sessions/${sessionId}/gsea/${database}${query ? `?${query}` : ''}`);
+}
+
+// GSEA Plot Data (on-demand)
+export async function getGSEAPlotData(
+  sessionId: string,
+  database: GSEADatabase,
+  term: string
+): Promise<GSEAPlotData> {
+  return fetchApi<GSEAPlotData>(`/api/sessions/${sessionId}/gsea/${database}/${encodeURIComponent(term)}/plot`);
+}
+
+// GSEA Heatmap Data (on-demand)
+export async function getGSEAHeatmapData(
+  sessionId: string,
+  database: GSEADatabase,
+  term: string
+): Promise<GSEAHeatmapData> {
+  return fetchApi<GSEAHeatmapData>(`/api/sessions/${sessionId}/gsea/${database}/${encodeURIComponent(term)}/heatmap`);
 }
 
 // Protein Abundance API

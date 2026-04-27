@@ -157,6 +157,20 @@ export interface GSEAData {
   results: GSEAResult[];
 }
 
+export interface GSEAPlotData {
+  term: string;
+  es: number;
+  nes: number;
+  running_es_curve: Array<[number, number]>;
+  rank_metric_positions: Array<[string, number, number]>;
+}
+
+export interface GSEAHeatmapData {
+  genes: string[];
+  samples: string[];
+  z_scores: number[][];
+}
+
 export type GSEADatabase = 'go_bp' | 'go_mf' | 'go_cc' | 'kegg' | 'reactome';
 
 export const GSEADatabaseLabels: Record<GSEADatabase, string> = {
