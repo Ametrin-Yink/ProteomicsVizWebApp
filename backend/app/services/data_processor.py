@@ -103,7 +103,7 @@ class DataProcessor:
         Raises:
             ValueError: If no abundance column found
         """
-        pattern = r'^"?Abundance F\d+ Sample"?$'
+        pattern = r'^"?Abundance F[\dA-Z]+ Sample"?$'
         for col in columns:
             if re.match(pattern, col):
                 return col
