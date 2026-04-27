@@ -13,6 +13,23 @@ interface PathwayTableProps {
 
 const ITEMS_PER_PAGE = 25;
 
+interface SortIndicatorProps {
+  sortKey: string;
+  columnKey: string;
+  direction: 'asc' | 'desc';
+}
+
+const SortIndicator: React.FC<SortIndicatorProps> = ({ sortKey, columnKey, direction }) => {
+  if (sortKey !== columnKey) {
+    return <span className="text-gray-300 ml-1">↕</span>;
+  }
+  return direction === 'asc' ? (
+    <ChevronUp className="w-4 h-4 ml-1 inline" />
+  ) : (
+    <ChevronDown className="w-4 h-4 ml-1 inline" />
+  );
+};
+
 export default function PathwayTable({
   data,
   selectedPathway,
@@ -85,18 +102,6 @@ export default function PathwayTable({
     exportToCSV(exportData, 'gsea_results.csv');
   };
 
-  // Sort indicator component
-  const SortIndicator = ({ columnKey }: { columnKey: string }) => {
-    if (sortConfig.key !== columnKey) {
-      return <span className="text-gray-300 ml-1">↕</span>;
-    }
-    return sortConfig.direction === 'asc' ? (
-      <ChevronUp className="w-4 h-4 ml-1 inline" />
-    ) : (
-      <ChevronDown className="w-4 h-4 ml-1 inline" />
-    );
-  };
-
   return (
     <div data-testid="gsea-table" className="bg-white rounded-lg border border-gray-200">
       {/* Header with controls */}
@@ -142,35 +147,35 @@ export default function PathwayTable({
                 onClick={() => handleSort('name')}
                 className="px-4 py-3 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
               >
-                Pathway <SortIndicator columnKey="name" />
+                Pathway <SortIndicator columnKey="name" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 data-testid="table-header-nes"
                 onClick={() => handleSort('nes')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
               >
-                NES <SortIndicator columnKey="nes" />
+                NES <SortIndicator columnKey="nes" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 data-testid="table-header-pvalue"
                 onClick={() => handleSort('pval')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
               >
-                P-value <SortIndicator columnKey="pval" />
+                P-value <SortIndicator columnKey="pval" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 data-testid="table-header-fdr"
                 onClick={() => handleSort('fdr')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
               >
-                Adj P-value <SortIndicator columnKey="fdr" />
+                Adj P-value <SortIndicator columnKey="fdr" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 data-testid="table-header-genes"
                 onClick={() => handleSort('matched_genes')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
               >
-                Gene Count <SortIndicator columnKey="matched_genes" />
+                Gene Count <SortIndicator columnKey="matched_genes" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
             </tr>
           </thead>

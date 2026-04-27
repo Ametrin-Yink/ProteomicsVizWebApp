@@ -68,6 +68,13 @@ export const Toast: React.FC<ToastProps> = ({
   const Icon = toastIcons[type];
   const colors = toastColors[type];
 
+  const handleClose = React.useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onClose?.(id);
+    }, 300);
+  }, [onClose, id]);
+
   // Auto-dismiss logic
   React.useEffect(() => {
     const startTime = Date.now();
@@ -94,14 +101,7 @@ export const Toast: React.FC<ToastProps> = ({
       clearTimeout(timer);
       cancelAnimationFrame(progressAnimation);
     };
-  }, [duration]);
-
-  const handleClose = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onClose?.(id);
-    }, 300);
-  };
+  }, [duration, handleClose]);
 
   return (
     <div

@@ -12,18 +12,16 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Plus,
-  ChevronLeft,
   ChevronRight,
   FlaskConical,
   FolderOpen,
   History,
-  Settings,
 } from 'lucide-react';
 import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessionStore';
 import { useUIStore } from '@/stores/uiStore';
 import { sessionsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/Button';
-import { SessionCard, MiniSessionCard } from './SessionCard';
+import { MiniSessionCard } from './SessionCard';
 import { SessionCreateDialog } from './SessionCreateDialog';
 import type { Session, AnalysisTemplate } from '@/types/session';
 
@@ -37,14 +35,15 @@ export interface SessionManagerProps {
  */
 export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => {
   const router = useRouter();
-  const sessions = useSessions() || [];
+  const sessions = useSessions();
+  const sessionsList = React.useMemo(() => sessions || [], [sessions]);
   const currentSession = useCurrentSession();
   const { setCurrentSession, addSession, loadSessions, deleteSession, updateSession } = useSessionStore();
-  const { sidebar, toggleSidebar, setSidebarCollapsed } = useUIStore();
+  const { sidebar, setSidebarCollapsed } = useUIStore();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'all' | 'recent'>('all');
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [, setIsLoading] = React.useState(false);
 
   // Load sessions from backend on mount
   React.useEffect(() => {
@@ -53,13 +52,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
   // Sort sessions by creation time (newest first)
   const sortedSessions = React.useMemo(() => {
-    if (!Array.isArray(sessions)) return [];
-    return [...sessions].sort((a, b) => {
+    return [...sessionsList].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
       return dateB - dateA; // Descending order (newest first)
     });
-  }, [sessions]);
+  }, [sessionsList]);
 
   // Filter sessions based on active tab
   const filteredSessions = React.useMemo(() => {
@@ -133,18 +131,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       deleteSession(sessionId);
       // Show success toast
       const { addToast } = useUIStore.getState();
-      addToast({
-        type: 'success',
-        message: 'Session deleted successfully',
-      });
+      addToast('success', 'Session deleted successfully');
     } catch (error) {
       console.error('Failed to delete session:', error);
       // Show error toast
       const { addToast } = useUIStore.getState();
-      addToast({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Failed to delete session',
-      });
+      addToast('error', error instanceof Error ? error.message : 'Failed to delete session');
     }
   };
 
@@ -157,18 +149,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       updateSession(sessionId, { name: newName });
       // Show success toast
       const { addToast } = useUIStore.getState();
-      addToast({
-        type: 'success',
-        message: 'Session renamed successfully',
-      });
+      addToast('success', 'Session renamed successfully');
     } catch (error) {
       console.error('Failed to rename session:', error);
       // Show error toast
       const { addToast } = useUIStore.getState();
-      addToast({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Failed to rename session',
-      });
+      addToast('error', error instanceof Error ? error.message : 'Failed to rename session');
     }
   };
 
@@ -280,7 +266,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               onClick={() => setActiveTab('all')}
             >
               <FolderOpen className="w-4 h-4" />
-              All ({sessions.length})
+              All ({sessionsList.length})
             </button>
             <button
               className={cn(
@@ -299,7 +285,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
         {/* Sessions list */}
         <div data-testid="session-list" className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
-          {sessions.length === 0 ? (
+          {sessionsList.length === 0 ? (
             <div data-testid="no-sessions-message" className="text-center py-8">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#f8f9fc] flex items-center justify-center">
                 <FlaskConical className="w-8 h-8 text-[#94a3b8]" />

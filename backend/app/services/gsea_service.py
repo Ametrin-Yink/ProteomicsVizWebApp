@@ -6,6 +6,7 @@ Performs Gene Set Enrichment Analysis using gseapy.
 
 import os
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -21,18 +22,68 @@ from app.services.gsea_cache_service import gsea_cache_service, GSEACacheKey
 
 logger = logging.getLogger("proteomics")
 
+# Enrichr API base URL
+ENRICHR_API_URL = "https://maayanlab.cloud/Enrichr/geneSetLibrary"
+
+
+def _validate_and_repair_gmt_cache() -> None:
+    """Validate cached GMT files and re-download any that are empty or missing.
+
+    gseapy downloads GMT files from Enrichr on first use, but network failures
+    can leave 0-byte files that cause silent empty results. This function checks
+    the cache and repairs empty files by fetching fresh data from the Enrichr API.
+    """
+    cache_dir = Path.home() / ".cache" / "gseapy"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    required_files = [
+        "Enrichr.GO_Biological_Process_2021.gmt",
+        "Enrichr.GO_Molecular_Function_2021.gmt",
+        "Enrichr.GO_Cellular_Component_2021.gmt",
+        "Enrichr.KEGG_2021_Human.gmt",
+        "Enrichr.Reactome_2022.gmt",
+    ]
+
+    for filename in required_files:
+        gmt_path = cache_dir / filename
+        if not gmt_path.exists() or gmt_path.stat().st_size == 0:
+            lib_name = filename.replace("Enrichr.", "").replace(".gmt", "")
+            logger.info(f"GMT cache empty/missing for {lib_name}, re-downloading...")
+            try:
+                import requests
+                url = f"{ENRICHR_API_URL}?mode=json&libraryName={lib_name}"
+                resp = requests.get(url, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
+
+                # Convert Enrichr JSON to GMT format
+                gmt_lines = []
+                lib_data = list(data.values())[0]
+                terms = lib_data.get("terms", {})
+                for term_name, genes_dict in terms.items():
+                    genes = list(genes_dict.keys())
+                    if genes:
+                        gmt_lines.append(f"{term_name}\thttp://example.com\t" + "\t".join(genes))
+
+                with open(gmt_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(gmt_lines))
+
+                logger.info(f"Downloaded {lib_name}: {len(gmt_lines)} gene sets, {gmt_path.stat().st_size} bytes")
+            except Exception as e:
+                logger.warning(f"Failed to re-download GMT cache for {lib_name}: {e}")
+
 
 class GSEAService:
     """
     GSEA analysis service.
-    
+
     Implements step 9 of the pipeline: GSEA analysis on multiple databases.
     """
-    
+
     def __init__(self):
         """Initialize GSEA service."""
         self.results: dict[str, GSEAResults] = {}
-    
+
     async def run_gsea_analysis(
         self,
         diff_expression_path: Path,
@@ -53,6 +104,9 @@ class GSEAService:
             Dictionary mapping database name to GSEAResults
         """
         logger.info("Step 9: Running GSEA analysis (parallel with caching)")
+
+        # Validate and repair GMT cache before running analysis
+        _validate_and_repair_gmt_cache()
 
         # Load differential expression data
         diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_path, sep='\t')
@@ -151,12 +205,12 @@ class GSEAService:
     def _prepare_ranked_list(self, diff_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         """
         Prepare ranked gene list for GSEA.
-        
+
         Ranking metric: -log10(p-value) * sign(logFC)
-        
+
         Args:
             diff_df: Differential expression DataFrame
-            
+
         Returns:
             Ranked DataFrame with columns: gene, metric
         """
@@ -164,7 +218,7 @@ class GSEAService:
         gene_col = None
         pval_col = None
         logfc_col = None
-        
+
         for col in diff_df.columns:
             col_lower = col.lower()
             if 'gene' in col_lower or 'symbol' in col_lower:
@@ -173,32 +227,37 @@ class GSEAService:
                 pval_col = col
             elif 'logfc' in col_lower or 'log2fc' in col_lower:
                 logfc_col = col
-        
+
         if gene_col is None or pval_col is None or logfc_col is None:
             logger.error(
                 f"Required columns not found. "
                 f"Gene: {gene_col}, Pval: {pval_col}, LogFC: {logfc_col}"
             )
             return None
-        
+
         # Prepare data
         df = diff_df[[gene_col, pval_col, logfc_col]].copy()
         df.columns = ['gene', 'pval', 'logfc']
-        
+
+        # Clean gene names: strip isoform suffixes (e.g. P48729-2 -> P48729)
+        # and take first gene from multi-ID entries (e.g. "Q9BXS6-6; Q9BXS6-7" -> Q9BXS6)
+        df['gene'] = df['gene'].str.split('[;]').str[0].str.strip()
+        df['gene'] = df['gene'].str.replace(r'-\d+$', '', regex=True)
+
         # Remove invalid values
         df = df.dropna()
         df = df[df['pval'] > 0]
         df = df[df['pval'] <= 1]
-        
+
         if len(df) == 0:
             return None
-        
+
         # Calculate ranking metric
         df['metric'] = -np.log10(df['pval']) * np.sign(df['logfc'])
-        
+
         # Sort by metric descending
         df = df.sort_values('metric', ascending=False)
-        
+
         # Return only gene and metric columns
         return df[['gene', 'metric']]
     

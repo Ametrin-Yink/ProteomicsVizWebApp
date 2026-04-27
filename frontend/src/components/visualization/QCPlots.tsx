@@ -212,16 +212,15 @@ export default function QCPlots({ data }: QCPlotsProps) {
 
     // Collect all values for range calculation (all data, not 90%)
     let allValues: number[] = [];
-    Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
-      Object.entries(replicates).forEach(([replicate, values]) => {
+    Object.entries(data.intensity_distributions.psm).forEach(([, replicates]) => {
+      Object.entries(replicates).forEach(([, values]) => {
         allValues = allValues.concat(values);
       });
     });
 
     // Calculate min/max for range (use all data)
-    const min = Math.min(...allValues);
-    const max = Math.max(...allValues);
-    const range = max - min || 1;
+    const min = allValues.reduce((a, b) => Math.min(a, b), Infinity);
+    const max = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
 
     // Function to calculate KDE - use all values, no filtering
     const calculateKDE = (values: number[], numPoints: number = 100) => {
@@ -231,8 +230,8 @@ export default function QCPlots({ data }: QCPlotsProps) {
       const cleanValues = values.filter(v => Number.isFinite(v));
       if (cleanValues.length === 0) return { x: [], y: [] };
 
-      const localMin = Math.min(...cleanValues);
-      const localMax = Math.max(...cleanValues);
+      const localMin = cleanValues.reduce((a, b) => Math.min(a, b), Infinity);
+      const localMax = cleanValues.reduce((a, b) => Math.max(a, b), -Infinity);
       const localRange = localMax - localMin;
 
       // Handle case where all values are the same
@@ -335,13 +334,13 @@ export default function QCPlots({ data }: QCPlotsProps) {
 
     // Collect all values for range calculation (all data, not 90%)
     let allValues: number[] = [];
-    Object.entries(data.intensity_distributions.protein).forEach(([condition, values]) => {
+    Object.entries(data.intensity_distributions.protein).forEach(([, values]) => {
       allValues = allValues.concat(values);
     });
 
     // Calculate min/max for range (use all data)
-    const globalMin = Math.min(...allValues);
-    const globalMax = Math.max(...allValues);
+    const globalMin = allValues.reduce((a, b) => Math.min(a, b), Infinity);
+    const globalMax = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
 
     // Function to calculate KDE - use all values, no filtering
     const calculateKDE = (values: number[], numPoints: number = 100) => {
@@ -351,8 +350,8 @@ export default function QCPlots({ data }: QCPlotsProps) {
       const cleanValues = values.filter(v => Number.isFinite(v));
       if (cleanValues.length === 0) return { x: [], y: [] };
 
-      const localMin = Math.min(...cleanValues);
-      const localMax = Math.max(...cleanValues);
+      const localMin = cleanValues.reduce((a, b) => Math.min(a, b), Infinity);
+      const localMax = cleanValues.reduce((a, b) => Math.max(a, b), -Infinity);
       const localRange = localMax - localMin;
 
       // Handle case where all values are the same
@@ -571,7 +570,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     // Trigger download using Plotly's toImage
     const plotElement = document.querySelector(`[data-testid="${plotId}-plot"] .js-plotly-plot`);
     if (plotElement) {
-      // @ts-ignore - Plotly is loaded globally
+      // @ts-expect-error - Plotly is loaded globally
       window.Plotly.toImage(plotElement, { format: 'png', width: 1200, height: 800 })
         .then((dataUrl: string) => {
           const link = document.createElement('a');

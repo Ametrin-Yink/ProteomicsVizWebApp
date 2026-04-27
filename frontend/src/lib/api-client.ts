@@ -6,13 +6,13 @@
 import type {
   ApiResponse,
   ApiError,
-  Session,
   SessionConfig,
   UploadedFile,
   CompoundFileData,
   ProcessingStatus,
   Organism,
 } from '@/types';
+import type { Session, SessionStatus, AnalysisConfig } from '@/types/session';
 
 // Use empty base URL to go through Next.js proxy (avoids CORS)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -47,8 +47,8 @@ interface BackendSession {
 }
 
 // Map backend status to frontend status
-function mapBackendStatus(status: string): Session['status'] {
-  const statusMap: Record<string, Session['status']> = {
+function mapBackendStatus(status: string): SessionStatus {
+  const statusMap: Record<string, SessionStatus> = {
     'created': 'created',
     'uploading': 'uploading',
     'uploaded': 'uploaded',
@@ -58,6 +58,44 @@ function mapBackendStatus(status: string): Session['status'] {
     'cancelled': 'cancelled',
   };
   return statusMap[status] || 'created';
+}
+
+/**
+ * Build a default AnalysisConfig to satisfy the Session type from @/types/session
+ */
+function defaultAnalysisConfig(override?: Partial<AnalysisConfig>): AnalysisConfig {
+  return {
+    name: '',
+    description: '',
+    template: 'pairwise_comparison',
+    conditions: [],
+    replicates: {},
+    parameters: {
+      minPeptides: 2,
+      minSamples: 2,
+      log2FoldChangeThreshold: 1.0,
+      pValueThreshold: 0.05,
+      gseaDatabase: 'GO_Biological_Process_2021',
+      gseaMinSize: 15,
+      gseaMaxSize: 500,
+      pcaComponents: 2,
+      normalizationMethod: 'median',
+      imputationMethod: 'knn',
+    },
+    ...override,
+  };
+}
+
+/**
+ * Default SessionResults for completed sessions
+ */
+function defaultSessionResults() {
+  return {
+    proteinAbundance: null,
+    differentialExpression: null,
+    qcMetrics: null,
+    gsea: null,
+  };
 }
 
 /**
@@ -138,32 +176,17 @@ export const sessionsApi = {
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
-      config: {
+      config: defaultAnalysisConfig({
         name: backendSession.config?.experiment_name || name,
-        description: '',
-        template: template as any,
         conditions: backendSession.config?.conditions || [],
-        replicates: {},
-        parameters: {
-          minPeptides: 2,
-          minSamples: 2,
-          log2FoldChangeThreshold: 1.0,
-          pValueThreshold: 0.05,
-          gseaDatabase: 'GO_Biological_Process_2021',
-          gseaMinSize: 15,
-          gseaMaxSize: 500,
-          pcaComponents: 2,
-          normalizationMethod: 'median',
-          imputationMethod: 'knn',
-        },
-      },
+      }),
       createdAt: backendSession.created_at,
       updatedAt: backendSession.updated_at,
-      completedAt: backendSession.completed_at,
+      completedAt: backendSession.completed_at ?? null,
       errorMessage: backendSession.error_message,
       uploadedFiles: [],
       compoundFile: null,
-      results: sessionStatus === 'completed' ? {} : null,
+      results: sessionStatus === 'completed' ? defaultSessionResults() : null,
     };
   },
 
@@ -173,7 +196,7 @@ export const sessionsApi = {
   list: async (): Promise<Session[]> => {
     const response = await fetch(apiUrl('/sessions'));
     const data = await handleResponse<BackendSession[]>(response);
-    
+
     // Map backend format to frontend format
     return (data || []).map(s => {
       const sessionId = s.id || s.session_id || '';
@@ -185,20 +208,17 @@ export const sessionsApi = {
         status: mapBackendStatus(sessionStatus),
         currentStep: null,
         progress: sessionStatus === 'completed' ? 100 : 0,
-        config: {
-          treatment: s.config?.conditions?.[1] || '',
-          control: s.config?.conditions?.[0] || '',
-          organism: 'human', // Default
-          remove_razor: !s.config?.keep_razor,
-          strict_filtering: s.config?.strict_filtering || false,
-        },
+        config: defaultAnalysisConfig({
+          name: s.name || s.config?.experiment_name || '',
+          conditions: s.config?.conditions || [],
+        }),
         createdAt: s.created_at,
         updatedAt: s.updated_at,
-        completedAt: s.completed_at,
+        completedAt: s.completed_at ?? null,
         errorMessage: s.error_message,
         uploadedFiles: [],
         compoundFile: null,
-        results: sessionStatus === 'completed' ? {} : null,
+        results: sessionStatus === 'completed' ? defaultSessionResults() : null,
       };
     });
   },
@@ -222,39 +242,24 @@ export const sessionsApi = {
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
-      config: {
+      config: defaultAnalysisConfig({
         name: backendSession.config?.experiment_name || '',
-        description: '',
-        template: 'protein-pairwise',
         conditions: backendSession.config?.conditions || [],
-        replicates: {},
-        parameters: {
-          minPeptides: 2,
-          minSamples: 2,
-          log2FoldChangeThreshold: 1.0,
-          pValueThreshold: 0.05,
-          gseaDatabase: 'GO_Biological_Process_2021',
-          gseaMinSize: 15,
-          gseaMaxSize: 500,
-          pcaComponents: 2,
-          normalizationMethod: 'median',
-          imputationMethod: 'knn',
-        },
-      },
+      }),
       createdAt: backendSession.created_at,
       updatedAt: backendSession.updated_at,
-      completedAt: backendSession.completed_at,
+      completedAt: backendSession.completed_at ?? null,
       errorMessage: backendSession.error_message,
       uploadedFiles: [],
       compoundFile: null,
-      results: sessionStatus === 'completed' ? {} : null,
+      results: sessionStatus === 'completed' ? defaultSessionResults() : null,
     };
   },
 
   /**
    * Update session configuration
    */
-  updateConfig: async (sessionId: string, config: SessionConfig): Promise<Session> => {
+  updateConfig: async (sessionId: string, config: SessionConfig): Promise<unknown> => {
     const response = await fetch(apiUrl(`/sessions/${sessionId}/config?_t=${Date.now()}`), {
       method: 'POST',
       headers: { 
@@ -403,12 +408,12 @@ export const organismsApi = {
       if (!response.ok) {
         // Fallback to default organisms if endpoint not available
         return [
-          { id: 'human', name: 'Human', display_name: 'Human (Homo sapiens)' },
-          { id: 'mouse', name: 'Mouse', display_name: 'Mouse (Mus musculus)' },
-          { id: 'rat', name: 'Rat', display_name: 'Rat (Rattus norvegicus)' },
-          { id: 'zebrafish', name: 'Zebrafish', display_name: 'Zebrafish (Danio rerio)' },
-          { id: 'fly', name: 'Fruit Fly', display_name: 'Fruit Fly (Drosophila melanogaster)' },
-          { id: 'yeast', name: 'Yeast', display_name: 'Yeast (Saccharomyces cerevisiae)' },
+          { id: 'human', name: 'Human', display_name: 'Human (Homo sapiens)', available: true },
+          { id: 'mouse', name: 'Mouse', display_name: 'Mouse (Mus musculus)', available: true },
+          { id: 'rat', name: 'Rat', display_name: 'Rat (Rattus norvegicus)', available: true },
+          { id: 'zebrafish', name: 'Zebrafish', display_name: 'Zebrafish (Danio rerio)', available: true },
+          { id: 'fly', name: 'Fruit Fly', display_name: 'Fruit Fly (Drosophila melanogaster)', available: true },
+          { id: 'yeast', name: 'Yeast', display_name: 'Yeast (Saccharomyces cerevisiae)', available: true },
         ];
       }
       const data = await response.json();
@@ -419,15 +424,15 @@ export const organismsApi = {
         display_name: org.name.charAt(0).toUpperCase() + org.name.slice(1),
         available: true
       }));
-    } catch (error) {
+    } catch {
       // Fallback to default organisms on error
       return [
-        { id: 'human', name: 'Human', display_name: 'Human (Homo sapiens)' },
-        { id: 'mouse', name: 'Mouse', display_name: 'Mouse (Mus musculus)' },
-        { id: 'rat', name: 'Rat', display_name: 'Rat (Rattus norvegicus)' },
-        { id: 'zebrafish', name: 'Zebrafish', display_name: 'Zebrafish (Danio rerio)' },
-        { id: 'fly', name: 'Fruit Fly', display_name: 'Fruit Fly (Drosophila melanogaster)' },
-        { id: 'yeast', name: 'Yeast', display_name: 'Yeast (Saccharomyces cerevisiae)' },
+        { id: 'human', name: 'Human', display_name: 'Human (Homo sapiens)', available: true },
+        { id: 'mouse', name: 'Mouse', display_name: 'Mouse (Mus musculus)', available: true },
+        { id: 'rat', name: 'Rat', display_name: 'Rat (Rattus norvegicus)', available: true },
+        { id: 'zebrafish', name: 'Zebrafish', display_name: 'Zebrafish (Danio rerio)', available: true },
+        { id: 'fly', name: 'Fruit Fly', display_name: 'Fruit Fly (Drosophila melanogaster)', available: true },
+        { id: 'yeast', name: 'Yeast', display_name: 'Yeast (Saccharomyces cerevisiae)', available: true },
       ];
     }
   },
@@ -450,7 +455,7 @@ export const reportsApi = {
   /**
    * Download PDF report
    */
-  download: async (sessionId: string, reportId: string): Promise<Blob> => {
+  download: async (sessionId: string, __reportId: string): Promise<Blob> => {
     const response = await fetch(apiUrl(`/sessions/${sessionId}/download`));
     if (!response.ok) {
       await handleResponse<never>(response);

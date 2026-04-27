@@ -74,7 +74,7 @@ export interface CompleteMessage {
   type: 'complete';
   payload: {
     session_id: string;
-    outputs: {
+    outputs?: {
       psm_abundances: string;
       protein_abundances: string;
       diff_expression: string;

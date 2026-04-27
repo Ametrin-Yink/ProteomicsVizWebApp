@@ -114,30 +114,75 @@ export async function uploadFiles(page: Page, files: string[]): Promise<void> {
   // Upload files ONE-BY-ONE (human-like behavior)
   for (const filePath of absolutePaths) {
     console.log(`Uploading file: ${path.basename(filePath)}`);
-    
+
     // Set up file chooser handler before clicking
     const fileChooserPromise = page.waitForEvent('filechooser');
-    
+
     // Click on the upload area to open file picker
     await page.locator('[data-testid="proteomics-upload"]').evaluate(el => {
       const parent = el.parentElement;
       if (parent) parent.click();
     });
-    
+
     // Wait for file chooser and set files
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(filePath);
-    
+
     // Wait for this file to appear in the table
     const fileName = path.basename(filePath);
-    await expect(page.locator('[data-testid="file-table"]').first()).toContainText(fileName, { timeout: 15000 });
+    await expect(page.locator('[data-testid="uploaded-files-list"]')).toContainText(fileName, { timeout: 30000 });
     console.log(`File uploaded successfully: ${fileName}`);
-    
+
     // Small delay between uploads (mimics user behavior)
     await page.waitForTimeout(500);
   }
   
   console.log('All files uploaded successfully');
+}
+
+/**
+ * Upload proteomics files in bulk (all at once via file chooser)
+ * Use this for large file sets where one-by-one upload is slow or unreliable
+ */
+export async function uploadFilesBulk(page: Page, files: string[]): Promise<void> {
+  // Resolve relative paths to absolute from project root
+  const projectRoot = path.resolve(__dirname, '..', '..');
+  const absolutePaths = files.map(f => {
+    if (path.isAbsolute(f)) return f;
+    const relativePath = f.replace(/^\.\.\/\.\.\//, '');
+    return path.join(projectRoot, relativePath);
+  });
+
+  console.log('Uploading files (bulk):', absolutePaths.map(p => path.basename(p)));
+
+  // Verify files exist
+  for (const filePath of absolutePaths) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+  }
+
+  // Set up file chooser handler before clicking
+  const fileChooserPromise = page.waitForEvent('filechooser');
+
+  // Click on the upload area to open file picker
+  await page.locator('[data-testid="proteomics-upload"]').evaluate(el => {
+    const parent = el.parentElement;
+    if (parent) parent.click();
+  });
+
+  // Wait for file chooser and set ALL files at once
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(absolutePaths);
+
+  // Wait for all files to appear in the table
+  for (const filePath of absolutePaths) {
+    const fileName = path.basename(filePath);
+    await expect(page.locator('[data-testid="uploaded-files-list"]')).toContainText(fileName, { timeout: 60000 });
+    console.log(`File uploaded: ${fileName}`);
+  }
+
+  console.log('All files uploaded successfully (bulk)');
 }
 
 /**
@@ -215,22 +260,20 @@ export async function configureAnalysis(
   // Set advanced options if provided
   if (config.removeRazor !== undefined || config.strictFiltering !== undefined) {
     await page.click('[data-testid="advanced-options-toggle"]');
-    
+
     if (config.removeRazor !== undefined) {
-      const checkbox = page.locator('[data-testid="remove-razor-checkbox"]');
-      if (config.removeRazor) {
-        await checkbox.check();
-      } else {
-        await checkbox.uncheck();
+      const toggle = page.locator('[data-testid="remove-razor-checkbox"]');
+      const isChecked = (await toggle.getAttribute('aria-checked')) === 'true';
+      if (config.removeRazor !== isChecked) {
+        await toggle.click();
       }
     }
 
     if (config.strictFiltering !== undefined) {
-      const checkbox = page.locator('[data-testid="strict-filtering-checkbox"]');
-      if (config.strictFiltering) {
-        await checkbox.check();
-      } else {
-        await checkbox.uncheck();
+      const toggle = page.locator('[data-testid="strict-filtering-checkbox"]');
+      const isChecked = (await toggle.getAttribute('aria-checked')) === 'true';
+      if (config.strictFiltering !== isChecked) {
+        await toggle.click();
       }
     }
   }

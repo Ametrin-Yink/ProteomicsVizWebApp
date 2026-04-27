@@ -27,14 +27,12 @@ function getCactusImageUrl(smiles: string, width: number = 300, height: number =
 function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string }) {
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [retryKey, setRetryKey] = useState(0);
 
-  const imageUrl = useMemo(() => getCactusImageUrl(smiles), [smiles, retryKey]);
+  const imageUrl = useMemo(() => getCactusImageUrl(smiles), [smiles]);
 
   const handleRetry = useCallback(() => {
     setImageError(false);
     setIsLoading(true);
-    setRetryKey(prev => prev + 1);
   }, []);
 
   if (!smiles) {
@@ -69,6 +67,7 @@ function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string 
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={imageUrl}
         alt={`Chemical structure of ${corpId}`}

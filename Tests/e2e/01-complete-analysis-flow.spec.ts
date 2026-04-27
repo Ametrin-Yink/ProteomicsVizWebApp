@@ -93,8 +93,8 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
     ]);
 
     // Verify files appear in table
-    await expect(page.locator('[data-testid="file-table"]')).toContainText('DMSO');
-    await expect(page.locator('[data-testid="file-table"]')).toContainText('INCZ123456');
+    await expect(page.locator('[data-testid="uploaded-files-list"]')).toContainText('DMSO');
+    await expect(page.locator('[data-testid="uploaded-files-list"]')).toContainText('INCZ123456');
 
     await takeScreenshot(page, '01-complete-flow', '03-files-uploaded', 'complete');
   });

@@ -60,7 +60,7 @@ export default function DocumentationPage() {
             <li>Sequence - Peptide sequence</li>
             <li>Modifications - Post-translational modifications</li>
             <li>Charge - Peptide charge state</li>
-            <li>Contaminant - Whether it's a contaminant</li>
+            <li>Contaminant - Whether it&apos;s a contaminant</li>
             <li>Master Protein Accessions - Protein identifiers</li>
             <li>Quan Info - Quantification information</li>
             <li>Abundance - Quantitative abundance values</li>

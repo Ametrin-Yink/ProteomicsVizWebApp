@@ -343,14 +343,16 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
 
         # Vectorized gene lookup for multi-ID proteins
         # Split all protein IDs by semicolon, lookup each, take first non-NA per protein
+        # For isoforms (e.g. P46087-2), strip the -N suffix before lookup
         all_ids <- strsplit(protein_ids, ";")
         flat_ids <- trimws(unlist(all_ids))
-        flat_mapped <- mapping[flat_ids]
-        # Re-group by original protein and take first non-NA
+        flat_ids_base <- sub("-[0-9]+$", "", flat_ids)  # Strip isoform suffix
+        flat_mapped <- mapping[flat_ids_base]            # Lookup by base protein ID
+        # Re-group by original protein and collect ALL gene names (joined by ;)
         group_idx <- rep(seq_along(protein_ids), lengths(all_ids))
         gene_names <- tapply(flat_mapped, group_idx, function(x) {
             non_na <- x[!is.na(x)]
-            if (length(non_na) > 0) non_na[1] else NA
+            if (length(non_na) > 0) paste(non_na, collapse = ";") else NA
         })
 
         cat("Loaded gene mapping for", sum(!is.na(gene_names)), "of", length(protein_ids), "proteins\n")
@@ -368,8 +370,9 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
     cat("No gene mapping file provided or file not found, using protein IDs as gene names\n", file = log_con)
 }
 
-# Handle NA gene names
-gene_names[is.na(gene_names)] <- protein_ids[is.na(gene_names)]
+# Handle NA gene names: for isoforms (e.g. P46087-2), strip the -N suffix
+# and use the base protein ID as fallback gene name
+gene_names[is.na(gene_names)] <- sub("-\\d+$", "", protein_ids[is.na(gene_names)])
 
 # Get PSM counts for each protein (vectorized named-vector lookup)
 psm_counts <- as.integer(protein_psm_counts[protein_ids])

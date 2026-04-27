@@ -47,7 +47,8 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     },
     ref
   ) => {
-    const selectId = id || React.useId();
+    const generatedId = React.useId();
+    const selectId = id || generatedId;
     const errorId = `${selectId}-error`;
     const helperId = `${selectId}-helper`;
 
@@ -170,7 +171,6 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const selectId = React.useId();
 
   // Close on click outside
   React.useEffect(() => {

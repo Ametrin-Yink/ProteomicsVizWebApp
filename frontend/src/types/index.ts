@@ -31,12 +31,18 @@ export interface ApiError {
 export interface Session {
   id: string;
   name: string;
-  template: string;
-  state: 'created' | 'configuring' | 'processing' | 'completed' | 'error';
-  config?: SessionConfig;
-  files?: SessionFiles;
-  created_at: string;
-  updated_at: string;
+  description: string;
+  status: string;
+  currentStep: string | null;
+  progress: number;
+  config: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  errorMessage: string | null;
+  uploadedFiles: unknown[];
+  compoundFile: unknown | null;
+  results: unknown;
 }
 
 export interface SessionConfig {

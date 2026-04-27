@@ -492,7 +492,7 @@ async def get_protein_abundance(
 
 
 async def load_psm_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
-    """Load PSM abundance data from TSV file.
+    """Load PSM abundance data from Parquet or TSV file.
 
     Args:
         results_dir: Path to session results directory
@@ -507,14 +507,26 @@ async def load_psm_abundance(results_dir: Path, protein_id: str, session_id: str
     if cached is not None:
         return cached
 
-    psm_file = results_dir / "PSM_Abundances.tsv"
+    # Pipeline uses Parquet for performance, fall back to TSV for compatibility
+    psm_parquet = results_dir / "PSM_Abundances.parquet"
+    psm_tsv = results_dir / "PSM_Abundances.tsv"
 
-    if not psm_file.exists():
+    if psm_parquet.exists():
+        try:
+            df = await asyncio.to_thread(pd.read_parquet, psm_parquet)
+        except Exception as e:
+            logger.error(f"Error reading Parquet file: {e}")
+            return {"psms": []}
+    elif psm_tsv.exists():
+        try:
+            df = await asyncio.to_thread(pd.read_csv, psm_tsv, sep='\t')
+        except Exception as e:
+            logger.error(f"Error reading TSV file: {e}")
+            return {"psms": []}
+    else:
         return {"psms": []}
 
     try:
-        df = await asyncio.to_thread(pd.read_csv, psm_file, sep='\t')
-
         # Filter rows for this protein (handle multiple accessions separated by ;)
         protein_rows = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
 

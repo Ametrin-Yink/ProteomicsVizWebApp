@@ -62,13 +62,16 @@ async def upload_proteomics_files(
             )
             uploaded_files.append(file_info)
         except Exception as e:
-            raise ValidationError(message=f"Error parsing {file.filename}: {str(e)}")
+            import traceback
+            logger.error(f"Upload error for {file.filename}: {traceback.format_exc()}")
+            raise ValidationError(message=f"Error parsing {file.filename}: {str(e)}", details={"traceback": traceback.format_exc()})
     
     # Convert UploadedFileMetadata to ProteomicsFileInfo and update session
+    response_files = []
     for file_metadata in uploaded_files:
         # Parse filename to get experiment, condition, replicate
         parsed = parse_psm_filename(file_metadata.original_filename)
-        
+
         proteomics_file = ProteomicsFileInfo(
             filename=file_metadata.original_filename,
             size=file_metadata.size,
@@ -79,12 +82,22 @@ async def upload_proteomics_files(
             replicate=parsed.replicate
         )
         session.files.proteomics.append(proteomics_file)
-    
+
+        # Build frontend-compatible response with parsed metadata
+        response_files.append({
+            "filename": file_metadata.original_filename,
+            "size": file_metadata.size,
+            "experiment": parsed.experiment,
+            "condition": parsed.condition,
+            "replicate": parsed.replicate,
+            "columns": [],
+        })
+
     await store.save(session)
-    
+
     return {
         "message": f"Successfully uploaded {len(uploaded_files)} files",
-        "files": [f.model_dump() for f in uploaded_files]
+        "files": response_files
     }
 
 

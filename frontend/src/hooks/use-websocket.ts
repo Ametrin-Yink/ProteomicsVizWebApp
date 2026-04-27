@@ -14,7 +14,8 @@ import {
   CompleteMessage,
 } from '@/types/processing';
 
-// Use relative URL to go through Next.js proxy
+// Use relative URL to go through Next.js proxy (avoid CORS)
+// WebSocket URL can be overridden via NEXT_PUBLIC_WS_URL env var
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || '';
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY = 1000; // 1 second
@@ -43,6 +44,45 @@ export const useWebSocket = (sessionId: string | null) => {
     return delay + jitter;
   }, []);
 
+  const handleMessage = useCallback((message: WSMessage) => {
+    switch (message.type) {
+      case 'progress': {
+        const progressMessage = message as ProgressMessage;
+        updateStepProgress(progressMessage.payload);
+        break;
+      }
+      case 'log': {
+        const logMessage = message as LogMessage;
+        addLog(logMessage.payload);
+        break;
+      }
+      case 'complete': {
+        const completeMessage = message as CompleteMessage;
+        setComplete(completeMessage.payload);
+        // Close connection on completion
+        if (ws.current) {
+          ws.current.close();
+        }
+        break;
+      }
+      case 'error': {
+        const errorMessage = message as ErrorMessage;
+        setError(errorMessage.payload);
+        break;
+      }
+      case 'pong': {
+        // Keepalive response - no action needed
+        break;
+      }
+      default: {
+        console.warn('Unknown WebSocket message type:', message.type);
+      }
+    }
+  }, [updateStepProgress, addLog, setComplete, setError]);
+
+  // Ref to hold the latest connect function for self-referential reconnect calls
+  const connectRef = useRef<(() => void) | null>(null);
+
   const connect = useCallback(() => {
     if (!sessionId) return;
 
@@ -65,8 +105,10 @@ export const useWebSocket = (sessionId: string | null) => {
       ws.current = null;
     }
 
-    // Connect directly to backend WebSocket (Next.js proxy doesn't handle WS well)
-    const wsUrl = `ws://127.0.0.1:8000/ws/sessions/${sessionId}`;
+    // Connect via WebSocket - use env var for production, fallback to direct backend for dev
+    const wsUrl = WS_BASE_URL
+      ? `${WS_BASE_URL}/ws/sessions/${sessionId}`
+      : `ws://127.0.0.1:8000/ws/sessions/${sessionId}`;
 
     console.log(`Connecting to WebSocket: ${wsUrl}`);
 
@@ -145,7 +187,7 @@ export const useWebSocket = (sessionId: string | null) => {
           console.log(`WebSocket closed unexpectedly. Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${MAX_RECONNECT_ATTEMPTS})`);
           reconnectTimeout.current = setTimeout(() => {
             reconnectAttempts.current += 1;
-            connect();
+            connectRef.current?.();
           }, delay);
         } else {
           console.error('Max WebSocket reconnection attempts reached');
@@ -159,43 +201,12 @@ export const useWebSocket = (sessionId: string | null) => {
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
     }
-  }, [sessionId, setConnected, getReconnectDelay]);
+  }, [sessionId, setConnected, getReconnectDelay, handleMessage]);
 
-  const handleMessage = useCallback((message: WSMessage) => {
-    switch (message.type) {
-      case 'progress': {
-        const progressMessage = message as ProgressMessage;
-        updateStepProgress(progressMessage.payload);
-        break;
-      }
-      case 'log': {
-        const logMessage = message as LogMessage;
-        addLog(logMessage.payload);
-        break;
-      }
-      case 'complete': {
-        const completeMessage = message as CompleteMessage;
-        setComplete(completeMessage.payload);
-        // Close connection on completion
-        if (ws.current) {
-          ws.current.close();
-        }
-        break;
-      }
-      case 'error': {
-        const errorMessage = message as ErrorMessage;
-        setError(errorMessage.payload);
-        break;
-      }
-      case 'pong': {
-        // Keepalive response - no action needed
-        break;
-      }
-      default: {
-        console.warn('Unknown WebSocket message type:', message.type);
-      }
-    }
-  }, [updateStepProgress, addLog, setComplete, setError]);
+  // Sync connect ref so reconnect callbacks can invoke latest connect
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Setup connection
   useEffect(() => {
@@ -215,7 +226,7 @@ export const useWebSocket = (sessionId: string | null) => {
         ws.current = null;
       }
     };
-  }, [sessionId, connect]);
+  }, [sessionId, connect, handleMessage]);
 
   // Keepalive ping
   useEffect(() => {

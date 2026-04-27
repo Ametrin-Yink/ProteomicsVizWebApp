@@ -15,6 +15,23 @@ interface ProteinTableProps {
 
 const ITEMS_PER_PAGE = 25;
 
+interface SortIndicatorProps {
+  sortKey: string;
+  columnKey: string;
+  direction: 'asc' | 'desc';
+}
+
+const SortIndicator: React.FC<SortIndicatorProps> = ({ sortKey, columnKey, direction }) => {
+  if (sortKey !== columnKey) {
+    return <span className="text-gray-300 ml-1" data-testid="sort-indicator">↕</span>;
+  }
+  return direction === 'asc' ? (
+    <ChevronUp className="w-4 h-4 ml-1 inline" data-testid="sort-indicator" />
+  ) : (
+    <ChevronDown className="w-4 h-4 ml-1 inline" data-testid="sort-indicator-desc" />
+  );
+};
+
 export default function ProteinTable({
   data,
   selectedProteins,
@@ -101,18 +118,6 @@ export default function ProteinTable({
     exportToCSV(exportData, 'protein_results.csv');
   };
 
-  // Sort indicator component
-  const SortIndicator = ({ columnKey }: { columnKey: string }) => {
-    if (sortConfig.key !== columnKey) {
-      return <span className="text-gray-300 ml-1" data-testid="sort-indicator">↕</span>;
-    }
-    return sortConfig.direction === 'asc' ? (
-      <ChevronUp className="w-4 h-4 ml-1 inline" data-testid="sort-indicator" />
-    ) : (
-      <ChevronDown className="w-4 h-4 ml-1 inline" data-testid="sort-indicator-desc" />
-    );
-  };
-
   return (
     <div className="bg-white rounded-lg border border-gray-200" data-testid="protein-table">
       {/* Header with controls */}
@@ -172,34 +177,34 @@ export default function ProteinTable({
                 className="px-4 py-3 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
                 data-testid="table-header-accession"
               >
-                Protein <SortIndicator columnKey="master_protein_accessions" />
+                Protein <SortIndicator columnKey="master_protein_accessions" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('gene_name')}
                 className="px-4 py-3 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
                 data-testid="table-header-gene"
               >
-                Gene Name <SortIndicator columnKey="gene_name" />
+                Gene Name <SortIndicator columnKey="gene_name" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('log_fc')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
                 data-testid="table-header-logfc"
               >
-                Log2 FC <SortIndicator columnKey="log_fc" />
+                Log2 FC <SortIndicator columnKey="log_fc" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('pval')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
                 data-testid="table-header-pvalue"
               >
-                P-value <SortIndicator columnKey="pval" />
+                P-value <SortIndicator columnKey="pval" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('adj_pval')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
               >
-                Adj P-value <SortIndicator columnKey="adj_pval" />
+                Adj P-value <SortIndicator columnKey="adj_pval" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th className="px-4 py-3 text-center font-medium text-gray-700">
                 Significance

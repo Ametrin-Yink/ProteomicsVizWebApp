@@ -268,7 +268,6 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
 }) => {
   const status = statusConfig[session.status];
   const StatusIcon = status.icon;
-  const [showActions, setShowActions] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editName, setEditName] = React.useState(session.name);
 

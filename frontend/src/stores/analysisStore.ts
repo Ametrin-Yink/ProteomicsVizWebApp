@@ -86,20 +86,6 @@ interface AnalysisActions {
 // Combined store interface
 interface AnalysisStore extends AnalysisState, AnalysisActions {}
 
-// Default parameters
-const defaultParameters: AnalysisParameters = {
-  minPeptides: 2,
-  minSamples: 2,
-  log2FoldChangeThreshold: 1.0,
-  pValueThreshold: 0.05,
-  gseaDatabase: 'GO_Biological_Process_2021',
-  gseaMinSize: 15,
-  gseaMaxSize: 500,
-  pcaComponents: 2,
-  normalizationMethod: 'median',
-  imputationMethod: 'knn',
-};
-
 // Initial state factory
 const createInitialState = (): AnalysisState => ({
   config: null,

@@ -7,7 +7,6 @@ import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import type {
   ParsedFilename,
-  UploadedFile,
   CompoundFileData,
   UploadProgress,
   SessionConfig,
@@ -66,7 +65,7 @@ const defaultConfig: SessionConfig = {
 };
 
 export const useAnalysisStore = create<AnalysisState>()(
-  immer((set, get) => ({
+  immer((set) => ({
     // Initial state
     uploadedFiles: [],
     uploadProgress: [],

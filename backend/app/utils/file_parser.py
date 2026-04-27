@@ -236,7 +236,7 @@ def find_abundance_column(columns: list[str]) -> str:
     Raises:
         InvalidFileFormatError: If no abundance column found
     """
-    abundance_pattern = re.compile(r'^"?Abundance F\d+ Sample"?$', re.IGNORECASE)
+    abundance_pattern = re.compile(r'^"?Abundance F[\dA-Z]+ Sample"?$', re.IGNORECASE)
     
     for col in columns:
         if abundance_pattern.match(col):

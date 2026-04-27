@@ -16,7 +16,6 @@ import { ProgressBar } from '@/components/processing/ProgressBar';
 import { LogPanel } from '@/components/processing/LogPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { formatDuration } from '@/lib/utils';
-import { cn } from '@/lib/utils';
 import type { LogEntry } from '@/types/processing';
 
 import {
@@ -25,41 +24,12 @@ import {
   CheckCircle2,
   RefreshCw,
   AlertCircle,
-  Wifi,
-  WifiOff,
   ArrowRight,
   Clock,
   FileText,
   X,
-  Loader2,
 } from 'lucide-react';
 
-// Connection status component
-const ConnectionStatus: React.FC<{ isConnected: boolean }> = ({
-  isConnected,
-}) => (
-  <div
-    data-testid="connection-status"
-    className={cn(
-      'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border',
-      isConnected
-        ? 'bg-green-50 text-green-700 border-green-200'
-        : 'bg-amber-50 text-amber-700 border-amber-200'
-    )}
-  >
-    {isConnected ? (
-      <>
-        <Wifi className="w-3.5 h-3.5" />
-        <span>Connected</span>
-      </>
-    ) : (
-      <>
-        <WifiOff className="w-3.5 h-3.5" />
-        <span>Reconnecting...</span>
-      </>
-    )}
-  </div>
-);
 
 // Cancelled display component
 const CancelledDisplay: React.FC<{
@@ -194,7 +164,6 @@ function ProcessingContent() {
   const sessionId = searchParams.get('session_id');
   const removeRazor = searchParams.get('remove_razor') !== 'false'; // Default true
 
-  const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -216,6 +185,7 @@ function ProcessingContent() {
     setCancelled,
     setLogs,
     setComplete,
+    syncStepProgress,
     retry,
   } = useProcessingStore();
 
@@ -232,9 +202,13 @@ function ProcessingContent() {
     console.log('WebSocket not connected, using polling fallback');
     const pollInterval = setInterval(async () => {
       try {
-        // Fetch logs and state
         const logData = await processingAPI.getLogs(sessionId);
         if (logData) {
+          // Sync step progress from completed_steps and current_step
+          if (logData.completed_steps && logData.current_step) {
+            syncStepProgress(logData.completed_steps, logData.current_step);
+          }
+
           // Update logs
           if (logData.logs && logData.logs.length > 0) {
             const logEntries: LogEntry[] = logData.logs.map((log: {
@@ -256,7 +230,13 @@ function ProcessingContent() {
           if (logData.is_complete) {
             setComplete({
               session_id: sessionId,
-              outputs: logData.outputs || {},
+              outputs: (logData.outputs as {
+                psm_abundances: string;
+                protein_abundances: string;
+                diff_expression: string;
+                qc_results: string;
+                gsea_results: string;
+              } | undefined) ?? undefined,
               duration: 0,
             });
             clearInterval(pollInterval);
@@ -268,7 +248,7 @@ function ProcessingContent() {
     }, 3000); // Poll every 3 seconds
 
     return () => clearInterval(pollInterval);
-  }, [sessionId, isConnected, isComplete, error, setComplete, setLogs]);
+  }, [sessionId, isConnected, isComplete, error, setComplete, setLogs, syncStepProgress]);
 
   // Note: Processing is now started by the analysis page BEFORE navigation
   // This ensures we don't miss early progress updates (Steps 1-5)
@@ -306,6 +286,12 @@ function ProcessingContent() {
           console.log('Fetching logs for session:', sessionId);
           const logData = await processingAPI.getLogs(sessionId);
           console.log('Logs fetched:', logData);
+
+          // Sync step progress from API (recovers missed WebSocket messages)
+          if (logData.completed_steps && logData.current_step) {
+            syncStepProgress(logData.completed_steps, logData.current_step);
+          }
+
           if (logData.logs && logData.logs.length > 0) {
             // Convert backend logs to LogEntry format with IDs
             const logEntries: LogEntry[] = logData.logs.map((log) => ({
@@ -322,13 +308,12 @@ function ProcessingContent() {
           }
         } catch (err) {
           console.error('Failed to fetch historical logs:', err);
-          // Don't ignore - show error in console for debugging
         }
       };
 
       fetchLogs();
     }
-  }, [sessionId, removeRazor, setSessionId, initializeSteps, setLogs]);
+  }, [sessionId, removeRazor, setSessionId, initializeSteps, setLogs, setFirstStepProcessing, syncStepProgress]);
 
   // Note: Processing is started by the analysis page before navigation
   // This page only connects to WebSocket and displays progress

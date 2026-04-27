@@ -66,22 +66,15 @@ const analysisTemplates = [
   },
 ];
 
-// Stats data
-const stats = [
-  { label: 'Active Sessions', value: '0', color: 'text-[#E73564]' },
-  { label: 'Completed', value: '0', color: 'text-emerald-500' },
-  { label: 'Total Analyses', value: '0', color: 'text-[#00ADEF]' },
-];
-
 export default function WelcomePage() {
   const router = useRouter();
   const sidebar = useUIStore((state) => state.sidebar);
   const sessions = useSessionStore((state) => state.sessions);
   const { addSession } = useSessionStore();
-  
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
-  const [selectedTemplate, setSelectedTemplate] = React.useState<AnalysisTemplate | null>(null);
   const [hoveredTemplate, setHoveredTemplate] = React.useState<string | null>(null);
+  const [_selectedTemplate, setSelectedTemplate] = React.useState<AnalysisTemplate | null>(null);
 
   // Calculate stats
   const activeSessions = sessions.filter((s) => 

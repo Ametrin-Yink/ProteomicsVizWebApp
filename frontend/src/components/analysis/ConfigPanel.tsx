@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, Info, Loader2 } from 'lucide-react';
-import { useAnalysisStore, getConditions, canStartAnalysis } from '@/stores/analysis-store';
+import { useAnalysisStore, getConditions } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { organismsApi } from '@/lib/api-client';
 import type { Organism } from '@/types';
@@ -20,7 +20,6 @@ export const ConfigPanel: React.FC = () => {
   const state = useAnalysisStore();
   const { config, setConfig, setAvailableOrganisms } = state;
   const conditions = getConditions(state);
-  const canStart = canStartAnalysis(state);
   const { addToast } = useUIStore();
   
   // Load organisms on mount
@@ -36,10 +35,7 @@ export const ConfigPanel: React.FC = () => {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load organisms';
         setLoadError(message);
-        addToast({
-          type: 'error',
-          message: `Failed to load organisms: ${message}`,
-        });
+        addToast('error', `Failed to load organisms: ${message}`);
       } finally {
         setIsLoadingOrganisms(false);
       }
@@ -274,7 +270,7 @@ export const ConfigPanel: React.FC = () => {
       </div>
       
       {/* Configuration Summary */}
-      <div className="border-t border-gray-200 pt-4">
+      <div data-testid="config-summary" className="border-t border-gray-200 pt-4">
         <h4 className="text-sm font-medium text-gray-900 mb-3">Configuration Summary</h4>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">

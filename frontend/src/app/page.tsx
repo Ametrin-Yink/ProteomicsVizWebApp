@@ -85,19 +85,13 @@ export default function HomePage() {
       // Store in localStorage for persistence
       localStorage.setItem('currentSessionId', newSession.id);
       
-      addToast({
-        type: 'success',
-        message: 'Session created successfully',
-      });
-      
+      addToast('success', 'Session created successfully');
+
       // Navigate to analysis page with session ID
       router.push(`/analysis?session=${newSession.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create session';
-      addToast({
-        type: 'error',
-        message: `Failed to create session: ${message}`,
-      });
+      addToast('error', `Failed to create session: ${message}`);
     } finally {
       setIsCreating(false);
     }

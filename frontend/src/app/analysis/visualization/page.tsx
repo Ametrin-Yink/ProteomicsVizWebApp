@@ -15,7 +15,6 @@ const SESSION_ID = 'mock-session-id';
 
 function ResultsContent() {
   const searchParams = useSearchParams();
-  const tab = searchParams.get('tab') || 'results';
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || SESSION_ID;
 
   const [data, setData] = useState<DEResultsData | null>(null);
@@ -55,8 +54,6 @@ function ResultsContent() {
 
     fetchData();
   }, [sessionId]);
-
-  const [selectionMode, setSelectionMode] = useState<'click' | 'box' | 'lasso'>('click');
 
   // Handle protein selection from volcano plot
   const handleSelectProteins = useCallback((proteins: string[], mode?: 'click' | 'box' | 'lasso') => {
@@ -159,7 +156,7 @@ function ResultsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div data-testid="results-page" className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -210,7 +207,7 @@ function ResultsContent() {
               filters={filters}
               selectedProteins={selectedProteins}
               onSelectProteins={handleSelectProteins}
-              onSelectionModeChange={setSelectionMode}
+              onSelectionModeChange={(_mode) => void _mode}
               onClearSelection={clearSelection}
             />
 

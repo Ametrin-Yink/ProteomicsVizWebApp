@@ -56,7 +56,6 @@ const formatFileSize = (bytes: number): string => {
 
 export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [isCompoundUpload, setIsCompoundUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const compoundInputRef = useRef<HTMLInputElement>(null);
   
@@ -64,7 +63,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     uploadedFiles,
     uploadProgress,
     compoundFile,
-    isUploading,
     addUploadedFile,
     removeUploadedFile,
     setUploadProgress,
@@ -104,10 +102,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     // Check if sessionId is available
     if (!sessionId) {
       console.error('No sessionId available');
-      addToast({
-        type: 'error',
-        message: 'No session available. Please create a session first.',
-      });
+      addToast('error', 'No session available. Please create a session first.');
       return;
     }
     
@@ -133,10 +128,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     // Show validation errors (but don't block valid files)
     if (validationErrors.length > 0) {
       validationErrors.forEach(({ name, error }) => {
-        addToast({
-          type: 'error',
-          message: `${name}: ${error}`,
-        });
+        addToast('error', `${name}: ${error}`);
       });
     }
 
@@ -156,10 +148,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         setCompoundFile(result);
         setUploadProgress(file.name, 100, 'completed');
         
-        addToast({
-          type: 'success',
-          message: `Compound file uploaded successfully: ${result.compounds.length} compounds`,
-        });
+        addToast('success', `Compound file uploaded successfully: ${result.compounds.length} compounds`);
       } else {
         // Handle proteomics files upload - validate filename pattern
         console.log('Uploading proteomics files:', validFilesAfterValidation.map(f => f.name));
@@ -169,10 +158,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           const parsed = parseFilename(file.name);
           if (!parsed) {
             console.error('Invalid filename:', file.name);
-            addToast({
-              type: 'error',
-              message: `Invalid filename: ${file.name}. Expected: PSM_ExperimentName_Condition_ReplicateNumber.csv`,
-            });
+            addToast('error', `Invalid filename: ${file.name}. Expected: PSM_ExperimentName_Condition_ReplicateNumber.csv`);
             continue;
           }
           validFiles.push(file);
@@ -196,22 +182,30 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           for (const uploadedFile of results) {
             console.log('Adding uploaded file to store:', uploadedFile);
             try {
-              // Parse filename: PSM_ExperimentName_Condition_ReplicateNumber.csv
-              const originalName = uploadedFile.original_filename || uploadedFile.filename || '';
-              const parts = originalName.replace('.csv', '').split('_');
-              // parts = ['PSM', 'ExperimentName', 'Condition', 'ReplicateNumber']
-              const parsedExperiment = parts.length >= 2 ? parts[1] : 'Unknown';
-              const parsedCondition = parts.length >= 3 ? parts[2] : 'Unknown';
-              const parsedReplicate = parts.length >= 4 ? parseInt(parts[3]) || 1 : 1;
-              
-              addUploadedFile({
-                filename: uploadedFile.filename,
-                experiment: uploadedFile.experiment || parsedExperiment,
-                condition: uploadedFile.condition || parsedCondition,
-                replicate: uploadedFile.replicate || parsedReplicate,
-                size: uploadedFile.size,
-                columns: uploadedFile.columns || [],
-              });
+              // Use parseFilename regex to correctly handle condition names with underscores
+              const originalName = uploadedFile.filename || '';
+              const parsed = parseFilename(originalName);
+
+              if (parsed) {
+                addUploadedFile({
+                  filename: uploadedFile.filename,
+                  experiment: parsed.experiment,
+                  condition: parsed.condition,
+                  replicate: parsed.replicate,
+                  size: uploadedFile.size,
+                  columns: uploadedFile.columns || [],
+                });
+              } else {
+                // Fallback: use backend-parsed values if regex fails
+                addUploadedFile({
+                  filename: uploadedFile.filename,
+                  experiment: uploadedFile.experiment || 'Unknown',
+                  condition: uploadedFile.condition || 'Unknown',
+                  replicate: uploadedFile.replicate || 1,
+                  size: uploadedFile.size,
+                  columns: uploadedFile.columns || [],
+                });
+              }
               console.log('File added to store successfully');
             } catch (error) {
               console.error('Error adding file to store:', error);
@@ -219,29 +213,20 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           }
           
           if (results.length > 0) {
-            addToast({
-              type: 'success',
-              message: `Uploaded ${results.length} file(s) successfully`,
-            });
+            addToast('success', `Uploaded ${results.length} file(s) successfully`);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Upload failed';
           for (const file of validFiles) {
             setUploadProgress(file.name, 0, 'error');
           }
-          addToast({
-            type: 'error',
-            message: `Failed to upload files: ${message}`,
-          });
+          addToast('error', `Failed to upload files: ${message}`);
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Upload failed';
       setUploadError(message);
-      addToast({
-        type: 'error',
-        message: `Upload failed: ${message}`,
-      });
+      addToast('error', `Upload failed: ${message}`);
     } finally {
       setIsUploading(false);
     }
@@ -257,21 +242,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     setIsDragging(false);
   }, []);
   
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    // Determine if this is compound upload based on the drop target
-    // The proteomics upload zone click sets isCompoundUpload=false
-    // We use the current isCompoundUpload state since user can only interact with one zone at a time
-    handleFiles(e.dataTransfer.files, isCompoundUpload);
-  }, [handleFiles, isCompoundUpload]);
-
   // Separate handler for proteomics drop zone
   const handleProteomicsDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    setIsCompoundUpload(false);
     handleFiles(e.dataTransfer.files, false);
   }, [handleFiles]);
   
@@ -301,7 +276,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           onDragLeave={handleDragLeave}
           onDrop={handleProteomicsDrop}
           onClick={() => {
-            setIsCompoundUpload(false);
             fileInputRef.current?.click();
           }}
           className={`
@@ -360,10 +334,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           <button
             type="button"
             onClick={() => {
-              addToast({
-                type: 'info',
-                message: 'Database upload feature coming soon (TBD)',
-              });
+              addToast('info', 'Database upload feature coming soon (TBD)');
             }}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
           >
@@ -374,7 +345,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         
         {/* Uploaded Files List */}
         {uploadedFiles.length > 0 && (
-          <div className="mt-6" data-testid="file-table">
+          <div className="mt-6" data-testid="uploaded-files-list">
             <h4 className="text-sm font-medium text-gray-900 mb-3">Uploaded Files ({uploadedFiles.length})</h4>
             <div className="space-y-2">
               {uploadedFiles.map((file) => {

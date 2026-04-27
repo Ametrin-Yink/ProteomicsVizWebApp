@@ -7,11 +7,10 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  FlaskConical, 
-  ArrowRight, 
-  Upload, 
-  Settings, 
+import {
+  FlaskConical,
+  Upload,
+  Settings,
   BarChart3,
   Play,
   ChevronRight

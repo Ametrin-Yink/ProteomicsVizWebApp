@@ -18,25 +18,30 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
     // Use actual running ES curve if available, otherwise generate synthetic
     let xValues: number[] = [];
     let yValues: number[] = [];
-    let hasRealCurve = false;
 
     if (pathway.running_es_curve && pathway.running_es_curve.length > 0) {
       // Use actual curve data from backend
       xValues = pathway.running_es_curve.map(([rank]) => rank);
       yValues = pathway.running_es_curve.map(([, es]) => es);
-      hasRealCurve = true;
     } else {
       // Fallback: generate synthetic curve for backwards compatibility
       const numPoints = 100;
       xValues = Array.from({ length: numPoints }, (_, i) => i);
 
+      // Seeded pseudo-random to avoid impure Math.random() during render
       const es = pathway.es;
+      let seed = numPoints * 9301 + 49297;
+      const pseudoRandom = () => {
+        seed = (seed * 9301 + 49297) % 233280;
+        return seed / 233280;
+      };
+
       yValues = xValues.map((x) => {
         const normalizedX = x / numPoints;
         if (es > 0) {
-          return es * Math.sin(normalizedX * Math.PI) * (1 + Math.random() * 0.1);
+          return es * Math.sin(normalizedX * Math.PI) * (1 + pseudoRandom() * 0.1);
         } else {
-          return es * Math.sin(normalizedX * Math.PI) * (1 + Math.random() * 0.1);
+          return es * Math.sin(normalizedX * Math.PI) * (1 + pseudoRandom() * 0.1);
         }
       });
     }
@@ -57,8 +62,13 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         }
       });
     } else {
-      // Fallback: random metrics
-      rankMetrics = xValues.map(() => (Math.random() - 0.5) * 2);
+      // Fallback: pseudo-random metrics
+      let seed2 = xValues.length * 9301 + 49297;
+      const pseudoRandom2 = () => {
+        seed2 = (seed2 * 9301 + 49297) % 233280;
+        return seed2 / 233280;
+      };
+      rankMetrics = xValues.map(() => (pseudoRandom2() - 0.5) * 2);
     }
 
     // Leading edge positions from actual data
@@ -87,7 +97,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
     const mainPlotDomain = hasHeatmap ? [0, 0.7] : [0, 1];
     const heatmapDomain = hasHeatmap ? [0.75, 1] : [0, 0];
 
-    const traces: any[] = [
+    const traces: Array<Record<string, unknown>> = [
       // Zero reference line
       {
         x: xValues,
@@ -177,7 +187,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
       });
     }
 
-    const layout: any = {
+    const layout: Record<string, unknown> = {
       title: {
         text: pathway.name,
         font: { size: 14, color: '#111827' },

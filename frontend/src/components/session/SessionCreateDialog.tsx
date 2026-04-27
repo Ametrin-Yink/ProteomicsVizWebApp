@@ -7,7 +7,6 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { X, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -60,7 +59,6 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
   onCreate,
   className,
 }) => {
-  const router = useRouter();
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [selectedTemplate, setSelectedTemplate] = React.useState<AnalysisTemplate>('pairwise_comparison');

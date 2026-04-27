@@ -42,6 +42,7 @@ interface ProcessingStore {
   setComplete: (message: CompleteMessage['payload']) => void;
   setConnected: (connected: boolean) => void;
   setCancelled: (cancelled: boolean) => void;
+  syncStepProgress: (completedSteps: number[], currentStep: number) => void;
   reset: () => void;
   retry: () => void;
 }
@@ -196,6 +197,31 @@ export const useProcessingStore = create<ProcessingStore>()(
     setCancelled: (cancelled: boolean) => {
       set((state) => {
         state.isCancelled = cancelled;
+      });
+    },
+
+    // Sync step progress from polling data (fallback when WebSocket is unavailable)
+    syncStepProgress: (completedSteps: number[], currentStep: number) => {
+      set((state) => {
+        // Mark completed steps
+        for (const stepNum of completedSteps) {
+          const step = state.steps.find((s: ProcessingStep) => s.id === stepNum);
+          if (step && step.status !== 'completed') {
+            step.status = 'completed';
+            step.progress = 100;
+          }
+        }
+        // Mark current step as in_progress
+        if (currentStep > 0) {
+          const current = state.steps.find((s: ProcessingStep) => s.id === currentStep);
+          if (current && current.status === 'not_started') {
+            current.status = 'in_progress';
+            current.progress = 50;
+          }
+        }
+        // Update overall progress based on completed steps
+        const completedCount = state.steps.filter((s: ProcessingStep) => s.status === 'completed').length;
+        state.overallProgress = Math.round((completedCount / state.steps.length) * 100);
       });
     },
 

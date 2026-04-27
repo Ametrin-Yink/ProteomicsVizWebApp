@@ -26,7 +26,7 @@ function AnalysisContent() {
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
   
   const state = useAnalysisStore();
-  const { config, reset, setConfig } = state;
+  const { config, setConfig } = state;
   const canStart = canStartAnalysis(state);
   const { addToast } = useUIStore();
   
@@ -66,50 +66,41 @@ function AnalysisContent() {
             setSessionId(session.id);
             localStorage.setItem('currentSessionId', session.id);
             
-            // Restore config if available
-            if (session.config) {
-              setConfig(session.config);
+            // Restore config if available (map AnalysisConfig to SessionConfig fields)
+            if (session.config && 'conditions' in session.config) {
+              const ac = session.config as { conditions?: string[] };
+              if (ac.conditions && ac.conditions.length >= 2) {
+                setConfig({
+                  treatment: ac.conditions[1] || '',
+                  control: ac.conditions[0] || '',
+                });
+              }
             }
             
-            addToast({
-              type: 'info',
-              message: 'Session loaded',
-            });
+            addToast('info', 'Session loaded');
             setIsCreatingSession(false);
             return;
           } catch {
             // Session not found, clear localStorage and redirect to home
             localStorage.removeItem('currentSessionId');
-            addToast({
-              type: 'error',
-              message: 'Session not found. Please create a new analysis.',
-            });
+            addToast('error', 'Session not found. Please create a new analysis.');
             router.push('/');
             return;
           }
         } else if (urlSessionId) {
           // Invalid session ID in URL (e.g., "undefined", "null", or malformed)
-          addToast({
-            type: 'error',
-            message: 'Invalid session. Please create a new analysis.',
-          });
+          addToast('error', 'Invalid session. Please create a new analysis.');
           router.push('/');
           return;
         }
         
         // No session in URL or localStorage - redirect to home page to create one
         // Don't auto-create sessions to avoid spam
-        addToast({
-          type: 'info',
-          message: 'Please select a template to start analysis',
-        });
+        addToast('info', 'Please select a template to start analysis');
         router.push('/');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to initialize session';
-        addToast({
-          type: 'error',
-          message: `Failed to initialize session: ${message}`,
-        });
+        addToast('error', `Failed to initialize session: ${message}`);
         router.push('/');
       } finally {
         setIsCreatingSession(false);
@@ -145,10 +136,7 @@ function AnalysisContent() {
         console.log('Processing started successfully');
       } catch (processingError) {
         console.error('Failed to start processing:', processingError);
-        addToast({
-          type: 'error',
-          message: 'Failed to start processing. Please try again.',
-        });
+        addToast('error', 'Failed to start processing. Please try again.');
         setIsStartingAnalysis(false);
         return;
       }
@@ -157,10 +145,7 @@ function AnalysisContent() {
       router.push(`/analysis/processing?session_id=${sessionId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';
-      addToast({
-        type: 'error',
-        message: `Failed to start analysis: ${message}`,
-      });
+      addToast('error', `Failed to start analysis: ${message}`);
       setIsStartingAnalysis(false);
     }
   };

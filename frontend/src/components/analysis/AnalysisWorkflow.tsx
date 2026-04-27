@@ -10,9 +10,9 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Play, ArrowLeft, Loader2, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
+import { useAnalysisStore, canStartAnalysis, getConditions } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi, processingApi } from '@/lib/api-client';
+import { sessionsApi, processingApi, uploadApi } from '@/lib/api-client';
 
 // Maximum file size: 500MB
 const MAX_FILE_SIZE = 500 * 1024 * 1024;
@@ -25,7 +25,7 @@ export const AnalysisWorkflow: React.FC = () => {
   const [activeStep, setActiveStep] = useState(1);
   
   const state = useAnalysisStore();
-  const { config, uploadedFiles, compoundFile, setConfig } = state;
+  const { config, uploadedFiles, compoundFile } = state;
   const canStart = canStartAnalysis(state);
   const { addToast } = useUIStore();
 
@@ -42,10 +42,7 @@ export const AnalysisWorkflow: React.FC = () => {
         localStorage.setItem('currentSessionId', session.id);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to create session';
-        addToast({
-          type: 'error',
-          message: `Failed to create session: ${message}`,
-        });
+        addToast('error', `Failed to create session: ${message}`);
       } finally {
         setIsCreatingSession(false);
       }
@@ -62,18 +59,12 @@ export const AnalysisWorkflow: React.FC = () => {
       await sessionsApi.updateConfig(sessionId, config);
       await processingApi.start(sessionId);
       
-      addToast({
-        type: 'success',
-        message: 'Analysis started successfully',
-      });
-      
+      addToast('success', 'Analysis started successfully');
+
       router.push('/analysis/processing');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';
-      addToast({
-        type: 'error',
-        message: `Failed to start analysis: ${message}`,
-      });
+      addToast('error', `Failed to start analysis: ${message}`);
       setIsStartingAnalysis(false);
     }
   };
@@ -267,22 +258,16 @@ const FileUploadSection: React.FC<{ sessionId: string }> = ({ sessionId }) => {
     for (const file of Array.from(files)) {
       // Validate file
       if (file.size > MAX_FILE_SIZE) {
-        addToast({
-          type: 'error',
-          message: `${file.name} is too large. Max size is 500MB`,
-        });
+        addToast('error', `${file.name} is too large. Max size is 500MB`);
         continue;
       }
-      
+
       // Check filename pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv
       const pattern = /^PSM_([A-Za-z0-9_-]+)_([A-Za-z0-9_-]+)_(\d+)\.csv$/;
       const match = file.name.match(pattern);
-      
+
       if (!match) {
-        addToast({
-          type: 'error',
-          message: `${file.name} doesn't match required pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv`,
-        });
+        addToast('error', `${file.name} doesn't match required pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv`);
         continue;
       }
       
@@ -291,29 +276,23 @@ const FileUploadSection: React.FC<{ sessionId: string }> = ({ sessionId }) => {
         const result = await uploadApi.uploadProteomics(
           sessionId,
           [file],
-          (filename, progress) => {
-            setUploadProgress(filename, progress);
+          (filename: string, progress: number) => {
+            setUploadProgress(filename, progress, progress === 100 ? 'completed' : 'uploading');
           }
         );
-        
+
         addUploadedFile({
           filename: file.name,
           experiment: match[1],
           condition: match[2],
           replicate: parseInt(match[3], 10),
           size: file.size,
-          id: result[0]?.id || '',
+          columns: result[0]?.columns || [],
         });
         
-        addToast({
-          type: 'success',
-          message: `${file.name} uploaded successfully`,
-        });
-      } catch (error) {
-        addToast({
-          type: 'error',
-          message: `Failed to upload ${file.name}`,
-        });
+        addToast('success', `${file.name} uploaded successfully`);
+      } catch {
+        addToast('error', `Failed to upload ${file.name}`);
       }
     }
     
@@ -369,7 +348,7 @@ const FileUploadSection: React.FC<{ sessionId: string }> = ({ sessionId }) => {
 // Experiment Structure Section
 const ExperimentStructureSection: React.FC = () => {
   const { uploadedFiles, toggleFileSelection, selectedFiles } = useAnalysisStore();
-  
+
   if (uploadedFiles.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
@@ -384,13 +363,13 @@ const ExperimentStructureSection: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-600">
-          {selectedFiles.length} of {uploadedFiles.length} files selected
+          {selectedFiles.size} of {uploadedFiles.length} files selected
         </p>
         <button
           onClick={() => {
             uploadedFiles.forEach(file => {
-              if (!selectedFiles.includes(file.id)) {
-                toggleFileSelection(file.id);
+              if (!selectedFiles.has(file.filename)) {
+                toggleFileSelection(file.filename);
               }
             });
           }}
@@ -413,12 +392,12 @@ const ExperimentStructureSection: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {uploadedFiles.map((file) => (
-              <tr key={file.id} className="hover:bg-gray-50">
+              <tr key={file.filename} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
                   <input
                     type="checkbox"
-                    checked={selectedFiles.includes(file.id)}
-                    onChange={() => toggleFileSelection(file.id)}
+                    checked={selectedFiles.has(file.filename)}
+                    onChange={() => toggleFileSelection(file.filename)}
                     className="w-4 h-4 text-cyan-600 rounded border-gray-300 focus:ring-cyan-500"
                   />
                 </td>
@@ -437,7 +416,10 @@ const ExperimentStructureSection: React.FC = () => {
 
 // Configuration Section
 const ConfigurationSection: React.FC = () => {
-  const { config, setConfig, conditions } = useAnalysisStore();
+  const state = useAnalysisStore();
+  const config = state.config;
+  const setConfig = state.setConfig;
+  const conditions = getConditions(state);
   const [organisms, setOrganisms] = useState<Array<{id: string, display_name: string}>>([]);
   const [isLoadingOrganisms, setIsLoadingOrganisms] = useState(true);
 
@@ -606,28 +588,16 @@ const CompoundUploadSection: React.FC<{ sessionId: string }> = ({ sessionId }) =
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
     
     if (!headers.includes('corp_id') && !headers.includes('corp id')) {
-      addToast({
-        type: 'error',
-        message: 'Compound file must have "Corp ID" column',
-      });
+      addToast('error', 'Compound file must have "Corp ID" column');
       return;
     }
-    
+
     try {
-      await uploadApi.uploadCompound(sessionId, file);
-      setCompoundFile({
-        filename: file.name,
-        size: file.size,
-      });
-      addToast({
-        type: 'success',
-        message: 'Compound file uploaded successfully',
-      });
-    } catch (error) {
-      addToast({
-        type: 'error',
-        message: 'Failed to upload compound file',
-      });
+      const result = await uploadApi.uploadCompound(sessionId, file);
+      setCompoundFile(result);
+      addToast('success', 'Compound file uploaded successfully');
+    } catch {
+      addToast('error', 'Failed to upload compound file');
     }
   };
 
@@ -672,8 +642,12 @@ const CompoundUploadSection: React.FC<{ sessionId: string }> = ({ sessionId }) =
 
 // Validation Summary
 const ValidationSummary: React.FC = () => {
-  const { uploadedFiles, selectedFiles, config, conditions = [] } = useAnalysisStore();
-  
+  const state = useAnalysisStore();
+  const uploadedFiles = state.uploadedFiles;
+  const selectedFiles = state.selectedFiles;
+  const config = state.config;
+  const conditions = getConditions(state);
+
   const validations = [
     {
       label: 'Files uploaded',
@@ -682,8 +656,8 @@ const ValidationSummary: React.FC = () => {
     },
     {
       label: 'Files selected',
-      valid: selectedFiles.length >= 6,
-      message: selectedFiles.length >= 6 ? `${selectedFiles.length} files selected` : 'Select at least 6 files',
+      valid: selectedFiles.size >= 6,
+      message: selectedFiles.size >= 6 ? `${selectedFiles.size} files selected` : `Select at least 6 files (${selectedFiles.size} currently)`,
     },
     {
       label: 'Same experiment',
@@ -697,7 +671,7 @@ const ValidationSummary: React.FC = () => {
     },
     {
       label: 'Minimum replicates',
-      valid: conditions.every(c => uploadedFiles.filter(f => f.condition === c).length >= 3),
+      valid: conditions.every((c: string) => uploadedFiles.filter(f => f.condition === c).length >= 3),
       message: 'At least 3 replicates per condition required',
     },
     {

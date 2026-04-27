@@ -252,7 +252,9 @@ class TestFileUploadAPI:
         assert len(data["files"]) == 1
         assert data["files"][0]["filename"] == "PSM_SampleData_DMSO_1.csv"
         assert "size" in data["files"][0]
-        assert "uploaded_at" in data["files"][0]
+        assert data["files"][0]["experiment"] == "SampleData"
+        assert data["files"][0]["condition"] == "DMSO"
+        assert data["files"][0]["replicate"] == 1
 
     @pytest.mark.needs_sample_data
     def test_upload_multiple_proteomics_files(self, client, sample_data_dir):

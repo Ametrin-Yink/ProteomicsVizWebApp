@@ -10,6 +10,50 @@ import { AlertCircle, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { useAnalysisStore, getValidation, canStartAnalysis } from '@/stores/analysis-store';
 import type { ValidationWarning } from '@/types';
 
+const statusColors = {
+  valid: 'text-green-600 bg-green-50 border-green-200',
+  invalid: 'text-red-600 bg-red-50 border-red-200',
+  neutral: 'text-gray-600 bg-gray-50 border-gray-200',
+};
+
+const iconColors = {
+  valid: 'text-green-500',
+  invalid: 'text-red-500',
+  neutral: 'text-gray-400',
+};
+
+const StatusItem: React.FC<{
+  label: string;
+  value: string | number;
+  status: 'valid' | 'invalid' | 'neutral';
+}> = ({ label, value, status }) => (
+  <div className={`flex items-center justify-between p-3 rounded-lg border ${statusColors[status]}`}>
+    <span className="text-sm font-medium">{label}</span>
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-semibold">{value}</span>
+      {status === 'valid' && <CheckCircle className={`w-4 h-4 ${iconColors[status]}`} />}
+      {status === 'invalid' && <XCircle className={`w-4 h-4 ${iconColors[status]}`} />}
+    </div>
+  </div>
+);
+
+const WarningItem: React.FC<{ warning: ValidationWarning }> = ({ warning }) => {
+  const Icon = warning.type === 'error' ? XCircle : AlertTriangle;
+  const colors = warning.type === 'error'
+    ? 'bg-red-50 border-red-200 text-red-800'
+    : 'bg-amber-50 border-amber-200 text-amber-800';
+  const iconColor = warning.type === 'error' ? 'text-red-500' : 'text-amber-500';
+
+  return (
+    <div data-testid="validation-error" className={`flex items-start gap-3 p-3 rounded-lg border ${colors}`}>
+      <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${iconColor}`} />
+      <div className="flex-1">
+        <p className="text-sm font-medium">{warning.message}</p>
+      </div>
+    </div>
+  );
+};
+
 export const ValidationPanel: React.FC = () => {
   const state = useAnalysisStore();
   const validation = getValidation(state);
@@ -19,53 +63,7 @@ export const ValidationPanel: React.FC = () => {
   
   const errorWarnings = warnings.filter((w) => w.type === 'error');
   const infoWarnings = warnings.filter((w) => w.type === 'warning');
-  
-  const WarningItem: React.FC<{ warning: ValidationWarning }> = ({ warning }) => {
-    const Icon = warning.type === 'error' ? XCircle : AlertTriangle;
-    const colors = warning.type === 'error' 
-      ? 'bg-red-50 border-red-200 text-red-800' 
-      : 'bg-amber-50 border-amber-200 text-amber-800';
-    const iconColor = warning.type === 'error' ? 'text-red-500' : 'text-amber-500';
-    
-    return (
-      <div data-testid="validation-error" className={`flex items-start gap-3 p-3 rounded-lg border ${colors}`}>
-        <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${iconColor}`} />
-        <div className="flex-1">
-          <p className="text-sm font-medium">{warning.message}</p>
-        </div>
-      </div>
-    );
-  };
-  
-  const StatusItem: React.FC<{
-    label: string;
-    value: string | number;
-    status: 'valid' | 'invalid' | 'neutral';
-  }> = ({ label, value, status }) => {
-    const statusColors = {
-      valid: 'text-green-600 bg-green-50 border-green-200',
-      invalid: 'text-red-600 bg-red-50 border-red-200',
-      neutral: 'text-gray-600 bg-gray-50 border-gray-200',
-    };
-    
-    const iconColors = {
-      valid: 'text-green-500',
-      invalid: 'text-red-500',
-      neutral: 'text-gray-400',
-    };
-    
-    return (
-      <div className={`flex items-center justify-between p-3 rounded-lg border ${statusColors[status]}`}>
-        <span className="text-sm font-medium">{label}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">{value}</span>
-          {status === 'valid' && <CheckCircle className={`w-4 h-4 ${iconColors[status]}`} />}
-          {status === 'invalid' && <XCircle className={`w-4 h-4 ${iconColors[status]}`} />}
-        </div>
-      </div>
-    );
-  };
-  
+
   // Determine status for each check
   const experimentStatus = experiments.length === 1 ? 'valid' : experiments.length > 1 ? 'invalid' : 'neutral';
   const conditionStatus = conditions.length === 2 ? 'valid' : conditions.length > 2 ? 'invalid' : 'neutral';

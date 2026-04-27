@@ -6,15 +6,17 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Toast } from '@/types';
 
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
 interface UIState {
   // Modals
   isUploadModalOpen: boolean;
   isConfigModalOpen: boolean;
   isHelpModalOpen: boolean;
-  
+
   // Toasts
   toasts: Toast[];
-  
+
   // Actions
   openUploadModal: () => void;
   closeUploadModal: () => void;
@@ -22,7 +24,7 @@ interface UIState {
   closeConfigModal: () => void;
   openHelpModal: () => void;
   closeHelpModal: () => void;
-  addToast: (toast: Omit<Toast, 'id'>) => void;
+  addToast: (type: ToastType, message: string, duration?: number) => void;
   removeToast: (id: string) => void;
   clearAllToasts: () => void;
 }
@@ -34,64 +36,64 @@ export const useUIStore = create<UIState>()(
     isConfigModalOpen: false,
     isHelpModalOpen: false,
     toasts: [],
-    
+
     // Modal actions
     openUploadModal: () => {
       set((state) => {
         state.isUploadModalOpen = true;
       });
     },
-    
+
     closeUploadModal: () => {
       set((state) => {
         state.isUploadModalOpen = false;
       });
     },
-    
+
     openConfigModal: () => {
       set((state) => {
         state.isConfigModalOpen = true;
       });
     },
-    
+
     closeConfigModal: () => {
       set((state) => {
         state.isConfigModalOpen = false;
       });
     },
-    
+
     openHelpModal: () => {
       set((state) => {
         state.isHelpModalOpen = true;
       });
     },
-    
+
     closeHelpModal: () => {
       set((state) => {
         state.isHelpModalOpen = false;
       });
     },
-    
-    // Toast actions
-    addToast: (toast) => {
+
+    // Toast actions - uses (type, message) signature for consistency with uiStore.ts
+    addToast: (type: ToastType, message: string, duration?: number) => {
       const id = crypto.randomUUID();
+      const toastDuration = duration ?? 5000;
       set((state) => {
-        state.toasts.push({ ...toast, id });
+        state.toasts.push({ id, type, message, duration: toastDuration });
       });
-      
+
       // Auto-remove after duration
-      const duration = toast.duration || 5000;
       setTimeout(() => {
         get().removeToast(id);
-      }, duration);
+      }, toastDuration);
     },
-    
+
     removeToast: (id) => {
       set((state) => {
         state.toasts = state.toasts.filter((t: Toast) => t.id !== id);
       });
     },
-    
+
     clearAllToasts: () => {
       set((state) => {
         state.toasts = [];
@@ -109,5 +111,5 @@ export const showToast = (
   duration?: number
 ): void => {
   const { addToast } = useUIStore.getState();
-  addToast({ type, message, duration });
+  addToast(type, message, duration);
 };

@@ -6,9 +6,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Check, ChevronDown, ChevronUp, Filter, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Filter, Search, X } from 'lucide-react';
 import { useAnalysisStore, getSelectedFiles, getExperiments, getConditions } from '@/stores/analysis-store';
-import type { ParsedFilename } from '@/types';
+
 
 type SortField = 'filename' | 'experiment' | 'condition' | 'replicate';
 type SortDirection = 'asc' | 'desc';
@@ -28,8 +28,6 @@ export const ExperimentTable: React.FC = () => {
     uploadedFiles,
     selectedFiles,
     toggleFileSelection,
-    selectAllFiles,
-    deselectAllFiles,
     removeUploadedFile,
   } = useAnalysisStore();
   
@@ -39,7 +37,7 @@ export const ExperimentTable: React.FC = () => {
   
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
-    let filtered = uploadedFiles.filter((file) => {
+    const filtered = uploadedFiles.filter((file) => {
       const matchesText = filterText === '' || 
         file.filename.toLowerCase().includes(filterText.toLowerCase()) ||
         file.experiment.toLowerCase().includes(filterText.toLowerCase()) ||

@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, SessionState, SessionActions, AnalysisTemplate } from '@/types/session';
+import type { Session, SessionState, SessionActions } from '@/types/session';
 
 // Extended store interface combining state and actions
 interface SessionStore extends SessionState, SessionActions {}

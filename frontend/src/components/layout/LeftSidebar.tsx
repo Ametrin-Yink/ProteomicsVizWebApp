@@ -7,11 +7,9 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  BookOpen, 
-  Download, 
-  Upload, 
-  FileText,
+import {
+  Download,
+  Upload,
   Info,
   ChevronRight
 } from 'lucide-react';
