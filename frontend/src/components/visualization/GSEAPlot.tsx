@@ -81,10 +81,11 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
       }
     });
 
-    // Find peak position for annotation
-    const peakIndex = yValues.length > 0 ? yValues.reduce((maxIdx, v, i) => v > yValues[maxIdx] ? i : maxIdx, 0) : 0;
-    const peakRank = xValues[peakIndex] || 0;
-    const peakES = yValues[peakIndex] || 0;
+    // Find the ES extremum (peak for positive NES, trough for negative NES)
+    const extremumIndex = yValues.length > 0 ? yValues.reduce((idx, v, i) =>
+      Math.abs(v) > Math.abs(yValues[idx]) ? i : idx, 0) : 0;
+    const peakRank = xValues[extremumIndex] || 0;
+    const peakES = yValues[extremumIndex] || 0;
 
     // Split pathway genes into leading edge (before peak) and post-peak, with gene names
     const [leadingEdgeGenes, leadingEdgePositions] = plotData.rank_metric_positions.reduce(
