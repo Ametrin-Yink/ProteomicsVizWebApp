@@ -38,6 +38,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const sessions = useSessions();
   const sessionsList = React.useMemo(() => sessions || [], [sessions]);
   const currentSession = useCurrentSession();
+  const sessionError = useSessionStore((state) => state.error);
   const { setCurrentSession, addSession, loadSessions, deleteSession, updateSession } = useSessionStore();
   const { sidebar, setSidebarCollapsed } = useUIStore();
 
@@ -291,10 +292,15 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 <FlaskConical className="w-8 h-8 text-[#94a3b8]" />
               </div>
               <p className="text-sm text-[#64748b]">
-                No sessions yet
+                {sessionError ? 'Failed to load sessions' : 'No sessions yet'}
               </p>
+              {sessionError && (
+                <p className="text-xs text-red-500 mt-1">
+                  {sessionError}
+                </p>
+              )}
               <p className="text-xs text-[#94a3b8] mt-1">
-                Create your first analysis
+                {sessionError ? 'Try refreshing the page' : 'Create your first analysis'}
               </p>
             </div>
           ) : (

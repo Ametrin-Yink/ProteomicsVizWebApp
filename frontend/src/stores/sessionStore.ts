@@ -44,17 +44,20 @@ export const useSessionStore = create<SessionStore>()(
         state.isLoading = true;
         state.error = null;
       });
-      
+
       try {
         const { sessionsApi } = await import('@/lib/api-client');
         const sessions = await sessionsApi.list();
+        console.log(`Loaded ${sessions.length} sessions from backend`);
         set((state) => {
           state.sessions = sessions;
           state.isLoading = false;
         });
       } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load sessions';
+        console.error('Session load failed:', error);
         set((state) => {
-          state.error = error instanceof Error ? error.message : 'Failed to load sessions';
+          state.error = message;
           state.isLoading = false;
         });
       }
