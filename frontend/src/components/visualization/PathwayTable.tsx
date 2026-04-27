@@ -185,7 +185,7 @@ export default function PathwayTable({
                 onClick={() => handleSort('fdr')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
               >
-                Adj P-value <SortIndicator columnKey="fdr" sortKey={sortBy} direction={sortOrder} />
+                FDR <SortIndicator columnKey="fdr" sortKey={sortBy} direction={sortOrder} />
               </th>
               <th
                 data-testid="table-header-genes"

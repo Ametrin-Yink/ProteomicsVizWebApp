@@ -99,13 +99,18 @@ export async function getGSEAData(
   return fetchApi<GSEAData>(`/api/sessions/${sessionId}/gsea/${database}${query ? `?${query}` : ''}`);
 }
 
+// Encode term for URL path segment (encodeURIComponent doesn't encode /)
+function encodeTerm(term: string): string {
+  return encodeURIComponent(term).replace(/\//g, '%2F');
+}
+
 // GSEA Plot Data (on-demand)
 export async function getGSEAPlotData(
   sessionId: string,
   database: GSEADatabase,
   term: string
 ): Promise<GSEAPlotData> {
-  return fetchApi<GSEAPlotData>(`/api/sessions/${sessionId}/gsea/${database}/${encodeURIComponent(term)}/plot`);
+  return fetchApi<GSEAPlotData>(`/api/sessions/${sessionId}/gsea/${database}/${encodeTerm(term)}/plot`);
 }
 
 // GSEA Heatmap Data (on-demand)
@@ -114,7 +119,7 @@ export async function getGSEAHeatmapData(
   database: GSEADatabase,
   term: string
 ): Promise<GSEAHeatmapData> {
-  return fetchApi<GSEAHeatmapData>(`/api/sessions/${sessionId}/gsea/${database}/${encodeURIComponent(term)}/heatmap`);
+  return fetchApi<GSEAHeatmapData>(`/api/sessions/${sessionId}/gsea/${database}/${encodeTerm(term)}/heatmap`);
 }
 
 // Protein Abundance API

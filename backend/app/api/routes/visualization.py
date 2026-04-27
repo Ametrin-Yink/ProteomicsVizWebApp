@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pandas as pd
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import settings
@@ -449,26 +450,48 @@ async def get_gsea_plot_data(
     # Compute running ES curve on-demand from gseapy output files
     gsea_dir = results_dir / "gsea" / database
 
-    rnk_file = gsea_dir / "gseapy.gene_set.0.rnk"
-    if not rnk_file.exists():
-        # Try alternate naming: gseapy uses the gene set name in the .rnk filename
-        try:
-            rnk_file = next(gsea_dir.glob("*.rnk"))
-        except StopIteration:
-            return create_response({
-                "term": term,
-                "es": pathway.get("es", 0),
-                "nes": pathway.get("nes", 0),
-                "running_es_curve": [],
-                "rank_metric_positions": [],
-            })
+    ranked_genes = []
+    ranked_metrics = []
 
-    try:
-        rnk_df = await asyncio.to_thread(pd.read_csv, rnk_file, sep='\t', header=None)
-        ranked_genes = rnk_df.iloc[:, 0].tolist()
-        ranked_metrics = rnk_df.iloc[:, 1].tolist()
-    except Exception as e:
-        logger.warning(f"Could not read .rnk file: {e}")
+    rnk_file = gsea_dir / "gseapy.gene_set.0.rnk"
+    if rnk_file.exists():
+        try:
+            rnk_df = await asyncio.to_thread(pd.read_csv, rnk_file, sep='\t', header=None)
+            ranked_genes = rnk_df.iloc[:, 0].tolist()
+            ranked_metrics = rnk_df.iloc[:, 1].tolist()
+        except Exception as e:
+            logger.warning(f"Could not read .rnk file: {e}")
+    else:
+        # Try alternate naming: gseapy uses the gene set name in the .rnk filename
+        alt_rnk = next((gsea_dir.glob("*.rnk")), None)
+        if alt_rnk is not None:
+            try:
+                rnk_df = await asyncio.to_thread(pd.read_csv, alt_rnk, sep='\t', header=None)
+                ranked_genes = rnk_df.iloc[:, 0].tolist()
+                ranked_metrics = rnk_df.iloc[:, 1].tolist()
+            except Exception as e:
+                logger.warning(f"Could not read alternate .rnk file: {e}")
+
+    # Fallback: reconstruct ranked list from Diff_Expression.tsv
+    if not ranked_genes:
+        de_file = results_dir / "Diff_Expression.tsv"
+        if de_file.exists():
+            try:
+                de_df = await asyncio.to_thread(pd.read_csv, de_file, sep='\t')
+                gene_col = next((c for c in de_df.columns if 'gene' in c.lower() or 'symbol' in c.lower()), None)
+                pval_col = next((c for c in de_df.columns if 'pval' in c.lower() and 'adj' not in c.lower()), None)
+                logfc_col = next((c for c in de_df.columns if 'logfc' in c.lower() or 'log2fc' in c.lower()), None)
+                if gene_col and pval_col and logfc_col:
+                    valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
+                    valid['metric'] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
+                    valid = valid.sort_values('metric', ascending=False)
+                    valid['gene'] = valid[gene_col].str.split('[;]').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
+                    ranked_genes = valid['gene'].tolist()
+                    ranked_metrics = valid['metric'].tolist()
+            except Exception as e:
+                logger.warning(f"Could not reconstruct ranked list from DE results: {e}")
+
+    if not ranked_genes:
         return create_response({
             "term": term,
             "es": pathway.get("es", 0),
@@ -565,6 +588,25 @@ async def get_gsea_heatmap_data(
     if not lead_genes:
         return create_response({"genes": [], "samples": [], "z_scores": []})
 
+    # Build ranked gene list to order heatmap genes by rank position
+    de_file = results_dir / "Diff_Expression.tsv"
+    gene_rank_map: dict[str, int] = {}
+    if de_file.exists():
+        try:
+            de_df = await asyncio.to_thread(pd.read_csv, de_file, sep='\t')
+            gene_col = next((c for c in de_df.columns if 'gene' in c.lower() or 'symbol' in c.lower()), None)
+            pval_col = next((c for c in de_df.columns if 'pval' in c.lower() and 'adj' not in c.lower()), None)
+            logfc_col = next((c for c in de_df.columns if 'logfc' in c.lower() or 'log2fc' in c.lower()), None)
+            if gene_col and pval_col and logfc_col:
+                valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
+                valid['metric'] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
+                valid = valid.sort_values('metric', ascending=False)
+                valid['gene'] = valid[gene_col].str.split('[;]').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
+                for rank, gene in enumerate(valid['gene'].tolist()):
+                    gene_rank_map[gene.upper()] = rank
+        except Exception as e:
+            logger.debug(f"Could not build gene rank map: {e}")
+
     # Load protein abundance data
     protein_file = results_dir / "Protein_Abundances.tsv"
     if not protein_file.exists():
@@ -578,6 +620,19 @@ async def get_gsea_heatmap_data(
 
     # Use existing method to generate heatmap data (PSM_Count already excluded)
     heatmap_data = gsea_service.generate_heatmap_data(protein_df, lead_genes)
+
+    if heatmap_data is None:
+        return create_response({"genes": [], "samples": [], "z_scores": []})
+
+    # Reorder genes and z_scores by rank position if rank info is available
+    if gene_rank_map and heatmap_data.get("genes"):
+        genes_with_rank = []
+        z_scores_by_gene = dict(zip(heatmap_data["genes"], heatmap_data["z_scores"]))
+        for gene in heatmap_data["genes"]:
+            genes_with_rank.append((gene, gene_rank_map.get(gene.upper(), gene_rank_map.get(gene, float('inf')))))
+        genes_with_rank.sort(key=lambda x: x[1])
+        heatmap_data["genes"] = [g for g, _ in genes_with_rank]
+        heatmap_data["z_scores"] = [z_scores_by_gene[g] for g in heatmap_data["genes"]]
 
     if heatmap_data is None:
         return create_response({"genes": [], "samples": [], "z_scores": []})
@@ -654,13 +709,21 @@ async def get_gsea_results(
     return create_response(gsea_data)
 
 
-async def load_protein_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
+async def load_protein_abundance(
+    results_dir: Path,
+    protein_id: str,
+    session_id: str = "",
+    control: str = "",
+    treatment: str = "",
+) -> Dict[str, Any]:
     """Load protein abundance data from TSV file.
 
     Args:
         results_dir: Path to session results directory
         protein_id: Protein accession ID
         session_id: Session ID for cache keying
+        control: Control condition name for label matching
+        treatment: Treatment condition name for label matching
 
     Returns:
         Protein abundance data dictionary matching frontend ProteinAbundance interface
@@ -701,13 +764,14 @@ async def load_protein_abundance(results_dir: Path, protein_id: str, session_id:
                 abundances.append(0.0)
             else:
                 abundances.append(float(value))
-            # Try to infer condition from sample name (e.g., "Abundance F1 Sample_DMSO_1")
-            # Default to Unknown if can't parse
+            # Infer condition from sample name using session config
             condition = "Unknown"
-            if "DMSO" in col.upper():
+            if control and control.lower() in col.lower():
                 condition = "Control"
-            elif "INCZ" in col.upper() or "TREATMENT" in col.upper():
+            elif treatment and treatment.lower() in col.lower():
                 condition = "Treatment"
+            elif "DMSO" in col.upper() or "VEHICLE" in col.upper():
+                condition = "Control"
             conditions.append(condition)
 
         result = {
@@ -739,8 +803,16 @@ async def get_protein_abundance(
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
 
+    # Extract control/treatment from session config for condition labeling
+    control = session.config.control if session.config else ""
+    treatment = session.config.treatment if session.config else ""
+
     # Load protein abundance from file
-    abundance_data = await load_protein_abundance(results_dir, protein_id, session_id)
+    abundance_data = await load_protein_abundance(
+        results_dir, protein_id, session_id,
+        control=control,
+        treatment=treatment,
+    )
 
     return create_response(abundance_data)
 
