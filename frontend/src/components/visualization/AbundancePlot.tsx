@@ -41,23 +41,20 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       conditionData[condition].abundances.push(validAbundance);
     });
 
-    const colors: Record<string, string> = {
+    const namedColors: Record<string, string> = {
       Control: '#00ADEF',
       Treatment: '#E73564',
       DMSO: '#00ADEF',
     };
 
-    // Helper to determine if condition is treatment
-    const isTreatment = (condition: string) => {
-      const upper = condition.toUpperCase();
-      return upper.includes('INCZ') || upper.includes('TREATMENT');
-    };
+    // Fallback colors in order for unlabeled conditions
+    const fallbackColors = ['#00ADEF', '#E73564'];
 
-    return Object.entries(conditionData).map(([condition, values]) => {
-      // Determine color based on condition name
-      let color = colors[condition];
+    return Object.entries(conditionData).map(([condition, values], idx) => {
+      let color = namedColors[condition];
       if (!color) {
-        color = isTreatment(condition) ? '#E73564' : '#00ADEF';
+        // For unlabeled conditions, alternate between blue and pink
+        color = fallbackColors[idx % fallbackColors.length];
       }
       return {
         x: values.samples,
@@ -163,16 +160,19 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
         x: psm.samples,
         y: psm.abundances,
         mode: 'lines+markers' as const,
-        name: psm.psm_id || `PSM ${index + 1}`,
+        name: psm.sequence || psm.psm_id || `PSM ${index + 1}`,
         line: { color, width: 2 },
         marker: { size: 6 },
-        hovertemplate: `<b>${psm.sequence || 'Unknown'}</b><br>Sample: %{x}<br>Abundance: %{y:.2f}<extra></extra>`,
+        hovertemplate: `<b>${psm.psm_id || 'Unknown'}</b><br>Sample: %{x}<br>Abundance: %{y:.2f}<extra></extra>`,
         type: 'scatter' as const,
       });
     });
 
     return traces;
   }, [data]);
+
+  const psmCount = data?.psms?.length ?? 0;
+  const plotHeight = Math.max(250, 150 + psmCount * 25);
 
   const layout = useMemo(
     () => ({
@@ -183,6 +183,7 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
       xaxis: {
         title: { text: 'Sample', font: { size: 12 }, standoff: 20 },
         tickangle: -45,
+        tickfont: { size: 10 },
         gridcolor: '#E5E7EB',
         type: 'category' as const,
       },
@@ -195,14 +196,16 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
       legend: {
         orientation: 'h' as const,
         x: 0.5,
-        y: 1.1,
+        y: -0.35,
         xanchor: 'center' as const,
+        yanchor: 'top' as const,
+        font: { size: 10 },
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 80, b: 100 },
+      margin: { l: 50, r: 30, t: 50, b: Math.max(100, 80 + psmCount * 15) },
     }),
-    [title]
+    [title, psmCount]
   );
 
   const config = useMemo(
@@ -215,7 +218,7 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
   );
 
   return (
-    <div className="w-full h-[250px] bg-white rounded-lg border border-gray-200 p-2">
+    <div className="w-full bg-white rounded-lg border border-gray-200 p-2" style={{ height: `${plotHeight}px` }}>
       <Plot
         data={plotData}
         layout={layout}
