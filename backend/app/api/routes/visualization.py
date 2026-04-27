@@ -814,11 +814,11 @@ async def load_protein_abundance(
         for col in abundance_cols:
             samples.append(col)
             value = protein_row.iloc[0].get(col)
-            # Convert NA to 0, otherwise use the value
+            # Convert NA to 0, otherwise reverse log2 transform
             if pd.isna(value):
                 abundances.append(0.0)
             else:
-                abundances.append(float(value))
+                abundances.append(2.0 ** float(value))
             # Infer condition from sample name using session config
             condition = "Unknown"
             if control and control.lower() in col.lower():
