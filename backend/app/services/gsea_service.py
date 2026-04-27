@@ -529,6 +529,9 @@ class GSEAService:
                 return None
 
             # Filter to pathway genes that are in the protein data
+            available_genes = protein_df[gene_col].astype(str).str.upper().tolist()
+            lead_genes_upper = [g.upper() for g in lead_genes]
+
             # Build a lookup: uppercase gene name -> index
             gene_index_map: dict[str, int] = {}
             for i, gene in enumerate(available_genes):

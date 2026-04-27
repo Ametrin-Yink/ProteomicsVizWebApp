@@ -42,8 +42,9 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
         if (!cancelled) {
           setPlotData(plot);
           setHeatmapData(heatmap.genes?.length ? heatmap : null);
-          // Update parent with pathway gene set size for the table
-          if (plot.pathway_gene_set_size && onPathwayUpdated && currentPathway) {
+          // Only update parent if pathway_gene_set_size wasn't already set
+          // to prevent infinite re-render loop
+          if (plot.pathway_gene_set_size && onPathwayUpdated && currentPathway && !currentPathway.pathway_gene_set_size) {
             onPathwayUpdated({
               ...currentPathway,
               pathway_gene_set_size: plot.pathway_gene_set_size,
