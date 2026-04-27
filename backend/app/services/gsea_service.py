@@ -506,9 +506,11 @@ class GSEAService:
         """
         try:
             # Identify gene column and abundance columns
-            id_cols = ['Master Protein Accessions', 'Gene_Name', 'Gene', 'Protein', 'Master_Protein_Accessions', 'PSM_Count', 'psm_count']
+            gene_id_cols = ['Master Protein Accessions', 'Gene_Name', 'Gene', 'Protein', 'Master_Protein_Accessions']
+            exclude_cols = set(gene_id_cols + ['PSM_Count', 'psm_count'])
+
             gene_col = None
-            for col in id_cols:
+            for col in gene_id_cols:
                 if col in protein_df.columns:
                     gene_col = col
                     break
@@ -517,10 +519,10 @@ class GSEAService:
                 # Try first column as gene column
                 gene_col = protein_df.columns[0]
 
-            # Get abundance columns (numeric columns excluding ID columns)
+            # Get abundance columns (numeric columns excluding metadata)
             abundance_cols = [
                 col for col in protein_df.columns
-                if col not in id_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
+                if col not in exclude_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
             ]
 
             if len(abundance_cols) == 0:

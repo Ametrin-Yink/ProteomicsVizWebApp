@@ -21,6 +21,8 @@ from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.gsea_service import gsea_service
 
+VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
+
 router = APIRouter()
 logger = logging.getLogger("proteomics")
 
@@ -474,6 +476,13 @@ async def get_gsea_plot_data(
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
 
+    # Validate database name to prevent path traversal
+    if database not in VALID_GSEA_DATABASES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}"
+        )
+
     # Load slim GSEA results to get lead_genes and pathway metadata
     gsea_data = load_gsea_results(results_dir, database, session_id)
     results = gsea_data.get("results", [])
@@ -525,6 +534,12 @@ async def get_gsea_plot_data(
     lead_genes = pathway.get("lead_genes", [])
     nes = pathway.get("nes", 0)
 
+    # Check cache first
+    cache_key = _cache_key(session_id, "gsea_plot", database, term)
+    cached = viz_cache.get(cache_key)
+    if cached is not None:
+        return create_response(cached)
+
     # Use existing method to compute curve
     running_es_curve = gsea_service.generate_running_es_curve(
         ranked_genes, lead_genes, nes, ranked_metrics
@@ -538,13 +553,18 @@ async def get_gsea_plot_data(
         if gene in lead_genes_set
     ]
 
-    return create_response({
+    response_data = {
         "term": term,
         "es": pathway.get("es", 0),
         "nes": pathway.get("nes", 0),
         "running_es_curve": running_es_curve,
         "rank_metric_positions": rank_metric_positions,
-    })
+    }
+
+    # Cache the result
+    viz_cache.set(cache_key, response_data)
+
+    return create_response(response_data)
 
 
 @router.get("/{session_id}/gsea/{database}/{term}/heatmap")
@@ -564,6 +584,13 @@ async def get_gsea_heatmap_data(
 
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
+
+    # Validate database name to prevent path traversal
+    if database not in VALID_GSEA_DATABASES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}"
+        )
 
     # Load slim GSEA results to get lead_genes
     gsea_data = load_gsea_results(results_dir, database, session_id)
@@ -794,12 +821,7 @@ async def get_protein_psm(
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
     
-    print(f"PSM ROUTE: session_id={session_id}, protein_id={protein_id}, results_dir={results_dir}", flush=True)
-    print(f"PSM ROUTE: settings.sessions_dir={settings.sessions_dir}", flush=True)
-    print(f"PSM ROUTE: parquet exists={(results_dir / 'PSM_Abundances.parquet').exists()}", flush=True)
-
     # Load PSM data from file
     psm_data = await load_psm_abundance(results_dir, protein_id, session_id)
 
-    print(f"PSM ROUTE: returned {len(psm_data.get('psms', []))} PSMs", flush=True)
     return create_response(psm_data)
