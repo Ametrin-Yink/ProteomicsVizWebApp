@@ -11,8 +11,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useProcessingStore } from '@/stores/processing-store';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { processingAPI } from '@/lib/api';
-import { StepTracker } from '@/components/processing/StepTracker';
-import { ProgressBar } from '@/components/processing/ProgressBar';
 import { LogPanel } from '@/components/processing/LogPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { formatDuration } from '@/lib/utils';
@@ -171,13 +169,11 @@ function ProcessingContent() {
   const {
     steps,
     logs,
-    overallProgress,
     isConnected,
     isComplete,
     isCancelled,
     error,
     processingDuration,
-    estimatedTimeRemaining,
     sessionId: storeSessionId,
     initializeSteps,
     setSessionId,
@@ -454,27 +450,6 @@ function ProcessingContent() {
 
         {/* Main content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Progress overview */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-medium text-gray-700">
-                Overall Progress
-              </h2>
-              <div className="flex items-center gap-4">
-                {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
-                  <span data-testid="estimated-time" className="text-sm text-gray-500 flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    Est. {formatDuration(estimatedTimeRemaining)} remaining
-                  </span>
-                )}
-                <span className="text-sm text-gray-500">
-                  {steps.filter((s) => s.status === 'completed').length} of{' '}
-                  {steps.length} steps completed
-                </span>
-              </div>
-            </div>
-            <ProgressBar data-testid="progress-bar" progress={overallProgress} size="lg" />
-          </div>
 
           {/* Error state */}
           {error && (
@@ -520,27 +495,13 @@ function ProcessingContent() {
             </div>
           )}
 
-          {/* Two-column layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left column - Step tracker */}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Activity className="w-5 h-5 text-blue-500" />
-                Processing Steps
-              </h2>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <StepTracker steps={steps} />
-              </div>
-            </div>
-
-            {/* Right column - Logs */}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-500" />
-                Activity Log
-              </h2>
-              <LogPanel logs={logs} maxHeight="600px" />
-            </div>
+          {/* Activity Log - full width */}
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-500" />
+              Activity Log
+            </h2>
+            <LogPanel logs={logs} maxHeight="600px" />
           </div>
           {/* Cancel Confirmation Dialog */}
           {showCancelDialog && (

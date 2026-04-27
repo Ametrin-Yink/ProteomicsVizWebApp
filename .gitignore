@@ -303,3 +303,5 @@ api_keys.json
 local/
 
 .worktrees/
+backend/test_upload3/PSM_DOCK5_DMSO_24h_1.csv
+backend/test_upload/PSM_DOCK5_DMSO_24h_1.csv

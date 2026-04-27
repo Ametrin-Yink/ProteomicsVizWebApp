@@ -136,10 +136,12 @@ async def http_exception_handler(request, exc: HTTPException):
 @app.get("/health")
 async def health_check():
     """Health check endpoint - responds immediately even if sessions aren't loaded."""
+    print("HEALTH CHECK CALLED - server running with latest code", flush=True)
     return {
         "status": "healthy",
         "version": settings.app_version,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "code_version": "debug-2026-04-27-2",
     }
 
 
