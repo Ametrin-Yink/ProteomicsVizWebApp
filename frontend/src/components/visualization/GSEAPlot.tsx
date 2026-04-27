@@ -77,6 +77,11 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
       Math.floor((rank / maxRank) * (xValues.length - 1))
     );
 
+    // Find peak position for annotation
+    const peakIndex = yValues.length > 0 ? yValues.reduce((maxIdx, v, i) => v > yValues[maxIdx] ? i : maxIdx, 0) : 0;
+    const peakRank = xValues[peakIndex] || 0;
+    const peakES = yValues[peakIndex] || 0;
+
     const zeroLineY = new Array(xValues.length).fill(0);
 
     // Heatmap
@@ -134,6 +139,19 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
         hovertemplate: 'Rank: %{x}<br>Metric: %{y:.3f}<extra></extra>',
         showlegend: false,
       },
+      // Peak marker (vertical dashed line at ES maximum)
+      {
+        x: [peakRank, peakRank],
+        y: [-Math.abs(peakES) * 1.1, Math.abs(peakES) * 1.1],
+        type: 'scatter' as const,
+        mode: 'lines' as const,
+        name: 'Peak ES',
+        line: { color: '#6B7280', width: 1.5, dash: 'dot' as const },
+        yaxis: 'y' as const,
+        xaxis: 'x' as const,
+        hoverinfo: 'skip',
+        showlegend: false,
+      },
     ];
 
     if (hasHeatmap) {
@@ -143,7 +161,6 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
         y: heatmapData!.genes,
         type: 'heatmap',
         colorscale: 'RdBu',
-        reversescale: true,
         zmid: 0,
         zmin: -3,
         zmax: 3,
