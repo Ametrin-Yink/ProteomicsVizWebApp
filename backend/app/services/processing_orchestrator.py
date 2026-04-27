@@ -5,6 +5,7 @@ Manages state persistence and error recovery.
 """
 
 import asyncio
+from collections import deque
 import gc
 import json
 import logging
@@ -162,10 +163,8 @@ class ProcessingOrchestrator:
         self.progress_callbacks: list[Callable[[ProcessingProgress], None]] = []
         self._current_session_id: Optional[str] = None
         self._pipeline_state: Optional[PipelineState] = None
-        # Batching state for progress updates
-        self._pending_progress: Optional[ProcessingProgress] = None
-        self._last_send_time: float = 0
-        self._min_interval: float = 1.0  # Minimum 1 second between updates
+        # Queue-based batching for progress updates
+        self._pending_queue: deque[ProcessingProgress] = deque()
         self._flush_task: Optional[asyncio.Task] = None
 
     def register_progress_callback(
@@ -179,66 +178,38 @@ class ProcessingOrchestrator:
         self.progress_callbacks.append(callback)
 
     async def _send_progress(self, progress: ProcessingProgress) -> None:
-        """Send progress update to all registered callbacks with batching.
+        """Send progress update to all registered callbacks.
 
-        Args:
-            progress: Progress update
+        Events are queued and flushed in order to guarantee no events are lost,
+        even when steps complete rapidly.
         """
-        # Store as pending
-        self._pending_progress = progress
+        self._pending_queue.append(progress)
 
-        # Check if we should send now
-        current_time = asyncio.get_event_loop().time()
-        time_since_last = current_time - self._last_send_time
-
-        if time_since_last >= self._min_interval:
-            # Send immediately
-            if self._flush_task:
-                self._flush_task.cancel()
-                self._flush_task = None
-            await self._flush_progress()
-        else:
-            # Schedule flush after remaining interval
-            delay = self._min_interval - time_since_last
-            if self._flush_task:
-                self._flush_task.cancel()
-            self._flush_task = asyncio.create_task(self._delayed_flush(delay))
-
-    async def _delayed_flush(self, delay: float) -> None:
-        """Flush progress after delay, unless superseded."""
-        try:
-            await asyncio.sleep(delay)
-            await self._flush_progress()
-        except asyncio.CancelledError:
-            pass
+        if self._flush_task is None or self._flush_task.done():
+            self._flush_task = asyncio.create_task(self._flush_progress())
 
     async def _flush_progress(self) -> None:
-        """Send pending progress update to all registered callbacks."""
-        if self._pending_progress is None:
-            return
+        """Flush all pending progress updates in order."""
+        while self._pending_queue:
+            progress = self._pending_queue.popleft()
+            logger.info(f"_send_progress: step {progress.step}, status {progress.status}, callbacks={len(self.progress_callbacks)}")
 
-        progress = self._pending_progress
-        self._pending_progress = None
-        self._last_send_time = asyncio.get_event_loop().time()
+            # Also send as log message for activity log
+            self._send_log(
+                level="info",
+                message=f"Step {progress.step}: {progress.step_name} - {progress.status}",
+                step=progress.step
+            )
 
-        logger.info(f"_send_progress: step {progress.step}, status {progress.status}, callbacks={len(self.progress_callbacks)}")
-
-        # Also send as log message for activity log
-        self._send_log(
-            level="info",
-            message=f"Step {progress.step}: {progress.step_name} - {progress.status}",
-            step=progress.step
-        )
-
-        for callback in self.progress_callbacks:
-            try:
-                if asyncio.iscoroutinefunction(callback):
-                    await callback(progress)
-                else:
-                    callback(progress)
-                logger.info(f"_send_progress: callback succeeded for step {progress.step}")
-            except Exception as e:
-                logger.warning(f"Progress callback failed: {e}", exc_info=True)
+            for callback in self.progress_callbacks:
+                try:
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(progress)
+                    else:
+                        callback(progress)
+                    logger.info(f"_send_progress: callback succeeded for step {progress.step}")
+                except Exception as e:
+                    logger.warning(f"Progress callback failed: {e}", exc_info=True)
 
     def _send_log(self, level: str, message: str, step: int = None) -> None:
         """Send log message to WebSocket and store in state.
@@ -266,8 +237,7 @@ class ProcessingOrchestrator:
             # Schedule async WebSocket sending
             if hasattr(session_manager, 'send_log_message'):
                 try:
-                    # Get the current event loop and schedule the async task
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     loop.create_task(
                         session_manager.send_log_message(
                             session_id=self._current_session_id,
@@ -495,11 +465,6 @@ class ProcessingOrchestrator:
             else:
                 psm_input_for_r = psm_output
                 psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
-                logger.info(f"Step 5: Saved TSV file at {psm_output}, size: {psm_output.stat().st_size} bytes")
-
-            # Save TSV only when Parquet is not being used (compatibility fallback)
-            if not use_parquet:
-                psm_df.to_csv(psm_output, sep='\t', index=False, encoding='utf-8')
                 if not psm_output.exists():
                     logger.error(f"Step 5: CRITICAL - File does not exist after save attempt: {psm_output}")
                     raise ProcessingError(
@@ -507,6 +472,7 @@ class ProcessingOrchestrator:
                         step=5,
                         recoverable=False
                     )
+                logger.info(f"Step 5: Saved TSV file at {psm_output}, size: {psm_output.stat().st_size} bytes")
 
             state.mark_step_completed(5, psm_output)
 

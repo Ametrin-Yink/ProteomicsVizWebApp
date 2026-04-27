@@ -144,7 +144,9 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Set multiple logs (for loading historical logs)
     setLogs: (logs: LogEntry[]) => {
       set((state) => {
-        state.logs = logs;
+        const existingMessages = new Set(state.logs.map(l => l.message));
+        const newLogs = logs.filter(l => !existingMessages.has(l.message));
+        state.logs.push(...newLogs);
       });
     },
 
