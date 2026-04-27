@@ -87,11 +87,14 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
     const peakRank = xValues[extremumIndex] || 0;
     const peakES = yValues[extremumIndex] || 0;
 
-    // Split pathway genes into leading edge (before peak) and post-peak, with gene names
+    // Split pathway genes into leading edge and non-leading edge.
+    // For positive NES: leading edge genes are BEFORE the peak (rank <= peakRank)
+    // For negative NES: leading edge genes are AFTER the trough (rank >= peakRank)
+    const isNegative = peakES < 0;
     const [leadingEdgeGenes, leadingEdgePositions] = plotData.rank_metric_positions.reduce(
       ([genes, positions]: [string[], number[]], [gene, rank]) => {
         const pos = Math.floor((rank / maxRank) * (xValues.length - 1));
-        if (rank <= peakRank) { genes.push(gene); positions.push(pos); }
+        if (isNegative ? rank >= peakRank : rank <= peakRank) { genes.push(gene); positions.push(pos); }
         return [genes, positions];
       },
       [[], []] as [string[], number[]]
@@ -99,7 +102,7 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
     const [postPeakGenes, postPeakPositions] = plotData.rank_metric_positions.reduce(
       ([genes, positions]: [string[], number[]], [gene, rank]) => {
         const pos = Math.floor((rank / maxRank) * (xValues.length - 1));
-        if (rank > peakRank) { genes.push(gene); positions.push(pos); }
+        if (isNegative ? rank < peakRank : rank > peakRank) { genes.push(gene); positions.push(pos); }
         return [genes, positions];
       },
       [[], []] as [string[], number[]]
