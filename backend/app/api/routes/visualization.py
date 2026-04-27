@@ -239,6 +239,12 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
 _gsea_file_cache: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
 
 
+def _load_gsea_json(filepath: Path) -> dict:
+    """Load and parse a GSEA JSON file. Run via asyncio.to_thread to avoid blocking."""
+    with open(filepath, 'r') as f:
+        return json.load(f)
+
+
 def load_gsea_results(results_dir: Path, database: str, session_id: str = "") -> Dict[str, Any]:
     """Load GSEA results from JSON file with per-session memory caching.
 
@@ -264,8 +270,7 @@ def load_gsea_results(results_dir: Path, database: str, session_id: str = "") ->
     if cache_key not in _gsea_file_cache:
         try:
             logger.info(f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)")
-            with open(gsea_file, 'r') as f:
-                all_results = json.load(f)
+            all_results = _load_gsea_json(gsea_file)
             # Pre-process all databases at once
             processed = {}
             for db_name, db_data in all_results.items():
@@ -397,65 +402,6 @@ async def get_qc_plots(
                 logger.error(f"Error recalculating total_psms: {e}")
 
     return create_response(qc_data)
-
-
-@router.get("/{session_id}/gsea/{database}")
-async def get_gsea_results(
-    session_id: str,
-    database: str,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=1000),
-    sort_by: str = Query("nes"),
-    sort_order: str = Query("desc"),
-    significant_only: bool = Query(False),
-    search: str = Query(""),
-    store: SessionStore = Depends(get_session_store)
-):
-    """Get GSEA results for a database with pagination and filtering."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-
-    # Get results directory
-    results_dir = settings.sessions_dir / session_id / "results"
-
-    # Load GSEA results (cached in memory after first load)
-    gsea_data = load_gsea_results(results_dir, database, session_id)
-
-    results = gsea_data.pop("results")
-
-    # Apply filters
-    if significant_only:
-        results = [r for r in results if r.get("significant", False)]
-
-    if search:
-        search_lower = search.lower()
-        results = [
-            r for r in results
-            if search_lower in r.get("name", "").lower()
-            or search_lower in r.get("term", "").lower()
-        ]
-
-    # Sort results
-    reverse = sort_order.lower() == "desc"
-    sort_key = sort_by if sort_by in ("nes", "pval", "fdr", "matched_genes") else "nes"
-    results.sort(key=lambda x: x.get(sort_key, 0), reverse=reverse)
-
-    # Paginate
-    total = len(results)
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    paginated_results = results[start_idx:end_idx]
-
-    gsea_data["results"] = paginated_results
-    gsea_data["page"] = page
-    gsea_data["page_size"] = page_size
-    gsea_data["total"] = total
-
-    return create_response(gsea_data)
 
 
 @router.get("/{session_id}/gsea/{database}/{term}/plot")
@@ -640,6 +586,72 @@ async def get_gsea_heatmap_data(
     viz_cache.set(cache_key, heatmap_data)
 
     return create_response(heatmap_data)
+
+
+@router.get("/{session_id}/gsea/{database}")
+async def get_gsea_results(
+    session_id: str,
+    database: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=1000),
+    sort_by: str = Query("nes"),
+    sort_order: str = Query("desc"),
+    significant_only: bool = Query(False),
+    search: str = Query(""),
+    store: SessionStore = Depends(get_session_store)
+):
+    """Get GSEA results for a database with pagination and filtering."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+
+    # Get results directory
+    results_dir = settings.sessions_dir / session_id / "results"
+
+    # Validate database name to prevent path traversal
+    if database not in VALID_GSEA_DATABASES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}"
+        )
+
+    # Load GSEA results (cached in memory after first load)
+    gsea_data = load_gsea_results(results_dir, database, session_id)
+
+    results = gsea_data.pop("results")
+
+    # Apply filters
+    if significant_only:
+        results = [r for r in results if r.get("significant", False)]
+
+    if search:
+        search_lower = search.lower()
+        results = [
+            r for r in results
+            if search_lower in r.get("name", "").lower()
+            or search_lower in r.get("term", "").lower()
+        ]
+
+    # Sort results
+    reverse = sort_order.lower() == "desc"
+    sort_key = sort_by if sort_by in ("nes", "pval", "fdr", "matched_genes") else "nes"
+    results.sort(key=lambda x: x.get(sort_key, 0), reverse=reverse)
+
+    # Paginate
+    total = len(results)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_results = results[start_idx:end_idx]
+
+    gsea_data["results"] = paginated_results
+    gsea_data["page"] = page
+    gsea_data["page_size"] = page_size
+    gsea_data["total"] = total
+
+    return create_response(gsea_data)
 
 
 async def load_protein_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:

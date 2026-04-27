@@ -100,7 +100,7 @@ export default function GSEADashboard({
           <div data-testid="significant-pathways" className="text-2xl font-bold text-gray-900">
             {data.significant_pathways}
           </div>
-          <div className="text-xs text-gray-400">Adj P-value ≤ 0.05</div>
+          <div className="text-xs text-gray-400">FDR &lt; 0.25 and |NES| &ge; 1</div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-4">
