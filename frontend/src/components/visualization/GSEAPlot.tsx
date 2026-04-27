@@ -53,7 +53,7 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
 
     fetchData();
     return () => { cancelled = true; };
-  }, [pathway?.term, sessionId, database]);
+  }, [pathway, sessionId, database]);
 
   // Generate Plotly traces from fetched data
   const renderData = useMemo(() => {

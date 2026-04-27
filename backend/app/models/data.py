@@ -171,8 +171,8 @@ class GSEAResult(BaseModel):
 
     @property
     def significant(self) -> bool:
-        """Check if result is significant (|NES| >= 1 and FDR < 0.05)."""
-        return abs(self.nes) >= 1.0 and self.fdr < 0.05
+        """Check if result is significant (|NES| >= 1 and FDR < 0.25)."""
+        return abs(self.nes) >= 1.0 and self.fdr < 0.25
 
     @property
     def enrichment_direction(self) -> str:

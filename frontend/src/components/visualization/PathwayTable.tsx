@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { GSEAResult, SortConfig } from '@/types/api';
+import type { GSEAResult } from '@/types/api';
 import { formatPValue, exportToCSV } from '@/lib/utils';
 import { ChevronUp, ChevronDown, Download, Search, X } from 'lucide-react';
 
@@ -25,8 +25,6 @@ interface PathwayTableProps {
   search: string;
   onSearchChange: (val: string) => void;
 }
-
-const ITEMS_PER_PAGE = 25;
 
 interface SortIndicatorProps {
   sortKey: string;
@@ -61,10 +59,6 @@ export default function PathwayTable({
   search,
   onSearchChange,
 }: PathwayTableProps) {
-  const [sortConfig, setSortConfig] = useState<SortConfig>({
-    key: 'fdr',
-    direction: 'asc',
-  });
   const [localFilterNES, setLocalFilterNES] = useState(true);
 
   // Data is already paginated and sorted from server
