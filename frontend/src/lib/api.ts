@@ -80,6 +80,8 @@ export async function getGSEAData(
     page?: number;
     per_page?: number;
     sort_by?: string;
+    sort_order?: 'asc' | 'desc';
+    search?: string;
   }
 ): Promise<GSEAData> {
   const queryParams = new URLSearchParams();
@@ -88,6 +90,8 @@ export async function getGSEAData(
   // Backend uses 'page_size' not 'per_page'
   if (params?.per_page) queryParams.append('page_size', params.per_page.toString());
   if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
+  if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+  if (params?.search) queryParams.append('search', params.search);
 
   const query = queryParams.toString();
   return fetchApi<GSEAData>(`/api/sessions/${sessionId}/gsea/${database}${query ? `?${query}` : ''}`);

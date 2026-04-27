@@ -21,14 +21,32 @@ function BioinformaticsContent() {
   const [error, setError] = useState<string | null>(null);
   const [selectedPathway, setSelectedPathway] = useState<GSEAResult | null>(null);
 
+  // Server-side pagination state
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const [sortBy, setSortBy] = useState('nes');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [significantOnly, setSignificantOnly] = useState(false);
+  const [search, setSearch] = useState('');
+  const [totalResults, setTotalResults] = useState(0);
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
       setError(null);
       setSelectedPathway(null);
       try {
-        const gseaData = await getGSEAData(sessionId, selectedDatabase);
+        const gseaData = await getGSEAData(sessionId, selectedDatabase, {
+          page,
+          per_page: pageSize,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          significant_only: significantOnly,
+          search,
+        });
         setData(gseaData);
+        // Backend returns total in the response
+        setTotalResults((gseaData as unknown as Record<string, unknown>).total as number || 0);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load GSEA data');
       } finally {
@@ -37,7 +55,7 @@ function BioinformaticsContent() {
     }
 
     fetchData();
-  }, [selectedDatabase, sessionId]);
+  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, search]);
 
   if (loading) {
     return (
@@ -119,6 +137,17 @@ function BioinformaticsContent() {
               data={data.results}
               selectedPathway={selectedPathway}
               onSelectPathway={setSelectedPathway}
+              totalResults={totalResults}
+              currentPage={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortChange={(key, order) => { setSortBy(key); setSortOrder(order); setPage(1); }}
+              significantOnly={significantOnly}
+              onSignificantOnlyChange={(val) => { setSignificantOnly(val); setPage(1); }}
+              search={search}
+              onSearchChange={(val) => { setSearch(val); setPage(1); }}
             />
           </div>
         ) : (

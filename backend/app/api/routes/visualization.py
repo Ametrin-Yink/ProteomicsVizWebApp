@@ -231,49 +231,68 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
         return default_result
 
 
-def load_gsea_results(results_dir: Path, database: str) -> Dict[str, Any]:
-    """Load GSEA results from JSON file.
-    
+# Global cache for loaded GSEA results (session_path -> dict of database -> list of results)
+# Loaded once per session, then served from memory
+_gsea_file_cache: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+
+
+def load_gsea_results(results_dir: Path, database: str, session_id: str = "") -> Dict[str, Any]:
+    """Load GSEA results from JSON file with per-session memory caching.
+
+    The GSEA results file can be hundreds of MB to multiple GB. We load it
+    once per session and keep it in memory so subsequent database switches
+    (go_bp, kegg, etc.) are instant.
+
     Args:
         results_dir: Path to session results directory
         database: Database name (go_bp, go_cc, go_mf, kegg, reactome)
-        
+        session_id: Session ID for cache keying
+
     Returns:
         GSEA results dictionary
     """
     gsea_file = results_dir / "GSEA_Results.json"
-    
+
     if not gsea_file.exists():
         return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
 
-    try:
-        with open(gsea_file, 'r') as f:
-            all_results = json.load(f)
+    # Load entire file once per session, cache all databases in memory
+    cache_key = str(gsea_file)
+    if cache_key not in _gsea_file_cache:
+        try:
+            logger.info(f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)")
+            with open(gsea_file, 'r') as f:
+                all_results = json.load(f)
+            # Pre-process all databases at once
+            processed = {}
+            for db_name, db_data in all_results.items():
+                results = db_data.get("results", [])
+                # Add significant field
+                for r in results:
+                    r["significant"] = abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.05
+                processed[db_name] = results
+            _gsea_file_cache[cache_key] = processed
+            logger.info(f"GSEA results cached: {len(processed)} databases")
+        except Exception as e:
+            logger.error(f"Error loading GSEA results: {e}")
+            return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
 
-        # Get results for specific database
-        db_results = all_results.get(database, {})
-        results = db_results.get("results", [])
+    db_results = _gsea_file_cache[cache_key].get(database, [])
+    results = db_results
 
-        # Add significant field to each result (GSEA significance: |NES| >= 1 and FDR < 0.05)
-        for r in results:
-            r["significant"] = abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.05
+    # Calculate summary stats
+    significant_count = sum(1 for p in results if p.get("significant", False))
+    overrepresented = sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) > 0)
+    underrepresented = sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) < 0)
 
-        # Use summary stats from file if available, otherwise calculate
-        significant_count = db_results.get("significant_pathways", sum(1 for p in results if p.get("significant", False)))
-        overrepresented = db_results.get("overrepresented", sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) > 0))
-        underrepresented = db_results.get("underrepresented", sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) < 0))
-
-        return {
-            "results": results,
-            "database": database,
-            "total_pathways": db_results.get("total_pathways", len(results)),
-            "significant_pathways": significant_count,
-            "overrepresented": overrepresented,
-            "underrepresented": underrepresented
-        }
-    except Exception as e:
-        logger.error(f"Error loading GSEA results: {e}")
-        return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
+    return {
+        "results": results,
+        "database": database,
+        "total_pathways": len(results),
+        "significant_pathways": significant_count,
+        "overrepresented": overrepresented,
+        "underrepresented": underrepresented
+    }
 
 
 @router.get("/{session_id}/results")
@@ -381,22 +400,58 @@ async def get_qc_plots(
 async def get_gsea_results(
     session_id: str,
     database: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=1000),
+    sort_by: str = Query("nes"),
+    sort_order: str = Query("desc"),
+    significant_only: bool = Query(False),
+    search: str = Query(""),
     store: SessionStore = Depends(get_session_store)
 ):
-    """Get GSEA results for a database."""
+    """Get GSEA results for a database with pagination and filtering."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found"
         )
-    
+
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
-    
-    # Load GSEA results from file
-    gsea_data = load_gsea_results(results_dir, database)
-    
+
+    # Load GSEA results (cached in memory after first load)
+    gsea_data = load_gsea_results(results_dir, database, session_id)
+
+    results = gsea_data.pop("results")
+
+    # Apply filters
+    if significant_only:
+        results = [r for r in results if r.get("significant", False)]
+
+    if search:
+        search_lower = search.lower()
+        results = [
+            r for r in results
+            if search_lower in r.get("name", "").lower()
+            or search_lower in r.get("term", "").lower()
+        ]
+
+    # Sort results
+    reverse = sort_order.lower() == "desc"
+    sort_key = sort_by if sort_by in ("nes", "pval", "fdr", "matched_genes") else "nes"
+    results.sort(key=lambda x: x.get(sort_key, 0), reverse=reverse)
+
+    # Paginate
+    total = len(results)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_results = results[start_idx:end_idx]
+
+    gsea_data["results"] = paginated_results
+    gsea_data["page"] = page
+    gsea_data["page_size"] = page_size
+    gsea_data["total"] = total
+
     return create_response(gsea_data)
 
 
