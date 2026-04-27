@@ -280,7 +280,14 @@ export const sessionsApi = {
       method: 'DELETE',
     });
     if (!response.ok) {
-      await handleResponse<never>(response);
+      // 204 No Content on success, so error responses may not have JSON body
+      try {
+        const data = await response.json();
+        const message = data?.error?.message || data?.detail || `Delete failed (${response.status})`;
+        throw new APIError(message, 'DELETE_FAILED', response.status);
+      } catch {
+        throw new APIError(`Delete failed (${response.status})`, 'DELETE_FAILED', response.status);
+      }
     }
   },
 
@@ -294,7 +301,13 @@ export const sessionsApi = {
       body: JSON.stringify({ name: newName }),
     });
     if (!response.ok) {
-      await handleResponse<never>(response);
+      try {
+        const data = await response.json();
+        const message = data?.error?.message || data?.detail || `Rename failed (${response.status})`;
+        throw new APIError(message, 'RENAME_FAILED', response.status);
+      } catch {
+        throw new APIError(`Rename failed (${response.status})`, 'RENAME_FAILED', response.status);
+      }
     }
   },
 };
