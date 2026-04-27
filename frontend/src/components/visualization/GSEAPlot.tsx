@@ -72,9 +72,15 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
       }
     });
 
-    // Leading edge positions
-    const leadingEdgePositions = plotData.rank_metric_positions.map(([, rank]) =>
-      Math.floor((rank / maxRank) * (xValues.length - 1))
+    // Split pathway genes into leading edge (before peak) and post-peak
+    const [leadingEdgePositions, postPeakPositions] = plotData.rank_metric_positions.reduce(
+      ([lead, post]: [number[], number[]], [, rank]) => {
+        const pos = Math.floor((rank / maxRank) * (xValues.length - 1));
+        if (rank <= peakRank) lead.push(pos);
+        else post.push(pos);
+        return [lead, post];
+      },
+      [[], []] as [number[], number[]]
     );
 
     // Find peak position for annotation
@@ -116,7 +122,7 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
         xaxis: 'x' as const,
         hovertemplate: 'Rank: %{x}<br>ES: %{y:.3f}<extra></extra>',
       },
-      // Leading edge markers
+      // Leading edge gene markers (blue, before peak)
       ...(leadingEdgePositions.length > 0 ? [{
         x: leadingEdgePositions,
         y: leadingEdgePositions.map(() => 0),
@@ -126,6 +132,18 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
         yaxis: 'y' as const,
         xaxis: 'x' as const,
         hovertemplate: 'Leading Edge Gene<extra></extra>',
+        showlegend: false,
+      }] : []),
+      // Post-peak pathway gene markers (gray, after peak)
+      ...(postPeakPositions.length > 0 ? [{
+        x: postPeakPositions,
+        y: postPeakPositions.map(() => 0),
+        type: 'scatter' as const,
+        mode: 'markers' as const,
+        marker: { color: '#9CA3AF', size: 6, symbol: 'line-ns' as const, line: { width: 1 } },
+        yaxis: 'y' as const,
+        xaxis: 'x' as const,
+        hovertemplate: 'Pathway Gene<extra></extra>',
         showlegend: false,
       }] : []),
       // Rank metric distribution

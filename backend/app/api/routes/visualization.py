@@ -567,12 +567,13 @@ async def get_gsea_plot_data(
         ranked_genes, list(pathway_genes), nes, ranked_metrics
     )
 
-    # Compute rank metric positions
-    lead_genes_set = set(lead_genes)
+    # Compute rank metric positions for ALL pathway genes in the ranked list
+    # (not just leading edge — includes post-peak genes too)
+    pathway_genes_upper = {g.upper() for g in pathway_genes}
     rank_metric_positions = [
         [gene, i, float(metric)]
         for i, (gene, metric) in enumerate(zip(ranked_genes, ranked_metrics))
-        if gene in lead_genes_set
+        if gene.upper() in pathway_genes_upper
     ]
 
     response_data = {
