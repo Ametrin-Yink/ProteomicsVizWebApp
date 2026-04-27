@@ -85,15 +85,22 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
     const peakRank = xValues[peakIndex] || 0;
     const peakES = yValues[peakIndex] || 0;
 
-    // Split pathway genes into leading edge (before peak) and post-peak
-    const [leadingEdgePositions, postPeakPositions] = plotData.rank_metric_positions.reduce(
-      ([lead, post]: [number[], number[]], [, rank]) => {
+    // Split pathway genes into leading edge (before peak) and post-peak, with gene names
+    const [leadingEdgeGenes, leadingEdgePositions] = plotData.rank_metric_positions.reduce(
+      ([genes, positions]: [string[], number[]], [gene, rank]) => {
         const pos = Math.floor((rank / maxRank) * (xValues.length - 1));
-        if (rank <= peakRank) lead.push(pos);
-        else post.push(pos);
-        return [lead, post];
+        if (rank <= peakRank) { genes.push(gene); positions.push(pos); }
+        return [genes, positions];
       },
-      [[], []] as [number[], number[]]
+      [[], []] as [string[], number[]]
+    );
+    const [postPeakGenes, postPeakPositions] = plotData.rank_metric_positions.reduce(
+      ([genes, positions]: [string[], number[]], [gene, rank]) => {
+        const pos = Math.floor((rank / maxRank) * (xValues.length - 1));
+        if (rank > peakRank) { genes.push(gene); positions.push(pos); }
+        return [genes, positions];
+      },
+      [[], []] as [string[], number[]]
     );
 
     const zeroLineY = new Array(xValues.length).fill(0);
@@ -134,24 +141,26 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
       ...(leadingEdgePositions.length > 0 ? [{
         x: leadingEdgePositions,
         y: leadingEdgePositions.map(() => 0),
+        text: leadingEdgeGenes,
         type: 'scatter' as const,
         mode: 'markers' as const,
         marker: { color: '#00ADEF', size: 8, symbol: 'line-ns' as const, line: { width: 2 } },
         yaxis: 'y' as const,
         xaxis: 'x' as const,
-        hovertemplate: 'Leading Edge Gene<extra></extra>',
+        hovertemplate: '%{text}<extra></extra>',
         showlegend: false,
       }] : []),
       // Post-peak pathway gene markers (gray, after peak)
       ...(postPeakPositions.length > 0 ? [{
         x: postPeakPositions,
         y: postPeakPositions.map(() => 0),
+        text: postPeakGenes,
         type: 'scatter' as const,
         mode: 'markers' as const,
         marker: { color: '#9CA3AF', size: 6, symbol: 'line-ns' as const, line: { width: 1 } },
         yaxis: 'y' as const,
         xaxis: 'x' as const,
-        hovertemplate: 'Pathway Gene<extra></extra>',
+        hovertemplate: '%{text}<extra></extra>',
         showlegend: false,
       }] : []),
       // Rank metric distribution

@@ -528,19 +528,25 @@ class GSEAService:
             if len(abundance_cols) == 0:
                 return None
 
-            # Filter to leading edge genes that are in the protein data
-            available_genes = protein_df[gene_col].astype(str).str.upper().tolist()
-            lead_genes_upper = [g.upper() for g in lead_genes]
+            # Filter to pathway genes that are in the protein data
+            # Build a lookup: uppercase gene name -> index
+            gene_index_map: dict[str, int] = {}
+            for i, gene in enumerate(available_genes):
+                # Split multi-gene entries and strip isoform suffixes
+                parts = gene.replace('[;]', ';').split(';')
+                for part in parts:
+                    clean = part.strip().upper()
+                    if clean and clean not in gene_index_map:
+                        gene_index_map[clean] = i
 
-            # Find matching genes (allowing for partial matches)
+            # Exact match against cleaned gene names
             matched_genes = []
             matched_indices = []
             for lead_gene in lead_genes_upper:
-                for i, available in enumerate(available_genes):
-                    if lead_gene in available or available in lead_gene:
-                        matched_genes.append(protein_df.iloc[i][gene_col])
-                        matched_indices.append(i)
-                        break
+                if lead_gene in gene_index_map:
+                    idx = gene_index_map[lead_gene]
+                    matched_genes.append(protein_df.iloc[idx][gene_col])
+                    matched_indices.append(idx)
 
             if len(matched_genes) == 0:
                 return None
