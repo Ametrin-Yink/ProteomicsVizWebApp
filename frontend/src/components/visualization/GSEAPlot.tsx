@@ -11,9 +11,10 @@ interface GSEAPlotProps {
   pathway: GSEAResult | null;
   sessionId: string;
   database: GSEADatabase;
+  onPathwayUpdated?: (pathway: GSEAResult) => void;
 }
 
-export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps) {
+export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdated }: GSEAPlotProps) {
   const [plotData, setPlotData] = useState<GSEAPlotData | null>(null);
   const [heatmapData, setHeatmapData] = useState<GSEAHeatmapData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,6 +42,13 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
         if (!cancelled) {
           setPlotData(plot);
           setHeatmapData(heatmap.genes?.length ? heatmap : null);
+          // Update parent with pathway gene set size for the table
+          if (plot.pathway_gene_set_size && onPathwayUpdated && currentPathway) {
+            onPathwayUpdated({
+              ...currentPathway,
+              pathway_gene_set_size: plot.pathway_gene_set_size,
+            });
+          }
         }
       } catch (err) {
         console.error('Failed to load GSEA visualization data:', err);
@@ -72,6 +80,11 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
       }
     });
 
+    // Find peak position for annotation
+    const peakIndex = yValues.length > 0 ? yValues.reduce((maxIdx, v, i) => v > yValues[maxIdx] ? i : maxIdx, 0) : 0;
+    const peakRank = xValues[peakIndex] || 0;
+    const peakES = yValues[peakIndex] || 0;
+
     // Split pathway genes into leading edge (before peak) and post-peak
     const [leadingEdgePositions, postPeakPositions] = plotData.rank_metric_positions.reduce(
       ([lead, post]: [number[], number[]], [, rank]) => {
@@ -82,11 +95,6 @@ export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps
       },
       [[], []] as [number[], number[]]
     );
-
-    // Find peak position for annotation
-    const peakIndex = yValues.length > 0 ? yValues.reduce((maxIdx, v, i) => v > yValues[maxIdx] ? i : maxIdx, 0) : 0;
-    const peakRank = xValues[peakIndex] || 0;
-    const peakES = yValues[peakIndex] || 0;
 
     const zeroLineY = new Array(xValues.length).fill(0);
 

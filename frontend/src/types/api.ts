@@ -137,6 +137,7 @@ export interface GSEAResult {
   fdr: number;
   lead_genes: string[];
   matched_genes: number;
+  pathway_gene_set_size?: number; // Total genes in GMT gene set (from plot endpoint)
   // Running enrichment score curve data for plotting
   running_es_curve?: Array<[number, number]>; // [rank, es] tuples
   rank_metric_positions?: Array<[string, number, number]>; // [gene_name, rank, metric_value]
@@ -163,6 +164,7 @@ export interface GSEAPlotData {
   nes: number;
   running_es_curve: Array<[number, number]>;
   rank_metric_positions: Array<[string, number, number]>;
+  pathway_gene_set_size?: number;
 }
 
 export interface GSEAHeatmapData {

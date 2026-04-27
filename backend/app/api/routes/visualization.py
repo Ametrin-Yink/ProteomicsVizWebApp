@@ -582,6 +582,7 @@ async def get_gsea_plot_data(
         "nes": pathway.get("nes", 0),
         "running_es_curve": running_es_curve,
         "rank_metric_positions": rank_metric_positions,
+        "pathway_gene_set_size": len(pathway_genes),
     }
 
     # Cache the result
