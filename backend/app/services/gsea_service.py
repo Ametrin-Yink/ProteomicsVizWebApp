@@ -314,10 +314,6 @@ class GSEAService:
                     results=[]
                 )
 
-            # Get the full ranked list for curve generation
-            ranked_genes = rnk['gene'].tolist()
-            ranked_metrics = rnk.iloc[:, 1].tolist()  # Second column is the metric
-
             # Convert to GSEAResult objects
             gsea_results = []
             overrepresented = 0
@@ -342,22 +338,6 @@ class GSEAService:
                 # Count matched genes
                 matched_genes = int(row.get('Tag %', '0').split('/')[0]) if 'Tag %' in row else 0
 
-                # Generate running enrichment score curve
-                running_es_curve = self._generate_running_es_curve(
-                    ranked_genes, lead_genes, nes, ranked_metrics
-                )
-
-                # Generate rank metric positions for leading edge genes
-                rank_metric_positions = []
-                for i, (gene, metric) in enumerate(zip(ranked_genes, ranked_metrics)):
-                    if gene in lead_genes:
-                        rank_metric_positions.append((gene, i, float(metric)))
-
-                # Generate heatmap data for leading edge genes
-                heatmap_data = None
-                if protein_df is not None and len(lead_genes) > 0:
-                    heatmap_data = self._generate_heatmap_data(protein_df, lead_genes)
-
                 result = GSEAResult(
                     term=term,
                     name=term,
@@ -366,10 +346,7 @@ class GSEAService:
                     pval=pval,
                     fdr=fdr,
                     lead_genes=lead_genes,
-                    matched_genes=matched_genes,
-                    running_es_curve=running_es_curve,
-                    rank_metric_positions=rank_metric_positions,
-                    heatmap_data=heatmap_data
+                    matched_genes=matched_genes
                 )
 
                 gsea_results.append(result)
@@ -529,7 +506,7 @@ class GSEAService:
         """
         try:
             # Identify gene column and abundance columns
-            id_cols = ['Master Protein Accessions', 'Gene_Name', 'Gene', 'Protein', 'Master_Protein_Accessions']
+            id_cols = ['Master Protein Accessions', 'Gene_Name', 'Gene', 'Protein', 'Master_Protein_Accessions', 'PSM_Count', 'psm_count']
             gene_col = None
             for col in id_cols:
                 if col in protein_df.columns:
