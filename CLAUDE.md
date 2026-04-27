@@ -357,11 +357,23 @@ find backend -name "*.pyc" -delete 2>/dev/null
 ```
 
 **Port 8000 in use (Windows):**
+
+Uvicorn's `--reload` mode spawns a parent reloader + child worker processes. Killing only the parent leaves orphaned children holding the port.
+
 ```bash
-# Find PID using port 8000
-netstat -ano | findstr :8000
-# Kill specific PID (use double slashes in bash)
-taskkill //F //PID <PID>
+# 1. Find all PIDs on port 8000
+netstat -ano | findstr ":8000 " | findstr "LISTENING"
+
+# 2. Find the actual Python processes (these are the children holding the port)
+powershell -Command "Get-WmiObject Win32_Process -Filter \"Name='python.exe'\" | Select-Object ProcessId | ForEach-Object { $_.ProcessId }"
+
+# 3. Kill the child workers (not the parent — it may already be dead)
+# Look for processes with parent_pid matching the PIDs from step 1, or just kill all python workers:
+taskkill //F //IM python.exe
+
+# Alternative: find children of the dead parent PIDs and kill only those
+powershell -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ParentProcessId -in (31596,16648) } | ForEach-Object { taskkill //F //PID \$_.ProcessId }"
+```
 ```
 
 **Test failures:**

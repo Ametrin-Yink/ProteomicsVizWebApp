@@ -405,11 +405,11 @@ async def get_qc_plots(
     return create_response(qc_data)
 
 
-@router.get("/{session_id}/gsea/{database}/{term}/plot")
+@router.get("/{session_id}/gsea/{database}/plot")
 async def get_gsea_plot_data(
     session_id: str,
     database: str,
-    term: str,
+    term: str = Query(..., description="Pathway term identifier"),
     store: SessionStore = Depends(get_session_store)
 ):
     """Get GSEA plot data (running ES curve + rank metric positions) for a specific pathway."""
@@ -536,11 +536,11 @@ async def get_gsea_plot_data(
     return create_response(response_data)
 
 
-@router.get("/{session_id}/gsea/{database}/{term}/heatmap")
+@router.get("/{session_id}/gsea/{database}/heatmap")
 async def get_gsea_heatmap_data(
     session_id: str,
     database: str,
-    term: str,
+    term: str = Query(..., description="Pathway term identifier"),
     store: SessionStore = Depends(get_session_store)
 ):
     """Get GSEA heatmap data (z-scores for leading edge genes) for a specific pathway."""
