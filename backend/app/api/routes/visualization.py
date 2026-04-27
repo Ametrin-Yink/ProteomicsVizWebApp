@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import settings
 from app.db.session_store import SessionStore
+from app.services.gsea_service import gsea_service
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
@@ -269,7 +270,7 @@ def load_gsea_results(results_dir: Path, database: str, session_id: str = "") ->
                 results = db_data.get("results", [])
                 # Add significant field
                 for r in results:
-                    r["significant"] = abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.05
+                    r["significant"] = abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.25
                 processed[db_name] = results
             _gsea_file_cache[cache_key] = processed
             logger.info(f"GSEA results cached: {len(processed)} databases")
@@ -455,6 +456,97 @@ async def get_gsea_results(
     return create_response(gsea_data)
 
 
+@router.get("/{session_id}/gsea/{database}/{term}/plot")
+async def get_gsea_plot_data(
+    session_id: str,
+    database: str,
+    term: str,
+    store: SessionStore = Depends(get_session_store)
+):
+    """Get GSEA plot data (running ES curve + rank metric positions) for a specific pathway."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+
+    # Get results directory
+    results_dir = settings.sessions_dir / session_id / "results"
+
+    # Load slim GSEA results to get lead_genes and pathway metadata
+    gsea_data = load_gsea_results(results_dir, database, session_id)
+    results = gsea_data.get("results", [])
+
+    # Find the specific pathway
+    pathway = None
+    for r in results:
+        if r.get("term") == term:
+            pathway = r
+            break
+
+    if pathway is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pathway '{term}' not found in {database}"
+        )
+
+    # Compute running ES curve on-demand from gseapy output files
+    gsea_dir = results_dir / "gsea" / database
+
+    rnk_file = gsea_dir / "gseapy.gene_set.0.rnk"
+    if not rnk_file.exists():
+        # Try alternate naming: gseapy uses the gene set name in the .rnk filename
+        try:
+            rnk_file = next(gsea_dir.glob("*.rnk"))
+        except StopIteration:
+            return create_response({
+                "term": term,
+                "es": pathway.get("es", 0),
+                "nes": pathway.get("nes", 0),
+                "running_es_curve": [],
+                "rank_metric_positions": [],
+            })
+
+    try:
+        rnk_df = await asyncio.to_thread(pd.read_csv, rnk_file, sep='\t', header=None)
+        ranked_genes = rnk_df.iloc[:, 0].tolist()
+        ranked_metrics = rnk_df.iloc[:, 1].tolist()
+    except Exception as e:
+        logger.warning(f"Could not read .rnk file: {e}")
+        return create_response({
+            "term": term,
+            "es": pathway.get("es", 0),
+            "nes": pathway.get("nes", 0),
+            "running_es_curve": [],
+            "rank_metric_positions": [],
+        })
+
+    lead_genes = pathway.get("lead_genes", [])
+    nes = pathway.get("nes", 0)
+
+    # Use existing method to compute curve
+    running_es_curve = gsea_service._generate_running_es_curve(
+        ranked_genes, lead_genes, nes, ranked_metrics
+    )
+
+    # Compute rank metric positions
+    lead_genes_set = set(lead_genes)
+    rank_metric_positions = [
+        [gene, i, float(metric)]
+        for i, (gene, metric) in enumerate(zip(ranked_genes, ranked_metrics))
+        if gene in lead_genes_set
+    ]
+
+    return create_response({
+        "term": term,
+        "es": pathway.get("es", 0),
+        "nes": pathway.get("nes", 0),
+        "running_es_curve": running_es_curve,
+        "rank_metric_positions": rank_metric_positions,
+    })
+
+
 async def load_protein_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
     """Load protein abundance data from TSV file.
 
@@ -634,7 +726,12 @@ async def get_protein_psm(
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
     
+    print(f"PSM ROUTE: session_id={session_id}, protein_id={protein_id}, results_dir={results_dir}", flush=True)
+    print(f"PSM ROUTE: settings.sessions_dir={settings.sessions_dir}", flush=True)
+    print(f"PSM ROUTE: parquet exists={(results_dir / 'PSM_Abundances.parquet').exists()}", flush=True)
+
     # Load PSM data from file
     psm_data = await load_psm_abundance(results_dir, protein_id, session_id)
-    
+
+    print(f"PSM ROUTE: returned {len(psm_data.get('psms', []))} PSMs", flush=True)
     return create_response(psm_data)
