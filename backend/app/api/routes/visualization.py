@@ -547,6 +547,65 @@ async def get_gsea_plot_data(
     })
 
 
+@router.get("/{session_id}/gsea/{database}/{term}/heatmap")
+async def get_gsea_heatmap_data(
+    session_id: str,
+    database: str,
+    term: str,
+    store: SessionStore = Depends(get_session_store)
+):
+    """Get GSEA heatmap data (z-scores for leading edge genes) for a specific pathway."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+
+    # Get results directory
+    results_dir = settings.sessions_dir / session_id / "results"
+
+    # Load slim GSEA results to get lead_genes
+    gsea_data = load_gsea_results(results_dir, database, session_id)
+    results = gsea_data.get("results", [])
+
+    # Find the specific pathway
+    pathway = None
+    for r in results:
+        if r.get("term") == term:
+            pathway = r
+            break
+
+    if pathway is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pathway '{term}' not found in {database}"
+        )
+
+    lead_genes = pathway.get("lead_genes", [])
+    if not lead_genes:
+        return create_response({"genes": [], "samples": [], "z_scores": []})
+
+    # Load protein abundance data
+    protein_file = results_dir / "Protein_Abundances.tsv"
+    if not protein_file.exists():
+        return create_response({"genes": [], "samples": [], "z_scores": []})
+
+    try:
+        protein_df = await asyncio.to_thread(pd.read_csv, protein_file, sep='\t')
+    except Exception as e:
+        logger.warning(f"Could not load protein abundance for heatmap: {e}")
+        return create_response({"genes": [], "samples": [], "z_scores": []})
+
+    # Use existing method to generate heatmap data (PSM_Count already excluded)
+    heatmap_data = gsea_service._generate_heatmap_data(protein_df, lead_genes)
+
+    if heatmap_data is None:
+        return create_response({"genes": [], "samples": [], "z_scores": []})
+
+    return create_response(heatmap_data)
+
+
 async def load_protein_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
     """Load protein abundance data from TSV file.
 
