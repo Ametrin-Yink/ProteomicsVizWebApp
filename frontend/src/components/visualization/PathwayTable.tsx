@@ -224,9 +224,14 @@ export default function PathwayTable({
                   {formatPValue(item.fdr)}
                 </td>
                 <td className="px-4 py-3 text-right text-gray-600">
-                  {item.pathway_gene_set_size
-                    ? `${item.matched_genes}/${item.pathway_gene_set_size}`
-                    : item.matched_genes}
+                  {(() => {
+                    const size = selectedPathway?.term === item.term
+                      ? selectedPathway.pathway_gene_set_size
+                      : undefined;
+                    return size
+                      ? `${item.matched_genes}/${size}`
+                      : item.matched_genes;
+                  })()}
                 </td>
               </tr>
             ))}

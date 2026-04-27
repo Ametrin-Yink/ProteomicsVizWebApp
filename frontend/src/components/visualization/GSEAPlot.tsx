@@ -227,11 +227,6 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
       showlegend: true,
       legend: { orientation: 'h' as const, y: 1.1 },
       annotations: [
-        {
-          x: 0.5, y: 0.25, xref: 'paper', yref: 'paper',
-          text: `NES: ${pathway.nes.toFixed(3)} | P-value: ${pathway.pval.toExponential(2)} | FDR: ${pathway.fdr.toExponential(2)}`,
-          showarrow: false, font: { size: 11, color: '#6B7280' },
-        },
         ...(hasHeatmap ? [{
           x: 0.875, y: 1.05, xref: 'paper', yref: 'paper',
           text: 'Leading Edge Genes (Z-score)', showarrow: false,
