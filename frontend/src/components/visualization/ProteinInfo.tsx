@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { DEResult, ProteinAbundance, PSMAbundanceData } from '@/types/api';
+import type { DEResult, ProteinAbundance, PeptideAbundanceData } from '@/types/api';
 import { formatNumber, formatPValue } from '@/lib/utils';
-import { getProteinAbundance, getPSMAbundance } from '@/lib/api';
+import { getProteinAbundance, getPeptideAbundance } from '@/lib/api';
 import { fetchGeneNames } from '@/lib/uniprot';
-import { ProteinAbundancePlot, PSMAbundancePlot } from './AbundancePlot';
+import { ProteinAbundancePlot, PeptideAbundancePlot } from './AbundancePlot';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProteinInfoSkeleton } from '@/components/ui/Skeleton';
 import { Microscope } from 'lucide-react';
@@ -53,7 +53,7 @@ function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
 
 export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinInfoProps) {
   const [proteinAbundance, setProteinAbundance] = useState<ProteinAbundance | null>(null);
-  const [psmAbundance, setPsmAbundance] = useState<PSMAbundanceData | null>(null);
+  const [peptideAbundance, setPeptideAbundance] = useState<PeptideAbundanceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetchedGeneNames, setFetchedGeneNames] = useState<Map<string, string>>(new Map());
@@ -61,7 +61,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinIn
   useEffect(() => {
     if (!protein) {
       setProteinAbundance(null);
-      setPsmAbundance(null);
+      setPeptideAbundance(null);
       setFetchedGeneNames(new Map());
       return;
     }
@@ -71,12 +71,12 @@ export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinIn
       setLoading(true);
       setError(null);
       try {
-        const [proteinData, psmData] = await Promise.all([
+        const [proteinData, peptideData] = await Promise.all([
           getProteinAbundance(sessionId, protein.master_protein_accessions),
-          getPSMAbundance(sessionId, protein.master_protein_accessions),
+          getPeptideAbundance(sessionId, protein.master_protein_accessions),
         ]);
         setProteinAbundance(proteinData);
-        setPsmAbundance(psmData);
+        setPeptideAbundance(peptideData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load abundance data');
       } finally {
@@ -243,15 +243,15 @@ export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinIn
         </div>
       )}
 
-      {/* Always show PSM Abundance section if data exists */}
-      {!loading && !error && psmAbundance && (
+      {/* Always show Peptide Abundance section if data exists */}
+      {!loading && !error && peptideAbundance && (
         <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">PSM Abundance</h4>
-          {psmAbundance.psms.length > 0 ? (
-            <PSMAbundancePlot data={psmAbundance} />
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Peptide Abundance</h4>
+          {peptideAbundance.peptides.length > 0 ? (
+            <PeptideAbundancePlot data={peptideAbundance} />
           ) : (
             <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500 text-sm">
-              No PSM data available for this protein
+              No peptide data available for this protein
             </div>
           )}
         </div>

@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import type { ProteinAbundance, PSMAbundanceData } from '@/types/api';
+import type { ProteinAbundance, PeptideAbundanceData } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -124,15 +124,15 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
   );
 }
 
-interface PSMAbundancePlotProps {
-  data: PSMAbundanceData;
+interface PeptideAbundancePlotProps {
+  data: PeptideAbundanceData;
   title?: string;
 }
 
-export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundancePlotProps) {
+export function PeptideAbundancePlot({ data, title = 'Peptide Abundance' }: PeptideAbundancePlotProps) {
   const plotData = useMemo(() => {
-    // Defensive: ensure data exists and has psms array
-    if (!data || !data.psms || data.psms.length === 0) {
+    // Defensive: ensure data exists and has peptides array
+    if (!data || !data.peptides || data.peptides.length === 0) {
       return [];
     }
 
@@ -149,15 +149,15 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
 
     const colors = ['#E73564', '#00ADEF', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
 
-    data.psms.forEach((psm, index) => {
-      if (!psm || !psm.samples || !psm.abundances) {
+    data.peptides.forEach((peptide, index) => {
+      if (!peptide || !peptide.samples || !peptide.abundances) {
         return;
       }
 
       // Aggregate abundances by sample (multiple rows per sample from different charge states)
       const aggregated = new Map<string, number>();
-      psm.samples.forEach((s, i) => {
-        aggregated.set(s, (aggregated.get(s) || 0) + psm.abundances[i]);
+      peptide.samples.forEach((s, i) => {
+        aggregated.set(s, (aggregated.get(s) || 0) + peptide.abundances[i]);
       });
 
       // Sort by sample name for consistent ordering
@@ -176,10 +176,10 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
         x: sortedSamples,
         y: normalizedY,
         mode: 'lines+markers' as const,
-        name: psm.sequence || psm.psm_id || `PSM ${index + 1}`,
+        name: peptide.sequence || peptide.peptide_id || `Peptide ${index + 1}`,
         line: { color, width: 2 },
         marker: { size: 6 },
-        hovertemplate: `<b>${psm.psm_id || 'Unknown'}</b><br>Sample: %{x}<br>Abundance: %{y:.2f}<extra></extra>`,
+        hovertemplate: `<b>${peptide.peptide_id || 'Unknown'}</b><br>Sample: %{x}<br>Abundance: %{y:.2f}<extra></extra>`,
         type: 'scatter' as const,
       });
     });
@@ -187,8 +187,8 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
     return traces;
   }, [data]);
 
-  const psmCount = data?.psms?.length ?? 0;
-  const plotHeight = 450 + psmCount * 12;
+  const peptideCount = data?.peptides?.length ?? 0;
+  const plotHeight = 450 + peptideCount * 12;
 
   const layout = useMemo(
     () => ({
@@ -219,9 +219,9 @@ export function PSMAbundancePlot({ data, title = 'PSM Abundance' }: PSMAbundance
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 200 + psmCount * 10 },
+      margin: { l: 50, r: 30, t: 50, b: 200 + peptideCount * 10 },
     }),
-    [title, psmCount]
+    [title, peptideCount]
   );
 
   const config = useMemo(

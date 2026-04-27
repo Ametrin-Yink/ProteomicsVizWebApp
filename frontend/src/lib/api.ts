@@ -10,7 +10,7 @@ import type {
   GSEAData,
   GSEADatabase,
   ProteinAbundance,
-  PSMAbundanceData,
+  PeptideAbundanceData,
   GSEAPlotData,
   GSEAHeatmapData,
 } from '@/types/api';
@@ -130,12 +130,12 @@ export async function getProteinAbundance(
   return fetchApi<ProteinAbundance>(`/api/sessions/${sessionId}/protein/${proteinId}/abundance`);
 }
 
-// PSM Abundance API
-export async function getPSMAbundance(
+// Peptide Abundance API
+export async function getPeptideAbundance(
   sessionId: string,
   proteinId: string
-): Promise<PSMAbundanceData> {
-  return fetchApi<PSMAbundanceData>(`/api/sessions/${sessionId}/protein/${proteinId}/psm`);
+): Promise<PeptideAbundanceData> {
+  return fetchApi<PeptideAbundanceData>(`/api/sessions/${sessionId}/protein/${proteinId}/peptide`);
 }
 
 // Processing API - Following AGENTS/04-api-contract.md

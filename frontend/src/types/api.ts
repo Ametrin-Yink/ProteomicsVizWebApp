@@ -190,16 +190,16 @@ export interface ProteinAbundance {
   conditions: string[];
 }
 
-// PSM Abundance
-export interface PSMAbundance {
-  psm_id: string;
+// Peptide Abundance
+export interface PeptideAbundance {
+  peptide_id: string;
   sequence: string;
   abundances: number[];
   samples: string[];
 }
 
-export interface PSMAbundanceData {
-  psms: PSMAbundance[];
+export interface PeptideAbundanceData {
+  peptides: PeptideAbundance[];
 }
 
 // Volcano Plot Filters

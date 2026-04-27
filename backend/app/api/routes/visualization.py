@@ -783,7 +783,7 @@ async def load_protein_abundance(
     Returns:
         Protein abundance data dictionary matching frontend ProteinAbundance interface
     """
-    cache_key = _cache_key(session_id, "protein", protein_id)
+    cache_key = _cache_key(session_id, "protein_v2", protein_id)
     cached = viz_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -872,8 +872,11 @@ async def get_protein_abundance(
     return create_response(abundance_data)
 
 
-async def load_psm_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
-    """Load PSM abundance data from Parquet or TSV file.
+async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
+    """Load peptide abundance data from Parquet or TSV file.
+
+    Aggregates PSMs into peptides by summing abundances for each unique
+    peptide sequence across samples.
 
     Args:
         results_dir: Path to session results directory
@@ -881,9 +884,9 @@ async def load_psm_abundance(results_dir: Path, protein_id: str, session_id: str
         session_id: Session ID for cache keying
 
     Returns:
-        PSM abundance data dictionary matching frontend PSMAbundanceData interface
+        Peptide abundance data dictionary matching frontend PeptideAbundanceData interface
     """
-    cache_key = _cache_key(session_id, "psm", protein_id)
+    cache_key = _cache_key(session_id, "peptide", protein_id)
     cached = viz_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -897,70 +900,78 @@ async def load_psm_abundance(results_dir: Path, protein_id: str, session_id: str
             df = await asyncio.to_thread(pd.read_parquet, psm_parquet)
         except Exception as e:
             logger.error(f"Error reading Parquet file: {e}")
-            return {"psms": []}
+            return {"peptides": []}
     elif psm_tsv.exists():
         try:
             df = await asyncio.to_thread(pd.read_csv, psm_tsv, sep='\t')
         except Exception as e:
             logger.error(f"Error reading TSV file: {e}")
-            return {"psms": []}
+            return {"peptides": []}
     else:
-        return {"psms": []}
+        return {"peptides": []}
 
     try:
-        # Filter rows for this protein (handle multiple accessions separated by ;)
+        # Filter rows for this protein
         protein_rows = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
 
         if protein_rows.empty:
-            return {"psms": []}
+            return {"peptides": []}
 
-        # Group by Unique_PSM to collect all sample abundances for each PSM
-        psms = []
-        for unique_psm, group in protein_rows.groupby('Unique_PSM'):
+        # Get unique samples
+        all_samples = sorted(protein_rows['Sample_Origination'].dropna().unique())
+
+        # Group by Sequence to aggregate PSMs into peptides
+        peptides = []
+        for sequence, group in protein_rows.groupby('Sequence'):
+            # Sum abundances per sample for this peptide
+            sample_sums = {}
+            for _, row in group.iterrows():
+                sample = str(row.get('Sample_Origination', ''))
+                abundance = row.get('Abundance')
+                if pd.notna(abundance) and sample:
+                    sample_sums[sample] = sample_sums.get(sample, 0) + float(abundance)
+
             samples = []
             abundances = []
+            for s in all_samples:
+                if s in sample_sums:
+                    samples.append(s)
+                    abundances.append(sample_sums[s])
 
-            for _, row in group.iterrows():
-                sample_name = row.get('Sample_Origination', '')
-                abundance = row.get('Abundance')
-                if pd.notna(abundance) and sample_name:
-                    samples.append(str(sample_name))
-                    abundances.append(float(abundance))
-
-            if samples:  # Only add if we have data
-                psms.append({
-                    "psm_id": str(unique_psm),
-                    "sequence": str(group.iloc[0].get('Sequence', '')),
+            if samples:
+                peptides.append({
+                    "peptide_id": sequence,
+                    "sequence": sequence,
                     "abundances": abundances,
-                    "samples": samples
+                    "samples": samples,
                 })
 
-        result = {"psms": psms}
+        result = {"peptides": peptides}
         viz_cache.set(cache_key, result)
         return result
     except Exception as e:
-        logger.error(f"Error loading PSM abundance: {e}")
-        return {"psms": []}
+        logger.error(f"Error loading peptide abundance: {e}")
+        return {"peptides": []}
 
 
-@router.get("/{session_id}/protein/{protein_id}/psm")
-async def get_protein_psm(
+@router.get("/{session_id}/protein/{protein_id}/peptide")
+async def get_protein_peptide(
     session_id: str,
     protein_id: str,
     store: SessionStore = Depends(get_session_store)
 ):
-    """Get PSM abundance data for a protein."""
+    """Get peptide abundance data for a protein."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found"
         )
-    
+
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
-    
-    # Load PSM data from file
-    psm_data = await load_psm_abundance(results_dir, protein_id, session_id)
 
-    return create_response(psm_data)
+    # Load peptide data from file
+    peptide_data = await load_peptide_abundance(results_dir, protein_id, session_id)
+
+    return create_response(peptide_data)
