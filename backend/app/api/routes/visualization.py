@@ -24,6 +24,53 @@ from app.services.gsea_service import gsea_service
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
 
+# Map database names to GMT file names
+_GMT_FILES = {
+    "go_bp": "Enrichr.GO_Biological_Process_2021.gmt",
+    "go_mf": "Enrichr.GO_Molecular_Function_2021.gmt",
+    "go_cc": "Enrichr.GO_Cellular_Component_2021.gmt",
+    "kegg": "Enrichr.KEGG_2021_Human.gmt",
+    "reactome": "Enrichr.Reactome_2022.gmt",
+}
+_cache_gmt: dict[str, dict[str, set[str]]] = {}  # db -> {pathway_name -> set of genes}
+
+
+def _get_pathway_genes(database: str, term: str) -> set[str]:
+    """Get full gene set for a pathway from GMT cache file."""
+    if database in _cache_gmt and term in _cache_gmt.get(database, {}):
+        return _cache_gmt[database][term]
+
+    gmt_filename = _GMT_FILES.get(database)
+    if not gmt_filename:
+        return set()
+
+    gmt_path = Path.home() / ".cache" / "gseapy" / gmt_filename
+    if not gmt_path.exists():
+        return set()
+
+    gene_sets: dict[str, set[str]] = {}
+    with open(gmt_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split('\t')
+            if len(parts) >= 3:
+                name = parts[0]
+                genes = set(parts[2:])
+                gene_sets[name] = genes
+
+    _cache_gmt[database] = gene_sets
+
+    # Try exact match first
+    if term in gene_sets:
+        return gene_sets[term]
+
+    # Fallback: partial match
+    for name, genes in gene_sets.items():
+        if name.startswith(term) or term.startswith(name):
+            return genes
+
+    return set()
+
+
 router = APIRouter()
 logger = logging.getLogger("proteomics")
 
@@ -509,9 +556,15 @@ async def get_gsea_plot_data(
     if cached is not None:
         return create_response(cached)
 
+    # Use full pathway gene set from GMT for curve generation (not just lead_genes)
+    pathway_genes = _get_pathway_genes(database, term)
+    if not pathway_genes:
+        # Fallback to lead_genes if GMT not available
+        pathway_genes = set(lead_genes)
+
     # Use existing method to compute curve
     running_es_curve = gsea_service.generate_running_es_curve(
-        ranked_genes, lead_genes, nes, ranked_metrics
+        ranked_genes, list(pathway_genes), nes, ranked_metrics
     )
 
     # Compute rank metric positions
