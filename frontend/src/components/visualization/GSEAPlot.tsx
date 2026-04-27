@@ -1,99 +1,86 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import type { GSEAResult } from '@/types/api';
+import type { GSEAResult, GSEAPlotData, GSEAHeatmapData, GSEADatabase } from '@/types/api';
+import { getGSEAPlotData, getGSEAHeatmapData } from '@/lib/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface GSEAPlotProps {
   pathway: GSEAResult | null;
+  sessionId: string;
+  database: GSEADatabase;
 }
 
-export default function GSEAPlot({ pathway }: GSEAPlotProps) {
-  // Generate GSEA enrichment plot data
-  const plotData = useMemo(() => {
-    if (!pathway) return null;
+export default function GSEAPlot({ pathway, sessionId, database }: GSEAPlotProps) {
+  const [plotData, setPlotData] = useState<GSEAPlotData | null>(null);
+  const [heatmapData, setHeatmapData] = useState<GSEAHeatmapData | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    // Use actual running ES curve if available, otherwise generate synthetic
-    let xValues: number[] = [];
-    let yValues: number[] = [];
+  // Fetch plot and heatmap data when pathway changes
+  useEffect(() => {
+    if (!pathway || !sessionId || !database) {
+      setPlotData(null);
+      setHeatmapData(null);
+      return;
+    }
 
-    if (pathway.running_es_curve && pathway.running_es_curve.length > 0) {
-      // Use actual curve data from backend
-      xValues = pathway.running_es_curve.map(([rank]) => rank);
-      yValues = pathway.running_es_curve.map(([, es]) => es);
-    } else {
-      // Fallback: generate synthetic curve for backwards compatibility
-      const numPoints = 100;
-      xValues = Array.from({ length: numPoints }, (_, i) => i);
+    let cancelled = false;
+    setLoading(true);
+    setPlotData(null);
+    setHeatmapData(null);
+    const currentPathway = pathway;
 
-      // Seeded pseudo-random to avoid impure Math.random() during render
-      const es = pathway.es;
-      let seed = numPoints * 9301 + 49297;
-      const pseudoRandom = () => {
-        seed = (seed * 9301 + 49297) % 233280;
-        return seed / 233280;
-      };
-
-      yValues = xValues.map((x) => {
-        const normalizedX = x / numPoints;
-        if (es > 0) {
-          return es * Math.sin(normalizedX * Math.PI) * (1 + pseudoRandom() * 0.1);
-        } else {
-          return es * Math.sin(normalizedX * Math.PI) * (1 + pseudoRandom() * 0.1);
+    async function fetchData() {
+      try {
+        const [plot, heatmap] = await Promise.all([
+          getGSEAPlotData(sessionId, database, currentPathway.term),
+          getGSEAHeatmapData(sessionId, database, currentPathway.term),
+        ]);
+        if (!cancelled) {
+          setPlotData(plot);
+          setHeatmapData(heatmap.genes?.length ? heatmap : null);
         }
-      });
-    }
-
-    // Generate rank metric distribution (bar chart at bottom)
-    // Use actual rank metric positions if available
-    let rankMetrics: number[] = [];
-    if (pathway.rank_metric_positions && pathway.rank_metric_positions.length > 0) {
-      // Create an array aligned with xValues, filling in actual metric values
-      const maxRank = xValues.length > 0 ? Math.max(...xValues) : 100;
-      rankMetrics = new Array(xValues.length).fill(0);
-
-      pathway.rank_metric_positions.forEach(([, rank, metric]) => {
-        // Find closest index in xValues
-        const index = Math.floor((rank / maxRank) * (xValues.length - 1));
-        if (index >= 0 && index < rankMetrics.length) {
-          rankMetrics[index] = metric;
+      } catch (err) {
+        console.error('Failed to load GSEA visualization data:', err);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
-      });
-    } else {
-      // Fallback: pseudo-random metrics
-      let seed2 = xValues.length * 9301 + 49297;
-      const pseudoRandom2 = () => {
-        seed2 = (seed2 * 9301 + 49297) % 233280;
-        return seed2 / 233280;
-      };
-      rankMetrics = xValues.map(() => (pseudoRandom2() - 0.5) * 2);
+      }
     }
 
-    // Leading edge positions from actual data
-    let leadingEdgePositions: number[] = [];
-    if (pathway.rank_metric_positions && pathway.rank_metric_positions.length > 0) {
-      const maxRank = xValues.length > 0 ? Math.max(...xValues) : 100;
-      leadingEdgePositions = pathway.rank_metric_positions.map(([, rank]) =>
-        Math.floor((rank / maxRank) * (xValues.length - 1))
-      );
-    } else if (pathway.lead_genes.length > 0) {
-      // Fallback: distribute evenly
-      leadingEdgePositions = pathway.lead_genes.map((_, i) =>
-        Math.floor((i / pathway.lead_genes.length) * xValues.length * 0.4 + xValues.length * 0.3)
-      );
-    }
+    fetchData();
+    return () => { cancelled = true; };
+  }, [pathway?.term, sessionId, database]);
 
-    // Calculate zero line for the ES curve
+  // Generate Plotly traces from fetched data
+  const renderData = useMemo(() => {
+    if (!pathway || !plotData) return null;
+
+    const xValues = plotData.running_es_curve.map(([rank]) => rank);
+    const yValues = plotData.running_es_curve.map(([, es]) => es);
+
+    // Rank metric distribution
+    const maxRank = xValues.length > 0 ? Math.max(...xValues) : 100;
+    const rankMetrics = new Array(xValues.length).fill(0);
+    plotData.rank_metric_positions.forEach(([, rank, metric]) => {
+      const index = Math.floor((rank / maxRank) * (xValues.length - 1));
+      if (index >= 0 && index < rankMetrics.length) {
+        rankMetrics[index] = metric;
+      }
+    });
+
+    // Leading edge positions
+    const leadingEdgePositions = plotData.rank_metric_positions.map(([, rank]) =>
+      Math.floor((rank / maxRank) * (xValues.length - 1))
+    );
+
     const zeroLineY = new Array(xValues.length).fill(0);
 
-    // CRIT-005: Add heatmap data if available
-    const hasHeatmap = pathway.heatmap_data &&
-                       pathway.heatmap_data.genes &&
-                       pathway.heatmap_data.genes.length > 0;
-
-    // Define domain for main plot - leave room for heatmap on right if available
+    // Heatmap
+    const hasHeatmap = heatmapData && heatmapData.genes.length > 0;
     const mainPlotDomain = hasHeatmap ? [0, 0.7] : [0, 1];
     const heatmapDomain = hasHeatmap ? [0.75, 1] : [0, 0];
 
@@ -104,7 +91,6 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         y: zeroLineY,
         type: 'scatter' as const,
         mode: 'lines' as const,
-        name: 'Zero',
         line: { color: '#000000', width: 1, dash: 'dash' as const },
         yaxis: 'y' as const,
         xaxis: 'x' as const,
@@ -131,13 +117,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         y: leadingEdgePositions.map(() => 0),
         type: 'scatter' as const,
         mode: 'markers' as const,
-        name: 'Leading Edge',
-        marker: {
-          color: '#00ADEF',
-          size: 8,
-          symbol: 'line-ns' as const,
-          line: { width: 2 },
-        },
+        marker: { color: '#00ADEF', size: 8, symbol: 'line-ns' as const, line: { width: 2 } },
         yaxis: 'y' as const,
         xaxis: 'x' as const,
         hovertemplate: 'Leading Edge Gene<extra></extra>',
@@ -148,10 +128,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         x: xValues,
         y: rankMetrics,
         type: 'bar' as const,
-        name: 'Rank Metric',
-        marker: {
-          color: rankMetrics.map((v) => (v > 0 ? '#10B981' : '#EF4444')),
-        },
+        marker: { color: rankMetrics.map((v) => (v > 0 ? '#10B981' : '#EF4444')) },
         yaxis: 'y2' as const,
         xaxis: 'x' as const,
         hovertemplate: 'Rank: %{x}<br>Metric: %{y:.3f}<extra></extra>',
@@ -159,13 +136,11 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
       },
     ];
 
-    // Add heatmap trace if data is available
     if (hasHeatmap) {
-      const heatmapData = pathway.heatmap_data!;
       traces.push({
-        z: heatmapData.z_scores,
-        x: heatmapData.samples,
-        y: heatmapData.genes,
+        z: heatmapData!.z_scores,
+        x: heatmapData!.samples,
+        y: heatmapData!.genes,
         type: 'heatmap',
         colorscale: 'RdBu',
         reversescale: true,
@@ -173,14 +148,7 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
         zmin: -3,
         zmax: 3,
         showscale: true,
-        colorbar: {
-          title: 'Z-score',
-          titleside: 'right',
-          thickness: 15,
-          len: 0.5,
-          y: 0.5,
-          x: 1.02,
-        },
+        colorbar: { title: 'Z-score', titleside: 'right', thickness: 15, len: 0.5, y: 0.5, x: 1.02 },
         yaxis: 'y3',
         xaxis: 'x2',
         hovertemplate: 'Gene: %{y}<br>Sample: %{x}<br>Z-score: %{z:.2f}<extra></extra>',
@@ -188,45 +156,17 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
     }
 
     const layout: Record<string, unknown> = {
-      title: {
-        text: pathway.name,
-        font: { size: 14, color: '#111827' },
-      },
-      xaxis: {
-        title: { text: 'Gene Rank', font: { size: 12 } },
-        domain: mainPlotDomain,
-        showgrid: false,
-      },
+      title: { text: pathway.name, font: { size: 14, color: '#111827' } },
+      xaxis: { title: { text: 'Gene Rank', font: { size: 12 } }, domain: mainPlotDomain, showgrid: false },
       yaxis: {
         title: { text: 'Running Enrichment Score', font: { size: 12 } },
-        domain: [0.3, 1],
-        gridcolor: '#E5E7EB',
-        zeroline: true,
-        zerolinecolor: '#000',
-        zerolinewidth: 1,
+        domain: [0.3, 1], gridcolor: '#E5E7EB', zeroline: true,
+        zerolinecolor: '#000', zerolinewidth: 1,
       },
-      yaxis2: {
-        domain: [0, 0.2],
-        showgrid: false,
-        zeroline: false,
-        showticklabels: false,
-      },
-      // Heatmap axes
+      yaxis2: { domain: [0, 0.2], showgrid: false, zeroline: false, showticklabels: false },
       ...(hasHeatmap ? {
-        xaxis2: {
-          domain: heatmapDomain,
-          showgrid: false,
-          tickangle: -45,
-          tickfont: { size: 8 },
-          matches: 'x',
-        },
-        yaxis3: {
-          domain: [0.3, 1],
-          anchor: 'x2',
-          showgrid: false,
-          tickfont: { size: 8 },
-          autorange: 'reversed',
-        },
+        xaxis2: { domain: heatmapDomain, showgrid: false, tickangle: -45, tickfont: { size: 8 }, matches: 'x' },
+        yaxis3: { domain: [0.3, 1], anchor: 'x2', showgrid: false, tickfont: { size: 8 }, autorange: 'reversed' },
       } : {}),
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
@@ -235,35 +175,38 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
       legend: { orientation: 'h' as const, y: 1.1 },
       annotations: [
         {
-          x: 0.5,
-          y: 0.25,
-          xref: 'paper',
-          yref: 'paper',
+          x: 0.5, y: 0.25, xref: 'paper', yref: 'paper',
           text: `NES: ${pathway.nes.toFixed(3)} | P-value: ${pathway.pval.toExponential(2)} | FDR: ${pathway.fdr.toExponential(2)}`,
-          showarrow: false,
-          font: { size: 11, color: '#6B7280' },
+          showarrow: false, font: { size: 11, color: '#6B7280' },
         },
         ...(hasHeatmap ? [{
-          x: 0.875,
-          y: 1.05,
-          xref: 'paper',
-          yref: 'paper',
-          text: 'Leading Edge Genes (Z-score)',
-          showarrow: false,
+          x: 0.875, y: 1.05, xref: 'paper', yref: 'paper',
+          text: 'Leading Edge Genes (Z-score)', showarrow: false,
           font: { size: 11, color: '#111827' },
         }] : []),
       ],
     };
 
     return { traces, layout };
-  }, [pathway]);
+  }, [pathway, plotData, heatmapData]);
 
-  if (!pathway || !plotData) {
+  if (!pathway) {
     return (
       <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 flex items-center justify-center h-[400px]">
         <div className="text-center text-gray-400">
           <p className="text-lg font-medium">GSEA Plot</p>
           <p className="text-sm mt-2">Select a pathway to view GSEA plot</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-center h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-500 text-sm">Loading pathway visualization...</p>
         </div>
       </div>
     );
@@ -278,13 +221,15 @@ export default function GSEAPlot({ pathway }: GSEAPlotProps) {
   return (
     <div data-testid="gsea-plot" className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="h-[400px]">
-        <Plot
-          data={plotData.traces}
-          layout={plotData.layout}
-          config={config}
-          style={{ width: '100%', height: '100%' }}
-          useResizeHandler={true}
-        />
+        {renderData && (
+          <Plot
+            data={renderData.traces}
+            layout={renderData.layout}
+            config={config}
+            style={{ width: '100%', height: '100%' }}
+            useResizeHandler={true}
+          />
+        )}
       </div>
     </div>
   );
