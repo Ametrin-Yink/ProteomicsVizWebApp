@@ -474,11 +474,15 @@ class ReportGenerator:
         protein_abundances_path: Optional[Path] = None,
         qc_data_path: Optional[Path] = None,
         gsea_results_path: Optional[Path] = None,
-        output_path: Optional[Path] = None
+        output_path: Optional[Path] = None,
+        report_request: Optional[ReportRequest] = None
     ) -> Path:
         """
         Generate report directly from result files.
         """
+        if report_request is None:
+            report_request = ReportRequest()
+
         # Create analysis result from files
         analysis_result = AnalysisResult(
             session_id=session.id,
@@ -505,6 +509,7 @@ class ReportGenerator:
         return await self.generate_report(
             session=session,
             analysis_result=analysis_result,
+            report_request=report_request,
             qc_data=qc_data,
             gsea_results=gsea_results,
             output_path=output_path

@@ -453,7 +453,7 @@
             {% if results.volcano_plot_image %}
             <h3 class="section-subtitle">Volcano Plot</h3>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ results.volcano_plot_image }}" alt="Volcano Plot">
+                <img src="{{ results.volcano_plot_image }}" alt="Volcano Plot">
                 <p class="plot-caption">
                     Volcano plot: log2 fold change vs -log10(p-value).
                     Red = upregulated, Blue = downregulated, Gray = not significant.
@@ -504,7 +504,7 @@
                 <strong>PC2 Variance:</strong> {{ qc_data.pca.pc2_variance }}%
             </div>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ qc_data.pca.plot_image }}" alt="PCA Plot">
+                <img src="{{ qc_data.pca.plot_image }}" alt="PCA Plot">
                 <p class="plot-caption">
                     PCA plot showing sample clustering by condition. Samples from the same condition should cluster together.
                 </p>
@@ -514,7 +514,7 @@
             {% if qc_data.pvalue_distribution and qc_data.pvalue_distribution.plot_image %}
             <h3 class="section-subtitle">P-value Distribution</h3>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ qc_data.pvalue_distribution.plot_image }}" alt="P-value Distribution">
+                <img src="{{ qc_data.pvalue_distribution.plot_image }}" alt="P-value Distribution">
                 <p class="plot-caption">
                     Distribution of p-values across all proteins. A peak near 0 indicates differentially expressed proteins.
                     Red dashed line = uniform distribution expectation.
@@ -525,7 +525,7 @@
             {% if qc_data.cv_data and qc_data.cv_plot_image %}
             <h3 class="section-subtitle">Coefficient of Variation</h3>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ qc_data.cv_plot_image }}" alt="CV Boxplot">
+                <img src="{{ qc_data.cv_plot_image }}" alt="CV Boxplot">
                 <p class="plot-caption">
                     Boxplot of PSM coefficient of variation per condition. Lower CV indicates higher technical reproducibility.
                 </p>
@@ -535,7 +535,7 @@
             {% if qc_data.data_completeness and qc_data.completeness_plot_image %}
             <h3 class="section-subtitle">Data Completeness</h3>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ qc_data.completeness_plot_image }}" alt="Data Completeness">
+                <img src="{{ qc_data.completeness_plot_image }}" alt="Data Completeness">
                 <p class="plot-caption">
                     Stacked bar chart showing present vs missing proteins per sample.
                 </p>

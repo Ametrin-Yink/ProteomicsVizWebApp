@@ -95,7 +95,8 @@ async def generate_report(
                 protein_abundances_path=protein_abundances_path if protein_abundances_path.exists() else None,
                 qc_data_path=qc_data_path if qc_data_path.exists() else None,
                 gsea_results_path=gsea_results_path if gsea_results_path.exists() else None,
-                output_path=output_path
+                output_path=output_path,
+                report_request=report_request
             )
             
             # Update status

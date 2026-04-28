@@ -139,7 +139,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
 
       // 2. Capture QC plots from hidden iframe
       const qcIframe = document.createElement('iframe');
-      qcIframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+      qcIframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1280px;height:800px;';
       qcIframe.src = `${baseUrl}/analysis/visualization/qc?session_id=${sessionId}`;
       document.body.appendChild(qcIframe);
 
@@ -167,7 +167,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
 
       // 3. Capture GSEA dashboard from hidden iframe
       const gseaIframe = document.createElement('iframe');
-      gseaIframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+      gseaIframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1280px;height:800px;';
       gseaIframe.src = `${baseUrl}/analysis/visualization/bioinformatics?session_id=${sessionId}`;
       document.body.appendChild(gseaIframe);
 
