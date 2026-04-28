@@ -174,6 +174,13 @@ export default function PathwayTable({
                 NES <SortIndicator columnKey="nes" sortKey={sortBy} direction={sortOrder} />
               </th>
               <th
+                data-testid="table-header-es"
+                onClick={() => handleSort('es')}
+                className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+              >
+                ES <SortIndicator columnKey="es" sortKey={sortBy} direction={sortOrder} />
+              </th>
+              <th
                 data-testid="table-header-pvalue"
                 onClick={() => handleSort('pval')}
                 className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
@@ -216,6 +223,11 @@ export default function PathwayTable({
                   }`}
                 >
                   {item.nes.toFixed(3)}
+                </td>
+                <td className={`px-4 py-3 text-right font-medium ${
+                  item.es > 0 ? 'text-pink-600' : 'text-blue-600'
+                }`}>
+                  {item.es.toFixed(3)}
                 </td>
                 <td className="px-4 py-3 text-right text-gray-600">
                   {formatPValue(item.pval)}
