@@ -44,14 +44,14 @@ async function enhancePlotFonts(iframe: HTMLIFrameElement, plotlyEl: HTMLElement
   const gd = plotlyEl as any;
   if (!gd || !gd.layout) return;
 
-  // Scale up all font sizes for PDF readability
+  // Scale up all font sizes for PDF readability (larger than screen)
   Plotly.relayout(gd, {
-    'font.size': 16,
-    'xaxis.title.font.size': 16,
-    'yaxis.title.font.size': 16,
-    'xaxis.tickfont.size': 14,
-    'yaxis.tickfont.size': 14,
-    'legend.font.size': 14,
+    'font.size': 20,
+    'xaxis.title.font.size': 18,
+    'yaxis.title.font.size': 18,
+    'xaxis.tickfont.size': 15,
+    'yaxis.tickfont.size': 15,
+    'legend.font.size': 15,
     'margin.t': 50,
     'margin.b': 80,
     'margin.l': 80,
@@ -68,12 +68,12 @@ async function enhancePlotFontsMain(plotlyEl: HTMLElement): Promise<void> {
   if (!gd || !gd.layout) return;
 
   Plotly.relayout(gd, {
-    'font.size': 16,
-    'xaxis.title.font.size': 16,
-    'yaxis.title.font.size': 16,
-    'xaxis.tickfont.size': 14,
-    'yaxis.tickfont.size': 14,
-    'legend.font.size': 14,
+    'font.size': 20,
+    'xaxis.title.font.size': 18,
+    'yaxis.title.font.size': 18,
+    'xaxis.tickfont.size': 15,
+    'yaxis.tickfont.size': 15,
+    'legend.font.size': 15,
     'margin.t': 50,
     'margin.b': 80,
     'margin.l': 80,
@@ -102,7 +102,7 @@ async function capturePlotFromIframe(
     // Enhance fonts for PDF readability
     await enhancePlotFonts(iframe, plotlyEl as HTMLElement);
     return await iframe.contentWindow.Plotly.toImage(plotlyEl as HTMLElement, {
-      format: 'png', width: 1400, height: 900, scale: 2,
+      format: 'png', width: 1600, height: 1000, scale: 2,
     });
   } catch {
     return null;
@@ -130,7 +130,7 @@ async function captureAllFromIframe(
     try {
       await enhancePlotFonts(iframe, plotlyEl);
       const img = await iframe.contentWindow!.Plotly.toImage(plotlyEl, {
-        format: 'png', width: 1400, height: 900, scale: 2,
+        format: 'png', width: 1600, height: 1000, scale: 2,
       });
       images.push(img);
     } catch { /* skip failed captures */ }
@@ -176,7 +176,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
           try {
             await enhancePlotFontsMain(plotlyEl);
             const img = await (window as any).Plotly.toImage(plotlyEl, {
-              format: 'png', width: 1400, height: 900, scale: 2,
+              format: 'png', width: 1600, height: 1000, scale: 2,
             });
             images['volcano_plot'] = [img];
           } catch { /* skip */ }

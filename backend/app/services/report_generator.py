@@ -296,7 +296,9 @@ class ReportGenerator:
         if pval_col is None:
             pval_col = 'pval'
 
-        df_sorted = df.nsmallest(n, pval_col)
+        # Sort by adjusted p-value (matches web app default sort)
+        sort_col = adjpval_col if adjpval_col else pval_col
+        df_sorted = df.nsmallest(n, sort_col)
 
         table_data = []
         for _, row in df_sorted.iterrows():
