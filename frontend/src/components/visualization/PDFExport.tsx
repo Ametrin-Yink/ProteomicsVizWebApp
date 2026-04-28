@@ -8,6 +8,7 @@ declare global {
   interface Window {
     Plotly?: {
       toImage: (el: HTMLElement, opts: { format: string; width: number; height: number; scale: number }) => Promise<string>;
+      newPlot: (el: HTMLElement, data: unknown[], layout: Record<string, unknown>, config?: Record<string, unknown>) => Promise<void>;
     };
   }
 }
@@ -37,89 +38,45 @@ function waitForElement(
   });
 }
 
-/** Increase Plotly font sizes before capturing as image. */
-async function enhancePlotFonts(iframe: HTMLIFrameElement, plotlyEl: HTMLElement): Promise<void> {
-  const Plotly = iframe.contentWindow!.Plotly;
-  const gd = plotlyEl as any;
-  if (!gd || !gd.layout) return;
+/** Apply font size overrides to a Plotly layout object. */
+function enhanceLayout(layout: Record<string, unknown>): void {
+  layout.font = { ...(layout.font as object || {}), size: 22 };
 
-  const layout = gd.layout;
-
-  // Global font
-  layout.font = { ...layout.font, size: 20 };
-
-  // Axis fonts — use titlefont (the relayout-compatible alias)
   if (layout.xaxis) {
-    layout.xaxis.tickfont = { ...layout.xaxis.tickfont, size: 16 };
-    layout.xaxis.titlefont = { ...layout.xaxis.titlefont, size: 18 };
+    const xa = layout.xaxis as Record<string, unknown>;
+    xa.tickfont = { ...(xa.tickfont as object || {}), size: 18 };
+    xa.titlefont = { ...(xa.titlefont as object || {}), size: 20 };
+    if (xa.title && typeof xa.title === 'object') {
+      (xa.title as Record<string, unknown>).font = { ...((xa.title as Record<string, unknown>).font as object || {}), size: 20 };
+    }
   }
+
   if (layout.yaxis) {
-    layout.yaxis.tickfont = { ...layout.yaxis.tickfont, size: 16 };
-    layout.yaxis.titlefont = { ...layout.yaxis.titlefont, size: 18 };
+    const ya = layout.yaxis as Record<string, unknown>;
+    ya.tickfont = { ...(ya.tickfont as object || {}), size: 18 };
+    ya.titlefont = { ...(ya.titlefont as object || {}), size: 20 };
+    if (ya.title && typeof ya.title === 'object') {
+      (ya.title as Record<string, unknown>).font = { ...((ya.title as Record<string, unknown>).font as object || {}), size: 20 };
+    }
   }
 
-  // Legend
   if (layout.legend) {
-    layout.legend.font = { ...layout.legend.font, size: 15 };
+    (layout.legend as Record<string, unknown>).font = { ...((layout.legend as Record<string, unknown>).font as object || {}), size: 16 };
   }
 
-  // Margins
-  layout.margin = { ...layout.margin, t: 50, b: 80, l: 80, r: 40 };
-
-  // Trigger layout re-render using dotted paths (Plotly requires these for relayout)
-  await Plotly.relayout(gd, {
-    'font.size': 20,
-    'xaxis.titlefont.size': 18,
-    'yaxis.titlefont.size': 18,
-    'xaxis.tickfont.size': 16,
-    'yaxis.tickfont.size': 16,
-    'legend.font.size': 15,
-    'margin.t': 50,
-    'margin.b': 80,
-    'margin.l': 80,
-    'margin.r': 40,
-  });
-  await new Promise(r => setTimeout(r, 800));
+  layout.margin = { ...(layout.margin as object || {}), t: 50, b: 80, l: 80, r: 40 };
 }
 
-/** Same as enhancePlotFonts but for the main window (no iframe). */
-async function enhancePlotFontsMain(plotlyEl: HTMLElement): Promise<void> {
-  const Plotly = (window as any).Plotly;
-  const gd = plotlyEl as any;
-  if (!gd || !gd.layout) return;
+/** Re-render a plot with enhanced fonts using Plotly.newPlot. */
+async function replotWithFonts(Plotly: typeof window.Plotly, gd: any): Promise<void> {
+  const data = JSON.parse(JSON.stringify(gd.data));
+  const layout = JSON.parse(JSON.stringify(gd.layout));
+  const config = JSON.parse(JSON.stringify(gd._context || {}));
 
-  const layout = gd.layout;
+  enhanceLayout(layout);
 
-  layout.font = { ...layout.font, size: 20 };
-
-  if (layout.xaxis) {
-    layout.xaxis.tickfont = { ...layout.xaxis.tickfont, size: 16 };
-    layout.xaxis.titlefont = { ...layout.xaxis.titlefont, size: 18 };
-  }
-  if (layout.yaxis) {
-    layout.yaxis.tickfont = { ...layout.yaxis.tickfont, size: 16 };
-    layout.yaxis.titlefont = { ...layout.yaxis.titlefont, size: 18 };
-  }
-
-  if (layout.legend) {
-    layout.legend.font = { ...layout.legend.font, size: 15 };
-  }
-
-  layout.margin = { ...layout.margin, t: 50, b: 80, l: 80, r: 40 };
-
-  await Plotly.relayout(gd, {
-    'font.size': 20,
-    'xaxis.titlefont.size': 18,
-    'yaxis.titlefont.size': 18,
-    'xaxis.tickfont.size': 16,
-    'yaxis.tickfont.size': 16,
-    'legend.font.size': 15,
-    'margin.t': 50,
-    'margin.b': 80,
-    'margin.l': 80,
-    'margin.r': 40,
-  });
-  await new Promise(r => setTimeout(r, 800));
+  await Plotly!.newPlot(gd, data, layout, config);
+  await new Promise(r => setTimeout(r, 1000));
 }
 
 /** Capture a Plotly chart as base64 PNG from an iframe. */
@@ -130,18 +87,21 @@ async function capturePlotFromIframe(
   const doc = iframe.contentDocument;
   if (!doc) return null;
 
-  // Wait for the container element to render
   const container = await waitForElement(doc, containerSelector, 30000);
   if (!container) return null;
 
-  // Wait for the Plotly element INSIDE the container to render
   const plotlyEl = await waitForElement(container, '.js-plotly-plot', 15000);
   if (!plotlyEl || !iframe.contentWindow?.Plotly) return null;
 
   try {
-    // Enhance fonts for PDF readability
-    await enhancePlotFonts(iframe, plotlyEl as HTMLElement);
-    return await iframe.contentWindow.Plotly.toImage(plotlyEl as HTMLElement, {
+    const Plotly = iframe.contentWindow.Plotly;
+    const gd = plotlyEl as any;
+    if (!gd || !gd.data || !gd.layout) return null;
+
+    // Re-render with larger fonts
+    await replotWithFonts(Plotly, gd);
+
+    return await Plotly.toImage(gd, {
       format: 'png', width: 1600, height: 1000, scale: 2,
     });
   } catch {
@@ -168,8 +128,13 @@ async function captureAllFromIframe(
     const plotlyEl = allContainers[i].querySelector('.js-plotly-plot') as HTMLElement;
     if (!plotlyEl) continue;
     try {
-      await enhancePlotFonts(iframe, plotlyEl);
-      const img = await iframe.contentWindow!.Plotly.toImage(plotlyEl, {
+      const Plotly = iframe.contentWindow.Plotly;
+      const gd = plotlyEl as any;
+      if (!gd || !gd.data || !gd.layout) continue;
+
+      await replotWithFonts(Plotly, gd);
+
+      const img = await Plotly.toImage(gd, {
         format: 'png', width: 1600, height: 1000, scale: 2,
       });
       images.push(img);
@@ -214,7 +179,10 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         const plotlyEl = volcanoContainer.querySelector('.js-plotly-plot') as HTMLElement;
         if (plotlyEl) {
           try {
-            await enhancePlotFontsMain(plotlyEl);
+            const gd = plotlyEl as any;
+            if (gd.data && gd.layout) {
+              await replotWithFonts((window as any).Plotly, gd);
+            }
             const img = await (window as any).Plotly.toImage(plotlyEl, {
               format: 'png', width: 1600, height: 1000, scale: 2,
             });
@@ -230,14 +198,12 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       qcIframe.src = `${baseUrl}/analysis/visualization/qc?session_id=${sessionId}`;
       document.body.appendChild(qcIframe);
 
-      // Wait for iframe content to load
       await new Promise<void>((resolve) => {
         qcIframe.onload = () => resolve();
-        setTimeout(() => resolve(), 30000); // safety timeout
+        setTimeout(() => resolve(), 30000);
       });
       setProgress(35);
 
-      // Capture individual QC plots (all 8 plots from QC page)
       const qcSelectors: Record<string, string> = {
         'qc_pca': '[data-testid="pca-plot"]',
         'qc_pvalue': '[data-testid="pvalue-plot"]',
@@ -268,7 +234,6 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       });
       setProgress(75);
 
-      // Capture GSEA dashboard bar chart (plot inside gsea-overview)
       const gseaImg = await capturePlotFromIframe(gseaIframe, '[data-testid="gsea-overview"]');
       if (gseaImg) images['gsea_dashboard'] = [gseaImg];
       setProgress(85);
