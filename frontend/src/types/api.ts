@@ -29,6 +29,13 @@ export interface Session {
   files?: SessionFiles;
   created_at: string;
   updated_at: string;
+  markers?: string[];
+  volcano_filters?: {
+    foldChange: number;
+    pValue: number;
+    adjPValue: number;
+    s0: number;
+  };
 }
 
 export interface SessionConfig {

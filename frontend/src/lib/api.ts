@@ -53,6 +53,13 @@ export async function getSession(
   name: string;
   config?: { treatment: string; control: string };
   files?: { proteomics: Array<{ experiment: string }> };
+  markers?: string[];
+  volcano_filters?: {
+    foldChange: number;
+    pValue: number;
+    adjPValue: number;
+    s0: number;
+  };
 } | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`, {
@@ -246,3 +253,24 @@ export const processingAPI = {
     });
   },
 };
+
+// Visualization state (markers + volcano filters)
+export async function updateSessionVisualizationState(
+  sessionId: string,
+  data: {
+    markers?: string[];
+    volcano_filters?: {
+      foldChange: number;
+      pValue: number;
+      adjPValue: number;
+      s0: number;
+    };
+  }
+): Promise<void> {
+  await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/visualization-state`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  // Silently ignore errors — localStorage fallback handles offline case
+}
