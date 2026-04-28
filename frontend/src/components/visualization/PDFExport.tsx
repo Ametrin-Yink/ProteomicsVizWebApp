@@ -40,10 +40,10 @@ function waitForElement(
 
 /** Deep-clone a layout and apply fonts for PDF readability.
  *
- * Capture at 500px wide to match 2-column grid display width in PDF (~314px).
- * 500px → 314px = 63% scale. Source 15pt → ~9.5pt in PDF (matches body text).
- * Full-width volcano plot (500px → ~664px in PDF) gets scaled to 75% via CSS
- * so fonts land at ~11pt, still consistent with the grid plots.
+ * Scale math (all plots use same 15pt source fonts):
+ *   Grid (500px capture → 314px in PDF): 62.8% → 15 × 0.628 = ~9.4pt
+ *   Full-width (1000px capture → 664px in PDF): 66.4% → 15 × 0.664 = ~10pt
+ * Both land near body text size (9.5pt).
  */
 function cloneLayoutWithFonts(layout: Record<string, unknown>): Record<string, unknown> {
   const l = JSON.parse(JSON.stringify(layout));
@@ -92,10 +92,14 @@ async function capturePlotWithFonts(
   Plotly: typeof window.Plotly,
   data: unknown[],
   layout: Record<string, unknown>,
+  /** Use 1000px for full-width plots, 500px for 2-column grid plots. */
+  size: 'full' | 'grid' = 'grid',
 ): Promise<string | null> {
+  const isFull = size === 'full';
+  const w = isFull ? 1000 : 500;
+  const h = Math.round(w * 0.625);
   const container = document.createElement('div');
-  // Capture at 500px to match 2-column grid display in PDF
-  container.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:500px;height:312px;';
+  container.style.cssText = `position:absolute;left:-9999px;top:-9999px;width:${w}px;height:${h}px;`;
   document.body.appendChild(container);
 
   try {
@@ -103,7 +107,7 @@ async function capturePlotWithFonts(
     await Plotly!.newPlot(container, data, enhancedLayout, { staticPlot: true });
     await new Promise(r => setTimeout(r, 800));
     const img = await Plotly!.toImage(container, {
-      format: 'png', width: 500, height: 312, scale: 1,
+      format: 'png', width: w, height: h, scale: 1,
     });
     return img;
   } catch {
@@ -207,7 +211,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
           try {
             const gd = plotlyEl as any;
             if (gd.data && gd.layout) {
-              const img = await capturePlotWithFonts((window as any).Plotly, gd.data, gd.layout);
+              const img = await capturePlotWithFonts((window as any).Plotly, gd.data, gd.layout, 'full');
               if (img) images['volcano_plot'] = [img];
             }
           } catch { /* skip */ }
