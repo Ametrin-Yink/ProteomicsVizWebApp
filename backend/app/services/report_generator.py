@@ -247,7 +247,9 @@ class ReportGenerator:
                 # Prepare top significant proteins table (top 50 by p-value)
                 if report_request.include_protein_table:
                     results["top_proteins"] = self._prepare_top_proteins_table(
-                        df, n=50, fc=fc, pval_thresh=pval_thresh
+                        df, n=50, fc=fc, pval_thresh=pval_thresh,
+                        adj_pval_thresh=report_request.adj_p_value,
+                        s0=s0,
                     )
 
         return results
@@ -280,12 +282,15 @@ class ReportGenerator:
         n: int = 50,
         fc: float = 1.0,
         pval_thresh: float = 0.05,
+        adj_pval_thresh: float = 1.0,
+        s0: float = 0.0,
     ) -> list[dict[str, Any]]:
         """Prepare top significant proteins table."""
         logfc_col = self._find_col(df, ['logFC', 'log_fc', 'Log2FC', 'log2fc'])
         pval_col = self._find_col(df, ['pval', 'adj.P.Val', 'adjPval', 'p_value', 'P.Value'])
         protein_col = self._find_col(df, ['Master_Protein_Accessions', 'Protein', 'master_protein_accessions', 'protein'])
         gene_col = self._find_col(df, ['Gene_Name', 'Gene', 'gene_name', 'gene'])
+        adjpval_col = self._find_col(df, ['adjPval', 'adj.P.Val', 'P.Value', 'adj_pval'])
         if logfc_col is None:
             logfc_col = 'logFC'
         if pval_col is None:
@@ -297,8 +302,9 @@ class ReportGenerator:
         for _, row in df_sorted.iterrows():
             row_log_fc = row.get(logfc_col, 0)
             row_pval = row.get(pval_col, 1)
-            is_sig = self._is_significant(row_log_fc, row_pval, row.get('adj_pval', row_pval),
-                                          fc, pval_thresh, 1.0, 0.0)
+            row_adj_pval = row.get(adjpval_col, row_pval) if adjpval_col else row_pval
+            is_sig = self._is_significant(row_log_fc, row_pval, row_adj_pval,
+                                          fc, pval_thresh, adj_pval_thresh, s0)
             entry = {
                 "protein": row.get(protein_col, "N/A") if protein_col else "N/A",
                 "gene": row.get(gene_col, "N/A") if gene_col else "N/A",
@@ -335,16 +341,22 @@ class ReportGenerator:
                 "plot_image": images.get("qc_pvalue", [None])[0],
             }
 
-        # CV data
+        # CV data (PSM + Protein)
         if qc_data.psm_cv:
-            qc_section["cv_data"] = qc_data.psm_cv
-            qc_section["cv_plot_image"] = images.get("qc_cv", [None])[0]
+            qc_section["psm_cv_data"] = qc_data.psm_cv
+            qc_section["psm_cv_plot_image"] = images.get("qc_psm_cv", [None])[0]
 
-        # Intensity distributions
+        if qc_data.protein_cv:
+            qc_section["protein_cv_data"] = qc_data.protein_cv
+            qc_section["protein_cv_plot_image"] = images.get("qc_protein_cv", [None])[0]
+
+        # Intensity distributions (PSM + Protein)
         if qc_data.intensity_distributions:
             qc_section["intensity_distributions"] = qc_data.intensity_distributions
+            qc_section["psm_intensity_plot_image"] = images.get("qc_psm_intensity", [None])[0]
+            qc_section["protein_intensity_plot_image"] = images.get("qc_protein_intensity", [None])[0]
 
-        # Data completeness
+        # Data completeness (Protein + PSM)
         if qc_data.data_completeness:
             qc_section["data_completeness"] = [
                 {
@@ -356,6 +368,18 @@ class ReportGenerator:
                 for dc in qc_data.data_completeness
             ]
             qc_section["completeness_plot_image"] = images.get("qc_completeness", [None])[0]
+
+        if qc_data.psm_completeness:
+            qc_section["psm_completeness"] = [
+                {
+                    "sample": dc.sample,
+                    "missing": dc.missing,
+                    "present": dc.present,
+                    "completeness_pct": round(dc.completeness_pct, 2)
+                }
+                for dc in qc_data.psm_completeness
+            ]
+            qc_section["psm_completeness_plot_image"] = images.get("qc_psm_completeness", [None])[0]
 
         return qc_section
 

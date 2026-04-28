@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ report_title }}</title>
     <style>
-        /* Reset and base styles */
+        /* ============================================================
+           BASE & RESET
+           ============================================================ */
         * {
             margin: 0;
             padding: 0;
@@ -13,159 +15,215 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 11pt;
-            line-height: 1.6;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 9.5pt;
+            line-height: 1.5;
+            color: #1a1a2e;
             background: white;
         }
 
-        /* Page layout */
+        /* ============================================================
+           PAGE LAYOUT
+           ============================================================ */
         .page {
             width: 210mm;
             min-height: 297mm;
-            padding: 20mm 15mm;
+            padding: 18mm 16mm 22mm;
             margin: 0 auto;
             background: white;
         }
 
-        /* Header */
+        /* ============================================================
+           COLOR TOKENS
+           ============================================================ */
+        :root {
+            --color-heading: #1a1a2e;
+            --color-body: #3a3a52;
+            --color-muted: #6b7280;
+            --color-border: #e5e7eb;
+            --color-border-strong: #d1d5db;
+            --color-accent: #2563eb;
+            --color-accent-light: #eff6ff;
+            --color-up: #dc2626;
+            --color-down: #2563eb;
+            --color-bg-subtle: #f9fafb;
+            --color-bg-panel: #f3f4f6;
+        }
+
+        /* ============================================================
+           HEADER
+           ============================================================ */
         .report-header {
-            text-align: center;
-            border-bottom: 3px solid #2c3e50;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
+            text-align: left;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+            border-bottom: 2px solid var(--color-heading);
         }
 
         .report-header h1 {
-            font-size: 24pt;
-            color: #2c3e50;
-            margin-bottom: 10px;
+            font-size: 18pt;
+            font-weight: 700;
+            color: var(--color-heading);
+            letter-spacing: -0.3px;
+            line-height: 1.2;
         }
 
         .report-header .generated-at {
-            font-size: 10pt;
-            color: #7f8c8d;
+            font-size: 9pt;
+            color: var(--color-muted);
+            margin-top: 4px;
         }
 
-        /* Section styles */
+        /* ============================================================
+           SECTIONS
+           ============================================================ */
         .section {
-            margin-bottom: 30px;
-            page-break-inside: avoid;
+            margin-bottom: 22px;
         }
 
         .section-title {
-            font-size: 16pt;
-            color: #2c3e50;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 8px;
-            margin-bottom: 20px;
+            font-size: 13pt;
+            font-weight: 700;
+            color: var(--color-heading);
+            letter-spacing: -0.2px;
+            padding-bottom: 6px;
+            margin-bottom: 14px;
+            border-bottom: 1.5px solid var(--color-border-strong);
         }
 
         .section-subtitle {
-            font-size: 13pt;
-            color: #34495e;
-            margin: 15px 0 10px 0;
-        }
-
-        /* Info boxes */
-        .info-box {
-            background: #f8f9fa;
-            border-left: 4px solid #3498db;
-            padding: 15px;
-            margin: 15px 0;
-        }
-
-        .info-box.warning {
-            border-left-color: #f39c12;
-            background: #fef9e7;
-        }
-
-        .info-box.success {
-            border-left-color: #27ae60;
-            background: #eafaf1;
-        }
-
-        /* Tables */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 10pt;
-        }
-
-        th, td {
-            padding: 8px 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-
-        th {
-            background: #34495e;
-            color: white;
+            font-size: 10.5pt;
             font-weight: 600;
+            color: var(--color-body);
+            margin: 12px 0 8px 0;
         }
 
-        tr:nth-child(even) {
-            background: #f8f9fa;
+        /* ============================================================
+           INFO PANELS (sample info, PCA stats)
+           ============================================================ */
+        .info-panel {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 2px 16px;
+            padding: 10px 14px;
+            background: var(--color-bg-subtle);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            font-size: 9.5pt;
         }
 
-        tr:hover {
-            background: #e8f4f8;
+        .info-panel strong {
+            color: var(--color-muted);
+            font-weight: 500;
         }
 
-        /* Stats section - simple solid blocks for reliable PDF rendering */
-        .stats-section {
-            margin: 20px 0;
+        /* ============================================================
+           STATS BAR (compact horizontal strip)
+           ============================================================ */
+        .stats-bar {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            margin: 14px 0;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            overflow: hidden;
         }
 
         .stat-item {
-            display: inline-block;
-            background: #f8f9fa;
-            border: 2px solid #dee2e6;
-            padding: 12px 30px;
-            border-radius: 0;
+            flex: 1;
             text-align: center;
-            margin-right: 15px;
-            margin-bottom: 10px;
+            padding: 10px 12px;
+            border-right: 1px solid var(--color-border);
         }
 
-        .stat-item h3 {
-            font-size: 28pt;
-            margin-bottom: 5px;
-            color: #2c3e50;
+        .stat-item:last-child {
+            border-right: none;
         }
 
-        .stat-item p {
-            font-size: 11pt;
-            color: #6c757d;
+        .stat-item .stat-value {
+            font-size: 18pt;
+            font-weight: 700;
+            color: var(--color-heading);
+            line-height: 1.1;
+        }
+
+        .stat-item .stat-label {
+            font-size: 7.5pt;
+            color: var(--color-muted);
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            margin-top: 3px;
+            white-space: nowrap;
         }
 
-        /* Configuration table */
+        .stat-item.up .stat-value { color: var(--color-up); }
+        .stat-item.down .stat-value { color: var(--color-down); }
+
+        /* ============================================================
+           TABLES
+           ============================================================ */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 8.5pt;
+        }
+
+        th {
+            background: var(--color-heading);
+            color: white;
+            font-weight: 600;
+            font-size: 8pt;
+            padding: 5px 8px;
+            text-align: left;
+            letter-spacing: 0.2px;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: middle;
+        }
+
+        tr:nth-child(even) td {
+            background: var(--color-bg-subtle);
+        }
+
+        /* ============================================================
+           CONFIG TABLE
+           ============================================================ */
         .config-table {
-            background: #f8f9fa;
-            border-radius: 8px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
             overflow: hidden;
         }
 
         .config-table td:first-child {
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--color-muted);
             width: 40%;
+            padding: 6px 10px;
         }
 
-        /* File list */
+        .config-table td:last-child {
+            padding: 6px 10px;
+        }
+
+        /* ============================================================
+           FILE LIST
+           ============================================================ */
         .file-list {
             list-style: none;
         }
 
         .file-list li {
-            padding: 8px 0;
-            border-bottom: 1px solid #eee;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--color-border);
             display: flex;
             justify-content: space-between;
+            font-size: 9pt;
         }
 
         .file-list li:last-child {
@@ -174,21 +232,24 @@
 
         .file-name {
             font-weight: 500;
-            color: #2c3e50;
+            color: var(--color-body);
         }
 
         .file-meta {
-            color: #7f8c8d;
-            font-size: 9pt;
+            color: var(--color-muted);
+            font-size: 8pt;
         }
 
-        /* Plot container */
+        /* ============================================================
+           PLOT CONTAINERS
+           ============================================================ */
         .plot-container {
             text-align: center;
-            margin: 20px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
+            margin: 14px 0;
+            padding: 12px;
+            background: var(--color-bg-subtle);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
         }
 
         .plot-container img {
@@ -197,15 +258,29 @@
         }
 
         .plot-caption {
-            font-size: 10pt;
-            color: #7f8c8d;
-            margin-top: 10px;
-            font-style: italic;
+            font-size: 8.5pt;
+            color: var(--color-muted);
+            margin-top: 8px;
+            line-height: 1.4;
         }
 
-        /* Protein table */
+        /* Two-column layout for smaller QC plots */
+        .plot-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            page-break-inside: avoid;
+        }
+
+        .plot-grid .plot-container {
+            margin: 0;
+        }
+
+        /* ============================================================
+           PROTEIN TABLE
+           ============================================================ */
         .protein-table {
-            font-size: 9pt;
+            font-size: 8.5pt;
             table-layout: auto;
             width: 100%;
             page-break-inside: auto;
@@ -219,97 +294,165 @@
             page-break-inside: avoid;
         }
 
-        .protein-table th {
-            background: #2c3e50;
+        .protein-table td {
+            padding: 3px 8px;
         }
 
         .protein-table td:nth-child(1) {
-            width: 25%;
+            width: 28%;
+            word-break: break-all;
         }
-
         .protein-table td:nth-child(2) {
-            width: 15%;
+            width: 14%;
         }
-
         .protein-table td:nth-child(3) {
-            width: 12%;
+            width: 13%;
+            text-align: right;
             white-space: nowrap;
         }
-
         .protein-table td:nth-child(4) {
             width: 15%;
+            text-align: right;
             white-space: nowrap;
         }
-
         .protein-table td:nth-child(5) {
             width: 12%;
-            white-space: nowrap;
+            text-align: center;
         }
 
         .protein-table .significant {
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .protein-table .upregulated {
-            color: #e74c3c;
+            color: var(--color-up);
         }
 
         .protein-table .downregulated {
-            color: #3498db;
+            color: var(--color-down);
         }
 
-        /* GSEA results */
-        .gsea-database {
-            margin-bottom: 25px;
-            page-break-inside: avoid;
+        .sig-yes {
+            font-weight: 700;
+            color: var(--color-heading);
         }
 
-        .gsea-database h4 {
-            background: #34495e;
+        .sig-no {
+            color: var(--color-muted);
+        }
+
+        /* ============================================================
+           GSEA SECTION
+           ============================================================ */
+        .gsea-db-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--color-heading);
             color: white;
-            padding: 10px 15px;
-            margin: 0;
-            font-size: 12pt;
+            padding: 7px 14px;
+            border-radius: 4px 4px 0 0;
+            font-size: 10pt;
+            font-weight: 600;
+        }
+
+        .gsea-db-header:first-child {
+            margin-top: 0;
         }
 
         .gsea-stats {
             display: flex;
-            gap: 20px;
-            padding: 10px 15px;
-            background: #ecf0f1;
-            font-size: 10pt;
+            gap: 16px;
+            padding: 8px 14px;
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            font-size: 8.5pt;
         }
 
-        .gsea-stats span {
+        .gsea-stats .stat-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
             font-weight: 600;
+            font-size: 8pt;
         }
 
-        /* Pathway table */
-        .pathway-table {
-            margin-top: 0;
+        .gsea-stats .stat-badge.total {
+            background: var(--color-bg-subtle);
+            color: var(--color-muted);
         }
 
-        .pathway-table .nes-positive {
-            color: #e74c3c;
-            font-weight: 600;
+        .gsea-stats .stat-badge.sig {
+            background: var(--color-accent-light);
+            color: var(--color-accent);
         }
 
-        .pathway-table .nes-negative {
-            color: #3498db;
-            font-weight: 600;
+        .gsea-stats .stat-badge.over {
+            background: #fef2f2;
+            color: var(--color-up);
         }
 
-        /* Footer */
-        .report-footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
+        .gsea-stats .stat-badge.under {
+            background: #eff6ff;
+            color: var(--color-down);
+        }
+
+        .gsea-database {
+            margin-bottom: 18px;
+            page-break-inside: avoid;
+        }
+
+        .pathway-table td:nth-child(1) {
+            width: 40%;
+        }
+        .pathway-table td:nth-child(2) {
+            width: 12%;
+            text-align: right;
+        }
+        .pathway-table td:nth-child(3) {
+            width: 14%;
+            text-align: right;
+        }
+        .pathway-table td:nth-child(4) {
+            width: 14%;
+            text-align: right;
+        }
+        .pathway-table td:nth-child(5) {
+            width: 10%;
             text-align: center;
-            font-size: 9pt;
-            color: #7f8c8d;
         }
 
-        /* Print styles */
+        .nes-positive {
+            color: var(--color-up);
+            font-weight: 600;
+        }
+
+        .nes-negative {
+            color: var(--color-down);
+            font-weight: 600;
+        }
+
+        /* ============================================================
+           FOOTER
+           ============================================================ */
+        .report-footer {
+            margin-top: 30px;
+            padding-top: 12px;
+            border-top: 1px solid var(--color-border);
+            text-align: center;
+            font-size: 8pt;
+            color: var(--color-muted);
+        }
+
+        .report-footer p + p {
+            margin-top: 2px;
+        }
+
+        /* ============================================================
+           PRINT STYLES
+           ============================================================ */
         @media print {
             .page {
                 width: 100%;
@@ -323,19 +466,10 @@
             .gsea-database {
                 page-break-inside: avoid;
             }
-        }
 
-        /* Utility classes */
-        .text-center {
-            text-align: center;
-        }
-
-        .mt-20 {
-            margin-top: 20px;
-        }
-
-        .mb-20 {
-            margin-bottom: 20px;
+            .plot-grid {
+                page-break-inside: avoid;
+            }
         }
     </style>
 </head>
@@ -348,13 +482,14 @@
         </div>
 
         <!-- Section 1: Sample Information -->
+        {% if sample_info %}
         <div class="section">
             <h2 class="section-title">1. Sample Information</h2>
 
-            <div class="info-box">
-                <strong>Session:</strong> {{ sample_info.session_name }}<br>
-                <strong>Session ID:</strong> {{ sample_info.session_id }}<br>
-                <strong>Created:</strong> {{ sample_info.created_at }}
+            <div class="info-panel">
+                <strong>Session</strong><span>{{ sample_info.session_name }}</span>
+                <strong>Session ID</strong><span>{{ sample_info.session_id }}</span>
+                <strong>Created</strong><span>{{ sample_info.created_at }}</span>
             </div>
 
             <h3 class="section-subtitle">Uploaded Files ({{ sample_info.total_files }})</h3>
@@ -362,17 +497,17 @@
                 {% for file in sample_info.uploaded_files %}
                 <li>
                     <span class="file-name">{{ file.filename }}</span>
-                    <span class="file-meta">{{ file.condition }} (Rep {{ file.replicate }}) - {{ file.size_mb }} MB</span>
+                    <span class="file-meta">{{ file.condition }} (Rep {{ file.replicate }}) &middot; {{ file.size_mb }} MB</span>
                 </li>
                 {% endfor %}
             </ul>
 
-            <h3 class="section-subtitle">Conditions & Replicates</h3>
+            <h3 class="section-subtitle">Conditions &amp; Replicates</h3>
             <table>
                 <thead>
                     <tr>
                         <th>Condition</th>
-                        <th>Number of Replicates</th>
+                        <th>Replicates</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -384,26 +519,22 @@
                     {% endfor %}
                 </tbody>
             </table>
-
-            {% if sample_info.has_compound_file %}
-            <div class="info-box success">
-                Compound file uploaded: Yes
-            </div>
-            {% endif %}
         </div>
+        {% endif %}
 
         <!-- Section 2: User Configuration -->
+        {% if user_config %}
         <div class="section">
             <h2 class="section-title">2. Analysis Configuration</h2>
 
             <table class="config-table">
                 <tbody>
                     <tr>
-                        <td>Treatment Condition</td>
+                        <td>Treatment</td>
                         <td>{{ user_config.treatment }}</td>
                     </tr>
                     <tr>
-                        <td>Control Condition</td>
+                        <td>Control</td>
                         <td>{{ user_config.control }}</td>
                     </tr>
                     <tr>
@@ -421,35 +552,38 @@
                 </tbody>
             </table>
         </div>
+        {% endif %}
 
         <!-- Section 3: Results -->
         {% if results %}
         <div class="section">
             <h2 class="section-title">3. Differential Expression Results</h2>
 
-            <div class="stats-section">
+            <!-- Stats bar -->
+            <div class="stats-bar">
                 <div class="stat-item">
-                    <h3>{{ results.total_proteins }}</h3>
-                    <p>Total Proteins Identified</p>
+                    <div class="stat-value">{{ results.total_proteins }}</div>
+                    <div class="stat-label">Total Proteins</div>
                 </div>
                 {% if results.significant_proteins is not none and results.significant_proteins > 0 %}
                 <div class="stat-item">
-                    <h3>{{ results.significant_proteins }}</h3>
-                    <p>Total DE Proteins</p>
+                    <div class="stat-value">{{ results.significant_proteins }}</div>
+                    <div class="stat-label">DE Proteins</div>
                 </div>
                 {% if results.upregulated is not none and results.downregulated is not none %}
-                <div class="stat-item">
-                    <h3>{{ results.upregulated }}</h3>
-                    <p>Upregulated</p>
+                <div class="stat-item up">
+                    <div class="stat-value">{{ results.upregulated }}</div>
+                    <div class="stat-label">Up</div>
                 </div>
-                <div class="stat-item">
-                    <h3>{{ results.downregulated }}</h3>
-                    <p>Downregulated</p>
+                <div class="stat-item down">
+                    <div class="stat-value">{{ results.downregulated }}</div>
+                    <div class="stat-label">Down</div>
                 </div>
                 {% endif %}
                 {% endif %}
             </div>
 
+            <!-- Volcano Plot -->
             {% if results.volcano_plot_image %}
             <h3 class="section-subtitle">Volcano Plot</h3>
             <div class="plot-container">
@@ -462,32 +596,35 @@
             </div>
             {% endif %}
 
+            <!-- Protein Table -->
             {% if results.top_proteins %}
             <h3 class="section-subtitle">Top 50 Significant Proteins</h3>
-                <table class="protein-table">
-                    <thead>
-                        <tr>
-                            <th>Protein</th>
-                            <th>Gene</th>
-                            <th>Log2 FC</th>
-                            <th>P-value</th>
-                            <th>Significant</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for protein in results.top_proteins %}
-                        <tr class="{% if protein.significant %}significant{% endif %}">
-                            <td>{{ protein.protein }}</td>
-                            <td>{{ protein.gene }}</td>
-                            <td class="{% if protein.log_fc > 0 %}upregulated{% else %}downregulated{% endif %}">
-                                {{ protein.log_fc }}
-                            </td>
-                            <td>{{ protein.pval }}</td>
-                            <td>{% if protein.significant %}Yes{% else %}No{% endif %}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <table class="protein-table">
+                <thead>
+                    <tr>
+                        <th>Protein</th>
+                        <th>Gene</th>
+                        <th>Log2 FC</th>
+                        <th>P-value</th>
+                        <th>Significant</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for protein in results.top_proteins %}
+                    <tr class="{% if protein.significant %}significant{% endif %}">
+                        <td>{{ protein.protein }}</td>
+                        <td>{{ protein.gene }}</td>
+                        <td class="{% if protein.log_fc > 0 %}upregulated{% else %}downregulated{% endif %}">
+                            {{ protein.log_fc }}
+                        </td>
+                        <td>{{ protein.pval }}</td>
+                        <td class="{% if protein.significant %}sig-yes{% else %}sig-no{% endif %}">
+                            {% if protein.significant %}Yes{% else %}No{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             {% endif %}
         </div>
         {% endif %}
@@ -497,50 +634,87 @@
         <div class="section">
             <h2 class="section-title">4. Quality Control Analysis</h2>
 
+            <!-- PCA -->
             {% if qc_data.pca and qc_data.pca.plot_image %}
             <h3 class="section-subtitle">Principal Component Analysis</h3>
-            <div class="info-box">
-                <strong>PC1 Variance:</strong> {{ qc_data.pca.pc1_variance }}% |
-                <strong>PC2 Variance:</strong> {{ qc_data.pca.pc2_variance }}%
+            <div class="info-panel">
+                <strong>PC1</strong><span>{{ qc_data.pca.pc1_variance }}% variance</span>
+                <strong>PC2</strong><span>{{ qc_data.pca.pc2_variance }}% variance</span>
             </div>
             <div class="plot-container">
                 <img src="{{ qc_data.pca.plot_image }}" alt="PCA Plot">
-                <p class="plot-caption">
-                    PCA plot showing sample clustering by condition. Samples from the same condition should cluster together.
-                </p>
+                <p class="plot-caption">Sample clustering by condition. Samples from the same condition should cluster together.</p>
             </div>
             {% endif %}
 
+            <!-- P-value distribution -->
             {% if qc_data.pvalue_distribution and qc_data.pvalue_distribution.plot_image %}
             <h3 class="section-subtitle">P-value Distribution</h3>
             <div class="plot-container">
                 <img src="{{ qc_data.pvalue_distribution.plot_image }}" alt="P-value Distribution">
-                <p class="plot-caption">
-                    Distribution of p-values across all proteins. A peak near 0 indicates differentially expressed proteins.
-                    Red dashed line = uniform distribution expectation.
-                </p>
+                <p class="plot-caption">Distribution of p-values across all proteins. Peak near 0 indicates differential expression.</p>
             </div>
             {% endif %}
 
-            {% if qc_data.cv_data and qc_data.cv_plot_image %}
+            <!-- CV plots (side by side) -->
+            {% if qc_data.psm_cv_data and qc_data.psm_cv_plot_image %}
             <h3 class="section-subtitle">Coefficient of Variation</h3>
-            <div class="plot-container">
-                <img src="{{ qc_data.cv_plot_image }}" alt="CV Boxplot">
-                <p class="plot-caption">
-                    Boxplot of PSM coefficient of variation per condition. Lower CV indicates higher technical reproducibility.
-                </p>
+            {% endif %}
+            {% if qc_data.psm_cv_plot_image or qc_data.protein_cv_plot_image %}
+            <div class="plot-grid">
+                {% if qc_data.psm_cv_plot_image %}
+                <div class="plot-container">
+                    <img src="{{ qc_data.psm_cv_plot_image }}" alt="PSM CV">
+                    <p class="plot-caption">PSM-level CV by condition</p>
+                </div>
+                {% endif %}
+                {% if qc_data.protein_cv_plot_image %}
+                <div class="plot-container">
+                    <img src="{{ qc_data.protein_cv_plot_image }}" alt="Protein CV">
+                    <p class="plot-caption">Protein-level CV by condition</p>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 
-            {% if qc_data.data_completeness and qc_data.completeness_plot_image %}
+            <!-- Intensity plots (side by side) -->
+            {% if qc_data.psm_intensity_plot_image or qc_data.protein_intensity_plot_image %}
+            <h3 class="section-subtitle">Intensity Distribution</h3>
+            <div class="plot-grid">
+                {% if qc_data.psm_intensity_plot_image %}
+                <div class="plot-container">
+                    <img src="{{ qc_data.psm_intensity_plot_image }}" alt="PSM Intensity">
+                    <p class="plot-caption">PSM intensity by sample</p>
+                </div>
+                {% endif %}
+                {% if qc_data.protein_intensity_plot_image %}
+                <div class="plot-container">
+                    <img src="{{ qc_data.protein_intensity_plot_image }}" alt="Protein Intensity">
+                    <p class="plot-caption">Protein intensity by sample</p>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Completeness plots (side by side) -->
+            {% if qc_data.completeness_plot_image or qc_data.psm_completeness_plot_image %}
             <h3 class="section-subtitle">Data Completeness</h3>
-            <div class="plot-container">
-                <img src="{{ qc_data.completeness_plot_image }}" alt="Data Completeness">
-                <p class="plot-caption">
-                    Stacked bar chart showing present vs missing proteins per sample.
-                </p>
+            <div class="plot-grid">
+                {% if qc_data.completeness_plot_image %}
+                <div class="plot-container">
+                    <img src="{{ qc_data.completeness_plot_image }}" alt="Protein Completeness">
+                    <p class="plot-caption">Protein-level completeness</p>
+                </div>
+                {% endif %}
+                {% if qc_data.psm_completeness_plot_image %}
+                <div class="plot-container">
+                    <img src="{{ qc_data.psm_completeness_plot_image }}" alt="PSM Completeness">
+                    <p class="plot-caption">PSM-level completeness</p>
+                </div>
+                {% endif %}
             </div>
             {% elif qc_data.data_completeness %}
+            <!-- Fallback: table only -->
             <h3 class="section-subtitle">Data Completeness by Sample</h3>
             <table>
                 <thead>
@@ -573,12 +747,14 @@
 
             {% for database in gsea_results.databases %}
             <div class="gsea-database">
-                <h4>{{ database.name }}</h4>
+                <div class="gsea-db-header">
+                    <span>{{ database.name }}</span>
+                    <span>{{ database.total_pathways }} pathways tested</span>
+                </div>
                 <div class="gsea-stats">
-                    <span>Total Pathways: {{ database.total_pathways }}</span>
-                    <span>Significant: {{ database.significant_pathways }}</span>
-                    <span style="color: #e74c3c;">Overrepresented: {{ database.overrepresented }}</span>
-                    <span style="color: #3498db;">Underrepresented: {{ database.underrepresented }}</span>
+                    <span class="stat-badge sig">{{ database.significant_pathways }} significant</span>
+                    <span class="stat-badge over">{{ database.overrepresented }} enriched</span>
+                    <span class="stat-badge under">{{ database.underrepresented }} depleted</span>
                 </div>
 
                 {% if database.top_pathways %}
@@ -595,7 +771,7 @@
                     <tbody>
                         {% for pathway in database.top_pathways %}
                         <tr>
-                            <td title="{{ pathway.name }}">{{ pathway.name[:60] }}{% if pathway.name|length > 60 %}...{% endif %}</td>
+                            <td title="{{ pathway.name }}">{{ pathway.name[:65] }}{% if pathway.name|length > 65 %}...{% endif %}</td>
                             <td class="{% if pathway.nes > 0 %}nes-positive{% else %}nes-negative{% endif %}">
                                 {{ pathway.nes }}
                             </td>
@@ -618,8 +794,8 @@
 
         <!-- Report Footer -->
         <div class="report-footer">
-            <p>Generated by Proteomics Visualization Web App</p>
-            <p>Session ID: {{ sample_info.session_id }}</p>
+            <p>Proteomics Visualization Web App</p>
+            <p>Session: {{ sample_info.session_id }}</p>
         </div>
     </div>
 </body>

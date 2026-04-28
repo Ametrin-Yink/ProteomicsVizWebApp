@@ -150,12 +150,16 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       });
       setProgress(35);
 
-      // Capture individual QC plots
+      // Capture individual QC plots (all 8 plots from QC page)
       const qcSelectors: Record<string, string> = {
         'qc_pca': '[data-testid="pca-plot"]',
         'qc_pvalue': '[data-testid="pvalue-plot"]',
-        'qc_cv': '[data-testid="psm-cv-plot"]',
+        'qc_psm_cv': '[data-testid="psm-cv-plot"]',
+        'qc_protein_cv': '[data-testid="protein-cv-plot"]',
+        'qc_psm_intensity': '[data-testid="psm-intensity-plot"]',
+        'qc_protein_intensity': '[data-testid="protein-intensity-plot"]',
         'qc_completeness': '[data-testid="completeness-plot"]',
+        'qc_psm_completeness': '[data-testid="psm-completeness-plot"]',
       };
 
       for (const [key, selector] of Object.entries(qcSelectors)) {
