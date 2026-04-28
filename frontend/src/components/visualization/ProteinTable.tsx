@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { DEResult, SortConfig } from '@/types/api';
-import { formatNumber, formatPValue, exportToCSV } from '@/lib/utils';
+import type { DEResult, SortConfig, VolcanoFilters } from '@/types/api';
+import { formatNumber, formatPValue, exportToCSV, isSignificantVolcano } from '@/lib/utils';
 import { ChevronUp, ChevronDown, Download } from 'lucide-react';
 
 interface ProteinTableProps {
@@ -11,6 +11,8 @@ interface ProteinTableProps {
   onSelectProtein: (protein: DEResult) => void;
   showSelectedOnly: boolean;
   onToggleShowSelected: () => void;
+  filters: VolcanoFilters;
+  sessionConfig: { treatment: string; control: string } | null;
 }
 
 const ITEMS_PER_PAGE = 25;
@@ -38,6 +40,8 @@ export default function ProteinTable({
   onSelectProtein,
   showSelectedOnly,
   onToggleShowSelected,
+  filters,
+  sessionConfig,
 }: ProteinTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'adj_pval',
@@ -71,6 +75,15 @@ export default function ProteinTable({
   const sortedData = useMemo(() => {
     const sorted = [...filteredData];
     sorted.sort((a, b) => {
+      // For 'significant' key, use computed significance based on current filters
+      if (sortConfig.key === 'significant') {
+        const aSig = isSignificantVolcano(a.log_fc, a.pval, a.adj_pval, filters);
+        const bSig = isSignificantVolcano(b.log_fc, b.pval, b.adj_pval, filters);
+        return sortConfig.direction === 'asc'
+          ? Number(aSig) - Number(bSig)
+          : Number(bSig) - Number(aSig);
+      }
+
       const aValue = a[sortConfig.key as keyof DEResult];
       const bValue = b[sortConfig.key as keyof DEResult];
 
@@ -84,10 +97,16 @@ export default function ProteinTable({
           : bValue.localeCompare(aValue);
       }
 
+      if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+        return sortConfig.direction === 'asc'
+          ? Number(aValue) - Number(bValue)
+          : Number(bValue) - Number(aValue);
+      }
+
       return 0;
     });
     return sorted;
-  }, [filteredData, sortConfig]);
+  }, [filteredData, sortConfig, filters]);
 
   // Paginate data
   const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
@@ -107,15 +126,22 @@ export default function ProteinTable({
 
   // Handle CSV export
   const handleExport = () => {
-    const exportData = sortedData.map((item) => ({
-      Protein: item.master_protein_accessions,
-      'Gene Name': item.gene_name,
-      'Log2 FC': item.log_fc,
-      'P-value': item.pval,
-      'Adj P-value': item.adj_pval,
-      Significance: item.significant ? 'Significant' : 'Not Significant',
-    }));
-    exportToCSV(exportData, 'protein_results.csv');
+    const exportData = sortedData.map((item) => {
+      const isSig = isSignificantVolcano(item.log_fc, item.pval, item.adj_pval, filters);
+      return {
+        Protein: item.master_protein_accessions,
+        'Gene Name': item.gene_name,
+        'Log2 FC': item.log_fc,
+        'P-value': item.pval,
+        'Adj P-value': item.adj_pval,
+        Significance: isSig ? 'Significant' : 'Not Significant',
+      };
+    });
+
+    const filename = sessionConfig
+      ? `${sessionConfig.treatment}_vs_${sessionConfig.control}`
+      : 'protein_results';
+    exportToCSV(exportData, `${filename}.csv`);
   };
 
   return (
@@ -206,8 +232,11 @@ export default function ProteinTable({
               >
                 Adj P-value <SortIndicator columnKey="adj_pval" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
-              <th className="px-4 py-3 text-center font-medium text-gray-700">
-                Significance
+              <th
+                onClick={() => handleSort('significant')}
+                className="px-4 py-3 text-center font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+              >
+                Significance <SortIndicator columnKey="significant" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
             </tr>
           </thead>
@@ -254,15 +283,20 @@ export default function ProteinTable({
                   {formatPValue(item.adj_pval)}
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      item.significant
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {item.significant ? 'Yes' : 'No'}
-                  </span>
+                  {(() => {
+                    const isSig = isSignificantVolcano(item.log_fc, item.pval, item.adj_pval, filters);
+                    return (
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          isSig
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {isSig ? 'Yes' : 'No'}
+                      </span>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

@@ -115,46 +115,72 @@ export default function VolcanoPlot({
 
   // Calculate threshold lines
   const thresholdShapes = useMemo(() => {
-    const shapes: Array<{
-      type: 'line';
-      x0: number;
-      x1: number;
-      y0: number;
-      y1: number;
-      line: { color: string; width: number; dash: 'dash' };
-    }> = [];
+    const shapes: Array<
+      | { type: 'line'; x0: number; x1: number; y0: number; y1: number; line: { color: string; width: number; dash: 'dash' } }
+      | { type: 'path'; path: string; line: { color: string; width: number; dash: 'dash' } }
+    > = [];
 
-    const maxY = Math.max(...data.map((d) => -Math.log10(d.pval || 1e-300))) * 1.1;
+    const maxY = 10;
     const maxX = Math.max(...data.map((d) => Math.abs(d.log_fc))) * 1.1;
 
-    // Vertical lines at +/- fold change threshold
-    shapes.push({
-      type: 'line',
-      x0: filters.foldChange,
-      x1: filters.foldChange,
-      y0: 0,
-      y1: maxY,
-      line: { color: '#9CA3AF', width: 1, dash: 'dash' },
-    });
-    shapes.push({
-      type: 'line',
-      x0: -filters.foldChange,
-      x1: -filters.foldChange,
-      y0: 0,
-      y1: maxY,
-      line: { color: '#9CA3AF', width: 1, dash: 'dash' },
-    });
+    const actualS0 = filters.s0 * filters.foldChange;
 
-    // Horizontal line at p-value threshold
-    const yThreshold = -Math.log10(filters.pValue);
-    shapes.push({
-      type: 'line',
-      x0: -maxX,
-      x1: maxX,
-      y0: yThreshold,
-      y1: yThreshold,
-      line: { color: '#9CA3AF', width: 1, dash: 'dash' },
-    });
+    if (actualS0 > 0) {
+      // Hyperbolic S0-factor curves: y = c / (|x| - s0)
+      const pLog10Threshold = -Math.log10(filters.pValue);
+      const c = pLog10Threshold * (filters.foldChange - actualS0);
+
+      // Generate path for right curve (positive logFC)
+      let rightPath = '';
+      const step = 0.02;
+      for (let x = actualS0 + step; x <= maxX; x += step) {
+        const y = c / (x - actualS0);
+        if (y <= maxY) {
+          rightPath += (rightPath === '' ? `M ${x} ${y}` : ` L ${x} ${y}`);
+        }
+      }
+      if (rightPath) shapes.push({ type: 'path', path: rightPath, line: { color: '#9CA3AF', width: 1, dash: 'dash' } });
+
+      // Generate path for left curve (negative logFC)
+      let leftPath = '';
+      for (let x = -maxX; x < -actualS0 - step; x += step) {
+        const y = c / (-x - actualS0);
+        if (y <= maxY) {
+          leftPath += (leftPath === '' ? `M ${x} ${y}` : ` L ${x} ${y}`);
+        }
+      }
+      if (leftPath) shapes.push({ type: 'path', path: leftPath, line: { color: '#9CA3AF', width: 1, dash: 'dash' } });
+    } else {
+      // Standard rectangular cutoff: vertical + horizontal lines
+      // Vertical lines at +/- fold change threshold
+      shapes.push({
+        type: 'line',
+        x0: filters.foldChange,
+        x1: filters.foldChange,
+        y0: 0,
+        y1: maxY,
+        line: { color: '#9CA3AF', width: 1, dash: 'dash' },
+      });
+      shapes.push({
+        type: 'line',
+        x0: -filters.foldChange,
+        x1: -filters.foldChange,
+        y0: 0,
+        y1: maxY,
+        line: { color: '#9CA3AF', width: 1, dash: 'dash' },
+      });
+
+      // Horizontal line at p-value threshold
+      const yThreshold = -Math.log10(filters.pValue);
+      shapes.push({
+        type: 'line',
+        x0: -maxX,
+        x1: maxX,
+        y0: yThreshold,
+        y1: yThreshold,
+        line: { color: '#9CA3AF', width: 1, dash: 'dash' },
+      });
+    }
 
     return shapes;
   }, [filters, data]);
@@ -175,6 +201,7 @@ export default function VolcanoPlot({
       },
       yaxis: {
         title: { text: '-log₁₀(p-value)', font: { size: 14 } },
+        range: [0, 10],
         zeroline: true,
         zerolinecolor: '#D1D5DB',
         zerolinewidth: 1,
@@ -349,7 +376,9 @@ export default function VolcanoPlot({
 
       {/* Threshold lines indicator */}
       <div data-testid="threshold-lines" className="mt-2 text-xs text-gray-500 text-center">
-        Threshold lines: Fold Change = ±{filters.foldChange}, P-value = {filters.pValue}
+        {filters.s0 > 0
+          ? `Hyperbolic cutoff: S0 = ${(filters.s0 * filters.foldChange).toFixed(2)} (${(filters.s0 * 100).toFixed(0)}% of log₂FC threshold ±${filters.foldChange}), P-value = ${filters.pValue}`
+          : `Threshold lines: Fold Change = ±${filters.foldChange}, P-value = ${filters.pValue}`}
       </div>
     </div>
   );

@@ -51,6 +51,8 @@ export interface DEResult {
   log_fc: number;
   pval: number;
   adj_pval: number;
+  se?: number | null;
+  t_statistic?: number | null;
   significant: boolean;
   psm_count?: number;
 }
@@ -207,6 +209,7 @@ export interface VolcanoFilters {
   foldChange: number;
   pValue: number;
   adjPValue: number;
+  s0: number; // Fraction of foldChange threshold (0-1). S0=0 → rectangular, S0>0 → hyperbolic.
 }
 
 // Table Sort Config

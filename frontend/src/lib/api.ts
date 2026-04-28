@@ -45,6 +45,21 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return data.data;
 }
 
+// Session API
+export async function getSession(
+  sessionId: string
+): Promise<{ id: string; name: string; config?: { treatment: string; control: string } } | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
 // Results API
 export async function getDEResults(
   sessionId: string,

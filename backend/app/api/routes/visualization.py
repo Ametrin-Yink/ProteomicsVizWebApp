@@ -185,12 +185,22 @@ async def load_diff_expression_results(results_dir: Path, session_id: str = "") 
             if pd.isna(psm_count):
                 psm_count = 0
 
+            se = row.get("se", None)
+            if pd.isna(se) if se is not None else True:
+                se = None
+
+            t_stat = row.get("t", None)
+            if pd.isna(t_stat) if t_stat is not None else True:
+                t_stat = None
+
             result = {
                 "master_protein_accessions": str(row.get("Master_Protein_Accessions", "")),
                 "gene_name": str(row.get("Gene_Name", "")),
                 "log_fc": float(log_fc) if log_fc is not None else 0,
                 "pval": float(pval) if pval is not None else 1,
                 "adj_pval": float(adj_pval) if adj_pval is not None else 1,
+                "se": float(se) if se is not None else None,
+                "t_statistic": float(t_stat) if t_stat is not None else None,
                 "significant": bool((adj_pval if adj_pval is not None else 1) < 0.05),
                 "psm_count": int(psm_count) if psm_count is not None else 0,
             }

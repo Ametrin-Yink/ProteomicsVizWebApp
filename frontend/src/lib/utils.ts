@@ -134,19 +134,45 @@ export function transformPCARowBased(
   }));
 }
 
-// Get color based on significance
+// Calculate significance using hyperbolic S0-factor cutoff.
+// When s0=0, falls back to standard rectangular cutoffs.
+// s0 is expressed as a fraction of the foldChange threshold.
+export function isSignificantVolcano(
+  logFC: number,
+  pValue: number,
+  adjPValue: number,
+  thresholds: { foldChange: number; pValue: number; adjPValue: number; s0: number }
+): boolean {
+  const { foldChange, pValue: pValThreshold, adjPValue: adjPValThreshold, s0 } = thresholds;
+  const actualS0 = s0 * foldChange; // s0 stored as fraction of foldChange
+
+  if (actualS0 === 0) {
+    // Standard rectangular cutoff
+    return (
+      Math.abs(logFC) >= foldChange &&
+      pValue <= pValThreshold &&
+      adjPValue <= adjPValThreshold
+    );
+  }
+
+  // Hyperbolic S0-factor cutoff: y = c / (|x| - s0)
+  const pLog10Threshold = -Math.log10(pValThreshold);
+  const c = pLog10Threshold * (foldChange - actualS0);
+  const y = -Math.log10(pValue);
+  const absX = Math.abs(logFC);
+
+  if (absX <= actualS0) return false;
+  return y > c / (absX - actualS0);
+}
+
+// Get color based on significance (supports both rectangular and S0 hyperbolic cutoffs)
 export function getVolcanoPointColor(
   logFC: number,
   pValue: number,
   adjPValue: number,
-  thresholds: { foldChange: number; pValue: number; adjPValue: number }
+  thresholds: { foldChange: number; pValue: number; adjPValue: number; s0: number }
 ): string {
-  const { foldChange, pValue: pValThreshold, adjPValue: adjPValThreshold } = thresholds;
-
-  const isSignificant =
-    Math.abs(logFC) >= foldChange &&
-    pValue <= pValThreshold &&
-    adjPValue <= adjPValThreshold;
+  const isSignificant = isSignificantVolcano(logFC, pValue, adjPValue, thresholds);
 
   if (!isSignificant) return '#6B7280'; // Grey
 
@@ -158,14 +184,9 @@ export function getSignificanceLabel(
   logFC: number,
   pValue: number,
   adjPValue: number,
-  thresholds: { foldChange: number; pValue: number; adjPValue: number }
+  thresholds: { foldChange: number; pValue: number; adjPValue: number; s0: number }
 ): string {
-  const { foldChange, pValue: pValThreshold, adjPValue: adjPValThreshold } = thresholds;
-
-  const isSignificant =
-    Math.abs(logFC) >= foldChange &&
-    pValue <= pValThreshold &&
-    adjPValue <= adjPValThreshold;
+  const isSignificant = isSignificantVolcano(logFC, pValue, adjPValue, thresholds);
 
   if (!isSignificant) return 'Not Significant';
   return logFC > 0 ? 'Upregulated' : 'Downregulated';

@@ -6,8 +6,9 @@ import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
 import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
-import { getDEResults } from '@/lib/api';
+import { getDEResults, getSession } from '@/lib/api';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
+import { isSignificantVolcano } from '@/lib/utils';
 
 
 // Mock session ID - in production this would come from context or URL
@@ -20,11 +21,13 @@ function ResultsContent() {
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string } | null>(null);
 
   const [filters, setFilters] = useState<VolcanoFilters>({
-    foldChange: 2,
+    foldChange: 1,
     pValue: 0.05,
     adjPValue: 1,
+    s0: 0.05, // 5% of foldChange threshold
   });
 
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
@@ -38,8 +41,6 @@ function ResultsContent() {
       setLoading(true);
       setError(null);
       try {
-        // Load all results for client-side filtering (VolcanoPlot, table search)
-        // Backend caching makes subsequent loads instant
         const results = await getDEResults(sessionId, {
           page: 1,
           per_page: 20000, // Get all for client-side filtering
@@ -53,6 +54,18 @@ function ResultsContent() {
     }
 
     fetchData();
+  }, [sessionId]);
+
+  // Fetch session config separately (non-blocking)
+  useEffect(() => {
+    async function fetchSessionConfig() {
+      const session = await getSession(sessionId);
+      if (session?.config) {
+        setSessionConfig(session.config);
+      }
+    }
+
+    fetchSessionConfig();
   }, [sessionId]);
 
   // Handle protein selection from volcano plot
@@ -103,10 +116,7 @@ function ResultsContent() {
     if (!data) return { total: 0, up: 0, down: 0 };
 
     const significant = data.results.filter(
-      (r) =>
-        Math.abs(r.log_fc) >= filters.foldChange &&
-        r.pval <= filters.pValue &&
-        r.adj_pval <= filters.adjPValue
+      (r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters)
     );
 
     return {
@@ -162,7 +172,7 @@ function ResultsContent() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Results</h1>
           <p className="text-gray-600 mt-2">
-            Differential expression analysis results with interactive volcano plot
+            {sessionConfig ? `${sessionConfig.treatment} vs ${sessionConfig.control}` : 'Treatment vs Control'}
           </p>
         </div>
 
@@ -198,6 +208,7 @@ function ResultsContent() {
               foldChange={filters.foldChange}
               pValue={filters.pValue}
               adjPValue={filters.adjPValue}
+              s0={filters.s0}
               onChange={(newFilters) => setFilters(newFilters)}
             />
 
@@ -218,6 +229,8 @@ function ResultsContent() {
                onSelectProtein={handleSelectProteinFromTable}
               showSelectedOnly={showSelectedOnly}
               onToggleShowSelected={() => setShowSelectedOnly(!showSelectedOnly)}
+              filters={filters}
+              sessionConfig={sessionConfig}
             />
           </div>
 
