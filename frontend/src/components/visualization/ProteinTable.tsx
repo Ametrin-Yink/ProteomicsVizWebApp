@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import type { DEResult, SortConfig, VolcanoFilters } from '@/types/api';
 import { formatNumber, formatPValue, exportToCSV, isSignificantVolcano } from '@/lib/utils';
-import { ChevronUp, ChevronDown, Download } from 'lucide-react';
+import { ChevronUp, ChevronDown, Download, Eraser } from 'lucide-react';
 
 interface ProteinTableProps {
   data: DEResult[];
@@ -13,6 +13,9 @@ interface ProteinTableProps {
   onToggleShowSelected: () => void;
   filters: VolcanoFilters;
   sessionConfig: { treatment: string; control: string; experiment: string } | null;
+  markedProteins: Set<string>;
+  onToggleMark: (protein: DEResult) => void;
+  onClearAllMarks: () => void;
 }
 
 const ITEMS_PER_PAGE = 25;
@@ -42,6 +45,9 @@ export default function ProteinTable({
   onToggleShowSelected,
   filters,
   sessionConfig,
+  markedProteins,
+  onToggleMark,
+  onClearAllMarks,
 }: ProteinTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'significant',
@@ -182,6 +188,17 @@ export default function ProteinTable({
             </label>
           )}
 
+          {markedProteins.size > 0 && (
+            <button
+              onClick={onClearAllMarks}
+              className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50"
+              data-testid="clear-all-marks-btn"
+            >
+              <Eraser className="w-3 h-3" />
+              Clear All Markers ({markedProteins.size})
+            </button>
+          )}
+
           <button
             onClick={handleExport}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -198,6 +215,12 @@ export default function ProteinTable({
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
+              <th
+                className="px-2 py-3 text-center font-medium text-gray-700 w-12"
+                data-testid="table-header-mark"
+              >
+                Mark
+              </th>
               <th
                 onClick={() => handleSort('master_protein_accessions')}
                 className="px-4 py-3 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
@@ -252,6 +275,19 @@ export default function ProteinTable({
                 }`}
                 data-testid="protein-table-row"
               >
+                <td
+                  className="px-2 py-3 text-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={markedProteins.has(item.master_protein_accessions)}
+                    onChange={() => onToggleMark(item)}
+                    className="rounded border-gray-300 text-[#E73564] focus:ring-[#E73564] cursor-pointer"
+                    data-testid="mark-checkbox"
+                    title="Mark in volcano plot"
+                  />
+                </td>
                 <td className="px-4 py-3 font-medium">
                   {item.master_protein_accessions.split(/[,;]/).map((acc, idx, arr) => (
                     <span key={acc.trim()}>
