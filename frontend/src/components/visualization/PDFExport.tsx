@@ -38,85 +38,81 @@ function waitForElement(
   });
 }
 
-/** Apply font size overrides to a Plotly layout object. */
-function enhanceLayout(layout: Record<string, unknown>): void {
-  // Global font - large to survive PDF scaling
-  layout.font = { family: 'Arial, sans-serif', size: 36, color: '#111827' };
+/** Deep-clone a layout and apply fonts sized to match report body text (~9.5pt).
+ *
+ * The 1000px image shrinks ~0.67x when rendered full-width in PDF.
+ * To end up at ~10pt in the PDF, we set source fonts to ~15pt.
+ * For 2-column grid plots (~0.33x scale), fonts land at ~5pt which is still readable.
+ */
+function cloneLayoutWithFonts(layout: Record<string, unknown>): Record<string, unknown> {
+  const l = JSON.parse(JSON.stringify(layout));
 
-  // X-axis
-  if (layout.xaxis) {
-    const xa = layout.xaxis as Record<string, unknown>;
-    xa.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
-    xa.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
-    if (typeof xa.title === 'object' && xa.title !== null) {
-      const titleObj = xa.title as Record<string, unknown>;
-      titleObj.font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
-    }
+  // Chart title (top-level)
+  if (l.title && typeof l.title === 'object') {
+    (l.title as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 15, color: '#111827' };
   }
 
-  // Y-axis
-  if (layout.yaxis) {
-    const ya = layout.yaxis as Record<string, unknown>;
-    ya.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
-    ya.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
-    if (typeof ya.title === 'object' && ya.title !== null) {
-      const titleObj = ya.title as Record<string, unknown>;
-      titleObj.font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
-    }
-  }
+  // Global font
+  l.font = { family: 'Arial, sans-serif', size: 15, color: '#111827' };
 
-  // Secondary axes
-  for (let i = 2; i <= 4; i++) {
-    const xKey = `xaxis${i}` as string;
-    const yKey = `yaxis${i}` as string;
-    if (layout[xKey]) {
-      const ax = layout[xKey] as Record<string, unknown>;
-      ax.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
-      ax.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+  // Apply fonts to all axes
+  const axes = ['xaxis', 'yaxis', 'xaxis2', 'yaxis2', 'xaxis3', 'yaxis3', 'xaxis4', 'yaxis4'];
+  for (const key of axes) {
+    if (l[key]) {
+      const ax = l[key] as Record<string, unknown>;
+      ax.tickfont = { family: 'Arial, sans-serif', size: 13, color: '#111827' };
+      ax.titlefont = { family: 'Arial, sans-serif', size: 14, color: '#111827' };
       if (typeof ax.title === 'object' && ax.title !== null) {
-        (ax.title as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
-      }
-    }
-    if (layout[yKey]) {
-      const ay = layout[yKey] as Record<string, unknown>;
-      ay.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
-      ay.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
-      if (typeof ay.title === 'object' && ay.title !== null) {
-        (ay.title as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+        (ax.title as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 14, color: '#111827' };
       }
     }
   }
 
   // Legend
-  if (layout.legend) {
-    (layout.legend as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 26, color: '#111827' };
+  if (l.legend) {
+    (l.legend as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 12, color: '#111827' };
   }
 
   // Annotations
-  if (Array.isArray(layout.annotations)) {
-    for (const ann of layout.annotations) {
+  if (Array.isArray(l.annotations)) {
+    for (const ann of l.annotations) {
       if (ann && typeof ann === 'object') {
-        (ann as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
+        (ann as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 13, color: '#111827' };
       }
     }
   }
 
-  layout.margin = { ...(layout.margin as object || {}), t: 50, b: 80, l: 80, r: 40 };
+  l.margin = { ...(l.margin as object || {}), t: 50, b: 80, l: 80, r: 40 };
+  return l;
 }
 
-/** Re-render a plot with enhanced fonts using Plotly.newPlot. */
-async function replotWithFonts(Plotly: typeof window.Plotly, gd: any): Promise<void> {
-  const data = JSON.parse(JSON.stringify(gd.data));
-  const layout = JSON.parse(JSON.stringify(gd.layout));
-  const config = JSON.parse(JSON.stringify(gd._context || {}));
+/** Create a hidden div, plot with enhanced fonts, capture, and clean up. */
+async function capturePlotWithFonts(
+  Plotly: typeof window.Plotly,
+  data: unknown[],
+  layout: Record<string, unknown>,
+): Promise<string | null> {
+  const container = document.createElement('div');
+  container.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1000px;height:625px;';
+  document.body.appendChild(container);
 
-  enhanceLayout(layout);
-
-  await Plotly!.newPlot(gd, data, layout, config);
-  await new Promise(r => setTimeout(r, 1000));
+  try {
+    const enhancedLayout = cloneLayoutWithFonts(layout);
+    await Plotly!.newPlot(container, data, enhancedLayout, { staticPlot: true });
+    await new Promise(r => setTimeout(r, 800));
+    const img = await Plotly!.toImage(container, {
+      format: 'png', width: 1000, height: 625, scale: 1,
+    });
+    return img;
+  } catch {
+    return null;
+  } finally {
+    Plotly?.purge(container);
+    container.remove();
+  }
 }
 
-/** Capture a Plotly chart as base64 PNG from an iframe. */
+/** Capture a Plotly chart as base64 PNG from an iframe using off-screen clone. */
 async function capturePlotFromIframe(
   iframe: HTMLIFrameElement,
   containerSelector: string,
@@ -135,12 +131,7 @@ async function capturePlotFromIframe(
     const gd = plotlyEl as any;
     if (!gd || !gd.data || !gd.layout) return null;
 
-    // Re-render with larger fonts
-    await replotWithFonts(Plotly, gd);
-
-    return await Plotly.toImage(gd, {
-      format: 'png', width: 1000, height: 625, scale: 1,
-    });
+    return await capturePlotWithFonts(Plotly, gd.data, gd.layout);
   } catch {
     return null;
   }
@@ -169,13 +160,9 @@ async function captureAllFromIframe(
       const gd = plotlyEl as any;
       if (!gd || !gd.data || !gd.layout) continue;
 
-      await replotWithFonts(Plotly, gd);
-
-      const img = await Plotly.toImage(gd, {
-        format: 'png', width: 1000, height: 625, scale: 1,
-      });
-      images.push(img);
-    } catch { /* skip failed captures */ }
+      const img = await capturePlotWithFonts(Plotly, gd.data, gd.layout);
+      if (img) images.push(img);
+    } catch { /* skip */ }
   }
   return images;
 }
@@ -210,7 +197,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     const baseUrl = window.location.origin;
 
     try {
-      // 1. Capture volcano plot from the current page (already rendered)
+      // 1. Capture volcano plot from the current page (clone to off-screen div, don't mutate)
       const volcanoContainer = document.querySelector('[data-testid="volcano-plot"]');
       if (volcanoContainer && (window as any).Plotly) {
         const plotlyEl = volcanoContainer.querySelector('.js-plotly-plot') as HTMLElement;
@@ -218,12 +205,9 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
           try {
             const gd = plotlyEl as any;
             if (gd.data && gd.layout) {
-              await replotWithFonts((window as any).Plotly, gd);
+              const img = await capturePlotWithFonts((window as any).Plotly, gd.data, gd.layout);
+              if (img) images['volcano_plot'] = [img];
             }
-            const img = await (window as any).Plotly.toImage(plotlyEl, {
-              format: 'png', width: 1000, height: 625, scale: 1,
-            });
-            images['volcano_plot'] = [img];
           } catch { /* skip */ }
         }
       }
