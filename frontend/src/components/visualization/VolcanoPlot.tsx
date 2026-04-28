@@ -20,6 +20,7 @@ interface VolcanoPlotProps {
   data: DEResult[];
   filters: VolcanoFilters;
   selectedProteins: Set<string>;
+  markedProteins: Set<string>;
   onSelectProteins: (proteins: string[], mode?: 'click' | 'box' | 'lasso') => void;
   onSelectionModeChange?: (mode: 'click' | 'box' | 'lasso') => void;
   onClearSelection?: () => void;
@@ -31,6 +32,7 @@ export default function VolcanoPlot({
   data,
   filters,
   selectedProteins,
+  markedProteins,
   onSelectProteins,
   onSelectionModeChange,
   onClearSelection,
@@ -110,8 +112,30 @@ export default function VolcanoPlot({
         customdata: data.map((d) => d.master_protein_accessions),
         name: 'Proteins',
       },
+      // Marker labels trace -- only for marked proteins
+      {
+        x: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => d.log_fc),
+        y: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => -Math.log10(d.pval || 1e-300)),
+        mode: 'text' as const,
+        type: 'scatter' as const,
+        text: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => d.gene_name || d.master_protein_accessions.split(/[,;]/)[0].trim()),
+        textposition: 'top center' as const,
+        textfont: {
+          size: 10,
+          color: '#FFFFFF',
+          family: 'Arial, sans-serif',
+        },
+        texttemplate: '%{text}',
+        hoverinfo: 'skip',
+        showlegend: false,
+        marker: {
+          size: 0,
+          opacity: 0,
+        },
+        name: 'Markers',
+      },
     ];
-  }, [data, filters, selectedProteins]);
+  }, [data, filters, selectedProteins, markedProteins]);
 
   // Calculate threshold lines
   const thresholdShapes = useMemo(() => {
