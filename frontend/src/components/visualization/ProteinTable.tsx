@@ -12,7 +12,7 @@ interface ProteinTableProps {
   showSelectedOnly: boolean;
   onToggleShowSelected: () => void;
   filters: VolcanoFilters;
-  sessionConfig: { treatment: string; control: string } | null;
+  sessionConfig: { treatment: string; control: string; experiment: string } | null;
 }
 
 const ITEMS_PER_PAGE = 25;
@@ -139,7 +139,7 @@ export default function ProteinTable({
     });
 
     const filename = sessionConfig
-      ? `${sessionConfig.treatment}_vs_${sessionConfig.control}`
+      ? `${sessionConfig.experiment}_${sessionConfig.treatment}_vs_${sessionConfig.control}`
       : 'protein_results';
     exportToCSV(exportData, `${filename}.csv`);
   };

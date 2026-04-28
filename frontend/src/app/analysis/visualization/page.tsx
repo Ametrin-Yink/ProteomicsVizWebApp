@@ -21,13 +21,13 @@ function ResultsContent() {
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string } | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string; experiment: string } | null>(null);
 
   const [filters, setFilters] = useState<VolcanoFilters>({
     foldChange: 1,
     pValue: 0.05,
     adjPValue: 1,
-    s0: 0.05, // 5% of foldChange threshold
+    s0: 0.1, // 10% of foldChange threshold
   });
 
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
@@ -60,8 +60,13 @@ function ResultsContent() {
   useEffect(() => {
     async function fetchSessionConfig() {
       const session = await getSession(sessionId);
-      if (session?.config) {
-        setSessionConfig(session.config);
+      if (session) {
+        const experiment = session.files?.proteomics?.[0]?.experiment ?? '';
+        setSessionConfig({
+          treatment: session.config?.treatment ?? '',
+          control: session.config?.control ?? '',
+          experiment,
+        });
       }
     }
 
@@ -172,7 +177,9 @@ function ResultsContent() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Results</h1>
           <p className="text-gray-600 mt-2">
-            {sessionConfig ? `${sessionConfig.treatment} vs ${sessionConfig.control}` : 'Treatment vs Control'}
+            {sessionConfig
+              ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
+              : 'Treatment vs Control'}
           </p>
         </div>
 
