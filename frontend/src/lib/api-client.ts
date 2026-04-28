@@ -50,6 +50,7 @@ interface BackendSession {
 function mapBackendStatus(status: string): SessionStatus {
   const statusMap: Record<string, SessionStatus> = {
     'created': 'created',
+    'configuring': 'created',
     'uploading': 'uploading',
     'uploaded': 'uploaded',
     'processing': 'processing',

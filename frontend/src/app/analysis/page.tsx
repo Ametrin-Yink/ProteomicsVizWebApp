@@ -65,7 +65,17 @@ function AnalysisContent() {
             const session = await sessionsApi.get(sessionIdToLoad);
             setSessionId(session.id);
             localStorage.setItem('currentSessionId', session.id);
-            
+
+            // Redirect if session is already processing or completed
+            if (session.status === 'processing') {
+              router.replace(`/analysis/processing?session_id=${session.id}`);
+              return;
+            }
+            if (session.status === 'completed') {
+              router.replace(`/analysis/visualization?session_id=${session.id}`);
+              return;
+            }
+
             // Restore config if available (map AnalysisConfig to SessionConfig fields)
             if (session.config && 'conditions' in session.config) {
               const ac = session.config as { conditions?: string[] };

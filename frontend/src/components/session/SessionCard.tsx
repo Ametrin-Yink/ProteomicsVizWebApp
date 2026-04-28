@@ -354,7 +354,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
           </div>
         ) : (
           <>
-            <p data-testid="session-name" className="text-sm font-medium text-[#1a1a2e] truncate">
+            <p data-testid="session-name" className="text-sm font-medium text-[#1a1a2e] line-clamp-2 break-words">
               {session.name}
             </p>
             <p data-testid="session-status" className={cn('text-xs', status.color)}>

@@ -157,10 +157,38 @@ async def start_processing(
 
     # Check if already processing
     if session.state == SessionState.PROCESSING:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Session is already being processed"
-        )
+        # Check for stale processing state (pipeline started but no recent activity)
+        pipeline_state = await store.load_pipeline_state(session_id)
+        is_stale = False
+        if pipeline_state:
+            started_at = pipeline_state.get("started_at")
+            if started_at:
+                try:
+                    from datetime import datetime, timezone, timedelta
+                    started_time = datetime.fromisoformat(started_at)
+                    if started_time.tzinfo is None:
+                        started_time = started_time.replace(tzinfo=timezone.utc)
+                    elapsed = datetime.now(timezone.utc) - started_time
+                    # If processing started more than 6 hours ago with no completion, consider it stale
+                    if elapsed > timedelta(hours=6) and not pipeline_state.get("completed_at"):
+                        is_stale = True
+                        logger.warning(
+                            f"Stale processing state detected for {session_id}: "
+                            f"started {elapsed.total_seconds()/3600:.1f}h ago, resetting"
+                        )
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Failed to parse pipeline started_at for {session_id}: {e}")
+                    is_stale = True
+
+        if is_stale:
+            # Reset stale processing state and allow re-processing
+            session.state = SessionState.CREATED
+            await store.save(session)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Session is already being processed"
+            )
 
     # Validate session has configuration
     if not session.config:

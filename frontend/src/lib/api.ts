@@ -192,10 +192,9 @@ export const processingAPI = {
   },
 
   retryProcessing: (sessionId: string): Promise<StartProcessingResponse> => {
-    return fetch(`${API_BASE_URL}/api/sessions/${sessionId}/process`, {
+    return fetch(`${API_BASE_URL}/api/sessions/${sessionId}/retry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, retry: true }),
     }).then(async (response) => {
       if (!response.ok) {
         const error = await response.json().catch(() => ({

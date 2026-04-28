@@ -14,8 +14,9 @@ import {
   Plus,
   ChevronRight,
   FlaskConical,
-  FolderOpen,
-  History,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessionStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -43,7 +44,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const { sidebar, setSidebarCollapsed } = useUIStore();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<'all' | 'recent'>('all');
+  const [activeTab, setActiveTab] = React.useState<'active' | 'completed' | 'error'>('active');
   const [, setIsLoading] = React.useState(false);
 
   // Load sessions from backend on mount
@@ -60,41 +61,40 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     });
   }, [sessionsList]);
 
-  // Filter sessions based on active tab
-  const filteredSessions = React.useMemo(() => {
-    if (!Array.isArray(sortedSessions)) return [];
-    if (activeTab === 'recent') {
-      return sortedSessions.slice(0, 5);
-    }
-    return sortedSessions;
-  }, [sortedSessions, activeTab]);
-
-  // Group sessions by status
+  // Group sessions by status category
   const groupedSessions = React.useMemo(() => {
-    if (!Array.isArray(filteredSessions)) {
-      return { active: [], completed: [], other: [] };
+    if (!Array.isArray(sortedSessions)) {
+      return { active: [], completed: [], error: [] };
     }
-    const active = filteredSessions.filter((s) =>
+    const active = sortedSessions.filter((s) =>
       ['created', 'uploading', 'uploaded', 'processing'].includes(s.status)
     );
-    const completed = filteredSessions.filter((s) => s.status === 'completed');
-    const other = filteredSessions.filter((s) =>
+    const completed = sortedSessions.filter((s) => s.status === 'completed');
+    const error = sortedSessions.filter((s) =>
       ['error', 'cancelled'].includes(s.status)
     );
-    return { active, completed, other };
-  }, [filteredSessions]);
+    return { active, completed, error };
+  }, [sortedSessions]);
+
+  // Get sessions for the active tab
+  const tabSessions = React.useMemo(() => {
+    if (activeTab === 'active') return groupedSessions.active;
+    if (activeTab === 'completed') return groupedSessions.completed;
+    return groupedSessions.error;
+  }, [activeTab, groupedSessions]);
 
   // Handle session click
   const handleSessionClick = (session: Session) => {
     setCurrentSession(session);
-    
-    // Navigate based on session status, always include session ID
-    if (session.status === 'created' || session.status === 'uploading') {
+
+    // Navigate based on session status
+    if (session.status === 'created' || session.status === 'uploading' || session.status === 'uploaded') {
       router.push(`/analysis?session=${session.id}`);
     } else if (session.status === 'completed') {
       router.push(`/analysis/visualization?session_id=${session.id}`);
     } else {
-      router.push(`/analysis?session=${session.id}`);
+      // processing, error, cancelled → processing/log page
+      router.push(`/analysis/processing?session_id=${session.id}`);
     }
   };
 
@@ -256,30 +256,42 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
         {/* Tabs */}
         <div className="px-4 pb-2">
-          <div className="flex gap-1 p-1 bg-[#f8f9fc] rounded-lg">
+          <div className="flex gap-0.5 p-0.5 bg-[#f8f9fc] rounded-lg">
             <button
               className={cn(
-                'flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                activeTab === 'all'
+                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
+                activeTab === 'active'
                   ? 'bg-white text-[#E73564] shadow-sm'
                   : 'text-[#64748b] hover:text-[#1a1a2e]'
               )}
-              onClick={() => setActiveTab('all')}
+              onClick={() => setActiveTab('active')}
             >
-              <FolderOpen className="w-4 h-4" />
-              All ({sessionsList.length})
+              <Loader2 className="w-3.5 h-3.5" />
+              Active ({groupedSessions.active.length})
             </button>
             <button
               className={cn(
-                'flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                activeTab === 'recent'
+                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
+                activeTab === 'completed'
                   ? 'bg-white text-[#E73564] shadow-sm'
                   : 'text-[#64748b] hover:text-[#1a1a2e]'
               )}
-              onClick={() => setActiveTab('recent')}
+              onClick={() => setActiveTab('completed')}
             >
-              <History className="w-4 h-4" />
-              Recent
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Completed ({groupedSessions.completed.length})
+            </button>
+            <button
+              className={cn(
+                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
+                activeTab === 'error'
+                  ? 'bg-white text-[#E73564] shadow-sm'
+                  : 'text-[#64748b] hover:text-[#1a1a2e]'
+              )}
+              onClick={() => setActiveTab('error')}
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              Error ({groupedSessions.error.length})
             </button>
           </div>
         </div>
@@ -303,74 +315,25 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 {sessionError ? 'Try refreshing the page' : 'Create your first analysis'}
               </p>
             </div>
+          ) : tabSessions.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-[#64748b]">
+                No {activeTab} sessions
+              </p>
+            </div>
           ) : (
-            <>
-              {/* Active sessions */}
-              {groupedSessions.active.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    Active
-                  </h3>
-                  <div className="space-y-2">
-                    {groupedSessions.active.map((session) => (
-                      <MiniSessionCard
-                        key={session.id}
-                        session={session}
-                        isActive={currentSession?.id === session.id}
-                        onClick={() => handleSessionClick(session)}
-                        onDelete={() => handleDeleteSession(session.id)}
-                        onRename={(newName) => handleRenameSession(session.id, newName)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Completed sessions */}
-              {groupedSessions.completed.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    Completed
-                  </h3>
-                  <div className="space-y-2">
-                    {groupedSessions.completed.map((session) => (
-                      <MiniSessionCard
-                        key={session.id}
-                        session={session}
-                        isActive={currentSession?.id === session.id}
-                        onClick={() => handleSessionClick(session)}
-                        onDelete={() => handleDeleteSession(session.id)}
-                        onRename={(newName) => handleRenameSession(session.id, newName)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Other sessions */}
-              {groupedSessions.other.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-gray-500"></span>
-                    Other
-                  </h3>
-                  <div className="space-y-2">
-                    {groupedSessions.other.map((session) => (
-                      <MiniSessionCard
-                        key={session.id}
-                        session={session}
-                        isActive={currentSession?.id === session.id}
-                        onClick={() => handleSessionClick(session)}
-                        onDelete={() => handleDeleteSession(session.id)}
-                        onRename={(newName) => handleRenameSession(session.id, newName)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+            <div className="space-y-2">
+              {tabSessions.map((session) => (
+                <MiniSessionCard
+                  key={session.id}
+                  session={session}
+                  isActive={currentSession?.id === session.id}
+                  onClick={() => handleSessionClick(session)}
+                  onDelete={() => handleDeleteSession(session.id)}
+                  onRename={(newName) => handleRenameSession(session.id, newName)}
+                />
+              ))}
+            </div>
           )}
         </div>
 

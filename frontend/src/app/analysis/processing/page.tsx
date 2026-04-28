@@ -246,70 +246,70 @@ function ProcessingContent() {
     return () => clearInterval(pollInterval);
   }, [sessionId, isConnected, isComplete, error, setComplete, setLogs, syncStepProgress]);
 
-  // Note: Processing is now started by the analysis page BEFORE navigation
-  // This ensures we don't miss early progress updates (Steps 1-5)
-  // The WebSocket connects after navigation and receives all updates
-  // This useEffect is kept for backward compatibility with retry functionality
-  const [hasStarted, setHasStarted] = useState(false);
-  useEffect(() => {
-    // Only start processing if we're in a retry scenario (not initial load)
-    // This is detected by checking if steps have been reset
-    if (sessionId && isConnected && !hasStarted && !isComplete && !error) {
-      const currentStep = steps[0]?.status;
-      // If all steps are not_started, we might need to start processing
-      // (this would happen on a retry or manual refresh)
-      if (currentStep === 'not_started' && steps.every(s => s.status === 'not_started')) {
-        setHasStarted(true);
-        processingAPI.startProcessing(sessionId).catch((err) => {
-          console.error('Failed to start processing:', err);
-          setStartError(err instanceof Error ? err.message : 'Failed to start');
-        });
-      }
-    }
-  }, [sessionId, isConnected, hasStarted, isComplete, error, steps]);
+  // Note: Processing is started by the analysis page before navigation.
+  // Retry is handled by the handleRetry callback below.
+  // No auto-start on page load to avoid 409 conflicts with already-running sessions.
 
   // Initialize on mount
   useEffect(() => {
-    if (sessionId) {
-      setSessionId(sessionId);
-      initializeSteps(removeRazor);
-      // Set first step to processing while waiting for WebSocket
-      setFirstStepProcessing();
+    if (!sessionId) return;
 
-      // Fetch historical logs and state
-      const fetchLogs = async () => {
-        try {
-          console.log('Fetching logs for session:', sessionId);
-          const logData = await processingAPI.getLogs(sessionId);
-          console.log('Logs fetched:', logData);
+    // Fetch historical state FIRST, then initialize steps to match
+    // This ensures we don't reset to all-not_started for an already-running session
+    const initFromServer = async () => {
+      try {
+        const logData = await processingAPI.getLogs(sessionId);
+        console.log('Initial logs fetched for session:', sessionId, logData);
 
-          // Sync step progress from API (recovers missed WebSocket messages)
-          if (logData.completed_steps && logData.current_step) {
-            syncStepProgress(logData.completed_steps, logData.current_step);
-          }
+        // Initialize steps based on server state
+        initializeSteps(removeRazor);
 
-          if (logData.logs && logData.logs.length > 0) {
-            // Convert backend logs to LogEntry format with IDs
-            const logEntries: LogEntry[] = logData.logs.map((log) => ({
-              id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              level: log.level,
-              message: log.message,
-              timestamp: log.timestamp,
-              step: log.step,
-            }));
-            console.log('Setting logs:', logEntries.length, 'entries');
-            setLogs(logEntries);
-          } else {
-            console.log('No logs found in response');
-          }
-        } catch (err) {
-          console.error('Failed to fetch historical logs:', err);
+        // Sync step progress from API (recovers missed WebSocket messages)
+        if (logData.completed_steps && logData.current_step) {
+          syncStepProgress(logData.completed_steps, logData.current_step);
         }
-      };
 
-      fetchLogs();
-    }
-  }, [sessionId, removeRazor, setSessionId, initializeSteps, setLogs, setFirstStepProcessing, syncStepProgress]);
+        if (logData.logs && logData.logs.length > 0) {
+          // Convert backend logs to LogEntry format with IDs
+          const logEntries: LogEntry[] = logData.logs.map((log) => ({
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            level: log.level,
+            message: log.message,
+            timestamp: log.timestamp,
+            step: log.step,
+          }));
+          console.log('Setting initial logs:', logEntries.length, 'entries');
+          setLogs(logEntries);
+        }
+
+        // Handle already-complete sessions
+        if (logData.is_complete) {
+          setComplete({
+            session_id: sessionId,
+            outputs: (logData.outputs as {
+              psm_abundances: string;
+              protein_abundances: string;
+              diff_expression: string;
+              qc_results: string;
+              gsea_results: string;
+            } | undefined) ?? undefined,
+            duration: 0,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch initial state:', err);
+        // Fallback: initialize fresh steps
+        initializeSteps(removeRazor);
+        setFirstStepProcessing();
+      }
+
+      // Now set session ID in store — this triggers WebSocket connection
+      // Steps are already synced to server state by this point
+      setSessionId(sessionId);
+    };
+
+    initFromServer();
+  }, [sessionId, removeRazor, initializeSteps, syncStepProgress, setLogs, setSessionId, setComplete, setFirstStepProcessing]);
 
   // Note: Processing is started by the analysis page before navigation
   // This page only connects to WebSocket and displays progress
@@ -329,11 +329,12 @@ function ProcessingContent() {
   const handleRetry = useCallback(async () => {
     if (!sessionId) return;
 
-    retry();
     setStartError(null);
 
     try {
       await processingAPI.retryProcessing(sessionId);
+      // Reset store only after retry succeeds
+      retry();
     } catch (err) {
       setStartError(
         err instanceof Error ? err.message : 'Failed to retry processing'
