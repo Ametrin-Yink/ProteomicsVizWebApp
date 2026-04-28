@@ -206,6 +206,26 @@ for (i in seq_along(norm_medians)) {
 
 cat("Normalization complete\n")
 
+# Save normalization coefficients for peptide visualization
+# Normalization: peptide_norm = peptide_log2 - sample_median + max_median
+# Shift on log2 scale: max_median - sample_median
+# Multiplicative factor on linear scale: 2^(max_median - sample_median)
+norm_coeff_file <- file.path(dirname(output_file), "normalization_coefficients.tsv")
+cat("Writing normalization coefficients to:", norm_coeff_file, "\n")
+shift_log2 <- max_median - sample_medians
+linear_factors <- 2.0 ^ shift_log2
+norm_df <- data.frame(
+    Sample = colnames(peptide_log2_assay),
+    Log2Shift = shift_log2,
+    LinearFactor = linear_factors,
+    stringsAsFactors = FALSE
+)
+write.table(norm_df, file = norm_coeff_file, sep = "\t", row.names = FALSE, quote = FALSE)
+cat("Normalization coefficients saved\n")
+for (i in seq_along(shift_log2)) {
+    cat("  ", colnames(peptide_log2_assay)[i], ": log2_shift =", round(shift_log2[i], 4), ", factor =", round(linear_factors[i], 4), "\n")
+}
+
 # Aggregate to protein level using normalized log2 data
 cat("Aggregating peptides to protein level...\n")
 cat("Using robust summary aggregation (this may take a few minutes for large datasets)...\n")

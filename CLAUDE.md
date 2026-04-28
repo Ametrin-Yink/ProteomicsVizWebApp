@@ -341,12 +341,20 @@ taskkill //F //PID <PID>
 "C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "library(msqrob2); library(QFeatures); library(limma)"
 ```
 
-**Python code changes not picked up:**
+**Python code changes not picked up (IMPORTANT):**
+uvicorn's `--reload` mode on Windows can serve stale bytecode even after detecting file changes. **Always clear `__pycache__` BEFORE restarting the backend** when debugging:
 ```bash
-# Clear all __pycache__ directories recursively
+# 1. Kill all Python processes
+taskkill //F //IM python.exe
+
+# 2. Clear ALL bytecode cache (MANDATORY step - skipping this wastes time debugging old code)
 find backend -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
 find backend -name "*.pyc" -delete 2>/dev/null
+
+# 3. Restart backend with venv Python
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
 ```
+If a fix works in isolation (`python -c "..."`) but the API still fails, it is ALWAYS a cache issue. Clear `__pycache__` and restart — do NOT keep debugging against stale code.
 
 **Port 8000 in use (Windows):**
 

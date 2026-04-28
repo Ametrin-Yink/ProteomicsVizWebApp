@@ -114,38 +114,33 @@
             background: #e8f4f8;
         }
 
-        /* Stats grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
+        /* Stats section - simple solid blocks for reliable PDF rendering */
+        .stats-section {
             margin: 20px 0;
         }
 
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
+        .stat-item {
+            display: inline-block;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            padding: 12px 30px;
+            border-radius: 0;
             text-align: center;
+            margin-right: 15px;
+            margin-bottom: 10px;
         }
 
-        .stat-card h3 {
-            font-size: 24pt;
+        .stat-item h3 {
+            font-size: 28pt;
             margin-bottom: 5px;
+            color: #2c3e50;
         }
 
-        .stat-card p {
-            font-size: 10pt;
-            opacity: 0.9;
-        }
-
-        .stat-card.success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        }
-
-        .stat-card.danger {
-            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        .stat-item p {
+            font-size: 11pt;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         /* Configuration table */
@@ -211,10 +206,44 @@
         /* Protein table */
         .protein-table {
             font-size: 9pt;
+            table-layout: auto;
+            width: 100%;
+            page-break-inside: auto;
+        }
+
+        .protein-table thead {
+            display: table-header-group;
+        }
+
+        .protein-table tr {
+            page-break-inside: avoid;
         }
 
         .protein-table th {
             background: #2c3e50;
+        }
+
+        .protein-table td:nth-child(1) {
+            width: 25%;
+        }
+
+        .protein-table td:nth-child(2) {
+            width: 15%;
+        }
+
+        .protein-table td:nth-child(3) {
+            width: 12%;
+            white-space: nowrap;
+        }
+
+        .protein-table td:nth-child(4) {
+            width: 15%;
+            white-space: nowrap;
+        }
+
+        .protein-table td:nth-child(5) {
+            width: 12%;
+            white-space: nowrap;
         }
 
         .protein-table .significant {
@@ -398,16 +427,26 @@
         <div class="section">
             <h2 class="section-title">3. Differential Expression Results</h2>
 
-            <div class="stats-grid">
-                <div class="stat-card">
+            <div class="stats-section">
+                <div class="stat-item">
                     <h3>{{ results.total_proteins }}</h3>
-                    <p>Total Proteins</p>
+                    <p>Total Proteins Identified</p>
                 </div>
-                {% if results.significant_proteins %}
-                <div class="stat-card success">
+                {% if results.significant_proteins is not none and results.significant_proteins > 0 %}
+                <div class="stat-item">
                     <h3>{{ results.significant_proteins }}</h3>
-                    <p>Significant Proteins</p>
+                    <p>Total DE Proteins</p>
                 </div>
+                {% if results.upregulated is not none and results.downregulated is not none %}
+                <div class="stat-item">
+                    <h3>{{ results.upregulated }}</h3>
+                    <p>Upregulated</p>
+                </div>
+                <div class="stat-item">
+                    <h3>{{ results.downregulated }}</h3>
+                    <p>Downregulated</p>
+                </div>
+                {% endif %}
                 {% endif %}
             </div>
 
@@ -425,7 +464,6 @@
 
             {% if results.top_proteins %}
             <h3 class="section-subtitle">Top 50 Significant Proteins</h3>
-            <div style="max-height: 500px; overflow-y: auto;">
                 <table class="protein-table">
                     <thead>
                         <tr>
@@ -450,7 +488,6 @@
                         {% endfor %}
                     </tbody>
                 </table>
-            </div>
             {% endif %}
         </div>
         {% endif %}

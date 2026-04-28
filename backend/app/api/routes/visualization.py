@@ -886,7 +886,8 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
     """Load peptide abundance data from Parquet or TSV file.
 
     Aggregates PSMs into peptides by summing abundances for each unique
-    peptide sequence across samples.
+    peptide sequence across samples. Applies normalization coefficients
+    from Step 6 so peptide abundances are on the same scale as protein abundances.
 
     Args:
         results_dir: Path to session results directory
@@ -900,6 +901,18 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
     cached = viz_cache.get(cache_key)
     if cached is not None:
         return cached
+
+    # Load normalization coefficients from Step 6
+    norm_coeff_file = results_dir / "normalization_coefficients.tsv"
+    norm_factors = {}
+    if norm_coeff_file.exists():
+        try:
+            coeff_df = await asyncio.to_thread(pd.read_csv, norm_coeff_file, sep='\t')
+            for _, row in coeff_df.iterrows():
+                norm_factors[row['Sample']] = float(row['LinearFactor'])
+            logger.debug(f"Loaded normalization coefficients for {len(norm_factors)} samples")
+        except Exception as e:
+            logger.warning(f"Could not load normalization coefficients: {e}")
 
     # Pipeline uses Parquet for performance, fall back to TSV for compatibility
     psm_parquet = results_dir / "PSM_Abundances.parquet"
@@ -946,7 +959,11 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
             for s in all_samples:
                 if s in sample_sums:
                     samples.append(s)
-                    abundances.append(sample_sums[s])
+                    # Apply normalization coefficient if available
+                    val = sample_sums[s]
+                    if s in norm_factors:
+                        val *= norm_factors[s]
+                    abundances.append(val)
 
             if samples:
                 peptides.append({

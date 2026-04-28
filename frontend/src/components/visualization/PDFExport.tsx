@@ -18,15 +18,19 @@ interface PDFExportProps {
 
 type PDFStatus = 'idle' | 'generating' | 'ready' | 'error';
 
-/** Wait for an element to appear in the iframe's document. */
-function waitForElement(doc: Document, selector: string, timeoutMs: number): Promise<Element | null> {
+/** Wait for an element to appear inside a container. */
+function waitForElement(
+  root: Document | Element,
+  selector: string,
+  timeoutMs: number,
+): Promise<Element | null> {
   return new Promise((resolve) => {
-    const el = doc.querySelector(selector);
+    const el = root.querySelector(selector);
     if (el) { resolve(el); return; }
 
     const start = Date.now();
     const timer = setInterval(() => {
-      const found = doc.querySelector(selector);
+      const found = root.querySelector(selector);
       if (found) { clearInterval(timer); resolve(found); return; }
       if (Date.now() - start > timeoutMs) { clearInterval(timer); resolve(null); }
     }, 200);
@@ -41,15 +45,18 @@ async function capturePlotFromIframe(
   const doc = iframe.contentDocument;
   if (!doc) return null;
 
-  // Wait for the Plotly element to render
+  // Wait for the container element to render
   const container = await waitForElement(doc, containerSelector, 30000);
   if (!container) return null;
 
-  const plotlyEl = container.querySelector('.js-plotly-plot') as HTMLElement;
+  // Wait for the Plotly element INSIDE the container to render
+  // The container div is rendered immediately by React, but .js-plotly-plot
+  // only appears after the dynamic Plotly import finishes loading
+  const plotlyEl = await waitForElement(container, '.js-plotly-plot', 15000);
   if (!plotlyEl || !iframe.contentWindow?.Plotly) return null;
 
   try {
-    return await iframe.contentWindow.Plotly.toImage(plotlyEl, {
+    return await iframe.contentWindow.Plotly.toImage(plotlyEl as HTMLElement, {
       format: 'png', width: 1200, height: 800, scale: 2,
     });
   } catch {

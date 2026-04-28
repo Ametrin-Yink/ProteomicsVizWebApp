@@ -208,12 +208,10 @@ class ReportGenerator:
         report_request: ReportRequest
     ) -> dict[str, Any]:
         """Prepare results section using frontend-captured volcano plot image."""
-        results: dict[str, Any] = {
-            "total_proteins": analysis_result.total_proteins,
-        }
+        images = report_request.images or {}
+        results: dict[str, Any] = {}
 
         # Use frontend-captured volcano plot image if provided
-        images = report_request.images or {}
         if report_request.include_volcano_plot and "volcano_plot" in images:
             results["volcano_plot_image"] = images["volcano_plot"][0]
 
@@ -221,6 +219,9 @@ class ReportGenerator:
             diff_path = Path(analysis_result.diff_expression_path)
             if diff_path.exists():
                 df = await asyncio.to_thread(pd.read_csv, diff_path, sep='\t')
+
+                # Total proteins = rows in diff expression table (matches Protein_Abundances)
+                results["total_proteins"] = len(df)
 
                 # Calculate significant count using user filters
                 fc = report_request.fold_change
@@ -240,6 +241,8 @@ class ReportGenerator:
                         y = -df[pcol].apply(lambda x: np.log10(max(x, 1e-300)))
                         sig_mask = (abs_x > s0) & (y > c / (abs_x - s0))
                     results["significant_proteins"] = int(sig_mask.sum())
+                    results["upregulated"] = int((sig_mask & (df[fcol] > 0)).sum())
+                    results["downregulated"] = int((sig_mask & (df[fcol] < 0)).sum())
 
                 # Prepare top significant proteins table (top 50 by p-value)
                 if report_request.include_protein_table:
@@ -280,9 +283,9 @@ class ReportGenerator:
     ) -> list[dict[str, Any]]:
         """Prepare top significant proteins table."""
         logfc_col = self._find_col(df, ['logFC', 'log_fc', 'Log2FC', 'log2fc'])
-        pval_col = self._find_col(df, ['pval', 'adj.P.Val', 'p_value', 'P.Value'])
-        protein_col = self._find_col(df, ['Protein', 'master_protein_accessions', 'protein'])
-        gene_col = self._find_col(df, ['Gene', 'gene_name', 'gene'])
+        pval_col = self._find_col(df, ['pval', 'adj.P.Val', 'adjPval', 'p_value', 'P.Value'])
+        protein_col = self._find_col(df, ['Master_Protein_Accessions', 'Protein', 'master_protein_accessions', 'protein'])
+        gene_col = self._find_col(df, ['Gene_Name', 'Gene', 'gene_name', 'gene'])
         if logfc_col is None:
             logfc_col = 'logFC'
         if pval_col is None:
@@ -356,6 +359,13 @@ class ReportGenerator:
 
         return qc_section
 
+    @staticmethod
+    def _format_pval(val: float) -> str:
+        """Format p-value, handling zero values gracefully."""
+        if val == 0:
+            return "< 1.0e-300"
+        return f"{val:.2e}"
+
     def _prepare_gsea_section(
         self,
         gsea_results: dict[str, GSEAResults],
@@ -386,8 +396,8 @@ class ReportGenerator:
                     "term": result.term,
                     "name": result.name,
                     "nes": round(result.nes, 3),
-                    "pval": f"{result.pval:.2e}",
-                    "fdr": f"{result.fdr:.2e}",
+                    "pval": self._format_pval(result.pval),
+                    "fdr": self._format_pval(result.fdr),
                     "direction": result.enrichment_direction,
                     "matched_genes": result.matched_genes,
                 })

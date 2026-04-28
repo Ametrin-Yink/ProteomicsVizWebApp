@@ -106,18 +106,18 @@ class Msqrob2Wrapper:
         stdout_thread.start()
         stderr_thread.start()
 
-        # Wait for process to complete with timeout
+        # Wait for process to complete with timeout (non-blocking)
         try:
-            process.wait(timeout=self.timeout)
+            await asyncio.to_thread(process.wait, timeout=self.timeout)
         except subprocess.TimeoutExpired:
             process.kill()
-            stdout_thread.join(timeout=5)
-            stderr_thread.join(timeout=5)
+            await asyncio.to_thread(stdout_thread.join, timeout=5)
+            await asyncio.to_thread(stderr_thread.join, timeout=5)
             raise
 
         # Wait for output threads to finish
-        stdout_thread.join()
-        stderr_thread.join()
+        await asyncio.to_thread(stdout_thread.join)
+        await asyncio.to_thread(stderr_thread.join)
 
         stdout_str = '\n'.join(stdout_lines)
         stderr_str = '\n'.join(stderr_lines)
