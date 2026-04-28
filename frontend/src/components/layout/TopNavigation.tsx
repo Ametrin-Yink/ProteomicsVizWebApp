@@ -16,7 +16,6 @@ const navLinks = [
   { href: '/', label: 'Home', id: 'home' },
   // Analysis removed - all operations in right panel
   { href: '/about', label: 'About', id: 'about' },
-  { href: '/documentation', label: 'Documentation', id: 'docs' },
 ];
 
 export const TopNavigation: React.FC = () => {

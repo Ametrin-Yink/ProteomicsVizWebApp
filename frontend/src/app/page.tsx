@@ -213,8 +213,8 @@ export default function HomePage() {
           <div className="mt-12 text-center">
             <p className="text-sm text-gray-500">
               Need help getting started?{' '}
-              <a 
-                href="#docs" 
+              <a
+                href="/about"
                 data-testid="help-link"
                 className="text-cyan-600 hover:text-cyan-700 font-medium"
               >

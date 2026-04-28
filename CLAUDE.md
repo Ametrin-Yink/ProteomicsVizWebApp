@@ -11,31 +11,34 @@ Proteomics Visualization Web App - A full-stack scientific data analysis platfor
 - Backend: FastAPI, Python 3.11+, Pydantic, asyncio
 - Analysis: R 4.3+, msqrob2, QFeatures, limma, gseapy
 
-## Environment Setup
+## Quick Start (Dev)
 
 ```bash
-# Backend dependencies (use existing venv)
+# Install deps (first time)
 cd backend && .venv/Scripts/python.exe -m pip install -r requirements.txt
+cd ../frontend && npm install
+cd ../Tests && npm install
 
-# Frontend dependencies
-cd frontend && npm install
-
-# Test dependencies
-cd Tests && npm install
-```
-
-## Common Commands
-
-### Development (Start Both Services)
-```bash
 # Terminal 1 - Backend (use backend venv)
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
 
 # Terminal 2 - Frontend
 cd frontend && npm run dev
-
 # Access at http://localhost:3000
 ```
+
+## System Paths (This Machine)
+
+**Python:**
+- Backend venv: `backend/.venv/Scripts/python.exe` (Python 3.12.10, has all deps)
+- **Always use the venv Python** for running backend code and tests
+
+**R:**
+- Installation: `C:/Program Files/R/R-4.5.1/`
+- Rscript: `C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe` (also on PATH)
+- Use full path if `Rscript` not found in PATH
+
+## Common Commands
 
 ### Testing
 ```bash
@@ -66,21 +69,10 @@ cd backend && ruff check .
 cd backend && ruff format .
 ```
 
-### R Package Verification (Critical)
+### R Package Verification
 ```bash
 "C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "library(msqrob2); library(QFeatures); library(limma); cat('OK\n')"
 ```
-
-## System Paths (This Machine)
-
-**Python:**
-- Backend venv: `backend/.venv/Scripts/python.exe` (Python 3.12.10, has all deps)
-- **Always use the venv Python** for running backend code and tests
-
-**R:**
-- Installation: `C:/Program Files/R/R-4.5.1/`
-- Rscript: `C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe` (also on PATH)
-- Use full path if `Rscript` not found in PATH
 
 ## High-Level Architecture
 
@@ -358,22 +350,28 @@ find backend -name "*.pyc" -delete 2>/dev/null
 
 **Port 8000 in use (Windows):**
 
-Uvicorn's `--reload` mode spawns a parent reloader + child worker processes. Killing only the parent leaves orphaned children holding the port.
+Uvicorn's `--reload` mode spawns a parent reloader + child worker processes. Killing only the parent leaves orphaned children holding the port. **Additionally, a stale system Python uvicorn** (`AppData\Local\Programs\Python\Python312\python.exe`) may coexist with the venv one and serve old code.
 
 ```bash
 # 1. Find all PIDs on port 8000
 netstat -ano | findstr ":8000 " | findstr "LISTENING"
 
-# 2. Find the actual Python processes (these are the children holding the port)
-powershell -Command "Get-WmiObject Win32_Process -Filter \"Name='python.exe'\" | Select-Object ProcessId | ForEach-Object { $_.ProcessId }"
-
-# 3. Kill the child workers (not the parent — it may already be dead)
-# Look for processes with parent_pid matching the PIDs from step 1, or just kill all python workers:
+# 2. Kill ALL Python processes (both venv and system Python — zombies can't be killed by PID alone)
 taskkill //F //IM python.exe
 
-# Alternative: find children of the dead parent PIDs and kill only those
-powershell -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ParentProcessId -in (31596,16648) } | ForEach-Object { taskkill //F //PID \$_.ProcessId }"
-```
+# 3. Verify port is free (should show nothing)
+netstat -ano | findstr ":8000 " | findstr "LISTENING"
+
+# 4. Start backend with venv Python only
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+
+# 5. Verify correct routes (should show /peptide, NOT /psm)
+curl -s http://localhost:8000/openapi.json | python -c "
+import sys, json
+data = json.load(sys.stdin)
+for p in sorted(data['paths']):
+    if 'protein' in p: print(p, list(data['paths'][p].keys()))
+"
 ```
 
 **Test failures:**
@@ -400,18 +398,6 @@ rm -rf backend/.venv
 cd backend && python -m venv .venv
 cd backend && .venv/Scripts/activate
 pip install -r requirements.txt
-```
-
-## Quick Start (Windows)
-
-See **System Paths** section above for Python and R locations.
-
-```bash
-# Terminal 1 - Backend
-cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
-
-# Terminal 2 - Frontend
-cd frontend && npm run dev
 ```
 
 ## Common Bug Patterns to Avoid
