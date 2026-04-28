@@ -3,6 +3,7 @@ PDF converter helper script - runs Playwright with default event loop.
 Usage: python pdf_converter.py <html_file> <output_pdf>
 """
 import sys
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -11,8 +12,8 @@ def main():
         print(f"Usage: {sys.argv[0]} <html_file> <output_pdf>", file=sys.stderr)
         sys.exit(1)
 
-    html_file = sys.argv[1]
-    output_pdf = sys.argv[2]
+    html_file = Path(sys.argv[1]).resolve()
+    output_pdf = Path(sys.argv[2]).resolve()
 
     with open(html_file, encoding='utf-8') as f:
         html_content = f.read()
