@@ -40,28 +40,65 @@ function waitForElement(
 
 /** Apply font size overrides to a Plotly layout object. */
 function enhanceLayout(layout: Record<string, unknown>): void {
-  layout.font = { ...(layout.font as object || {}), size: 22 };
+  // Global font - large to survive PDF scaling
+  layout.font = { family: 'Arial, sans-serif', size: 36, color: '#111827' };
 
+  // X-axis
   if (layout.xaxis) {
     const xa = layout.xaxis as Record<string, unknown>;
-    xa.tickfont = { ...(xa.tickfont as object || {}), size: 18 };
-    xa.titlefont = { ...(xa.titlefont as object || {}), size: 20 };
-    if (xa.title && typeof xa.title === 'object') {
-      (xa.title as Record<string, unknown>).font = { ...((xa.title as Record<string, unknown>).font as object || {}), size: 20 };
+    xa.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
+    xa.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+    if (typeof xa.title === 'object' && xa.title !== null) {
+      const titleObj = xa.title as Record<string, unknown>;
+      titleObj.font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
     }
   }
 
+  // Y-axis
   if (layout.yaxis) {
     const ya = layout.yaxis as Record<string, unknown>;
-    ya.tickfont = { ...(ya.tickfont as object || {}), size: 18 };
-    ya.titlefont = { ...(ya.titlefont as object || {}), size: 20 };
-    if (ya.title && typeof ya.title === 'object') {
-      (ya.title as Record<string, unknown>).font = { ...((ya.title as Record<string, unknown>).font as object || {}), size: 20 };
+    ya.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
+    ya.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+    if (typeof ya.title === 'object' && ya.title !== null) {
+      const titleObj = ya.title as Record<string, unknown>;
+      titleObj.font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
     }
   }
 
+  // Secondary axes
+  for (let i = 2; i <= 4; i++) {
+    const xKey = `xaxis${i}` as string;
+    const yKey = `yaxis${i}` as string;
+    if (layout[xKey]) {
+      const ax = layout[xKey] as Record<string, unknown>;
+      ax.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
+      ax.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+      if (typeof ax.title === 'object' && ax.title !== null) {
+        (ax.title as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+      }
+    }
+    if (layout[yKey]) {
+      const ay = layout[yKey] as Record<string, unknown>;
+      ay.tickfont = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
+      ay.titlefont = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+      if (typeof ay.title === 'object' && ay.title !== null) {
+        (ay.title as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 32, color: '#111827' };
+      }
+    }
+  }
+
+  // Legend
   if (layout.legend) {
-    (layout.legend as Record<string, unknown>).font = { ...((layout.legend as Record<string, unknown>).font as object || {}), size: 16 };
+    (layout.legend as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 26, color: '#111827' };
+  }
+
+  // Annotations
+  if (Array.isArray(layout.annotations)) {
+    for (const ann of layout.annotations) {
+      if (ann && typeof ann === 'object') {
+        (ann as Record<string, unknown>).font = { family: 'Arial, sans-serif', size: 28, color: '#111827' };
+      }
+    }
   }
 
   layout.margin = { ...(layout.margin as object || {}), t: 50, b: 80, l: 80, r: 40 };
@@ -102,7 +139,7 @@ async function capturePlotFromIframe(
     await replotWithFonts(Plotly, gd);
 
     return await Plotly.toImage(gd, {
-      format: 'png', width: 1600, height: 1000, scale: 2,
+      format: 'png', width: 1000, height: 625, scale: 1,
     });
   } catch {
     return null;
@@ -135,7 +172,7 @@ async function captureAllFromIframe(
       await replotWithFonts(Plotly, gd);
 
       const img = await Plotly.toImage(gd, {
-        format: 'png', width: 1600, height: 1000, scale: 2,
+        format: 'png', width: 1000, height: 625, scale: 1,
       });
       images.push(img);
     } catch { /* skip failed captures */ }
@@ -184,7 +221,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
               await replotWithFonts((window as any).Plotly, gd);
             }
             const img = await (window as any).Plotly.toImage(plotlyEl, {
-              format: 'png', width: 1600, height: 1000, scale: 2,
+              format: 'png', width: 1000, height: 625, scale: 1,
             });
             images['volcano_plot'] = [img];
           } catch { /* skip */ }

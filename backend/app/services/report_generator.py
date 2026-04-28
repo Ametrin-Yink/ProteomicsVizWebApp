@@ -285,7 +285,7 @@ class ReportGenerator:
         adj_pval_thresh: float = 1.0,
         s0: float = 0.0,
     ) -> list[dict[str, Any]]:
-        """Prepare top significant proteins table."""
+        """Prepare top significant proteins table, ranked by significance score."""
         logfc_col = self._find_col(df, ['logFC', 'log_fc', 'Log2FC', 'log2fc'])
         pval_col = self._find_col(df, ['pval', 'adj.P.Val', 'adjPval', 'p_value', 'P.Value'])
         protein_col = self._find_col(df, ['Master_Protein_Accessions', 'Protein', 'master_protein_accessions', 'protein'])
@@ -296,9 +296,18 @@ class ReportGenerator:
         if pval_col is None:
             pval_col = 'pval'
 
-        # Sort by adjusted p-value (matches web app default sort)
-        sort_col = adjpval_col if adjpval_col else pval_col
-        df_sorted = df.nsmallest(n, sort_col)
+        # Rank by significance: significant proteins first, then by p-value within each group
+        df = df.copy()
+        df['_is_sig'] = df.apply(
+            lambda r: self._is_significant(
+                r.get(logfc_col, 0), r.get(pval_col, 1),
+                r.get(adjpval_col, r.get(pval_col, 1)) if adjpval_col else r.get(pval_col, 1),
+                fc, pval_thresh, adj_pval_thresh, s0
+            ),
+            axis=1,
+        )
+        df['_pval_sort'] = df[pval_col].clip(lower=1e-300)
+        df_sorted = df.sort_values(['_is_sig', '_pval_sort'], ascending=[False, True]).head(n)
 
         table_data = []
         for _, row in df_sorted.iterrows():
