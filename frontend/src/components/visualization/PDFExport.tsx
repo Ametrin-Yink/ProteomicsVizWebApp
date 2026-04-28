@@ -37,6 +37,51 @@ function waitForElement(
   });
 }
 
+/** Increase Plotly font sizes before capturing as image. */
+async function enhancePlotFonts(iframe: HTMLIFrameElement, plotlyEl: HTMLElement): Promise<void> {
+  const Plotly = iframe.contentWindow!.Plotly;
+  // Get current plot layout
+  const gd = plotlyEl as any;
+  if (!gd || !gd.layout) return;
+
+  // Scale up all font sizes for PDF readability
+  Plotly.relayout(gd, {
+    'font.size': 16,
+    'xaxis.title.font.size': 16,
+    'yaxis.title.font.size': 16,
+    'xaxis.tickfont.size': 14,
+    'yaxis.tickfont.size': 14,
+    'legend.font.size': 14,
+    'margin.t': 50,
+    'margin.b': 80,
+    'margin.l': 80,
+    'margin.r': 40,
+  });
+  // Wait for relayout to complete
+  await new Promise(r => setTimeout(r, 500));
+}
+
+/** Same as enhancePlotFonts but for the main window (no iframe). */
+async function enhancePlotFontsMain(plotlyEl: HTMLElement): Promise<void> {
+  const Plotly = (window as any).Plotly;
+  const gd = plotlyEl as any;
+  if (!gd || !gd.layout) return;
+
+  Plotly.relayout(gd, {
+    'font.size': 16,
+    'xaxis.title.font.size': 16,
+    'yaxis.title.font.size': 16,
+    'xaxis.tickfont.size': 14,
+    'yaxis.tickfont.size': 14,
+    'legend.font.size': 14,
+    'margin.t': 50,
+    'margin.b': 80,
+    'margin.l': 80,
+    'margin.r': 40,
+  });
+  await new Promise(r => setTimeout(r, 500));
+}
+
 /** Capture a Plotly chart as base64 PNG from an iframe. */
 async function capturePlotFromIframe(
   iframe: HTMLIFrameElement,
@@ -50,14 +95,14 @@ async function capturePlotFromIframe(
   if (!container) return null;
 
   // Wait for the Plotly element INSIDE the container to render
-  // The container div is rendered immediately by React, but .js-plotly-plot
-  // only appears after the dynamic Plotly import finishes loading
   const plotlyEl = await waitForElement(container, '.js-plotly-plot', 15000);
   if (!plotlyEl || !iframe.contentWindow?.Plotly) return null;
 
   try {
+    // Enhance fonts for PDF readability
+    await enhancePlotFonts(iframe, plotlyEl as HTMLElement);
     return await iframe.contentWindow.Plotly.toImage(plotlyEl as HTMLElement, {
-      format: 'png', width: 1200, height: 800, scale: 2,
+      format: 'png', width: 1400, height: 900, scale: 2,
     });
   } catch {
     return null;
@@ -83,8 +128,9 @@ async function captureAllFromIframe(
     const plotlyEl = allContainers[i].querySelector('.js-plotly-plot') as HTMLElement;
     if (!plotlyEl) continue;
     try {
+      await enhancePlotFonts(iframe, plotlyEl);
       const img = await iframe.contentWindow!.Plotly.toImage(plotlyEl, {
-        format: 'png', width: 1200, height: 800, scale: 2,
+        format: 'png', width: 1400, height: 900, scale: 2,
       });
       images.push(img);
     } catch { /* skip failed captures */ }
@@ -128,8 +174,9 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         const plotlyEl = volcanoContainer.querySelector('.js-plotly-plot') as HTMLElement;
         if (plotlyEl) {
           try {
+            await enhancePlotFontsMain(plotlyEl);
             const img = await (window as any).Plotly.toImage(plotlyEl, {
-              format: 'png', width: 1200, height: 800, scale: 2,
+              format: 'png', width: 1400, height: 900, scale: 2,
             });
             images['volcano_plot'] = [img];
           } catch { /* skip */ }

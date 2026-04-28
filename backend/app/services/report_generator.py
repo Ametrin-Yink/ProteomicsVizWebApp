@@ -310,6 +310,7 @@ class ReportGenerator:
                 "gene": row.get(gene_col, "N/A") if gene_col else "N/A",
                 "log_fc": round(row_log_fc, 3),
                 "pval": f"{row_pval:.2e}" if pval_col in row else "N/A",
+                "adj_pval": f"{row_adj_pval:.2e}" if adjpval_col and adjpval_col in row else "N/A",
                 "significant": is_sig,
             }
             table_data.append(entry)
