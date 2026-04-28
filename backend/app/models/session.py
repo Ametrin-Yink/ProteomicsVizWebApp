@@ -96,6 +96,8 @@ class Session(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     error_message: Optional[str] = None
+    markers: list[str] = Field(default_factory=list, description="Marked protein accessions for volcano plot labels")
+    volcano_filters: Optional[dict[str, Any]] = Field(default=None, description="Volcano plot filter settings (foldChange, pValue, adjPValue, s0)")
     
     model_config = {
         "from_attributes": True,
