@@ -38,11 +38,12 @@ function waitForElement(
   });
 }
 
-/** Deep-clone a layout and apply fonts sized to match report body text (~9.5pt).
+/** Deep-clone a layout and apply fonts for PDF readability.
  *
- * The 1000px image shrinks ~0.67x when rendered full-width in PDF.
- * To end up at ~10pt in the PDF, we set source fonts to ~15pt.
- * For 2-column grid plots (~0.33x scale), fonts land at ~5pt which is still readable.
+ * Capture at 500px wide to match 2-column grid display width in PDF (~314px).
+ * 500px → 314px = 63% scale. Source 15pt → ~9.5pt in PDF (matches body text).
+ * Full-width volcano plot (500px → ~664px in PDF) gets scaled to 75% via CSS
+ * so fonts land at ~11pt, still consistent with the grid plots.
  */
 function cloneLayoutWithFonts(layout: Record<string, unknown>): Record<string, unknown> {
   const l = JSON.parse(JSON.stringify(layout));
@@ -93,7 +94,8 @@ async function capturePlotWithFonts(
   layout: Record<string, unknown>,
 ): Promise<string | null> {
   const container = document.createElement('div');
-  container.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1000px;height:625px;';
+  // Capture at 500px to match 2-column grid display in PDF
+  container.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:500px;height:312px;';
   document.body.appendChild(container);
 
   try {
@@ -101,7 +103,7 @@ async function capturePlotWithFonts(
     await Plotly!.newPlot(container, data, enhancedLayout, { staticPlot: true });
     await new Promise(r => setTimeout(r, 800));
     const img = await Plotly!.toImage(container, {
-      format: 'png', width: 1000, height: 625, scale: 1,
+      format: 'png', width: 500, height: 312, scale: 1,
     });
     return img;
   } catch {
