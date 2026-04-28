@@ -40,25 +40,46 @@ function waitForElement(
 /** Increase Plotly font sizes before capturing as image. */
 async function enhancePlotFonts(iframe: HTMLIFrameElement, plotlyEl: HTMLElement): Promise<void> {
   const Plotly = iframe.contentWindow!.Plotly;
-  // Get current plot layout
   const gd = plotlyEl as any;
   if (!gd || !gd.layout) return;
 
-  // Scale up all font sizes for PDF readability (larger than screen)
-  Plotly.relayout(gd, {
+  const layout = gd.layout;
+
+  // Global font
+  layout.font = { ...layout.font, size: 20 };
+
+  // Axis fonts — use titlefont (the relayout-compatible alias)
+  if (layout.xaxis) {
+    layout.xaxis.tickfont = { ...layout.xaxis.tickfont, size: 16 };
+    layout.xaxis.titlefont = { ...layout.xaxis.titlefont, size: 18 };
+  }
+  if (layout.yaxis) {
+    layout.yaxis.tickfont = { ...layout.yaxis.tickfont, size: 16 };
+    layout.yaxis.titlefont = { ...layout.yaxis.titlefont, size: 18 };
+  }
+
+  // Legend
+  if (layout.legend) {
+    layout.legend.font = { ...layout.legend.font, size: 15 };
+  }
+
+  // Margins
+  layout.margin = { ...layout.margin, t: 50, b: 80, l: 80, r: 40 };
+
+  // Trigger layout re-render using dotted paths (Plotly requires these for relayout)
+  await Plotly.relayout(gd, {
     'font.size': 20,
-    'xaxis.title.font.size': 18,
-    'yaxis.title.font.size': 18,
-    'xaxis.tickfont.size': 15,
-    'yaxis.tickfont.size': 15,
+    'xaxis.titlefont.size': 18,
+    'yaxis.titlefont.size': 18,
+    'xaxis.tickfont.size': 16,
+    'yaxis.tickfont.size': 16,
     'legend.font.size': 15,
     'margin.t': 50,
     'margin.b': 80,
     'margin.l': 80,
     'margin.r': 40,
   });
-  // Wait for relayout to complete
-  await new Promise(r => setTimeout(r, 500));
+  await new Promise(r => setTimeout(r, 800));
 }
 
 /** Same as enhancePlotFonts but for the main window (no iframe). */
@@ -67,19 +88,38 @@ async function enhancePlotFontsMain(plotlyEl: HTMLElement): Promise<void> {
   const gd = plotlyEl as any;
   if (!gd || !gd.layout) return;
 
-  Plotly.relayout(gd, {
+  const layout = gd.layout;
+
+  layout.font = { ...layout.font, size: 20 };
+
+  if (layout.xaxis) {
+    layout.xaxis.tickfont = { ...layout.xaxis.tickfont, size: 16 };
+    layout.xaxis.titlefont = { ...layout.xaxis.titlefont, size: 18 };
+  }
+  if (layout.yaxis) {
+    layout.yaxis.tickfont = { ...layout.yaxis.tickfont, size: 16 };
+    layout.yaxis.titlefont = { ...layout.yaxis.titlefont, size: 18 };
+  }
+
+  if (layout.legend) {
+    layout.legend.font = { ...layout.legend.font, size: 15 };
+  }
+
+  layout.margin = { ...layout.margin, t: 50, b: 80, l: 80, r: 40 };
+
+  await Plotly.relayout(gd, {
     'font.size': 20,
-    'xaxis.title.font.size': 18,
-    'yaxis.title.font.size': 18,
-    'xaxis.tickfont.size': 15,
-    'yaxis.tickfont.size': 15,
+    'xaxis.titlefont.size': 18,
+    'yaxis.titlefont.size': 18,
+    'xaxis.tickfont.size': 16,
+    'yaxis.tickfont.size': 16,
     'legend.font.size': 15,
     'margin.t': 50,
     'margin.b': 80,
     'margin.l': 80,
     'margin.r': 40,
   });
-  await new Promise(r => setTimeout(r, 500));
+  await new Promise(r => setTimeout(r, 800));
 }
 
 /** Capture a Plotly chart as base64 PNG from an iframe. */
