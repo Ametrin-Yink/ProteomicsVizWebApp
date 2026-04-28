@@ -125,9 +125,15 @@ class SessionCreate(BaseModel):
 
 class SessionUpdate(BaseModel):
     """Session update request."""
-    
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     config: Optional[SessionConfig] = None
+
+
+class VisualizationStateUpdate(BaseModel):
+    """Partial update for visualization state (markers + volcano filters)."""
+    markers: Optional[list[str]] = None
+    volcano_filters: Optional[dict[str, Any]] = None
 
 
 class SessionSummary(BaseModel):

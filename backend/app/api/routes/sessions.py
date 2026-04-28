@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.models.session import (
     Session, SessionCreate, SessionUpdate, SessionSummary,
-    SessionState, ProcessingStatus, SessionConfig, SessionFiles
+    SessionState, ProcessingStatus, SessionConfig, SessionFiles,
+    VisualizationStateUpdate,
 )
 from app.core.config import settings
 from app.db.session_store import SessionStore
@@ -137,6 +138,29 @@ async def update_session_config(
     session.state = SessionState.CONFIGURING
     await store.update(session)
     
+    return session
+
+
+@router.patch("/{session_id}/visualization-state", response_model=Session)
+async def update_visualization_state(
+    session_id: str,
+    data: VisualizationStateUpdate,
+    store: SessionStore = Depends(get_session_store)
+):
+    """Update visualization state (markers and/or volcano filters) for a session."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+
+    if data.markers is not None:
+        session.markers = data.markers
+    if data.volcano_filters is not None:
+        session.volcano_filters = data.volcano_filters
+
+    await store.update(session)
     return session
 
 
