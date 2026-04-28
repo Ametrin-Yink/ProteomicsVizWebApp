@@ -130,26 +130,103 @@ class TestDataProcessor:
 
     def test_step5_lenient_filtering(self, processor):
         """Test lenient filtering (allows more missing values)."""
-        # Create data with some missing values - needs Unique_PSM, Condition and Replicate columns
+        # Lenient: 40% threshold, 4 replicates → max 1 missing allowed
+        # Dataset must include rows spanning all 4 replicates so totals are correct.
+        # PSM_PASS: detected in 3/4 replicates → missing 1 ≤ 1 → pass
+        # PSM_FAIL: detected in 2/4 replicates → missing 2 > 1 → fail
+        # PSM_FULL defines all 4 replicates exist in the experiment.
         df = pd.DataFrame({
-            'Sequence': ['PEP1', 'PEP2', 'PEP3', 'PEP4'],
-            'Modifications': ['', '', '', ''],
-            'Charge': [2, 2, 2, 2],
-            'Contaminant': [False, False, False, False],
-            'Master Protein Accessions': ['P1', 'P2', 'P3', 'P4'],
-            'Quan_Info': ['Valid', 'Valid', 'Valid', 'Valid'],
-            'Unique_PSM': ['PEP1||2', 'PEP2||2', 'PEP3||2', 'PEP4||2'],
-            'Condition': ['DMSO', 'DMSO', 'DMSO', 'DMSO'],
-            'Replicate': [1, 2, 3, 4],
-            'Abundance': [100.0, 200.0, 300.0, 400.0],
-            'Abundance F1 Sample': [100.0, np.nan, 300.0, 400.0],
-            'Abundance F2 Sample': [100.0, 200.0, np.nan, 400.0],
+            'Sequence': ['FULL'] * 4 + ['PASS'] * 3 + ['FAIL'] * 2,
+            'Modifications': [''] * 9,
+            'Charge': [2] * 9,
+            'Contaminant': [False] * 9,
+            'Master Protein Accessions': ['P0'] * 4 + ['P1'] * 3 + ['P2'] * 2,
+            'Quan_Info': ['Valid'] * 9,
+            'Unique_PSM': ['FULL||2'] * 4 + ['PASS||2'] * 3 + ['FAIL||2'] * 2,
+            'Condition': ['DMSO'] * 9,
+            'Replicate': [1, 2, 3, 4, 1, 2, 3, 1, 2],
+            'Abundance': [100.0] * 9,
         })
 
         result = processor.step5_filter_by_criteria(df)
 
-        # Should keep rows with lenient filtering
-        assert len(result) > 0
+        # FULL (4/4) and PASS (3/4) pass, FAIL (2/4, missing 2 > 1) is removed
+        assert len(result) == 7
+        assert set(result['Unique_PSM'].unique()) == {'FULL||2', 'PASS||2'}
+
+    def test_step5_strict_filtering(self):
+        """Test strict filtering (20% threshold, very few missing allowed)."""
+        from app.services.data_processor import DataProcessor, ProcessingConfig
+        strict_proc = DataProcessor(ProcessingConfig(strict_filtering=True))
+
+        # Strict: 20% threshold, 4 replicates → max 0 missing allowed
+        # PSM_FULL: detected in 4/4 → pass
+        # PSM_MISSING1: detected in 3/4 → missing 1 > 0 → fail
+        # PSM_FULL also ensures strict filter (>1 PSM per protein) is met
+        df = pd.DataFrame({
+            'Sequence': ['FULL'] * 4 + ['FULL'] * 4 + ['MISS'] * 3,
+            'Modifications': [''] * 11,
+            'Charge': [2] * 11,
+            'Contaminant': [False] * 11,
+            'Master_Protein_Accessions': ['P0'] * 8 + ['P1'] * 3,
+            'Quan_Info': ['Valid'] * 11,
+            'Unique_PSM': ['FULL_A||2'] * 4 + ['FULL_B||2'] * 4 + ['MISS||2'] * 3,
+            'Condition': ['DMSO'] * 11,
+            'Replicate': [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3],
+            'Abundance': [100.0] * 11,
+        })
+
+        result = strict_proc.step5_filter_by_criteria(df)
+
+        # FULL_A and FULL_B pass (0/4 missing ≤ 0), MISS fails (1/4 > 0)
+        # Also protein P1 has only 1 PSM → removed by strict 1-PSM filter
+        assert len(result) == 8
+        assert set(result['Unique_PSM'].unique()) == {'FULL_A||2', 'FULL_B||2'}
+
+    def test_step5_sparse_psm_rejected(self):
+        """PSM detected in only 1 replicate per condition should be rejected.
+
+        Regression test: PSMs like Q9NYC9/ATADKLK that appear in only
+        DMSO_24h_4 and INCB231845_24h_3 (2 of 7 total samples) were
+        incorrectly passing because the filter counted NAs in existing
+        rows instead of checking actual replicate coverage.
+        """
+        from app.services.data_processor import DataProcessor, ProcessingConfig
+        proc = DataProcessor(ProcessingConfig(strict_filtering=False))
+
+        # Build dataset that defines all 7 samples (4 DMSO + 3 INCB)
+        full_psms = []
+        for rep in range(1, 5):
+            full_psms.append({
+                'Sequence': 'FULL', 'Modifications': '', 'Charge': 2,
+                'Contaminant': False, 'Master Protein Accessions': 'P0',
+                'Quan_Info': 'Valid', 'Unique_PSM': f'FULL||2_rep{rep}',
+                'Condition': 'DMSO_24h', 'Replicate': rep, 'Abundance': 100.0,
+            })
+        for rep in range(1, 4):
+            full_psms.append({
+                'Sequence': 'FULL', 'Modifications': '', 'Charge': 2,
+                'Contaminant': False, 'Master Protein Accessions': 'P0',
+                'Quan_Info': 'Valid', 'Unique_PSM': f'FULL||2_rep{rep}_t',
+                'Condition': 'INCB231845_24h', 'Replicate': rep, 'Abundance': 100.0,
+            })
+        # Sparse PSM: only in DMSO_24h_4 and INCB231845_24h_3
+        sparse_rows = [
+            {'Sequence': 'SPARSE', 'Modifications': '', 'Charge': 3,
+             'Contaminant': False, 'Master Protein Accessions': 'Q9NYC9',
+             'Quan_Info': 'Valid', 'Unique_PSM': 'SPARSE||3',
+             'Condition': 'DMSO_24h', 'Replicate': 4, 'Abundance': 62212.0},
+            {'Sequence': 'SPARSE', 'Modifications': '', 'Charge': 3,
+             'Contaminant': False, 'Master Protein Accessions': 'Q9NYC9',
+             'Quan_Info': 'Valid', 'Unique_PSM': 'SPARSE||3',
+             'Condition': 'INCB231845_24h', 'Replicate': 3, 'Abundance': 144067.0},
+        ]
+        df = pd.DataFrame(full_psms + sparse_rows)
+
+        result = proc.step5_filter_by_criteria(df)
+        # DMSO: 4 replicates, max_missing=int(4*0.4)=1, sparse has 3 missing → fail
+        # INCB: 3 replicates, max_missing=int(3*0.4)=1, sparse has 2 missing → fail
+        assert 'SPARSE||3' not in result['Unique_PSM'].values
 
     def test_processing_config_defaults(self):
         """Test ProcessingConfig default values."""

@@ -402,21 +402,27 @@ class DataProcessor:
                 f"max {max_missing} missing allowed"
             )
         
-        # Group by Unique_PSM and filter
-        def filter_psm_group(group: pd.DataFrame) -> bool:
-            """Check if PSM group passes filter criteria."""
-            for condition in group['Condition'].unique():
-                condition_group = group[group['Condition'] == condition]
-                replicates = condition_group['Replicate'].nunique()
-                max_missing = int(replicates * threshold)
-                
-                missing_count = condition_group['Abundance'].isna().sum()
-                if missing_count > max_missing:
-                    return False
-            return True
-        
-        # Apply filter
-        df = df.groupby('Unique_PSM').filter(filter_psm_group)
+        # Pre-compute total replicates per condition from the full dataset
+        total_replicates_per_condition = df.groupby('Condition')['Replicate'].nunique().to_dict()
+
+        # Vectorized: count detected replicates per (Unique_PSM, Condition)
+        detected = df.groupby(['Unique_PSM', 'Condition'])['Replicate'].nunique().reset_index()
+        detected.columns = ['Unique_PSM', 'Condition', 'detected_replicates']
+        detected['total_replicates'] = detected['Condition'].map(total_replicates_per_condition)
+        detected['missing_count'] = detected['total_replicates'] - detected['detected_replicates']
+        detected['max_missing'] = (detected['total_replicates'] * threshold).astype(int)
+
+        # PSM passes only if missing_count <= max_missing for ALL conditions
+        passing_psms = (
+            detected[detected['missing_count'] <= detected['max_missing']]
+            .groupby('Unique_PSM')
+            .size()
+            .reset_index(name='conditions_met')
+        )
+        # Number of conditions the PSM appears in must match total conditions
+        passing_psms = passing_psms[passing_psms['conditions_met'] == len(conditions)]['Unique_PSM']
+
+        df = df[df['Unique_PSM'].isin(passing_psms)].copy()
         
         # Strict only: Remove proteins with only 1 PSM
         if self.config.strict_filtering:

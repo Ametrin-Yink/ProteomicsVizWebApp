@@ -27,11 +27,14 @@ ENRICHR_API_URL = "https://maayanlab.cloud/Enrichr/geneSetLibrary"
 
 
 def _validate_and_repair_gmt_cache() -> None:
-    """Validate cached GMT files and re-download any that are empty or missing.
+    """Validate cached GMT files exist and are non-empty.
 
-    gseapy downloads GMT files from Enrichr on first use, but network failures
-    can leave 0-byte files that cause silent empty results. This function checks
-    the cache and repairs empty files by fetching fresh data from the Enrichr API.
+    gseapy downloads GMT files from Enrichr on first use. We only check
+    local file existence — no network calls here. gseapy handles
+    downloading on its own if files are missing.
+
+    If files are empty (from a prior failed download), log a warning
+    so the operator can investigate, but don't block on network I/O.
     """
     cache_dir = Path.home() / ".cache" / "gseapy"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -46,31 +49,10 @@ def _validate_and_repair_gmt_cache() -> None:
 
     for filename in required_files:
         gmt_path = cache_dir / filename
-        if not gmt_path.exists() or gmt_path.stat().st_size == 0:
-            lib_name = filename.replace("Enrichr.", "").replace(".gmt", "")
-            logger.info(f"GMT cache empty/missing for {lib_name}, re-downloading...")
-            try:
-                import requests
-                url = f"{ENRICHR_API_URL}?mode=json&libraryName={lib_name}"
-                resp = requests.get(url, timeout=120)
-                resp.raise_for_status()
-                data = resp.json()
-
-                # Convert Enrichr JSON to GMT format
-                gmt_lines = []
-                lib_data = list(data.values())[0]
-                terms = lib_data.get("terms", {})
-                for term_name, genes_dict in terms.items():
-                    genes = list(genes_dict.keys())
-                    if genes:
-                        gmt_lines.append(f"{term_name}\thttp://example.com\t" + "\t".join(genes))
-
-                with open(gmt_path, "w", encoding="utf-8") as f:
-                    f.write("\n".join(gmt_lines))
-
-                logger.info(f"Downloaded {lib_name}: {len(gmt_lines)} gene sets, {gmt_path.stat().st_size} bytes")
-            except Exception as e:
-                logger.warning(f"Failed to re-download GMT cache for {lib_name}: {e}")
+        if not gmt_path.exists():
+            logger.info(f"GMT cache missing for {filename}, gseapy will download on first use")
+        elif gmt_path.stat().st_size == 0:
+            logger.warning(f"GMT cache file is empty: {gmt_path}. Remove it and gseapy will re-download")
 
 
 class GSEAService:
@@ -141,11 +123,13 @@ class GSEAService:
         # Run GSEA for each database in parallel
         self.results = {}
 
-        # Determine threads per database (avoid oversubscription)
+        # Determine threads per database — gseapy's prerank is CPU-bound in its
+        # permutation loop, so each database benefits from parallelism.
+        # Cap at 4 threads per database to avoid severe oversubscription when
+        # running multiple databases in parallel.
         n_cores = os.cpu_count() or 4
-        n_dbs = len(databases)
-        threads_per_db = max(1, n_cores // n_dbs)
-        logger.info(f"Allocating {threads_per_db} threads per database ({n_cores} cores / {n_dbs} databases)")
+        threads_per_db = min(4, n_cores)
+        logger.info(f"Allocating {threads_per_db} threads per database ({n_cores} cores available)")
 
         async def run_single_db(db_type: DatabaseType) -> tuple[str, GSEAResults]:
             """Run GSEA for a single database with caching."""
