@@ -6,7 +6,7 @@ import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
 import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
-import { getDEResults, getSession } from '@/lib/api';
+import { getDEResults, getSession, updateSessionVisualizationState } from '@/lib/api';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { isSignificantVolcano } from '@/lib/utils';
 
@@ -23,18 +23,11 @@ function ResultsContent() {
   const [error, setError] = useState<string | null>(null);
   const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string; experiment: string } | null>(null);
 
-  const [filters, setFilters] = useState<VolcanoFilters>(() => {
-    // Restore from localStorage if available
-    try {
-      const saved = localStorage.getItem('volcano_filters');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
-      foldChange: 1,
-      pValue: 0.05,
-      adjPValue: 1,
-      s0: 0.1, // 10% of foldChange threshold
-    };
+  const [filters, setFilters] = useState<VolcanoFilters>({
+    foldChange: 1,
+    pValue: 0.05,
+    adjPValue: 1,
+    s0: 0.1, // 10% of foldChange threshold
   });
 
   // Persist filters to localStorage for PDFExport to read
@@ -47,6 +40,7 @@ function ResultsContent() {
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
   const [selectedProteinData, setSelectedProteinData] = useState<DEResult | null>(null);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const [markedProteins, setMarkedProteins] = useState<Set<string>>(new Set());
 
 
   // Fetch data on mount
@@ -70,7 +64,7 @@ function ResultsContent() {
     fetchData();
   }, [sessionId]);
 
-  // Fetch session config separately (non-blocking)
+  // Fetch session config and restore visualization state
   useEffect(() => {
     async function fetchSessionConfig() {
       const session = await getSession(sessionId);
@@ -81,6 +75,16 @@ function ResultsContent() {
           control: session.config?.control ?? '',
           experiment,
         });
+
+        // Restore markers from session
+        if (session.markers && session.markers.length > 0) {
+          setMarkedProteins(new Set(session.markers));
+        }
+
+        // Restore volcano filters from session (overrides localStorage)
+        if (session.volcano_filters) {
+          setFilters(session.volcano_filters);
+        }
       }
     }
 
@@ -129,6 +133,49 @@ function ResultsContent() {
     setSelectedProteins(new Set());
     setSelectedProteinData(null);
   }, []);
+
+  // Handle marker toggle from table
+  const handleToggleMark = useCallback((protein: DEResult) => {
+    setMarkedProteins((prev) => {
+      const next = new Set(prev);
+      if (next.has(protein.master_protein_accessions)) {
+        next.delete(protein.master_protein_accessions);
+      } else {
+        next.add(protein.master_protein_accessions);
+      }
+      return next;
+    });
+  }, []);
+
+  // Clear all markers
+  const handleClearAllMarks = useCallback(() => {
+    setMarkedProteins(new Set());
+  }, []);
+
+  // Save markers to backend when they change (debounced)
+  useEffect(() => {
+    const markersArray = Array.from(markedProteins);
+    const timer = setTimeout(async () => {
+      try {
+        await updateSessionVisualizationState(sessionId, { markers: markersArray });
+      } catch {
+        // Silently fail — markers are still in local state
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [markedProteins, sessionId]);
+
+  // Save filters to backend when they change (debounced)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        await updateSessionVisualizationState(sessionId, { volcano_filters: filters });
+      } catch {
+        // Silently fail — filters are still in local state
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [filters, sessionId]);
 
   // Calculate DE counts based on current filters
   const deCounts = React.useMemo(() => {
@@ -238,6 +285,7 @@ function ResultsContent() {
               data={data.results}
               filters={filters}
               selectedProteins={selectedProteins}
+              markedProteins={markedProteins}
               onSelectProteins={handleSelectProteins}
               onSelectionModeChange={(_mode) => void _mode}
               onClearSelection={clearSelection}
@@ -252,6 +300,9 @@ function ResultsContent() {
               onToggleShowSelected={() => setShowSelectedOnly(!showSelectedOnly)}
               filters={filters}
               sessionConfig={sessionConfig}
+              markedProteins={markedProteins}
+              onToggleMark={handleToggleMark}
+              onClearAllMarks={handleClearAllMarks}
             />
           </div>
 
