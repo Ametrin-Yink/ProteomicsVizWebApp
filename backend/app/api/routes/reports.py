@@ -84,8 +84,9 @@ async def generate_report(
             # Load analysis results
             diff_expression_path = results_dir / "Diff_Expression.tsv"
             protein_abundances_path = results_dir / "Protein_Abundances.tsv"
-            qc_data_path = results_dir / "qc_data.json"
-            gsea_results_path = results_dir / "gsea_results.json"
+            # Actual file names from the pipeline
+            qc_data_path = results_dir / "QC_Results.json"
+            gsea_results_path = results_dir / "GSEA_Results.json"
             
             # Generate report
             generated_path = await report_generator.generate_report_from_files(

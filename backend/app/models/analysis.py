@@ -187,7 +187,7 @@ class ProcessingProgress(BaseModel):
 
 class ReportRequest(BaseModel):
     """PDF report generation request."""
-    
+
     include_volcano_plot: bool = Field(default=True)
     include_heatmap: bool = Field(default=True)
     include_qc_plots: bool = Field(default=True)
@@ -200,6 +200,13 @@ class ReportRequest(BaseModel):
         "qc_analysis",
         "gsea_analysis"
     ])
+    # User-adjustable volcano plot filters
+    fold_change: float = Field(default=1.0, description="log2 Fold Change threshold")
+    p_value: float = Field(default=0.05, description="P-value threshold")
+    adj_p_value: float = Field(default=1.0, description="Adjusted P-value threshold")
+    s0: float = Field(default=0.1, description="S0 factor as fraction of fold_change")
+    # Frontend-captured plot images (base64 data URLs)
+    images: Optional[dict[str, list[str]]] = Field(default=None, description="{key: [base64 data URLs]}")
 
 
 class ReportStatus(BaseModel):

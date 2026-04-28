@@ -1,14 +1,95 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { FileDown, X, Eye, Mail, RotateCcw, Loader2 } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { FileDown, X, Eye, RotateCcw, Loader2 } from 'lucide-react';
 import { reportsApi } from '@/lib/api-client';
+
+declare global {
+  interface Window {
+    Plotly?: {
+      toImage: (el: HTMLElement, opts: { format: string; width: number; height: number; scale: number }) => Promise<string>;
+    };
+  }
+}
 
 interface PDFExportProps {
   sessionId: string;
 }
 
-type PDFStatus = 'idle' | 'generating' | 'ready' | 'error' | 'cancelled';
+type PDFStatus = 'idle' | 'generating' | 'ready' | 'error';
+
+/** Wait for an element to appear in the iframe's document. */
+function waitForElement(doc: Document, selector: string, timeoutMs: number): Promise<Element | null> {
+  return new Promise((resolve) => {
+    const el = doc.querySelector(selector);
+    if (el) { resolve(el); return; }
+
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const found = doc.querySelector(selector);
+      if (found) { clearInterval(timer); resolve(found); return; }
+      if (Date.now() - start > timeoutMs) { clearInterval(timer); resolve(null); }
+    }, 200);
+  });
+}
+
+/** Capture a Plotly chart as base64 PNG from an iframe. */
+async function capturePlotFromIframe(
+  iframe: HTMLIFrameElement,
+  containerSelector: string,
+): Promise<string | null> {
+  const doc = iframe.contentDocument;
+  if (!doc) return null;
+
+  // Wait for the Plotly element to render
+  const container = await waitForElement(doc, containerSelector, 30000);
+  if (!container) return null;
+
+  const plotlyEl = container.querySelector('.js-plotly-plot') as HTMLElement;
+  if (!plotlyEl || !iframe.contentWindow?.Plotly) return null;
+
+  try {
+    return await iframe.contentWindow.Plotly.toImage(plotlyEl, {
+      format: 'png', width: 1200, height: 800, scale: 2,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Capture ALL Plotly charts matching a selector from an iframe. */
+async function captureAllFromIframe(
+  iframe: HTMLIFrameElement,
+  containerSelector: string,
+): Promise<string[]> {
+  const doc = iframe.contentDocument;
+  if (!doc) return [];
+
+  const containers = await waitForElement(doc, containerSelector, 30000);
+  if (!containers) return [];
+
+  const images: string[] = [];
+  const allContainers = doc.querySelectorAll(containerSelector);
+  if (!iframe.contentWindow?.Plotly) return images;
+
+  for (let i = 0; i < allContainers.length; i++) {
+    const plotlyEl = allContainers[i].querySelector('.js-plotly-plot') as HTMLElement;
+    if (!plotlyEl) continue;
+    try {
+      const img = await iframe.contentWindow!.Plotly.toImage(plotlyEl, {
+        format: 'png', width: 1200, height: 800, scale: 2,
+      });
+      images.push(img);
+    } catch { /* skip failed captures */ }
+  }
+  return images;
+}
+
+function removeIframe(iframe: HTMLIFrameElement | null) {
+  if (iframe && iframe.parentNode) {
+    iframe.parentNode.removeChild(iframe);
+  }
+}
 
 export default function PDFExport({ sessionId }: PDFExportProps) {
   const [status, setStatus] = useState<PDFStatus>('idle');
@@ -16,38 +97,109 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
   const [reportId, setReportId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleExport = useCallback(async () => {
     setStatus('generating');
     setProgress(0);
     setErrorMessage('');
+    setReportId(null);
 
-    // Simulate progress updates
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) return prev;
-        return prev + 10;
-      });
-    }, 500);
+    const images: Record<string, string[]> = {};
+    const baseUrl = window.location.origin;
 
     try {
-      const response = await reportsApi.generate(sessionId);
-      clearInterval(progressInterval);
+      // 1. Capture volcano plot from the current page (already rendered)
+      const volcanoContainer = document.querySelector('[data-testid="volcano-plot"]');
+      if (volcanoContainer && (window as any).Plotly) {
+        const plotlyEl = volcanoContainer.querySelector('.js-plotly-plot') as HTMLElement;
+        if (plotlyEl) {
+          try {
+            const img = await (window as any).Plotly.toImage(plotlyEl, {
+              format: 'png', width: 1200, height: 800, scale: 2,
+            });
+            images['volcano_plot'] = [img];
+          } catch { /* skip */ }
+        }
+      }
+      setProgress(15);
+
+      // 2. Capture QC plots from hidden iframe
+      const qcIframe = document.createElement('iframe');
+      qcIframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+      qcIframe.src = `${baseUrl}/analysis/visualization/qc?session_id=${sessionId}`;
+      document.body.appendChild(qcIframe);
+
+      // Wait for iframe content to load
+      await new Promise<void>((resolve) => {
+        qcIframe.onload = () => resolve();
+        setTimeout(() => resolve(), 30000); // safety timeout
+      });
+      setProgress(35);
+
+      // Capture individual QC plots
+      const qcSelectors: Record<string, string> = {
+        'qc_pca': '[data-testid="pca-plot"]',
+        'qc_pvalue': '[data-testid="pvalue-plot"]',
+        'qc_cv': '[data-testid="psm-cv-plot"]',
+        'qc_completeness': '[data-testid="completeness-plot"]',
+      };
+
+      for (const [key, selector] of Object.entries(qcSelectors)) {
+        const img = await capturePlotFromIframe(qcIframe, selector);
+        if (img) images[key] = [img];
+      }
+      setProgress(55);
+      removeIframe(qcIframe);
+
+      // 3. Capture GSEA dashboard from hidden iframe
+      const gseaIframe = document.createElement('iframe');
+      gseaIframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+      gseaIframe.src = `${baseUrl}/analysis/visualization/bioinformatics?session_id=${sessionId}`;
+      document.body.appendChild(gseaIframe);
+
+      await new Promise<void>((resolve) => {
+        gseaIframe.onload = () => resolve();
+        setTimeout(() => resolve(), 30000);
+      });
+      setProgress(75);
+
+      // Capture GSEA dashboard bar chart (plot inside gsea-overview)
+      const gseaImg = await capturePlotFromIframe(gseaIframe, '[data-testid="gsea-overview"]');
+      if (gseaImg) images['gsea_dashboard'] = [gseaImg];
+      setProgress(85);
+      removeIframe(gseaIframe);
+
+      // 4. Read current filter settings
+      let filters = { foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 };
+      try {
+        const saved = localStorage.getItem('volcano_filters');
+        if (saved) filters = JSON.parse(saved);
+      } catch {}
+
+      // 5. Send to backend
+      const response = await reportsApi.generate(sessionId, {
+        fold_change: filters.foldChange,
+        p_value: filters.pValue,
+        adj_p_value: filters.adjPValue,
+        s0: filters.s0,
+        images,
+      });
       setProgress(100);
       setReportId(response.report_id);
       setStatus('ready');
     } catch (error) {
-      clearInterval(progressInterval);
+      const msg = error instanceof Error ? error.message : 'Unknown error occurred';
       setStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'PDF generation failed');
+      setErrorMessage(msg);
     }
   }, [sessionId]);
-
-  const handleCancel = useCallback(() => {
-    setStatus('cancelled');
-    setProgress(0);
-    setReportId(null);
-  }, []);
 
   const handleDownload = useCallback(async () => {
     if (!reportId) return;
@@ -68,13 +220,27 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     }
   }, [sessionId, reportId]);
 
-  const handlePreview = useCallback(() => {
-    setShowPreview(true);
-  }, []);
+  const handlePreview = useCallback(async () => {
+    if (!reportId) return;
+
+    try {
+      const blob = await reportsApi.download(sessionId, reportId);
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setShowPreview(true);
+    } catch (error) {
+      setStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Preview failed');
+    }
+  }, [sessionId, reportId]);
 
   const handleClosePreview = useCallback(() => {
     setShowPreview(false);
-  }, []);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  }, [previewUrl]);
 
   const handleRetry = useCallback(() => {
     setStatus('idle');
@@ -82,12 +248,6 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     handleExport();
   }, [handleExport]);
 
-  const handleEmail = useCallback(() => {
-    // Email functionality placeholder
-    alert('Email feature coming soon!');
-  }, []);
-
-  // Idle state - show export button
   if (status === 'idle') {
     return (
       <button
@@ -101,7 +261,6 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     );
   }
 
-  // Generating state - show progress
   if (status === 'generating') {
     return (
       <div data-testid="pdf-generating" className="flex items-center gap-4">
@@ -114,7 +273,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         </div>
         <button
           data-testid="cancel-pdf-btn"
-          onClick={handleCancel}
+          onClick={() => { setStatus('idle'); setProgress(0); }}
           className="flex items-center gap-1 px-3 py-1 text-sm text-red-600 hover:text-red-800 transition-colors"
         >
           <X className="w-4 h-4" />
@@ -124,7 +283,6 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     );
   }
 
-  // Ready state - show download and preview buttons
   if (status === 'ready') {
     return (
       <div data-testid="pdf-ready" className="flex items-center gap-2">
@@ -145,15 +303,15 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
           Preview
         </button>
         <button
-          data-testid="email-pdf-btn"
-          onClick={handleEmail}
+          data-testid="retry-pdf-btn"
+          onClick={() => { setStatus('idle'); setReportId(null); handleExport(); }}
           className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
         >
-          <Mail className="w-4 h-4" />
-          Email
+          <RotateCcw className="w-4 h-4" />
+          Regenerate
         </button>
 
-        {showPreview && (
+        {showPreview && previewUrl && (
           <div
             data-testid="pdf-preview-modal"
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
@@ -173,10 +331,13 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div data-testid="pdf-viewer" className="flex-1 p-4 bg-gray-100">
-                <div className="w-full h-full bg-white rounded-lg shadow-sm flex items-center justify-center">
-                  <p className="text-gray-500">PDF preview will be displayed here</p>
-                </div>
+              <div className="flex-1 p-4 bg-gray-100">
+                <iframe
+                  data-testid="pdf-viewer"
+                  src={previewUrl}
+                  className="w-full h-full rounded-lg shadow-sm"
+                  title="PDF Preview"
+                />
               </div>
             </div>
           </div>
@@ -185,24 +346,6 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     );
   }
 
-  // Cancelled state
-  if (status === 'cancelled') {
-    return (
-      <div data-testid="pdf-cancelled" className="flex items-center gap-4">
-        <span className="text-amber-600">PDF generation cancelled</span>
-        <button
-          data-testid="export-pdf-btn"
-          onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <FileDown className="w-4 h-4" />
-          Try Again
-        </button>
-      </div>
-    );
-  }
-
-  // Error state
   if (status === 'error') {
     return (
       <div data-testid="pdf-error" className="flex items-center gap-4">

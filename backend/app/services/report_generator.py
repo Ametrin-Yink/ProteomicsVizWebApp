@@ -2,11 +2,11 @@
 PDF Report Generator Service.
 
 Generates comprehensive PDF reports from analysis results using HTML → PDF
-conversion via Playwright for professional styling.
+conversion via Playwright for professional styling. Plots are captured from
+the frontend as base64 PNG images to ensure the report matches what the user sees.
 """
 
 import asyncio
-import base64
 import json
 import logging
 import numpy as np
@@ -16,13 +16,12 @@ from typing import Any, Optional
 
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from playwright.async_api import async_playwright
 
 from app.core.config import settings
 from app.core.exceptions import ProcessingError
 from app.models.session import Session
 from app.models.analysis import AnalysisResult, ReportRequest
-from app.models.data import QCData, GSEAResults
+from app.models.data import QCData, GSEAResults, PCAResult
 
 logger = logging.getLogger("proteomics")
 
@@ -30,10 +29,11 @@ logger = logging.getLogger("proteomics")
 class ReportGenerator:
     """
     PDF report generator using HTML → Playwright → PDF approach.
-    
-    Generates professional scientific reports with all analysis sections.
+
+    Generates professional scientific reports with all analysis sections
+    and embedded matplotlib plot images.
     """
-    
+
     def __init__(self):
         """Initialize report generator."""
         self.template_dir = settings.base_dir / "templates"
@@ -41,7 +41,7 @@ class ReportGenerator:
             loader=FileSystemLoader(self.template_dir),
             autoescape=select_autoescape(['html', 'xml'])
         )
-        
+
     async def generate_report(
         self,
         session: Session,
@@ -53,7 +53,7 @@ class ReportGenerator:
     ) -> Path:
         """
         Generate complete PDF report.
-        
+
         Args:
             session: Session object with metadata
             analysis_result: Analysis results
@@ -61,23 +61,23 @@ class ReportGenerator:
             qc_data: QC metrics data (optional)
             gsea_results: GSEA results by database (optional)
             output_path: Output PDF path (optional, auto-generated)
-            
+
         Returns:
             Path to generated PDF file
-            
+
         Raises:
             ProcessingError: If report generation fails
         """
         if report_request is None:
             report_request = ReportRequest()
-            
+
         if output_path is None:
             output_path = self._get_default_output_path(session.id)
-            
+
         logger.info(f"Generating report for session {session.id}")
-        
+
         try:
-            # Prepare report data
+            # Prepare report data (includes generating plot images)
             report_data = await self._prepare_report_data(
                 session=session,
                 analysis_result=analysis_result,
@@ -85,16 +85,16 @@ class ReportGenerator:
                 qc_data=qc_data,
                 gsea_results=gsea_results
             )
-            
+
             # Generate HTML
             html_content = await self._generate_html(report_data)
-            
+
             # Convert to PDF
             await self._html_to_pdf(html_content, output_path)
-            
+
             logger.info(f"Report generated: {output_path}")
             return output_path
-            
+
         except Exception as e:
             logger.error(f"Report generation failed: {e}")
             raise ProcessingError(
@@ -102,14 +102,14 @@ class ReportGenerator:
                 step=0,
                 recoverable=True
             )
-    
+
     def _get_default_output_path(self, session_id: str) -> Path:
         """Get default output path for report."""
         results_dir = settings.sessions_dir / session_id / "results"
         results_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return results_dir / f"report_{timestamp}.pdf"
-    
+
     async def _prepare_report_data(
         self,
         session: Session,
@@ -119,18 +119,10 @@ class ReportGenerator:
         gsea_results: Optional[dict[str, GSEAResults]] = None
     ) -> dict[str, Any]:
         """
-        Prepare all data needed for the report.
-        
-        Args:
-            session: Session object
-            analysis_result: Analysis results
-            report_request: Report configuration
-            qc_data: QC metrics data
-            gsea_results: GSEA results
-            
-        Returns:
-            Dictionary with all report data
+        Prepare all data needed for the report, including plot images.
         """
+        images = report_request.images or {}
+
         data = {
             "report_title": f"Proteomics Analysis Report - {session.name}",
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -138,40 +130,38 @@ class ReportGenerator:
             "analysis_result": analysis_result,
             "report_request": report_request,
         }
-        
+
         # Section 1: Sample Information
         data["sample_info"] = self._prepare_sample_info(session)
-        
+
         # Section 2: User Configuration
         data["user_config"] = self._prepare_user_config(session)
-        
-        # Section 3: Results
+
+        # Section 3: Results (with frontend-captured volcano plot image)
         if report_request.include_volcano_plot or report_request.include_protein_table:
             data["results"] = await self._prepare_results_section(
-                analysis_result,
-                report_request
+                analysis_result, report_request
             )
-        
-        # Section 4: QC Plots
+
+        # Section 4: QC Plots (with frontend-captured plot images)
         if report_request.include_qc_plots and qc_data:
-            data["qc_data"] = self._prepare_qc_section(qc_data)
-        
+            data["qc_data"] = await self._prepare_qc_section(qc_data, images)
+
         # Section 5: Bioinformatics Analysis
         if report_request.include_gsea_results and gsea_results:
-            data["gsea_results"] = self._prepare_gsea_section(gsea_results)
-        
+            data["gsea_results"] = self._prepare_gsea_section(gsea_results, images)
+
         return data
-    
+
     def _prepare_sample_info(self, session: Session) -> dict[str, Any]:
         """Prepare sample information section."""
         files = session.files
-        
-        # Count replicates per condition
+
         condition_counts: dict[str, int] = {}
         if files and files.proteomics:
             for f in files.proteomics:
                 condition_counts[f.condition] = condition_counts.get(f.condition, 0) + 1
-        
+
         return {
             "session_name": session.name,
             "session_id": session.id,
@@ -190,11 +180,11 @@ class ReportGenerator:
             "total_files": len(files.proteomics) if files else 0,
             "has_compound_file": files.compound is not None if files else False,
         }
-    
+
     def _prepare_user_config(self, session: Session) -> dict[str, Any]:
         """Prepare user configuration section."""
         config = session.config
-        
+
         if not config:
             return {
                 "treatment": "N/A",
@@ -203,7 +193,7 @@ class ReportGenerator:
                 "remove_razor": "N/A",
                 "strict_filtering": "N/A",
             }
-        
+
         return {
             "treatment": config.treatment,
             "control": config.control,
@@ -211,100 +201,118 @@ class ReportGenerator:
             "remove_razor": "Yes" if config.remove_razor else "No",
             "strict_filtering": "Yes" if config.strict_filtering else "No",
         }
-    
+
     async def _prepare_results_section(
         self,
         analysis_result: AnalysisResult,
         report_request: ReportRequest
     ) -> dict[str, Any]:
-        """Prepare results section with volcano plot and protein table."""
-        results = {
+        """Prepare results section using frontend-captured volcano plot image."""
+        results: dict[str, Any] = {
             "total_proteins": analysis_result.total_proteins,
-            "significant_proteins": analysis_result.significant_proteins,
         }
-        
-        # Load differential expression data
+
+        # Use frontend-captured volcano plot image if provided
+        images = report_request.images or {}
+        if report_request.include_volcano_plot and "volcano_plot" in images:
+            results["volcano_plot_image"] = images["volcano_plot"][0]
+
         if analysis_result.diff_expression_path:
             diff_path = Path(analysis_result.diff_expression_path)
             if diff_path.exists():
                 df = await asyncio.to_thread(pd.read_csv, diff_path, sep='\t')
-                
-                # Prepare volcano plot data
-                if report_request.include_volcano_plot:
-                    results["volcano_plot"] = self._prepare_volcano_plot_data(df)
-                
-                # Prepare top significant proteins table (top 50)
+
+                # Calculate significant count using user filters
+                fc = report_request.fold_change
+                pval_thresh = report_request.p_value
+                s0 = report_request.s0 * fc
+
+                pcol = self._find_col(df, ['pval', 'adj.P.Val', 'p_value', 'P.Value'])
+                fcol = self._find_col(df, ['logFC', 'log_fc', 'Log2FC', 'log2fc'])
+
+                if pcol and fcol:
+                    if s0 == 0:
+                        sig_mask = (df[pcol] <= pval_thresh) & (abs(df[fcol]) >= fc)
+                    else:
+                        plog10_thresh = -np.log10(pval_thresh)
+                        c = plog10_thresh * (fc - s0)
+                        abs_x = abs(df[fcol])
+                        y = -df[pcol].apply(lambda x: np.log10(max(x, 1e-300)))
+                        sig_mask = (abs_x > s0) & (y > c / (abs_x - s0))
+                    results["significant_proteins"] = int(sig_mask.sum())
+
+                # Prepare top significant proteins table (top 50 by p-value)
                 if report_request.include_protein_table:
-                    results["top_proteins"] = self._prepare_top_proteins_table(df, n=50)
-        
+                    results["top_proteins"] = self._prepare_top_proteins_table(
+                        df, n=50, fc=fc, pval_thresh=pval_thresh
+                    )
+
         return results
-    
-    def _prepare_volcano_plot_data(self, df: pd.DataFrame) -> dict[str, Any]:
-        """Prepare volcano plot data from differential expression DataFrame."""
-        # Determine column names
-        logfc_col = 'logFC' if 'logFC' in df.columns else 'log_fc'
-        pval_col = 'pval' if 'pval' in df.columns else 'adj.P.Val'
-        protein_col = 'Protein' if 'Protein' in df.columns else 'master_protein_accessions'
-        gene_col = 'Gene' if 'Gene' in df.columns else 'gene_name'
-        
-        # Calculate -log10(p-value)
-        df = df.copy()
-        df['neg_log_pval'] = -df[pval_col].apply(lambda x: np.log10(max(x, 1e-300)))
-        
-        # Determine significance
-        df['significant'] = (df[pval_col] < 0.05) & (abs(df[logfc_col]) > 1)
-        df['regulation'] = df.apply(
-            lambda row: 'up' if row['significant'] and row[logfc_col] > 0 
-            else ('down' if row['significant'] and row[logfc_col] < 0 else 'not_significant'),
-            axis=1
-        )
-        
-        return {
-            "x": df[logfc_col].tolist(),
-            "y": df['neg_log_pval'].tolist(),
-            "protein": df[protein_col].tolist() if protein_col in df.columns else [],
-            "gene": df[gene_col].tolist() if gene_col in df.columns else [],
-            "significant": df['significant'].tolist(),
-            "regulation": df['regulation'].tolist(),
-            "thresholds": {
-                "pvalue": 0.05,
-                "logfc": 1.0
-            }
-        }
-    
+
+    @staticmethod
+    def _find_col(df: pd.DataFrame, candidates: list[str]) -> Optional[str]:
+        """Find first matching column name."""
+        for c in candidates:
+            if c in df.columns:
+                return c
+        return None
+
+    @staticmethod
+    def _is_significant(log_fc: float, pval: float, adj_pval: float,
+                        fc: float, pval_thresh: float, adj_pval_thresh: float, s0: float) -> bool:
+        """Check significance using same logic as frontend isSignificantVolcano."""
+        if s0 == 0:
+            return abs(log_fc) >= fc and pval <= pval_thresh and adj_pval <= adj_pval_thresh
+        plog10_thresh = -np.log10(pval_thresh)
+        c = plog10_thresh * (fc - s0)
+        y = -np.log10(max(pval, 1e-300))
+        abs_x = abs(log_fc)
+        if abs_x <= s0:
+            return False
+        return y > c / (abs_x - s0)
+
     def _prepare_top_proteins_table(
         self,
         df: pd.DataFrame,
-        n: int = 50
+        n: int = 50,
+        fc: float = 1.0,
+        pval_thresh: float = 0.05,
     ) -> list[dict[str, Any]]:
         """Prepare top significant proteins table."""
-        # Determine column names
-        logfc_col = 'logFC' if 'logFC' in df.columns else 'log_fc'
-        pval_col = 'pval' if 'pval' in df.columns else 'adj.P.Val'
-        protein_col = 'Protein' if 'Protein' in df.columns else 'master_protein_accessions'
-        gene_col = 'Gene' if 'Gene' in df.columns else 'gene_name'
-        
-        # Sort by p-value and take top n
+        logfc_col = self._find_col(df, ['logFC', 'log_fc', 'Log2FC', 'log2fc'])
+        pval_col = self._find_col(df, ['pval', 'adj.P.Val', 'p_value', 'P.Value'])
+        protein_col = self._find_col(df, ['Protein', 'master_protein_accessions', 'protein'])
+        gene_col = self._find_col(df, ['Gene', 'gene_name', 'gene'])
+        if logfc_col is None:
+            logfc_col = 'logFC'
+        if pval_col is None:
+            pval_col = 'pval'
+
         df_sorted = df.nsmallest(n, pval_col)
-        
+
         table_data = []
         for _, row in df_sorted.iterrows():
+            row_log_fc = row.get(logfc_col, 0)
+            row_pval = row.get(pval_col, 1)
+            is_sig = self._is_significant(row_log_fc, row_pval, row.get('adj_pval', row_pval),
+                                          fc, pval_thresh, 1.0, 0.0)
             entry = {
-                "protein": row.get(protein_col, "N/A"),
-                "gene": row.get(gene_col, "N/A"),
-                "log_fc": round(row[logfc_col], 3) if logfc_col in row else None,
-                "pval": f"{row[pval_col]:.2e}" if pval_col in row else "N/A",
-                "significant": row.get('significant', False) if 'significant' in row else (row[pval_col] < 0.05 and abs(row[logfc_col]) > 1),
+                "protein": row.get(protein_col, "N/A") if protein_col else "N/A",
+                "gene": row.get(gene_col, "N/A") if gene_col else "N/A",
+                "log_fc": round(row_log_fc, 3),
+                "pval": f"{row_pval:.2e}" if pval_col in row else "N/A",
+                "significant": is_sig,
             }
             table_data.append(entry)
-        
+
         return table_data
-    
-    def _prepare_qc_section(self, qc_data: QCData) -> dict[str, Any]:
-        """Prepare QC plots section."""
+
+    async def _prepare_qc_section(self, qc_data: QCData, images: Optional[dict[str, list[str]]] = None) -> dict[str, Any]:
+        """Prepare QC plots section using frontend-captured plot images."""
+        images = images or {}
         qc_section = {}
-        
-        # PCA data
+
+        # PCA plot
         if qc_data.pca:
             qc_section["pca"] = {
                 "samples": qc_data.pca.samples,
@@ -313,23 +321,26 @@ class ReportGenerator:
                 "conditions": qc_data.pca.conditions,
                 "pc1_variance": round(qc_data.pca.pc1_variance, 2),
                 "pc2_variance": round(qc_data.pca.pc2_variance, 2),
+                "plot_image": images.get("qc_pca", [None])[0],
             }
-        
+
         # P-value distribution
         if qc_data.pvalue_distribution:
             qc_section["pvalue_distribution"] = {
                 "bins": qc_data.pvalue_distribution.bins,
                 "counts": qc_data.pvalue_distribution.counts,
+                "plot_image": images.get("qc_pvalue", [None])[0],
             }
-        
+
         # CV data
         if qc_data.psm_cv:
             qc_section["cv_data"] = qc_data.psm_cv
-        
+            qc_section["cv_plot_image"] = images.get("qc_cv", [None])[0]
+
         # Intensity distributions
         if qc_data.intensity_distributions:
             qc_section["intensity_distributions"] = qc_data.intensity_distributions
-        
+
         # Data completeness
         if qc_data.data_completeness:
             qc_section["data_completeness"] = [
@@ -341,18 +352,21 @@ class ReportGenerator:
                 }
                 for dc in qc_data.data_completeness
             ]
-        
+            qc_section["completeness_plot_image"] = images.get("qc_completeness", [None])[0]
+
         return qc_section
-    
+
     def _prepare_gsea_section(
         self,
-        gsea_results: dict[str, GSEAResults]
+        gsea_results: dict[str, GSEAResults],
+        images: Optional[dict[str, list[str]]] = None,
     ) -> dict[str, Any]:
         """Prepare GSEA results section."""
+        images = images or {}
         gsea_section = {
             "databases": []
         }
-        
+
         for db_name, results in gsea_results.items():
             db_data = {
                 "name": db_name,
@@ -362,11 +376,11 @@ class ReportGenerator:
                 "underrepresented": results.underrepresented,
                 "top_pathways": []
             }
-            
+
             # Get top 10 significant pathways
             significant = [r for r in results.results if r.significant]
             significant.sort(key=lambda x: x.fdr)
-            
+
             for result in significant[:10]:
                 db_data["top_pathways"].append({
                     "term": result.term,
@@ -377,71 +391,72 @@ class ReportGenerator:
                     "direction": result.enrichment_direction,
                     "matched_genes": result.matched_genes,
                 })
-            
+
             gsea_section["databases"].append(db_data)
-        
+
+        # Add GSEA dashboard image if provided
+        if "gsea_dashboard" in images:
+            gsea_section["dashboard_image"] = images["gsea_dashboard"][0]
+
         return gsea_section
-    
+
     async def _generate_html(self, report_data: dict[str, Any]) -> str:
         """
         Generate HTML from template and data.
-        
+
         Args:
             report_data: Dictionary with all report data
-            
+
         Returns:
             HTML string
         """
         template = self.env.get_template("report_template.html")
         return template.render(**report_data)
-    
+
     async def _html_to_pdf(self, html_content: str, output_path: Path) -> None:
         """
-        Convert HTML to PDF using Playwright.
-        
+        Convert HTML to PDF using Playwright in a separate process.
+
+        We use a dedicated Python subprocess to bypass the ProactorEventLoop
+        incompatibility with Playwright's subprocess management on Windows.
+
         Args:
             html_content: HTML string
             output_path: Output PDF path
-            
+
         Raises:
             ProcessingError: If PDF conversion fails
         """
         try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch()
-                page = await browser.new_page()
-                
-                # Set content
-                await page.set_content(html_content, wait_until='networkidle')
-                
-                # Wait for any charts to render
-                await page.wait_for_timeout(1000)
-                
-                # Generate PDF
-                await page.pdf(
-                    path=str(output_path),
-                    format='A4',
-                    margin={
-                        'top': '20mm',
-                        'right': '15mm',
-                        'bottom': '20mm',
-                        'left': '15mm'
-                    },
-                    print_background=True,
-                    display_header_footer=True,
-                    header_template='<div style="font-size: 9px; margin-left: 15mm; width: 100%;"><span class="title"></span></div>',
-                    footer_template='<div style="font-size: 9px; margin-left: 15mm; width: 100%;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>'
-                )
-                
-                await browser.close()
-                
+            import subprocess
+            import tempfile
+
+            # Write HTML to temp file
+            tmp_html = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8')
+            tmp_html.write(html_content)
+            tmp_html.close()
+
+            # Run Playwright via a dedicated Python process (uses default ProactorEventLoop)
+            helper_script = str(Path(__file__).parent / "pdf_converter.py")
+            python_exe = settings.base_dir / ".venv" / "Scripts" / "python.exe"
+            result = subprocess.run(
+                [str(python_exe), helper_script, tmp_html.name, str(output_path)],
+                capture_output=True, text=True, timeout=120, cwd=settings.base_dir
+            )
+
+            import os
+            os.unlink(tmp_html.name)
+
+            if result.returncode != 0:
+                raise RuntimeError(f"Playwright failed: {result.stderr}")
+
         except Exception as e:
             raise ProcessingError(
                 message=f"PDF conversion failed: {str(e)}",
                 step=0,
                 recoverable=True
             )
-    
+
     async def generate_report_from_files(
         self,
         session: Session,
@@ -453,17 +468,6 @@ class ReportGenerator:
     ) -> Path:
         """
         Generate report directly from result files.
-        
-        Args:
-            session: Session object
-            diff_expression_path: Path to differential expression results
-            protein_abundances_path: Path to protein abundances (optional)
-            qc_data_path: Path to QC data JSON (optional)
-            gsea_results_path: Path to GSEA results JSON (optional)
-            output_path: Output PDF path (optional)
-            
-        Returns:
-            Path to generated PDF
         """
         # Create analysis result from files
         analysis_result = AnalysisResult(
@@ -471,13 +475,13 @@ class ReportGenerator:
             diff_expression_path=str(diff_expression_path),
             protein_abundances_path=str(protein_abundances_path) if protein_abundances_path else None,
         )
-        
+
         # Load QC data if available
         qc_data = None
         if qc_data_path and qc_data_path.exists():
             with open(qc_data_path, encoding='utf-8') as f:
                 qc_data = QCData.model_validate_json(f.read())
-        
+
         # Load GSEA results if available
         gsea_results = None
         if gsea_results_path and gsea_results_path.exists():
@@ -487,7 +491,7 @@ class ReportGenerator:
                     db: GSEAResults.model_validate(data)
                     for db, data in gsea_data.items()
                 }
-        
+
         return await self.generate_report(
             session=session,
             analysis_result=analysis_result,

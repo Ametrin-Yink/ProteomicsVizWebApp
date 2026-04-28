@@ -11,7 +11,7 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-size: 11pt;
@@ -19,7 +19,7 @@
             color: #333;
             background: white;
         }
-        
+
         /* Page layout */
         .page {
             width: 210mm;
@@ -28,7 +28,7 @@
             margin: 0 auto;
             background: white;
         }
-        
+
         /* Header */
         .report-header {
             text-align: center;
@@ -36,24 +36,24 @@
             padding-bottom: 20px;
             margin-bottom: 30px;
         }
-        
+
         .report-header h1 {
             font-size: 24pt;
             color: #2c3e50;
             margin-bottom: 10px;
         }
-        
+
         .report-header .generated-at {
             font-size: 10pt;
             color: #7f8c8d;
         }
-        
+
         /* Section styles */
         .section {
             margin-bottom: 30px;
             page-break-inside: avoid;
         }
-        
+
         .section-title {
             font-size: 16pt;
             color: #2c3e50;
@@ -61,13 +61,13 @@
             padding-bottom: 8px;
             margin-bottom: 20px;
         }
-        
+
         .section-subtitle {
             font-size: 13pt;
             color: #34495e;
             margin: 15px 0 10px 0;
         }
-        
+
         /* Info boxes */
         .info-box {
             background: #f8f9fa;
@@ -75,17 +75,17 @@
             padding: 15px;
             margin: 15px 0;
         }
-        
+
         .info-box.warning {
             border-left-color: #f39c12;
             background: #fef9e7;
         }
-        
+
         .info-box.success {
             border-left-color: #27ae60;
             background: #eafaf1;
         }
-        
+
         /* Tables */
         table {
             width: 100%;
@@ -93,27 +93,27 @@
             margin: 15px 0;
             font-size: 10pt;
         }
-        
+
         th, td {
             padding: 8px 10px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
-        
+
         th {
             background: #34495e;
             color: white;
             font-weight: 600;
         }
-        
+
         tr:nth-child(even) {
             background: #f8f9fa;
         }
-        
+
         tr:hover {
             background: #e8f4f8;
         }
-        
+
         /* Stats grid */
         .stats-grid {
             display: grid;
@@ -121,7 +121,7 @@
             gap: 15px;
             margin: 20px 0;
         }
-        
+
         .stat-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -129,64 +129,64 @@
             border-radius: 8px;
             text-align: center;
         }
-        
+
         .stat-card h3 {
             font-size: 24pt;
             margin-bottom: 5px;
         }
-        
+
         .stat-card p {
             font-size: 10pt;
             opacity: 0.9;
         }
-        
+
         .stat-card.success {
             background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
         }
-        
+
         .stat-card.danger {
             background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
         }
-        
+
         /* Configuration table */
         .config-table {
             background: #f8f9fa;
             border-radius: 8px;
             overflow: hidden;
         }
-        
+
         .config-table td:first-child {
             font-weight: 600;
             color: #2c3e50;
             width: 40%;
         }
-        
+
         /* File list */
         .file-list {
             list-style: none;
         }
-        
+
         .file-list li {
             padding: 8px 0;
             border-bottom: 1px solid #eee;
             display: flex;
             justify-content: space-between;
         }
-        
+
         .file-list li:last-child {
             border-bottom: none;
         }
-        
+
         .file-name {
             font-weight: 500;
             color: #2c3e50;
         }
-        
+
         .file-meta {
             color: #7f8c8d;
             font-size: 9pt;
         }
-        
+
         /* Plot container */
         .plot-container {
             text-align: center;
@@ -195,46 +195,46 @@
             background: #f8f9fa;
             border-radius: 8px;
         }
-        
+
         .plot-container img {
             max-width: 100%;
             height: auto;
         }
-        
+
         .plot-caption {
             font-size: 10pt;
             color: #7f8c8d;
             margin-top: 10px;
             font-style: italic;
         }
-        
+
         /* Protein table */
         .protein-table {
             font-size: 9pt;
         }
-        
+
         .protein-table th {
             background: #2c3e50;
         }
-        
+
         .protein-table .significant {
             font-weight: 600;
         }
-        
+
         .protein-table .upregulated {
             color: #e74c3c;
         }
-        
+
         .protein-table .downregulated {
             color: #3498db;
         }
-        
+
         /* GSEA results */
         .gsea-database {
             margin-bottom: 25px;
             page-break-inside: avoid;
         }
-        
+
         .gsea-database h4 {
             background: #34495e;
             color: white;
@@ -242,7 +242,7 @@
             margin: 0;
             font-size: 12pt;
         }
-        
+
         .gsea-stats {
             display: flex;
             gap: 20px;
@@ -250,26 +250,26 @@
             background: #ecf0f1;
             font-size: 10pt;
         }
-        
+
         .gsea-stats span {
             font-weight: 600;
         }
-        
+
         /* Pathway table */
         .pathway-table {
             margin-top: 0;
         }
-        
+
         .pathway-table .nes-positive {
             color: #e74c3c;
             font-weight: 600;
         }
-        
+
         .pathway-table .nes-negative {
             color: #3498db;
             font-weight: 600;
         }
-        
+
         /* Footer */
         .report-footer {
             margin-top: 40px;
@@ -279,32 +279,32 @@
             font-size: 9pt;
             color: #7f8c8d;
         }
-        
+
         /* Print styles */
         @media print {
             .page {
                 width: 100%;
                 padding: 0;
             }
-            
+
             .section {
                 page-break-inside: avoid;
             }
-            
+
             .gsea-database {
                 page-break-inside: avoid;
             }
         }
-        
+
         /* Utility classes */
         .text-center {
             text-align: center;
         }
-        
+
         .mt-20 {
             margin-top: 20px;
         }
-        
+
         .mb-20 {
             margin-bottom: 20px;
         }
@@ -321,13 +321,13 @@
         <!-- Section 1: Sample Information -->
         <div class="section">
             <h2 class="section-title">1. Sample Information</h2>
-            
+
             <div class="info-box">
                 <strong>Session:</strong> {{ sample_info.session_name }}<br>
                 <strong>Session ID:</strong> {{ sample_info.session_id }}<br>
                 <strong>Created:</strong> {{ sample_info.created_at }}
             </div>
-            
+
             <h3 class="section-subtitle">Uploaded Files ({{ sample_info.total_files }})</h3>
             <ul class="file-list">
                 {% for file in sample_info.uploaded_files %}
@@ -337,7 +337,7 @@
                 </li>
                 {% endfor %}
             </ul>
-            
+
             <h3 class="section-subtitle">Conditions & Replicates</h3>
             <table>
                 <thead>
@@ -355,7 +355,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-            
+
             {% if sample_info.has_compound_file %}
             <div class="info-box success">
                 Compound file uploaded: Yes
@@ -366,7 +366,7 @@
         <!-- Section 2: User Configuration -->
         <div class="section">
             <h2 class="section-title">2. Analysis Configuration</h2>
-            
+
             <table class="config-table">
                 <tbody>
                     <tr>
@@ -397,28 +397,32 @@
         {% if results %}
         <div class="section">
             <h2 class="section-title">3. Differential Expression Results</h2>
-            
+
             <div class="stats-grid">
                 <div class="stat-card">
                     <h3>{{ results.total_proteins }}</h3>
                     <p>Total Proteins</p>
                 </div>
+                {% if results.significant_proteins %}
                 <div class="stat-card success">
                     <h3>{{ results.significant_proteins }}</h3>
                     <p>Significant Proteins</p>
                 </div>
+                {% endif %}
             </div>
-            
-            {% if results.volcano_plot %}
+
+            {% if results.volcano_plot_image %}
             <h3 class="section-subtitle">Volcano Plot</h3>
             <div class="plot-container">
+                <img src="data:image/png;base64,{{ results.volcano_plot_image }}" alt="Volcano Plot">
                 <p class="plot-caption">
-                    Volcano plot showing log2 fold change vs -log10(p-value). 
-                    Red points: upregulated proteins. Blue points: downregulated proteins.
+                    Volcano plot: log2 fold change vs -log10(p-value).
+                    Red = upregulated, Blue = downregulated, Gray = not significant.
+                    Dashed lines mark p = 0.05 and |log2FC| = 1 thresholds.
                 </p>
             </div>
             {% endif %}
-            
+
             {% if results.top_proteins %}
             <h3 class="section-subtitle">Top 50 Significant Proteins</h3>
             <div style="max-height: 500px; overflow-y: auto;">
@@ -455,52 +459,51 @@
         {% if qc_data %}
         <div class="section">
             <h2 class="section-title">4. Quality Control Analysis</h2>
-            
-            {% if qc_data.pca %}
+
+            {% if qc_data.pca and qc_data.pca.plot_image %}
             <h3 class="section-subtitle">Principal Component Analysis</h3>
             <div class="info-box">
-                <strong>PC1 Variance:</strong> {{ qc_data.pca.pc1_variance }}% | 
+                <strong>PC1 Variance:</strong> {{ qc_data.pca.pc1_variance }}% |
                 <strong>PC2 Variance:</strong> {{ qc_data.pca.pc2_variance }}%
             </div>
             <div class="plot-container">
+                <img src="data:image/png;base64,{{ qc_data.pca.plot_image }}" alt="PCA Plot">
                 <p class="plot-caption">
-                    PCA plot showing sample clustering. Samples from the same condition should cluster together.
+                    PCA plot showing sample clustering by condition. Samples from the same condition should cluster together.
                 </p>
             </div>
             {% endif %}
-            
-            {% if qc_data.pvalue_distribution %}
+
+            {% if qc_data.pvalue_distribution and qc_data.pvalue_distribution.plot_image %}
             <h3 class="section-subtitle">P-value Distribution</h3>
             <div class="plot-container">
+                <img src="data:image/png;base64,{{ qc_data.pvalue_distribution.plot_image }}" alt="P-value Distribution">
                 <p class="plot-caption">
                     Distribution of p-values across all proteins. A peak near 0 indicates differentially expressed proteins.
+                    Red dashed line = uniform distribution expectation.
                 </p>
             </div>
             {% endif %}
-            
-            {% if qc_data.cv_data %}
+
+            {% if qc_data.cv_data and qc_data.cv_plot_image %}
             <h3 class="section-subtitle">Coefficient of Variation</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Condition</th>
-                        <th>Mean CV</th>
-                        <th>Median CV</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for condition, cv_values in qc_data.cv_data.items() %}
-                    <tr>
-                        <td>{{ condition }}</td>
-                        <td>{{ "%.3f"|format(cv_values|sum / cv_values|length) if cv_values else "N/A" }}</td>
-                        <td>{{ "%.3f"|format(cv_values|sort[cv_values|length // 2]) if cv_values else "N/A" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="plot-container">
+                <img src="data:image/png;base64,{{ qc_data.cv_plot_image }}" alt="CV Boxplot">
+                <p class="plot-caption">
+                    Boxplot of PSM coefficient of variation per condition. Lower CV indicates higher technical reproducibility.
+                </p>
+            </div>
             {% endif %}
-            
-            {% if qc_data.data_completeness %}
+
+            {% if qc_data.data_completeness and qc_data.completeness_plot_image %}
+            <h3 class="section-subtitle">Data Completeness</h3>
+            <div class="plot-container">
+                <img src="data:image/png;base64,{{ qc_data.completeness_plot_image }}" alt="Data Completeness">
+                <p class="plot-caption">
+                    Stacked bar chart showing present vs missing proteins per sample.
+                </p>
+            </div>
+            {% elif qc_data.data_completeness %}
             <h3 class="section-subtitle">Data Completeness by Sample</h3>
             <table>
                 <thead>
@@ -530,7 +533,7 @@
         {% if gsea_results and gsea_results.databases %}
         <div class="section">
             <h2 class="section-title">5. Gene Set Enrichment Analysis</h2>
-            
+
             {% for database in gsea_results.databases %}
             <div class="gsea-database">
                 <h4>{{ database.name }}</h4>
@@ -540,7 +543,7 @@
                     <span style="color: #e74c3c;">Overrepresented: {{ database.overrepresented }}</span>
                     <span style="color: #3498db;">Underrepresented: {{ database.underrepresented }}</span>
                 </div>
-                
+
                 {% if database.top_pathways %}
                 <table class="pathway-table">
                     <thead>

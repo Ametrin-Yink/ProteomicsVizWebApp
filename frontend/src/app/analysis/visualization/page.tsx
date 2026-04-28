@@ -23,12 +23,26 @@ function ResultsContent() {
   const [error, setError] = useState<string | null>(null);
   const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string; experiment: string } | null>(null);
 
-  const [filters, setFilters] = useState<VolcanoFilters>({
-    foldChange: 1,
-    pValue: 0.05,
-    adjPValue: 1,
-    s0: 0.1, // 10% of foldChange threshold
+  const [filters, setFilters] = useState<VolcanoFilters>(() => {
+    // Restore from localStorage if available
+    try {
+      const saved = localStorage.getItem('volcano_filters');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      foldChange: 1,
+      pValue: 0.05,
+      adjPValue: 1,
+      s0: 0.1, // 10% of foldChange threshold
+    };
   });
+
+  // Persist filters to localStorage for PDFExport to read
+  useEffect(() => {
+    try {
+      localStorage.setItem('volcano_filters', JSON.stringify(filters));
+    } catch {}
+  }, [filters]);
 
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
   const [selectedProteinData, setSelectedProteinData] = useState<DEResult | null>(null);
@@ -244,7 +258,7 @@ function ResultsContent() {
           {/* Right Column - Protein Info */}
           <div className="lg:col-span-1">
             {selectedProteins.size === 1 ? (
-              <ProteinInfo protein={selectedProteinData} sessionId={sessionId} />
+              <ProteinInfo protein={selectedProteinData} sessionId={sessionId} filters={filters} />
             ) : selectedProteins.size > 1 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6">
                 <div className="text-center text-gray-500 py-8">
@@ -262,7 +276,7 @@ function ResultsContent() {
                 </div>
               </div>
             ) : (
-              <ProteinInfo protein={null} sessionId={sessionId} />
+              <ProteinInfo protein={null} sessionId={sessionId} filters={filters} />
             )}
           </div>
         </div>

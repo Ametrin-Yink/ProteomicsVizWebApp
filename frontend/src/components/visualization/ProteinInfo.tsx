@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { DEResult, ProteinAbundance, PeptideAbundanceData } from '@/types/api';
-import { formatNumber, formatPValue } from '@/lib/utils';
+import type { DEResult, ProteinAbundance, PeptideAbundanceData, VolcanoFilters } from '@/types/api';
+import { formatNumber, formatPValue, getSignificanceLabel, getVolcanoPointColor } from '@/lib/utils';
 import { getProteinAbundance, getPeptideAbundance } from '@/lib/api';
 import { fetchGeneNames } from '@/lib/uniprot';
 import { ProteinAbundancePlot, PeptideAbundancePlot } from './AbundancePlot';
@@ -14,6 +14,7 @@ interface ProteinInfoProps {
   protein: DEResult | null;
   sessionId: string;
   isLoading?: boolean;
+  filters?: VolcanoFilters;
 }
 
 interface ParsedProteinInfo {
@@ -51,7 +52,7 @@ function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
   return { accessions, geneNames: paddedGeneNames };
 }
 
-export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinInfoProps) {
+export default function ProteinInfo({ protein, sessionId, isLoading, filters }: ProteinInfoProps) {
   const [proteinAbundance, setProteinAbundance] = useState<ProteinAbundance | null>(null);
   const [peptideAbundance, setPeptideAbundance] = useState<PeptideAbundanceData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -210,15 +211,31 @@ export default function ProteinInfo({ protein, sessionId, isLoading }: ProteinIn
 
         <div className="flex justify-between items-center py-2">
           <span className="text-sm text-gray-500">Significance</span>
-          <span
-            className={`text-sm font-medium px-2 py-1 rounded ${
-              protein.significant
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-600'
-            }`}
-          >
-            {protein.significant ? 'Significant' : 'Not Significant'}
-          </span>
+          {filters ? (
+            (() => {
+              const label = getSignificanceLabel(protein.log_fc, protein.pval, protein.adj_pval, filters);
+              const isSignificant = label !== 'Not Significant';
+              const color = getVolcanoPointColor(protein.log_fc, protein.pval, protein.adj_pval, filters);
+              return (
+                <span
+                  className="text-sm font-medium px-2 py-1 rounded"
+                  style={{ backgroundColor: isSignificant ? color + '20' : '#F3F4F6', color: isSignificant ? color : '#6B7280' }}
+                >
+                  {label}
+                </span>
+              );
+            })()
+          ) : (
+            <span
+              className={`text-sm font-medium px-2 py-1 rounded ${
+                protein.significant
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {protein.significant ? 'Significant' : 'Not Significant'}
+            </span>
+          )}
         </div>
       </div>
 

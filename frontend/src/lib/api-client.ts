@@ -459,21 +459,46 @@ export const reportsApi = {
   /**
    * Generate PDF report
    */
-  generate: async (sessionId: string): Promise<{ status: string; report_id: string }> => {
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/export`), {
+  generate: async (
+    sessionId: string,
+    opts?: {
+      fold_change?: number; p_value?: number; adj_p_value?: number; s0?: number;
+      images?: Record<string, string[]>;
+    }
+  ): Promise<{ report_id: string; status: string; progress: number; download_url: string }> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/reports/generate`), {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts || {}),
     });
-    return handleResponse<{ status: string; report_id: string }>(response);
+    return handleResponse<{ report_id: string; status: string; progress: number; download_url: string }>(response);
   },
 
   /**
    * Download PDF report
    */
-  download: async (sessionId: string, __reportId: string): Promise<Blob> => {
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/download`));
+  download: async (sessionId: string, reportId: string): Promise<Blob> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/reports/${reportId}/download`));
     if (!response.ok) {
-      await handleResponse<never>(response);
+      const contentType = response.headers.get('content-type');
+      if (contentType?.includes('application/json')) {
+        const errorData = await response.json();
+        throw new APIError(
+          errorData.detail || 'Download failed',
+          'DOWNLOAD_FAILED',
+          response.status
+        );
+      }
+      throw new APIError('Download failed', 'DOWNLOAD_FAILED', response.status);
     }
     return response.blob();
+  },
+
+  /**
+   * List reports for a session
+   */
+  list: async (sessionId: string): Promise<{ reports: Array<{ report_id: string; filename: string; size_mb: number; created_at: string; download_url: string }> }> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/reports`));
+    return handleResponse<{ reports: Array<{ report_id: string; filename: string; size_mb: number; created_at: string; download_url: string }> }>(response);
   },
 };
