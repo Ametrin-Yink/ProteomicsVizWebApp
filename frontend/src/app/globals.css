@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@tailwindcss/typography";
+@plugin "@tailwindcss/typography";
 
 /* Proteomics Visualization Web App - Design System */
 /* Primary: #E73564 (Coral Pink) | Secondary: #00ADEF (Cyan) */

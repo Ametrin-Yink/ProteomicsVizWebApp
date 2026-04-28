@@ -155,14 +155,18 @@ export function isSignificantVolcano(
     );
   }
 
-  // Hyperbolic S0-factor cutoff: y = c / (|x| - s0)
+  // Hyperbolic S0-factor cutoff: y = y0 + c / (|x| - actualS0)
+  // where c = y0 * (foldChange - actualS0). The curve passes through (foldChange, 2*y0),
+  // asymptotes to y0 (the p-value line) as |x| → ∞, and never crosses below it.
+  // The vertical asymptote is at |x| = actualS0 (not at foldChange), preserving
+  // S0's role as the curve shape parameter.
   const pLog10Threshold = -Math.log10(pValThreshold);
   const c = pLog10Threshold * (foldChange - actualS0);
   const y = -Math.log10(pValue);
   const absX = Math.abs(logFC);
 
   if (absX <= actualS0) return false;
-  return y > c / (absX - actualS0);
+  return y > pLog10Threshold + c / (absX - actualS0);
 }
 
 // Get color based on significance (supports both rectangular and S0 hyperbolic cutoffs)

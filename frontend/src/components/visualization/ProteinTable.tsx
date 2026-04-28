@@ -44,8 +44,8 @@ export default function ProteinTable({
   sessionConfig,
 }: ProteinTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
-    key: 'adj_pval',
-    direction: 'asc',
+    key: 'significant',
+    direction: 'desc',
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [filterText, setFilterText] = useState('');

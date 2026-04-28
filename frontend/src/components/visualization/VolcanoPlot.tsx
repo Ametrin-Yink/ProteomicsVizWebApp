@@ -126,7 +126,9 @@ export default function VolcanoPlot({
     const actualS0 = filters.s0 * filters.foldChange;
 
     if (actualS0 > 0) {
-      // Hyperbolic S0-factor curves: y = c / (|x| - s0)
+      // Hyperbolic S0-factor curves: y = y0 + c / (|x| - actualS0)
+      // where c = y0 * (foldChange - actualS0). The curve asymptotes to y0
+      // (the p-value line), never crossing it, with vertical asymptote at |x| = actualS0.
       const pLog10Threshold = -Math.log10(filters.pValue);
       const c = pLog10Threshold * (filters.foldChange - actualS0);
 
@@ -134,7 +136,7 @@ export default function VolcanoPlot({
       let rightPath = '';
       const step = 0.02;
       for (let x = actualS0 + step; x <= maxX; x += step) {
-        const y = c / (x - actualS0);
+        const y = pLog10Threshold + c / (x - actualS0);
         if (y <= maxY) {
           rightPath += (rightPath === '' ? `M ${x} ${y}` : ` L ${x} ${y}`);
         }
@@ -144,7 +146,7 @@ export default function VolcanoPlot({
       // Generate path for left curve (negative logFC)
       let leftPath = '';
       for (let x = -maxX; x < -actualS0 - step; x += step) {
-        const y = c / (-x - actualS0);
+        const y = pLog10Threshold + c / (-x - actualS0);
         if (y <= maxY) {
           leftPath += (leftPath === '' ? `M ${x} ${y}` : ` L ${x} ${y}`);
         }
