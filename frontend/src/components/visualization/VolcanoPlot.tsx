@@ -120,11 +120,6 @@ export default function VolcanoPlot({
         type: 'scatter' as const,
         text: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => d.gene_name || d.master_protein_accessions.split(/[,;]/)[0].trim()),
         textposition: 'top center' as const,
-        textfont: {
-          size: 14,
-          color: '#111827',
-          family: 'Arial, sans-serif',
-        },
         texttemplate: '%{text}',
         hoverinfo: 'skip',
         showlegend: false,
