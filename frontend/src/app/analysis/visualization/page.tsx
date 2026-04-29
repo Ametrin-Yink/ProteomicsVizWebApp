@@ -11,12 +11,9 @@ import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { isSignificantVolcano } from '@/lib/utils';
 
 
-// Mock session ID - in production this would come from context or URL
-const SESSION_ID = 'mock-session-id';
-
 function ResultsContent() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id') || searchParams.get('session') || SESSION_ID;
+  const sessionId = searchParams.get('session_id') || searchParams.get('session');
 
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +43,7 @@ function ResultsContent() {
   // Fetch data on mount
   useEffect(() => {
     async function fetchData() {
+      if (!sessionId) return;
       setLoading(true);
       setError(null);
       try {
@@ -66,8 +64,9 @@ function ResultsContent() {
 
   // Fetch session config and restore visualization state
   useEffect(() => {
+    if (!sessionId) return;
     async function fetchSessionConfig() {
-      const session = await getSession(sessionId);
+      const session = await getSession(sessionId!);
       if (session) {
         const experiment = session.files?.proteomics?.[0]?.experiment ?? '';
         setSessionConfig({
@@ -159,6 +158,7 @@ function ResultsContent() {
   // Save markers to backend when they change (debounced)
   useEffect(() => {
     const markersArray = Array.from(markedProteins);
+    if (!sessionId) return;
     const timer = setTimeout(async () => {
       try {
         await updateSessionVisualizationState(sessionId, { markers: markersArray });
@@ -171,6 +171,7 @@ function ResultsContent() {
 
   // Save filters to backend when they change (debounced)
   useEffect(() => {
+    if (!sessionId) return;
     const timer = setTimeout(async () => {
       try {
         await updateSessionVisualizationState(sessionId, { volcano_filters: filters });
@@ -213,6 +214,24 @@ function ResultsContent() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
           <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Results</h2>
           <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sessionId) {
+    return (
+      <div data-testid="no-session-selected" className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center text-gray-500">
+          <p className="text-lg text-gray-700 font-medium mb-2">No session selected</p>
+          <p className="text-sm text-gray-500 mb-4">Create a new analysis to get started.</p>
+          <a
+            data-testid="start-analysis-link"
+            href="/"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E73564] to-[#00ADEF] text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Start New Analysis
+          </a>
         </div>
       </div>
     );
