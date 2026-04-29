@@ -269,10 +269,8 @@ export default function VolcanoPlot({
   // Handle click events - select single protein (replaces any existing selection)
   const handleClick = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
-      console.log('Plotly click event:', event, 'selectionMode:', selectionMode);
       if (selectionMode === 'click' && event.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
-        console.log('Selecting protein:', protein);
         onSelectProteins([protein], 'click');
       }
     },
@@ -282,10 +280,8 @@ export default function VolcanoPlot({
   // Handle double-click events - select single protein (same as single click)
   const handleDoubleClick = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
-      console.log('Plotly doubleClick event:', event, 'selectionMode:', selectionMode);
       if (selectionMode === 'click' && event.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
-        console.log('Selecting protein on double-click:', protein);
         onSelectProteins([protein], 'click');
       }
     },
