@@ -4,6 +4,7 @@ JSON-based session persistence layer.
 Provides CRUD operations for session data stored as JSON files.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -36,6 +37,7 @@ class SessionStore:
         """
         self.sessions_dir = sessions_dir or settings.sessions_dir
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        self._save_lock = asyncio.Lock()
     
     def _get_session_dir(self, session_id: str) -> Path:
         """Get session directory path."""
@@ -209,15 +211,15 @@ class SessionStore:
     
     async def _save_session(self, session: Session) -> None:
         """
-        Save session to JSON file.
-        
+        Save session to JSON file. Thread-safe via asyncio lock.
+
         Args:
             session: Session to save
         """
         session_file = self._get_session_file(session.id)
-        
-        async with aiofiles.open(session_file, 'w', encoding='utf-8') as f:
-            await f.write(session.model_dump_json(indent=2))
+        async with self._save_lock:
+            async with aiofiles.open(session_file, 'w', encoding='utf-8') as f:
+                await f.write(session.model_dump_json(indent=2))
     
     def get_session_data_dir(self, session_id: str) -> Path:
         """

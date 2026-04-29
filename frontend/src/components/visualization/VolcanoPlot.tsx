@@ -121,8 +121,8 @@ export default function VolcanoPlot({
         text: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => d.gene_name || d.master_protein_accessions.split(/[,;]/)[0].trim()),
         textposition: 'top center' as const,
         textfont: {
-          size: 10,
-          color: '#FFFFFF',
+          size: 14,
+          color: '#111827',
           family: 'Arial, sans-serif',
         },
         texttemplate: '%{text}',

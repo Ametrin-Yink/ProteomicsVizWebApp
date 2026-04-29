@@ -76,14 +76,18 @@ function ResultsContent() {
           experiment,
         });
 
-        // Restore markers from session
+        // Restore markers from session (always reset, don't carry over from previous session)
         if (session.markers && session.markers.length > 0) {
           setMarkedProteins(new Set(session.markers));
+        } else {
+          setMarkedProteins(new Set());
         }
 
-        // Restore volcano filters from session (overrides localStorage)
+        // Restore volcano filters from session (always reset, fall back to defaults)
         if (session.volcano_filters) {
           setFilters(session.volcano_filters);
+        } else {
+          setFilters({ foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 });
         }
       }
     }

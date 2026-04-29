@@ -191,10 +191,10 @@ export default function ProteinTable({
           {markedProteins.size > 0 && (
             <button
               onClick={onClearAllMarks}
-              className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
               data-testid="clear-all-marks-btn"
             >
-              <Eraser className="w-3 h-3" />
+              <Eraser className="w-4 h-4" />
               Clear All Markers ({markedProteins.size})
             </button>
           )}
