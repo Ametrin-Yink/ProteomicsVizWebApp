@@ -239,7 +239,7 @@ class ReportGenerator:
                         c = plog10_thresh * (fc - s0)
                         abs_x = abs(df[fcol])
                         y = -df[pcol].apply(lambda x: np.log10(max(x, 1e-300)))
-                        sig_mask = (abs_x > s0) & (y > c / (abs_x - s0))
+                        sig_mask = (abs_x > s0) & (y > plog10_thresh + c / (abs_x - s0))
                     results["significant_proteins"] = int(sig_mask.sum())
                     results["upregulated"] = int((sig_mask & (df[fcol] > 0)).sum())
                     results["downregulated"] = int((sig_mask & (df[fcol] < 0)).sum())
@@ -265,7 +265,7 @@ class ReportGenerator:
     @staticmethod
     def _is_significant(log_fc: float, pval: float, adj_pval: float,
                         fc: float, pval_thresh: float, adj_pval_thresh: float, s0: float) -> bool:
-        """Check significance using same logic as frontend isSignificantVolcano."""
+        """Check significance using hyperbolic S0-factor cutoff, matching frontend isSignificantVolcano."""
         if s0 == 0:
             return abs(log_fc) >= fc and pval <= pval_thresh and adj_pval <= adj_pval_thresh
         plog10_thresh = -np.log10(pval_thresh)
@@ -274,7 +274,7 @@ class ReportGenerator:
         abs_x = abs(log_fc)
         if abs_x <= s0:
             return False
-        return y > c / (abs_x - s0)
+        return y > plog10_thresh + c / (abs_x - s0)
 
     def _prepare_top_proteins_table(
         self,
