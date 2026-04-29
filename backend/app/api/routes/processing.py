@@ -500,6 +500,52 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         _cancel_events.pop(session_id, None)
 
 
+async def _recover_orphaned_sessions(store: SessionStore) -> None:
+    """Recover sessions stuck in QUEUED or stale PROCESSING state after a restart.
+
+    QUEUED sessions are reset to CONFIGURING (safe — user files/config preserved).
+    PROCESSING sessions are checked for staleness (6-hour timeout) and reset if stale.
+    """
+    from datetime import datetime, timezone as tz, timedelta
+
+    all_sessions = await store.list_all()
+    recovered = 0
+    for session in all_sessions:
+        if session.state == SessionState.QUEUED:
+            logger.info(f"Recovering orphaned queued session {session.id}: resetting to CONFIGURING")
+            session.state = SessionState.CONFIGURING
+            await store.save(session)
+            recovered += 1
+        elif session.state == SessionState.PROCESSING:
+            pipeline_state = await store.load_pipeline_state(session.id)
+            is_stale = False
+            if pipeline_state and pipeline_state.get("started_at"):
+                try:
+                    started_time = datetime.fromisoformat(pipeline_state["started_at"])
+                    if started_time.tzinfo is None:
+                        started_time = started_time.replace(tzinfo=tz.utc)
+                    elapsed = datetime.now(tz.utc) - started_time
+                    if elapsed > timedelta(hours=6) and not pipeline_state.get("completed_at"):
+                        is_stale = True
+                except (ValueError, TypeError):
+                    is_stale = True
+            else:
+                # No pipeline state or no started_at — likely orphaned from restart
+                is_stale = True
+
+            if is_stale:
+                logger.info(
+                    f"Recovering stale processing session {session.id}: "
+                    f"resetting to CONFIGURING"
+                )
+                session.state = SessionState.CONFIGURING
+                await store.save(session)
+                recovered += 1
+
+    if recovered:
+        logger.info(f"Session recovery: {recovered} session(s) reset to CONFIGURING")
+
+
 @router.post("/{session_id}/cancel")
 async def cancel_processing(
     session_id: str,

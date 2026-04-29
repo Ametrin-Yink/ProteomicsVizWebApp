@@ -265,6 +265,10 @@ function ProcessingContent() {
             const statusData = await processingAPI.getStatus(sessionId);
             if (statusData.queue_position && statusData.queue_position > 0) {
               setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+            } else if (statusData.state === 'queued') {
+              // Session is queued but queue_position may be null (e.g. after backend restart)
+              // Show queued UI with position 1 since server-side queue tracking was lost
+              setQueued(1, 0);
             } else if (statusData.state === 'processing') {
               clearQueued();
             }
@@ -346,6 +350,8 @@ function ProcessingContent() {
             const statusData = await processingAPI.getStatus(sessionId);
             if (statusData.queue_position && statusData.queue_position > 0) {
               setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+            } else if (statusData.state === 'queued') {
+              setQueued(1, 0);
             } else if (statusData.state === 'processing') {
               clearQueued();
             }

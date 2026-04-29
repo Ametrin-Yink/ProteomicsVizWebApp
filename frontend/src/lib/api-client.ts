@@ -62,6 +62,33 @@ function mapBackendStatus(status: string): SessionStatus {
   return statusMap[status] || 'created';
 }
 
+/** Map backend file metadata to ParsedFilename format for the analysis store */
+export function mapBackendFiles(files: BackendSession['files']): Array<{
+  filename: string;
+  experiment: string;
+  condition: string;
+  replicate: number;
+  size: number;
+  columns?: string[];
+}> {
+  if (!files?.proteomics) return [];
+  return (files.proteomics as Array<{
+    filename: string;
+    size: number;
+    experiment?: string;
+    condition?: string;
+    replicate?: number;
+    columns?: string[];
+  }>).map(f => ({
+    filename: f.filename,
+    experiment: f.experiment || '',
+    condition: f.condition || '',
+    replicate: f.replicate || 0,
+    size: f.size,
+    columns: f.columns || [],
+  }));
+}
+
 /**
  * Build a default AnalysisConfig to satisfy the Session type from @/types/session
  */
@@ -231,11 +258,11 @@ export const sessionsApi = {
   get: async (sessionId: string): Promise<Session> => {
     const response = await fetch(apiUrl(`/sessions/${sessionId}`));
     const backendSession = await handleResponse<BackendSession>(response);
-    
+
     // Use id or session_id (backend returns id)
     const sid = backendSession.id || backendSession.session_id || sessionId;
     const sessionStatus = backendSession.state || backendSession.status || 'created';
-    
+
     // Map backend format to frontend format
     return {
       id: sid,

@@ -53,6 +53,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Session scanning failed: {e} - continuing with empty session list")
 
+    # Recover orphaned sessions stuck in QUEUED or stale PROCESSING state
+    try:
+        from app.api.routes.processing import _recover_orphaned_sessions
+
+        await asyncio.wait_for(
+            _recover_orphaned_sessions(app.state.session_store),
+            timeout=10.0,
+        )
+    except Exception as e:
+        logger.warning(f"Session recovery failed: {e}")
+
     yield
 
     # Shutdown

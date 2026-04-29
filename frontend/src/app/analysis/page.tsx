@@ -16,7 +16,7 @@ import ConfigPanel from '@/components/analysis/ConfigPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi, processingApi } from '@/lib/api-client';
+import { sessionsApi, processingApi, mapBackendFiles } from '@/lib/api-client';
 
 function AnalysisContent() {
   const router = useRouter();
@@ -73,6 +73,21 @@ function AnalysisContent() {
             const session = await sessionsApi.get(sessionIdToLoad);
             setSessionId(session.id);
             localStorage.setItem('currentSessionId', session.id);
+
+            // Restore existing files from backend into analysis store
+            try {
+              const rawResp = await fetch(`/api/sessions/${sessionIdToLoad}`);
+              if (rawResp.ok) {
+                const rawSession = await rawResp.json();
+                const files = mapBackendFiles(rawSession.files);
+                const { addUploadedFile } = useAnalysisStore.getState();
+                for (const file of files) {
+                  addUploadedFile(file);
+                }
+              }
+            } catch {
+              // File restoration failed, continue anyway
+            }
 
             // Redirect if session is already processing or completed
             if (session.status === 'processing') {

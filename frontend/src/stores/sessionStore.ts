@@ -54,13 +54,14 @@ export const useSessionStore = create<SessionStore>()(
         });
       } catch (error) {
         // Silently handle transient network errors (e.g. backend not ready yet)
-        // Store remains empty, user can retry via manual interaction
+        // Keep existing sessions in the store so user doesn't see a blank list
         set((state) => {
-          state.sessions = [];
           state.isLoading = false;
           // Only show error for non-network failures
           if (error instanceof Error && !error.message.includes('fetch')) {
             state.error = error.message;
+          } else {
+            state.error = 'Could not connect to server. Sessions will appear once connected.';
           }
         });
       }
