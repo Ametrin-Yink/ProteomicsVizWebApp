@@ -76,7 +76,7 @@ export default function HomePage() {
     
     try {
       // Create session via backend API
-      const sessionName = `Analysis ${new Date().toLocaleString()}`;
+      const sessionName = `Analysis ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
       const newSession = await sessionsApi.create(sessionName, template.id);
       
       // Add to local store
