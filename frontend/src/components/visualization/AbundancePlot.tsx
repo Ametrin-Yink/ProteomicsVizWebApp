@@ -104,7 +104,8 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
 
   const config = useMemo(
     () => ({
-      displayModeBar: false,
+      displayModeBar: true,
+      modeBarButtonsToRemove: ['select2d', 'lasso2d'],
       displaylogo: false,
       responsive: true,
     }),
