@@ -5,8 +5,8 @@ import { FileDown, X, Eye, RotateCcw, Loader2 } from 'lucide-react';
 import { reportsApi } from '@/lib/api-client';
 
 interface PlotlyGraphDiv {
-  data: unknown;
-  layout: unknown;
+  data: unknown[];
+  layout: Record<string, unknown>;
 }
 
 declare global {
@@ -118,7 +118,7 @@ async function capturePlotWithFonts(
   } catch {
     return null;
   } finally {
-    Plotly?.purge(container);
+    (Plotly as any)?.purge?.(container);
     container.remove();
   }
 }
