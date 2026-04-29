@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
-import { getQCData } from '@/lib/api';
+import { getQCData, getSession } from '@/lib/api';
 
 function QCContent() {
   const searchParams = useSearchParams();
@@ -13,6 +13,8 @@ function QCContent() {
   const [data, setData] = useState<QCData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [treatment, setTreatment] = useState<string>('');
+  const [control, setControl] = useState<string>('');
 
   useEffect(() => {
     async function fetchData() {
@@ -21,6 +23,12 @@ function QCContent() {
       try {
         const qcData = await getQCData(sessionId);
         setData(qcData);
+        // Fetch session config for treatment/control group names
+        const session = await getSession(sessionId);
+        if (session?.config) {
+          setTreatment(session.config.treatment ?? '');
+          setControl(session.config.control ?? '');
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load QC data');
       } finally {
@@ -116,7 +124,7 @@ function QCContent() {
 
         {/* QC Plots Grid */}
         {data ? (
-          <QCPlots data={data} />
+          <QCPlots data={data} treatment={treatment || undefined} control={control || undefined} />
         ) : (
           <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
             <p className="text-gray-500">No QC data available</p>
