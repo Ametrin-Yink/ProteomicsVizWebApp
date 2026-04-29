@@ -17,6 +17,7 @@ class SessionState(str, Enum):
     
     CREATED = "created"
     CONFIGURING = "configuring"
+    QUEUED = "queued"
     PROCESSING = "processing"
     COMPLETED = "completed"
     ERROR = "error"
@@ -173,6 +174,8 @@ class ProcessingStatus(BaseModel):
     started_at: Optional[datetime] = None
     estimated_completion: Optional[datetime] = None
     error_message: Optional[str] = None
+    queue_position: Optional[int] = None
+    queue_length: Optional[int] = None
 
 
 class PipelineState(BaseModel):

@@ -29,6 +29,9 @@ interface ProcessingStore {
   sessionId: string | null;
   outputs: CompleteMessage['payload']['outputs'] | null;
   processingDuration: number | null;
+  isQueued: boolean;
+  queuePosition: number;
+  queueLength: number;
 
   // Actions
   initializeSteps: (removeRazor: boolean) => void;
@@ -42,6 +45,8 @@ interface ProcessingStore {
   setConnected: (connected: boolean) => void;
   setCancelled: (cancelled: boolean) => void;
   syncStepProgress: (completedSteps: number[], currentStep: number) => void;
+  setQueued: (position: number, length: number) => void;
+  clearQueued: () => void;
   reset: () => void;
   retry: () => void;
 }
@@ -73,6 +78,9 @@ export const useProcessingStore = create<ProcessingStore>()(
     sessionId: null,
     outputs: null,
     processingDuration: null,
+    isQueued: false,
+    queuePosition: 0,
+    queueLength: 0,
 
     // Initialize steps based on configuration
     initializeSteps: (removeRazor: boolean) => {
@@ -225,6 +233,22 @@ export const useProcessingStore = create<ProcessingStore>()(
       });
     },
 
+    // Set queued state from polling data
+    setQueued: (position: number, length: number) => {
+      set((state) => {
+        state.isQueued = true;
+        state.queuePosition = position;
+        state.queueLength = length;
+      });
+    },
+
+    // Clear queued state
+    clearQueued: () => {
+      set((state) => {
+        state.isQueued = false;
+      });
+    },
+
     // Reset store to initial state
     reset: () => {
       set((state) => {
@@ -238,6 +262,9 @@ export const useProcessingStore = create<ProcessingStore>()(
         state.sessionId = null;
         state.outputs = null;
         state.processingDuration = null;
+        state.isQueued = false;
+        state.queuePosition = 0;
+        state.queueLength = 0;
       });
     },
 

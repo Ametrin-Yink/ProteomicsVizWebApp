@@ -10,6 +10,7 @@ export type SessionStatus =
   | 'created'
   | 'uploading'
   | 'uploaded'
+  | 'queued'
   | 'processing'
   | 'completed'
   | 'error'

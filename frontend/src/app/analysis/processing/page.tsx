@@ -158,6 +158,42 @@ const CompletionDisplay: React.FC<{
   </div>
 );
 
+// Queued display component
+function QueuedDisplay({ queuePosition, queueLength }: { queuePosition: number; queueLength: number }) {
+  return (
+    <div data-testid="processing-queued" className="mb-8">
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+              <Clock className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-blue-900 mb-1">Queued for Processing</h3>
+            <p className="text-sm text-blue-700 mb-4">
+              Another analysis is currently running. Your session is next in line.
+            </p>
+            <div className="flex items-center gap-3 text-sm text-blue-600">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Queue position:</span>
+                <span className="text-lg font-bold">#{queuePosition}</span>
+              </div>
+              <span className="text-blue-400">|</span>
+              <div>
+                <span className="font-medium">{queueLength} session{queueLength !== 1 ? 's' : ''} waiting</span>
+              </div>
+            </div>
+            <p className="text-xs text-blue-500 mt-3">
+              This page will automatically update when your analysis starts.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -174,6 +210,9 @@ function ProcessingContent() {
     isConnected,
     isComplete,
     isCancelled,
+    isQueued,
+    queuePosition,
+    queueLength,
     error,
     processingDuration,
     sessionId: storeSessionId,
@@ -183,6 +222,8 @@ function ProcessingContent() {
     setCancelled,
     setLogs,
     setComplete,
+    setQueued,
+    clearQueued,
     syncStepProgress,
     retry,
   } = useProcessingStore();
@@ -204,6 +245,12 @@ function ProcessingContent() {
           // Sync step progress from completed_steps and current_step
           if (logData.completed_steps && logData.current_step) {
             syncStepProgress(logData.completed_steps, logData.current_step);
+            clearQueued();
+          }
+
+          // Check if queued
+          if (logData.queue_position !== undefined) {
+            setQueued(logData.queue_position, logData.queue_length ?? 0);
           }
 
           // Update logs
@@ -245,7 +292,7 @@ function ProcessingContent() {
     }, 3000); // Poll every 3 seconds
 
     return () => clearInterval(pollInterval);
-  }, [sessionId, isConnected, isComplete, error, setComplete, setLogs, syncStepProgress]);
+  }, [sessionId, isConnected, isComplete, error, setComplete, setLogs, syncStepProgress, setQueued, clearQueued]);
 
   // Note: Processing is started by the analysis page before navigation.
   // Retry is handled by the handleRetry callback below.
@@ -450,6 +497,11 @@ function ProcessingContent() {
 
         {/* Main content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+          {/* Queued state */}
+          {isQueued && (
+            <QueuedDisplay queuePosition={queuePosition} queueLength={queueLength} />
+          )}
 
           {/* Terminal state cards - collapsible */}
           {(error || isCancelled || isComplete || startError) && (

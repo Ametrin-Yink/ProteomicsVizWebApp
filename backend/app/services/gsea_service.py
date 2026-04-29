@@ -64,7 +64,7 @@ class GSEAService:
 
     def __init__(self):
         """Initialize GSEA service."""
-        self.results: dict[str, GSEAResults] = {}
+        pass
 
     async def run_gsea_analysis(
         self,
@@ -121,7 +121,7 @@ class GSEAService:
             databases = list(DatabaseType)
 
         # Run GSEA for each database in parallel
-        self.results = {}
+        results: dict[str, GSEAResults] = {}
 
         # Determine threads per database — gseapy's prerank is CPU-bound in its
         # permutation loop, so each database benefits from parallelism.
@@ -179,12 +179,12 @@ class GSEAService:
         results_list = await asyncio.gather(*tasks)
 
         # Combine results
-        self.results = dict(results_list)
+        results = dict(results_list)
 
-        total_pathways = sum(r.significant_pathways for r in self.results.values())
+        total_pathways = sum(r.significant_pathways for r in results.values())
         logger.info(f"Step 9 complete: GSEA analysis finished, {total_pathways} total significant pathways")
 
-        return self.results
+        return results
     
     def _prepare_ranked_list(self, diff_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         """
@@ -566,33 +566,35 @@ class GSEAService:
             logger.warning(f"Could not generate heatmap data: {e}")
             return None
 
-    def get_results(self, database: Optional[str] = None) -> Optional[GSEAResults]:
+    def get_results(self, results: dict[str, GSEAResults], database: Optional[str] = None) -> Optional[GSEAResults]:
         """
         Get GSEA results.
-        
+
         Args:
+            results: GSEA results dictionary
             database: Database name (returns all if None)
-            
+
         Returns:
             GSEAResults or dictionary of results
         """
         if database:
-            return self.results.get(database)
-        return self.results
-    
-    def save_results(self, output_path: Path) -> None:
+            return results.get(database)
+        return results
+
+    def save_results(self, results: dict[str, GSEAResults], output_path: Path) -> None:
         """
         Save GSEA results to JSON.
-        
+
         Args:
+            results: GSEA results dictionary
             output_path: Path to save JSON
         """
         import json
-        
+
         results_dict = {
-            db: result.model_dump() for db, result in self.results.items()
+            db: result.model_dump() for db, result in results.items()
         }
-        
+
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(results_dict, f, indent=2, default=str)
 

@@ -14,7 +14,7 @@ from app.services.report_generator import report_generator, ReportGenerator
 from app.services.compound_service import compound_service, CompoundService
 from app.services.plot_generator import plot_generator, PlotGenerator
 from app.services.data_processor import DataProcessor, process_psm_files
-from app.services.qc_calculator import qc_calculator, QCCalculator
+from app.services.qc_calculator import QCCalculator
 from app.services.session_manager import session_manager, SessionManager
 
 __all__ = [
@@ -26,7 +26,6 @@ __all__ = [
     'PlotGenerator',
     'DataProcessor',
     'process_psm_files',
-    'qc_calculator',
     'QCCalculator',
     'session_manager',
     'SessionManager',

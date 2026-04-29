@@ -27,9 +27,9 @@ from app.models.analysis import (
 from app.models.data import QCData
 from app.models.session import SessionState as SessionStateEnum
 from app.services.data_processor import DataProcessor, ProcessingConfig
-from app.services.gsea_service import gsea_service
+from app.services.gsea_service import GSEAService
 from app.services.msqrob2_wrapper import msqrob2_wrapper
-from app.services.qc_calculator import qc_calculator
+from app.services.qc_calculator import QCCalculator
 from app.services.session_manager import session_manager
 
 logger = logging.getLogger("proteomics")
@@ -158,11 +158,11 @@ class PipelineState:
 class ProcessingOrchestrator:
     """Orchestrates the 9-step processing pipeline."""
 
-    def __init__(self):
-        """Initialize orchestrator."""
+    def __init__(self, session_id: str):
+        """Initialize orchestrator for a specific session."""
+        self._session_id = session_id
         self.progress_callbacks: list[Callable[[ProcessingProgress], None]] = []
-        self._current_session_id: Optional[str] = None
-        self._pipeline_state: Optional[PipelineState] = None
+        self._pipeline_state = PipelineState(session_id)
         # Queue-based batching for progress updates
         self._pending_queue: deque[ProcessingProgress] = deque()
         self._flush_task: Optional[asyncio.Task] = None
@@ -224,12 +224,12 @@ class ProcessingOrchestrator:
         """
         try:
             # Store log in pipeline state using the existing instance
-            if not self._current_session_id:
+            if not self._session_id:
                 logger.warning(f"_send_log: No current session ID, cannot save log: {message}")
                 return
 
             if self._pipeline_state:
-                logger.debug(f"_send_log: Saving log to session {self._current_session_id}: {message[:50]}...")
+                logger.debug(f"_send_log: Saving log to session {self._session_id}: {message[:50]}...")
                 self._pipeline_state.add_log(level, message, step)
             else:
                 logger.warning(f"_send_log: No pipeline state, cannot save log: {message}")
@@ -240,7 +240,7 @@ class ProcessingOrchestrator:
                     loop = asyncio.get_running_loop()
                     loop.create_task(
                         session_manager.send_log_message(
-                            session_id=self._current_session_id,
+                            session_id=self._session_id,
                             level=level,
                             message=message,
                             step=step
@@ -294,14 +294,12 @@ class ProcessingOrchestrator:
 
     async def process_session(
         self,
-        session_id: str,
         config: AnalysisConfig,
         websocket_callback: Optional[Callable[[ProcessingProgress], None]] = None,
     ) -> AnalysisResult:
         """Process a session through all 9 steps.
 
         Args:
-            session_id: Session ID
             config: Analysis configuration
             websocket_callback: Optional WebSocket callback for progress updates
 
@@ -314,41 +312,37 @@ class ProcessingOrchestrator:
         import traceback
 
         logger.info(
-            f"=== ENTERING process_session for session {session_id} ===",
-            extra={"session_id": session_id, "config": config.model_dump()},
+            f"=== ENTERING process_session for session {self._session_id} ===",
+            extra={"session_id": self._session_id, "config": config.model_dump()},
         )
-
-        # Store session_id and pipeline state for log messages
-        self._current_session_id = session_id
 
         # Register WebSocket callback
         if websocket_callback:
             self.register_progress_callback(websocket_callback)
-            logger.info(f"WebSocket callback registered for session {session_id}")
+            logger.info(f"WebSocket callback registered for session {self._session_id}")
 
-        # Initialize state - MUST be done before setting _pipeline_state
-        state = PipelineState(session_id)
-        self._pipeline_state = state
+        # Use the pipeline state initialized in __init__
+        state = self._pipeline_state
         logger.info(f"PipelineState initialized: current_step={state.data['current_step']}, completed={state.data['completed_steps']}")
 
         try:
             state.mark_started()
-            logger.info(f"Pipeline marked as started for session {session_id}")
+            logger.info(f"Pipeline marked as started for session {self._session_id}")
 
             # Get session directories
-            uploads_dir = await session_manager.get_uploads_dir(session_id)
-            results_dir = await session_manager.get_results_dir(session_id)
+            uploads_dir = await session_manager.get_uploads_dir(self._session_id)
+            results_dir = await session_manager.get_results_dir(self._session_id)
 
             # Initialize result
-            result = AnalysisResult(session_id=session_id)
+            result = AnalysisResult(session_id=self._session_id)
 
             # Update session state
             await session_manager.update_session_state(
-                session_id, SessionStateEnum.PROCESSING
+                self._session_id, SessionStateEnum.PROCESSING
             )
 
             # Get proteomics files
-            session = await session_manager.get_session(session_id)
+            session = await session_manager.get_session(self._session_id)
             if not session.files or not session.files.proteomics:
                 raise ProcessingError(
                     message="No proteomics files found",
@@ -602,13 +596,14 @@ class ProcessingOrchestrator:
             )
 
             psm_qc_path = psm_input_for_r  # Use Parquet if available
-            qc_data = await qc_calculator.calculate_all_metrics(
+            qc_calc = QCCalculator()
+            qc_data = await qc_calc.calculate_all_metrics(
                 protein_abundances_path=protein_output,
                 diff_expression_path=de_output,
                 psm_abundances_path=psm_qc_path,
             )
 
-            qc_calculator.save_qc_data(qc_output)
+            qc_calc.save_qc_data(qc_data, qc_output)
 
             state.mark_step_completed(8, qc_output)
             result.qc_results_path = str(qc_output)
@@ -624,13 +619,14 @@ class ProcessingOrchestrator:
                 self._create_progress(9, "started", 0, "Running GSEA analysis...")
             )
 
-            gsea_results = await gsea_service.run_gsea_analysis(
+            gsea = GSEAService()
+            gsea_results = await gsea.run_gsea_analysis(
                 diff_expression_path=de_output,
                 output_dir=results_dir / "gsea",
                 protein_abundance_path=protein_output if protein_output.exists() else None
             )
 
-            gsea_service.save_results(gsea_output)
+            gsea.save_results(gsea_results, gsea_output)
 
             state.mark_step_completed(9, gsea_output)
             result.gsea_results_path = str(gsea_output)
@@ -647,7 +643,7 @@ class ProcessingOrchestrator:
             # Mark pipeline as completed
             state.mark_completed()
             await session_manager.update_session_state(
-                session_id, SessionStateEnum.COMPLETED
+                self._session_id, SessionStateEnum.COMPLETED
             )
 
             # Calculate processing time
@@ -660,25 +656,18 @@ class ProcessingOrchestrator:
             result.steps_completed = state.data["completed_steps"]
 
             logger.info(
-                f"Processing pipeline completed for session {session_id}",
+                f"Processing pipeline completed for session {self._session_id}",
                 extra={
-                    "session_id": session_id,
+                    "session_id": self._session_id,
                     "total_psms": result.total_psms,
                     "total_proteins": result.total_proteins,
                     "significant_proteins": result.significant_proteins,
                 },
             )
 
-            # Clear session_id before returning
-            self._current_session_id = None
-            self._pipeline_state = None
             return result
 
         except Exception as e:
-            # Clear session_id on error
-            self._current_session_id = None
-            self._pipeline_state = None
-
             # Mark step as failed
             current_step = state.data["current_step"]
             error_msg = str(e)
@@ -687,7 +676,7 @@ class ProcessingOrchestrator:
             logger.error(
                 f"Processing failed at step {current_step}: {error_msg}",
                 extra={
-                    "session_id": session_id,
+                    "session_id": self._session_id,
                     "step": current_step,
                     "error": error_msg,
                     "traceback": error_trace,
@@ -698,7 +687,7 @@ class ProcessingOrchestrator:
 
             # Update session state
             await session_manager.update_session_state(
-                session_id, SessionStateEnum.ERROR, error_msg
+                self._session_id, SessionStateEnum.ERROR, error_msg
             )
 
             # Send failure progress
@@ -719,45 +708,3 @@ class ProcessingOrchestrator:
                     details={"error": error_msg, "traceback": error_trace},
                 )
 
-    async def resume_processing(
-        self,
-        session_id: str,
-        config: AnalysisConfig,
-        websocket_callback: Optional[Callable[[ProcessingProgress], None]] = None,
-    ) -> AnalysisResult:
-        """Resume processing from last failed step.
-
-        Args:
-            session_id: Session ID
-            config: Analysis configuration
-            websocket_callback: Optional WebSocket callback
-
-        Returns:
-            AnalysisResult
-        """
-        state = PipelineState(session_id)
-
-        if not state.can_resume():
-            raise ProcessingError(
-                message="Cannot resume: no failed step to resume from",
-                step=0,
-                recoverable=False,
-            )
-
-        failed_step = state.data["failed_step"]
-        logger.info(
-            f"Resuming processing from step {failed_step}",
-            extra={"session_id": session_id, "step": failed_step},
-        )
-
-        # Clear failed state
-        state.data["failed_step"] = None
-        state.data["error"] = None
-        state.save()
-
-        # Re-run processing (will skip completed steps if implemented)
-        return await self.process_session(session_id, config, websocket_callback)
-
-
-# Global orchestrator instance
-processing_orchestrator = ProcessingOrchestrator()

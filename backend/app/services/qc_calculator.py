@@ -30,7 +30,7 @@ class QCCalculator:
     
     def __init__(self):
         """Initialize QC calculator."""
-        self.qc_data: Optional[QCData] = None
+        pass
     
     async def calculate_all_metrics(
         self,
@@ -90,7 +90,7 @@ class QCCalculator:
         average_psm_cv = self._calculate_average_cv(psm_cv)
         completeness_rate = self._calculate_completeness_rate(data_completeness)
 
-        self.qc_data = QCData(
+        qc_data = QCData(
             pca=pca_result,
             pvalue_distribution=self._calculate_pvalue_distribution(diff_df),
             psm_cv=psm_cv,
@@ -110,8 +110,8 @@ class QCCalculator:
         )
         
         logger.info("Step 8 complete: QC metrics calculated")
-        
-        return self.qc_data
+
+        return qc_data
     
     def _calculate_pca(self, protein_df: pd.DataFrame) -> PCAResult:
         """
@@ -567,33 +567,15 @@ class QCCalculator:
             return None
         return round((total_present / total) * 100, 1)
 
-    def get_qc_data(self) -> Optional[QCData]:
-        """
-        Get calculated QC data.
-        
-        Returns:
-            QCData object or None
-        """
-        return self.qc_data
-    
-    def save_qc_data(self, output_path: Path) -> None:
+    def save_qc_data(self, qc_data: QCData, output_path: Path) -> None:
         """
         Save QC data to JSON file.
-        
+
         Args:
+            qc_data: QCData object to save
             output_path: Path to save JSON
         """
-        if self.qc_data is None:
-            raise ProcessingError(
-                message="QC data not calculated",
-                step=8,
-                recoverable=True
-            )
-        
         import json
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(self.qc_data.model_dump(), f, indent=2)
+            json.dump(qc_data.model_dump(), f, indent=2)
 
-
-# Global calculator instance
-qc_calculator = QCCalculator()
