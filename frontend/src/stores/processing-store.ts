@@ -29,7 +29,6 @@ interface ProcessingStore {
   sessionId: string | null;
   outputs: CompleteMessage['payload']['outputs'] | null;
   processingDuration: number | null;
-  estimatedTimeRemaining: number | null;
 
   // Actions
   initializeSteps: (removeRazor: boolean) => void;
@@ -74,7 +73,6 @@ export const useProcessingStore = create<ProcessingStore>()(
     sessionId: null,
     outputs: null,
     processingDuration: null,
-    estimatedTimeRemaining: null,
 
     // Initialize steps based on configuration
     initializeSteps: (removeRazor: boolean) => {
