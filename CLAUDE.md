@@ -20,7 +20,7 @@ cd ../frontend && npm install
 cd ../Tests && npm install
 
 # Terminal 1 - Backend (use backend venv)
-cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 
 # Terminal 2 - Frontend
 cd frontend && npm run dev
@@ -214,7 +214,7 @@ taskkill //F //IM python.exe
 netstat -ano | findstr ":8000 " | findstr "LISTENING"
 
 # Restart backend with venv Python
-cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 
 # Verify routes
 curl -s http://localhost:8000/openapi.json | python -c "import sys,json; d=json.load(sys.stdin); [print(p,list(d['paths'][p].keys())) for p in sorted(d['paths']) if 'protein' in p]"
@@ -226,7 +226,7 @@ uvicorn's `--reload` mode on Windows can serve stale bytecode. **Always clear `_
 taskkill //F //IM python.exe
 find backend -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
 find backend -name "*.pyc" -delete 2>/dev/null
-cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 ```
 If a fix works in isolation (`python -c "..."`) but the API still fails, it is ALWAYS a cache issue.
 
