@@ -372,7 +372,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
           className="flex items-center gap-1 px-3 py-1 text-sm text-red-600 hover:text-red-800 transition-colors"
         >
           <X className="w-4 h-4" />
-          Cancel
+          Dismiss
         </button>
       </div>
     );
