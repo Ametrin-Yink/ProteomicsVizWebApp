@@ -25,6 +25,9 @@ _processing_semaphore = asyncio.Semaphore(1)
 # Track sessions currently waiting in queue
 _queued_sessions: list[str] = []  # Ordered list of session_ids
 
+# Track sessions actively running inside the semaphore
+_processing_sessions: set[str] = set()
+
 
 def get_session_store() -> SessionStore:
     """Dependency to get session store."""
@@ -215,6 +218,32 @@ async def start_processing(
                 }
             }
 
+    # Check if any other session is currently processing — if so, queue this one
+    if not _processing_sessions:
+        # Check session store for any processing sessions
+        all_sessions = await store.list()
+        any_processing = any(
+            s.state == SessionState.PROCESSING and s.id != session_id
+            for s in all_sessions
+        )
+        if any_processing:
+            session.state = SessionState.QUEUED
+            await store.save(session)
+            _queued_sessions.append(session_id)
+            queue_position = len(_queued_sessions)
+            logger.info(f"Session {session_id} queued at position {queue_position} (another session processing)")
+
+            # Create background task that will wait for semaphore
+            asyncio.create_task(run_processing_pipeline_async(session_id, session))
+
+            return {
+                "data": {
+                    "status": "queued",
+                    "queue_position": queue_position,
+                    "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}"
+                }
+            }
+
     # Validate session has configuration
     if not session.config:
         raise HTTPException(
@@ -277,6 +306,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
 
         # Acquire semaphore (blocks until it's this session's turn)
         async with _processing_semaphore:
+            _processing_sessions.add(session_id)
             logger.info(f"Session {session_id} acquired semaphore, starting processing")
 
             # Update state to processing
@@ -358,6 +388,8 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         await session_manager.update_session_state(
             session_id, SessionState.ERROR, str(e)
         )
+    finally:
+        _processing_sessions.discard(session_id)
 
 
 @router.post("/{session_id}/cancel")
@@ -388,6 +420,7 @@ async def cancel_processing(
         )
 
     # Cancel processing
+    _processing_sessions.discard(session_id)
     session.state = SessionState.CANCELLED
     await store.save(session)
     return {"data": {"status": "cancelled"}}
