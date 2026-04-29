@@ -59,7 +59,7 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
     await page.waitForLoadState('networkidle');
 
     // Verify page elements
-    await expect(page.locator('[data-testid="app-logo"]')).toBeVisible();
+    await expect(page.locator('[data-testid="app-logo"]').first()).toBeVisible();
     await expect(page.locator('[data-testid="template-protein-pairwise"]')).toBeVisible();
 
     await takeScreenshot(page, '01-complete-flow', '01-welcome', 'loaded');
@@ -138,25 +138,31 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
   });
 
   // ===== STEP 7: Verify Results - Volcano Plot =====
-  await test.step('7. Verify volcano plot displays data', async () => {
+  await test.step('7. Verify results display data', async () => {
     await expect(page.locator('[data-testid="volcano-plot"]')).toBeVisible();
 
-    // Verify plot has actual data points
-    const points = page.locator('.scatterlayer .trace .point');
-    await expect(points.first()).toBeVisible({ timeout: 10000 });
-
-    // Get protein count
+    // Verify data counts are populated
     const totalText = await page.locator('[data-testid="total-proteins"]').textContent();
     const totalCount = parseInt(totalText?.match(/\d+/)?.[0] || '0');
     expect(totalCount).toBeGreaterThan(0);
 
+    // Verify DE counts are populated
+    const sigText = await page.locator('[data-testid="significant-proteins"]').textContent();
+    const sigCount = parseInt(sigText?.match(/\d+/)?.[0] || '0');
+    expect(sigCount).toBeGreaterThan(0);
+
+    // Verify protein table has rows
+    await expect(page.locator('[data-testid="file-table"]')).toBeVisible({ timeout: 10000 });
+
     await takeScreenshot(page, '01-complete-flow', '07-volcano-plot', 'with-data');
   });
 
-  // ===== STEP 8: Click Point → Protein Details =====
-  await test.step('8. Click volcano point to see protein details', async () => {
-    const firstPoint = page.locator('.scatterlayer .trace .point').first();
-    await firstPoint.click();
+  // ===== STEP 8: Click table row → Protein Details =====
+  await test.step('8. Click table row to see protein details', async () => {
+    // Click the first data row in the protein table
+    const firstRow = page.locator('[data-testid="file-table"] tbody tr').first();
+    await expect(firstRow).toBeVisible({ timeout: 10000 });
+    await firstRow.click();
 
     // Verify protein info panel appears
     await expect(page.locator('[data-testid="protein-info-panel"]')).toBeVisible({ timeout: 5000 });
@@ -182,7 +188,7 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
 
   // ===== STEP 10: Navigate to GSEA =====
   await test.step('10. Navigate to GSEA', async () => {
-    await page.locator('[data-testid="gsea-tab"]').click();
+    await page.locator('[data-testid="bioinformatics-tab"]').click();
     await page.waitForTimeout(1000);
 
     // Verify GSEA heatmap displays
@@ -207,7 +213,7 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
     const downloadPromise = page.waitForEvent('download', { timeout: 10000 });
 
     // Click the actual download/preview button if exists
-    const pdfDownloadBtn = page.locator('[data-testid="pdf-download-btn"]').first();
+    const pdfDownloadBtn = page.locator('[data-testid="download-pdf-btn"]').first();
     if (await pdfDownloadBtn.isVisible().catch(() => false)) {
       await pdfDownloadBtn.click();
     }

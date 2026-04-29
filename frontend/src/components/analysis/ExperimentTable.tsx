@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Filter, Search, X } from 'lucide-react';
-import { useAnalysisStore, getSelectedFiles, getExperiments, getConditions } from '@/stores/analysis-store';
+import { useAnalysisStore } from '@/stores/analysis-store';
 
 
 type SortField = 'filename' | 'experiment' | 'condition' | 'replicate';
@@ -30,10 +30,20 @@ export const ExperimentTable: React.FC = () => {
     toggleFileSelection,
     removeUploadedFile,
   } = useAnalysisStore();
-  
-  const selected = useAnalysisStore(state => getSelectedFiles(state));
-  const experiments = useAnalysisStore(state => getExperiments(state));
-  const conditions = useAnalysisStore(state => getConditions(state));
+
+  // Derived values from raw state (useMemo to avoid infinite re-render loop in React 19)
+  const selected = useMemo(
+    () => uploadedFiles.filter((file) => selectedFiles.has(file.filename)),
+    [uploadedFiles, selectedFiles]
+  );
+  const experiments = useMemo(
+    () => Array.from(new Set(selected.map((f) => f.experiment))),
+    [selected]
+  );
+  const conditions = useMemo(
+    () => Array.from(new Set(selected.map((f) => f.condition))),
+    [selected]
+  );
   
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {

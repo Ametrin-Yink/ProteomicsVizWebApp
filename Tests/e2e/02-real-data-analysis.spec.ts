@@ -50,7 +50,7 @@ test('real-world data: DOCK5 Jurkat analysis', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    await expect(page.locator('[data-testid="app-logo"]')).toBeVisible();
+    await expect(page.locator('[data-testid="app-logo"]').first()).toBeVisible();
     await expect(page.locator('[data-testid="template-protein-pairwise"]')).toBeVisible();
 
     await takeScreenshot(page, '02-real-data-flow', '01-welcome', 'loaded');

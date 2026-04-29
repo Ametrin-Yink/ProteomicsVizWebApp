@@ -115,18 +115,8 @@ export async function uploadFiles(page: Page, files: string[]): Promise<void> {
   for (const filePath of absolutePaths) {
     console.log(`Uploading file: ${path.basename(filePath)}`);
 
-    // Set up file chooser handler before clicking
-    const fileChooserPromise = page.waitForEvent('filechooser');
-
-    // Click on the upload area to open file picker
-    await page.locator('[data-testid="proteomics-upload"]').evaluate(el => {
-      const parent = el.parentElement;
-      if (parent) parent.click();
-    });
-
-    // Wait for file chooser and set files
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(filePath);
+    // Use setInputFiles directly on the hidden file input
+    await page.locator('[data-testid="proteomics-upload"]').setInputFiles(filePath);
 
     // Wait for this file to appear in the table
     const fileName = path.basename(filePath);
@@ -162,18 +152,8 @@ export async function uploadFilesBulk(page: Page, files: string[]): Promise<void
     }
   }
 
-  // Set up file chooser handler before clicking
-  const fileChooserPromise = page.waitForEvent('filechooser');
-
-  // Click on the upload area to open file picker
-  await page.locator('[data-testid="proteomics-upload"]').evaluate(el => {
-    const parent = el.parentElement;
-    if (parent) parent.click();
-  });
-
-  // Wait for file chooser and set ALL files at once
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles(absolutePaths);
+  // Use setInputFiles directly for all files at once
+  await page.locator('[data-testid="proteomics-upload"]').setInputFiles(absolutePaths);
 
   // Wait for all files to appear in the table
   for (const filePath of absolutePaths) {
@@ -199,18 +179,8 @@ export async function uploadCompoundFile(page: Page, filePath: string): Promise<
     throw new Error(`Compound file not found: ${absolutePath}`);
   }
 
-  // Set up file chooser handler
-  const fileChooserPromise = page.waitForEvent('filechooser');
-  
-  // Click on the upload area
-  await page.locator('[data-testid="compound-upload"]').evaluate(el => {
-    const parent = el.parentElement;
-    if (parent) parent.click();
-  });
-  
-  // Wait for file chooser and set files
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles(absolutePath);
+  // Use setInputFiles directly on the hidden file input
+  await page.locator('[data-testid="compound-upload"]').setInputFiles(absolutePath);
 
   // Wait for upload to complete - use specific locator within compound info section
   await expect(page.locator('[data-testid="compound-info"] [data-testid="compound-upload-success"]').first()).toBeVisible({ timeout: 10000 });

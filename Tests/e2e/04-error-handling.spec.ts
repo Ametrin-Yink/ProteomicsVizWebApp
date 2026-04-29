@@ -49,14 +49,8 @@ test.describe('Error Handling', () => {
     // Create invalid file content
     const invalidContent = Buffer.from('Sequence,Modifications,Charge\nTEST,None,2');
 
-    // Upload invalid file via file chooser
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('[data-testid="proteomics-upload"]').evaluate(el => {
-      const parent = el.parentElement;
-      if (parent) parent.click();
-    });
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles({
+    // Upload invalid file via setInputFiles
+    await page.locator('[data-testid="proteomics-upload"]').setInputFiles({
       name: 'invalid_file_name.csv',
       mimeType: 'text/csv',
       buffer: invalidContent,
@@ -81,13 +75,8 @@ test.describe('Error Handling', () => {
     const invalidContent = Buffer.from('Sequence,Charge\nTESTSEQ,2');
 
     // Upload file
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('[data-testid="proteomics-upload"]').evaluate(el => {
-      const parent = el.parentElement;
-      if (parent) parent.click();
-    });
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles({
+    // Upload file with missing columns via setInputFiles
+    await page.locator('[data-testid="proteomics-upload"]').setInputFiles({
       name: 'PSM_TestData_Condition_1.csv',
       mimeType: 'text/csv',
       buffer: invalidContent,

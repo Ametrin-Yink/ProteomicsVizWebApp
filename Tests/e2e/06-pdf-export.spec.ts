@@ -157,7 +157,7 @@ test.describe('PDF Export', () => {
     await page.waitForTimeout(2000);
 
     // Try to trigger download if there's a download button
-    const downloadBtn = page.locator('[data-testid="pdf-download-btn"]').first();
+    const downloadBtn = page.locator('[data-testid="download-pdf-btn"]').first();
     if (await downloadBtn.isVisible().catch(() => false)) {
       await downloadBtn.click();
     }
