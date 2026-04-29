@@ -26,6 +26,8 @@ import {
   Clock,
   FileText,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 
@@ -165,6 +167,7 @@ function ProcessingContent() {
   const [startError, setStartError] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [statusCollapsed, setStatusCollapsed] = useState(false);
 
   const {
     logs,
@@ -448,47 +451,37 @@ function ProcessingContent() {
         {/* Main content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-          {/* Error state */}
-          {error && (
-            <div className="mb-8">
-              <ErrorDisplay
-                error={error}
-                onRetry={handleRetry}
-                onBack={handleBack}
-              />
-            </div>
-          )}
-
-          {/* Cancelled state */}
-          {isCancelled && !error && (
-            <div className="mb-8">
-              <CancelledDisplay onBack={handleBack} />
-            </div>
-          )}
-
-          {/* Completion state */}
-          {isComplete && !error && (
-            <div className="mb-8">
-              <CompletionDisplay
-                duration={processingDuration}
-                onNavigate={handleNavigateToResults}
-              />
-            </div>
-          )}
-
-          {/* Start error */}
-          {startError && !error && (
-            <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600" />
-                <p className="text-amber-700">{startError}</p>
-                <button
-                  onClick={handleRetry}
-                  className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
+          {/* Terminal state cards - collapsible */}
+          {(error || isCancelled || isComplete || startError) && (
+            <div className="mb-4">
+              <button
+                onClick={() => setStatusCollapsed(!statusCollapsed)}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-2"
+              >
+                {statusCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                {statusCollapsed ? 'Show' : 'Hide'} processing status
+              </button>
+              {!statusCollapsed && (
+                <div className="space-y-4">
+                  {error && <ErrorDisplay error={error} onRetry={handleRetry} onBack={handleBack} />}
+                  {isCancelled && !error && <CancelledDisplay onBack={handleBack} />}
+                  {isComplete && !error && (
+                    <CompletionDisplay duration={processingDuration} onNavigate={handleNavigateToResults} />
+                  )}
+                  {startError && !error && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600" />
+                        <p className="text-amber-700">{startError}</p>
+                        <button onClick={handleRetry}
+                          className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg transition-colors">
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
