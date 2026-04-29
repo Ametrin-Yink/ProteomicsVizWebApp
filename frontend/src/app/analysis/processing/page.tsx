@@ -26,6 +26,8 @@ import {
   Clock,
   FileText,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 
@@ -46,7 +48,7 @@ const CancelledDisplay: React.FC<{
           The processing has been cancelled by the user.
         </p>
         <button
-          data-testid="cancel-btn"
+          data-testid="cancelled-back-btn"
           onClick={onBack}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
         >
@@ -104,7 +106,7 @@ const ErrorDisplay: React.FC<{
             </button>
           )}
           <button
-            data-testid="cancel-btn"
+            data-testid="error-back-btn"
             onClick={onBack}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
           >
@@ -165,6 +167,7 @@ function ProcessingContent() {
   const [startError, setStartError] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [statusCollapsed, setStatusCollapsed] = useState(false);
 
   const {
     logs,
@@ -194,7 +197,6 @@ function ProcessingContent() {
     // Only poll if WebSocket is not connected
     if (isConnected) return;
 
-    console.log('WebSocket not connected, using polling fallback');
     const pollInterval = setInterval(async () => {
       try {
         const logData = await processingAPI.getLogs(sessionId);
@@ -258,7 +260,6 @@ function ProcessingContent() {
     const initFromServer = async () => {
       try {
         const logData = await processingAPI.getLogs(sessionId);
-        console.log('Initial logs fetched for session:', sessionId, logData);
 
         // Initialize steps based on server state
         initializeSteps(removeRazor);
@@ -277,7 +278,6 @@ function ProcessingContent() {
             timestamp: log.timestamp,
             step: log.step,
           }));
-          console.log('Setting initial logs:', logEntries.length, 'entries');
           setLogs(logEntries);
         }
 
@@ -434,7 +434,7 @@ function ProcessingContent() {
               {/* <ConnectionStatus isConnected={isConnected} /> */}
                 {!isComplete && !isCancelled && !error && (
                   <button
-                    data-testid="cancel-btn"
+                    data-testid="cancel-processing-btn"
                     onClick={handleCancelClick}
                     disabled={isCancelling}
                     className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
@@ -451,47 +451,37 @@ function ProcessingContent() {
         {/* Main content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-          {/* Error state */}
-          {error && (
-            <div className="mb-8">
-              <ErrorDisplay
-                error={error}
-                onRetry={handleRetry}
-                onBack={handleBack}
-              />
-            </div>
-          )}
-
-          {/* Cancelled state */}
-          {isCancelled && !error && (
-            <div className="mb-8">
-              <CancelledDisplay onBack={handleBack} />
-            </div>
-          )}
-
-          {/* Completion state */}
-          {isComplete && !error && (
-            <div className="mb-8">
-              <CompletionDisplay
-                duration={processingDuration}
-                onNavigate={handleNavigateToResults}
-              />
-            </div>
-          )}
-
-          {/* Start error */}
-          {startError && !error && (
-            <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600" />
-                <p className="text-amber-700">{startError}</p>
-                <button
-                  onClick={handleRetry}
-                  className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
+          {/* Terminal state cards - collapsible */}
+          {(error || isCancelled || isComplete || startError) && (
+            <div className="mb-4">
+              <button
+                onClick={() => setStatusCollapsed(!statusCollapsed)}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-2"
+              >
+                {statusCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                {statusCollapsed ? 'Show' : 'Hide'} processing status
+              </button>
+              {!statusCollapsed && (
+                <div className="space-y-4">
+                  {error && <ErrorDisplay error={error} onRetry={handleRetry} onBack={handleBack} />}
+                  {isCancelled && !error && <CancelledDisplay onBack={handleBack} />}
+                  {isComplete && !error && (
+                    <CompletionDisplay duration={processingDuration} onNavigate={handleNavigateToResults} />
+                  )}
+                  {startError && !error && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600" />
+                        <p className="text-amber-700">{startError}</p>
+                        <button onClick={handleRetry}
+                          className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg transition-colors">
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

@@ -134,7 +134,7 @@ export const ValidationPanel: React.FC = () => {
                     text-sm font-medium
                     ${count >= 3 ? 'text-green-600' : 'text-red-600'}
                   `}>
-                    {count}
+                    {count}/3 min
                   </span>
                 </div>
               </div>

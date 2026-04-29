@@ -31,9 +31,9 @@ export const ExperimentTable: React.FC = () => {
     removeUploadedFile,
   } = useAnalysisStore();
   
-  const selected = useMemo(() => getSelectedFiles(useAnalysisStore.getState()), []);
-  const experiments = useMemo(() => getExperiments(useAnalysisStore.getState()), []);
-  const conditions = useMemo(() => getConditions(useAnalysisStore.getState()), []);
+  const selected = useAnalysisStore(state => getSelectedFiles(state));
+  const experiments = useAnalysisStore(state => getExperiments(state));
+  const conditions = useAnalysisStore(state => getConditions(state));
   
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {

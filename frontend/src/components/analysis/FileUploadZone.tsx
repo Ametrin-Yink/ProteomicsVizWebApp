@@ -87,17 +87,10 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
   };
   
   const handleFiles = useCallback(async (files: FileList | null, isCompound: boolean = false) => {
-    console.log('handleFiles called:', { filesCount: files?.length, isCompound, sessionId });
     if (!files || files.length === 0) {
-      console.log('handleFiles: No files provided');
       return;
     }
     
-    console.log('handleFiles called:', { 
-      filesCount: files.length, 
-      isCompound,
-      fileNames: Array.from(files).map(f => f.name)
-    });
     
     // Check if sessionId is available
     if (!sessionId) {
@@ -108,11 +101,9 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     
     setIsUploading(true);
     setUploadError(null);
-    
-    const fileArray = Array.from(files);
-    console.log('handleFiles: Processing', fileArray.length, 'files');
 
     // Validate files - collect valid ones and errors separately
+    const fileArray = Array.from(files);
     const validFilesAfterValidation: File[] = [];
     const validationErrors: { name: string; error: string }[] = [];
 
@@ -151,8 +142,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         addToast('success', `Compound file uploaded successfully: ${result.compounds.length} compounds`);
       } else {
         // Handle proteomics files upload - validate filename pattern
-        console.log('Uploading proteomics files:', validFilesAfterValidation.map(f => f.name));
-
         const validFiles: File[] = [];
         for (const file of validFilesAfterValidation) {
           const parsed = parseFilename(file.name);
@@ -171,16 +160,12 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         }
         
         try {
-          console.log('Calling uploadApi.uploadProteomics for session:', sessionId);
           const results = await uploadApi.uploadProteomics(sessionId, validFiles, (name, progress) => {
-            console.log('Upload progress:', name, progress);
             setUploadProgress(name, progress, progress === 100 ? 'completed' : 'uploading');
           });
-          console.log('Upload results:', results);
           
           // Process all uploaded files
           for (const uploadedFile of results) {
-            console.log('Adding uploaded file to store:', uploadedFile);
             try {
               // Use parseFilename regex to correctly handle condition names with underscores
               const originalName = uploadedFile.filename || '';
@@ -206,7 +191,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                   columns: uploadedFile.columns || [],
                 });
               }
-              console.log('File added to store successfully');
             } catch (error) {
               console.error('Error adding file to store:', error);
             }
@@ -252,11 +236,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
   
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, isCompound: boolean = false) => {
     const files = e.target.files;
-    console.log('handleFileInputChange called:', { 
-      fileCount: files?.length || 0, 
-      isCompound,
-      fileNames: files ? Array.from(files).map(f => f.name) : []
-    });
     handleFiles(files, isCompound);
     e.target.value = ''; // Reset input
   }, [handleFiles]);
@@ -281,9 +260,9 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           className={`
             relative border-2 border-dashed rounded-xl p-8 cursor-pointer
             transition-all duration-200 ease-in-out
-            ${isDragging 
-              ? 'border-cyan-500 bg-cyan-50' 
-              : 'border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100'
+            ${isDragging
+              ? 'border-[#E73564] bg-pink-50'
+              : 'border-[#E73564]/40 hover:border-[#E73564] bg-pink-50/30 hover:bg-pink-50/50'
             }
           `}
         >
@@ -300,11 +279,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           <div className="flex flex-col items-center text-center space-y-4">
             <div className={`
               p-4 rounded-full transition-colors duration-200
-              ${isDragging ? 'bg-cyan-100' : 'bg-gray-200'}
+              ${isDragging ? 'bg-pink-100' : 'bg-[#E73564]/10'}
             `}>
               <Upload className={`
                 w-8 h-8 transition-colors duration-200
-                ${isDragging ? 'text-cyan-600' : 'text-gray-500'}
+                ${isDragging ? 'text-[#E73564]' : 'text-[#E73564]/70'}
               `} />
             </div>
             
@@ -315,16 +294,15 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
               <p className="text-sm text-gray-500 mt-1">
                 or click to browse
               </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Expected: <code className="px-1 py-0.5 bg-gray-100 rounded text-gray-600">PSM_Experiment_Condition_Rep.csv</code>
+              </p>
             </div>
             
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <span>Supported: CSV files</span>
               <span>•</span>
               <span>Max {formatFileSize(MAX_FILE_SIZE)}</span>
-            </div>
-            
-            <div className="text-xs text-gray-400 bg-gray-100 px-3 py-1.5 rounded-full">
-              Pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw, HelpCircle } from 'lucide-react';
 import { Slider } from '@/components/ui/Slider';
 
 interface FilterPanelProps {
@@ -10,9 +10,10 @@ interface FilterPanelProps {
   adjPValue: number;
   s0: number; // Stored as fraction of foldChange (0-1)
   onChange: (filters: { foldChange: number; pValue: number; adjPValue: number; s0: number }) => void;
+  onReset: () => void;
 }
 
-export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange }: FilterPanelProps) {
+export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onReset }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const actualS0 = s0 * foldChange;
@@ -31,6 +32,13 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange }: Fil
           className="p-1 hover:bg-gray-100 rounded"
         >
           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        <button
+          onClick={onReset}
+          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+          title="Reset filters to defaults"
+        >
+          <RotateCcw className="w-4 h-4" />
         </button>
       </div>
 
@@ -134,6 +142,12 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange }: Fil
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 S0 Factor
+                <span className="group relative inline-block ml-1">
+                  <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 pointer-events-none">
+                    S0 factor widens the significance threshold at low fold changes. Higher values are more permissive, allowing proteins with small fold changes but high reproducibility to appear significant.
+                  </span>
+                </span>
               </label>
               <div className="flex items-center gap-2">
                 <Slider

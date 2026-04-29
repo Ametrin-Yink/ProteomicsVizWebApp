@@ -197,19 +197,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ className }) => {
 
         {/* Quick Actions */}
         <div className="pt-4 border-t border-gray-200 space-y-2">
-          <button 
+          <button
             onClick={() => router.push('/analysis')}
             className="w-full flex items-center justify-between px-4 py-3 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 transition-colors text-sm font-medium"
           >
             <span>Start New Analysis</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          
-          <button 
-            onClick={() => router.push('/sessions')}
-            className="w-full flex items-center justify-between px-4 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm font-medium"
-          >
-            <span>View Sessions</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

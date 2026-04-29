@@ -18,6 +18,7 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
   const [plotData, setPlotData] = useState<GSEAPlotData | null>(null);
   const [heatmapData, setHeatmapData] = useState<GSEAHeatmapData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch plot and heatmap data when pathway changes
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
     const currentPathway = pathway;
 
     async function fetchData() {
+      setError(null);
       try {
         const [plot, heatmap] = await Promise.all([
           getGSEAPlotData(sessionId, database, currentPathway.term),
@@ -52,7 +54,8 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
           }
         }
       } catch (err) {
-        console.error('Failed to load GSEA visualization data:', err);
+        const message = err instanceof Error ? err.message : 'Failed to load plot data';
+        setError(message);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -249,6 +252,16 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
           <p className="text-lg font-medium">GSEA Plot</p>
           <p className="text-sm mt-2">Select a pathway to view GSEA plot</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <p className="text-red-700 text-sm mb-3">Failed to load visualization</p>
+        <p className="text-red-500 text-xs mb-3">{error}</p>
+        <p className="text-gray-500 text-xs">Reload the page to retry.</p>
       </div>
     );
   }

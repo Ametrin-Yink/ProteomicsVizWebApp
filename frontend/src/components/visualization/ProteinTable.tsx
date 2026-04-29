@@ -205,7 +205,7 @@ export default function ProteinTable({
             data-testid="export-csv-btn"
           >
             <Download className="w-4 h-4" />
-            Export CSV
+            Export Current Page
           </button>
         </div>
       </div>
@@ -361,6 +361,33 @@ export default function ProteinTable({
             <span className="text-sm text-gray-600" data-testid="page-number">
               Page {currentPage} of {totalPages}
             </span>
+
+            <div className="flex items-center gap-1 ml-2">
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                defaultValue={currentPage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const page = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                      setCurrentPage(page);
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const page = parseInt(e.target.value, 10);
+                  if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                    setCurrentPage(page);
+                  } else {
+                    (e.target as HTMLInputElement).value = String(currentPage);
+                  }
+                }}
+                className="w-14 px-1 py-1 text-sm text-center border border-gray-300 rounded-md"
+                data-testid="page-input"
+              />
+            </div>
 
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}

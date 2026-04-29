@@ -94,7 +94,6 @@ export const useWebSocket = (sessionId: string | null) => {
 
     // Prevent multiple simultaneous connections
     if (ws.current?.readyState === WebSocket.CONNECTING) {
-      console.log('WebSocket already connecting, skipping...');
       return;
     }
 
@@ -110,13 +109,10 @@ export const useWebSocket = (sessionId: string | null) => {
       ? `${WS_BASE_URL}/ws/sessions/${sessionId}`
       : `ws://127.0.0.1:8000/ws/sessions/${sessionId}`;
 
-    console.log(`Connecting to WebSocket: ${wsUrl}`);
-
     try {
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log('WebSocket connected successfully');
         setConnected(true);
         reconnectAttempts.current = 0;
         isManualClose.current = false;
@@ -171,20 +167,17 @@ export const useWebSocket = (sessionId: string | null) => {
 
         // Don't reconnect if manually closed
         if (isManualClose.current) {
-          console.log('WebSocket manually closed, not reconnecting');
           return;
         }
 
         // Don't reconnect if connection was closed cleanly (processing complete)
         if (event.wasClean) {
-          console.log('WebSocket closed cleanly');
           return;
         }
 
         // Attempt reconnection if not at max attempts
         if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
           const delay = getReconnectDelay();
-          console.log(`WebSocket closed unexpectedly. Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${MAX_RECONNECT_ATTEMPTS})`);
           reconnectTimeout.current = setTimeout(() => {
             reconnectAttempts.current += 1;
             connectRef.current?.();

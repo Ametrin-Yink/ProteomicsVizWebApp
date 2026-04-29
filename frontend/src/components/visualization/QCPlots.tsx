@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { QCData } from '@/types/api';
 import { transformPCARowBased } from '@/lib/utils';
+import { calculateKDE } from '@/lib/kde';
 import { Maximize2, Download } from 'lucide-react';
 
 // Dynamically import Plotly to avoid SSR issues
@@ -11,9 +12,37 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface QCPlotsProps {
   data: QCData;
+  treatment?: string;
+  control?: string;
 }
 
-export default function QCPlots({ data }: QCPlotsProps) {
+export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
+  // Color by treatment/control groups from session config
+  const treatmentColor = '#E73564';
+  const controlColor = '#00ADEF';
+
+  const getConditionColor = (condition: string) => {
+    if (treatment && condition.toLowerCase() === treatment.toLowerCase()) return treatmentColor;
+    if (control && condition.toLowerCase() === control.toLowerCase()) return controlColor;
+    // Fallback: if treatment/control not available, use default mapping
+    if (condition.includes('INCZ')) return treatmentColor;
+    if (condition === 'DMSO' || condition === 'Control') return controlColor;
+    return '#6B7280';
+  };
+
+  // Protein CV uses different colors from PSM CV for visual distinction
+  const proteinTreatmentColor = '#F59E0B';
+  const proteinControlColor = '#10B981';
+
+  const getProteinConditionColor = (condition: string) => {
+    if (treatment && condition.toLowerCase() === treatment.toLowerCase()) return proteinTreatmentColor;
+    if (control && condition.toLowerCase() === control.toLowerCase()) return proteinControlColor;
+    // Fallback: if treatment/control not available, use default mapping
+    if (condition.includes('INCZ')) return proteinTreatmentColor;
+    if (condition === 'DMSO' || condition === 'Control') return proteinControlColor;
+    return '#6B7280';
+  };
+
   // 1. PCA Plot - Color by sample
   const pcaPlot = useMemo(() => {
     if (!data.pca) return null;
@@ -24,19 +53,6 @@ export default function QCPlots({ data }: QCPlotsProps) {
       data.pca.pc2,
       data.pca.conditions
     );
-
-    // Create a color map for each sample based on condition
-    // Support both old (Control/Treatment) and new (DMSO/INCZ*) condition names
-    const conditionColors: Record<string, string> = {
-      Control: '#00ADEF',
-      Treatment: '#E73564',
-      DMSO: '#00ADEF',
-    };
-    // Any condition containing INCZ should use the treatment color
-    const getConditionColor = (condition: string) => {
-      if (condition.includes('INCZ')) return '#E73564';
-      return conditionColors[condition] || '#6B7280';
-    };
 
     // Assign colors based on condition but ensure unique colors per sample
     const sampleColors = rowData.map((d) => getConditionColor(d.condition));
@@ -77,7 +93,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     };
 
     return { traces: [trace], layout };
-  }, [data.pca]);
+  }, [data.pca, treatment, control]);
 
   // 2. P-value Distribution
   const pvalueDistPlot = useMemo(() => {
@@ -134,8 +150,8 @@ export default function QCPlots({ data }: QCPlotsProps) {
       type: 'violin' as const,
       name: condition,
       box: { visible: true },
-      line: { color: condition === 'DMSO' ? '#00ADEF' : '#E73564' },
-      fillcolor: condition === 'DMSO' ? 'rgba(0, 173, 239, 0.5)' : 'rgba(231, 53, 100, 0.5)',
+      line: { color: getConditionColor(condition) },
+      fillcolor: getConditionColor(condition) + '80', // 50% opacity hex
       hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
       // Hide individual points - only show violin and box
       points: false,
@@ -159,7 +175,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     };
 
     return { traces, layout };
-  }, [data.psm_cv]);
+  }, [data.psm_cv, treatment, control]);
 
   // 3b. Protein CVs (with different colors) - show 95th percentile top
   const proteinCVPlot = useMemo(() => {
@@ -179,8 +195,8 @@ export default function QCPlots({ data }: QCPlotsProps) {
       type: 'violin' as const,
       name: condition,
       box: { visible: true },
-      line: { color: condition === 'DMSO' ? '#10B981' : '#F59E0B' },
-      fillcolor: condition === 'DMSO' ? 'rgba(16, 185, 129, 0.5)' : 'rgba(245, 158, 11, 0.5)',
+      line: { color: getProteinConditionColor(condition) },
+      fillcolor: getProteinConditionColor(condition) + '80', // 50% opacity hex
       hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
       // Hide individual points - only show violin and box
       points: false,
@@ -204,7 +220,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     };
 
     return { traces, layout };
-  }, [data.protein_cv]);
+  }, [data.protein_cv, treatment, control]);
 
   // 4. PSM Intensity Distribution - KDE curves (lines) showing all data
   const psmIntensityPlot = useMemo(() => {
@@ -222,51 +238,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     const min = allValues.reduce((a, b) => Math.min(a, b), Infinity);
     const max = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
 
-    // Function to calculate KDE - use all values, no filtering
-    const calculateKDE = (values: number[], numPoints: number = 100) => {
-      if (values.length === 0) return { x: [], y: [] };
-
-      // Filter out non-finite values
-      const cleanValues = values.filter(v => Number.isFinite(v));
-      if (cleanValues.length === 0) return { x: [], y: [] };
-
-      const localMin = cleanValues.reduce((a, b) => Math.min(a, b), Infinity);
-      const localMax = cleanValues.reduce((a, b) => Math.max(a, b), -Infinity);
-      const localRange = localMax - localMin;
-
-      // Handle case where all values are the same
-      if (localRange === 0) {
-        return {
-          x: [localMin - 1, localMin, localMin + 1],
-          y: [0, cleanValues.length, 0]
-        };
-      }
-
-      // Silverman's rule of thumb for bandwidth
-      const mean = cleanValues.reduce((a, b) => a + b, 0) / cleanValues.length;
-      const std = Math.sqrt(cleanValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / cleanValues.length);
-      // Ensure minimum bandwidth to avoid numerical issues
-      const bandwidth = Math.max(1e-10, 1.06 * std * Math.pow(cleanValues.length, -0.2));
-
-      const x: number[] = [];
-      const y: number[] = [];
-
-      for (let i = 0; i < numPoints; i++) {
-        const xi = localMin + (localRange * i) / (numPoints - 1);
-        x.push(xi);
-
-        // Gaussian kernel - use normalized calculation for numerical stability
-        let yi = 0;
-        for (const v of cleanValues) {
-          const z = (xi - v) / bandwidth;
-          yi += Math.exp(-0.5 * z * z);
-        }
-        y.push(yi / (cleanValues.length * bandwidth * Math.sqrt(2 * Math.PI)));
-      }
-
-      return { x, y };
-    };
-
+    // KDE calculation is shared via @/lib/kde
     const traces: Array<{
       x: number[];
       y: number[];
@@ -342,51 +314,7 @@ export default function QCPlots({ data }: QCPlotsProps) {
     const globalMin = allValues.reduce((a, b) => Math.min(a, b), Infinity);
     const globalMax = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
 
-    // Function to calculate KDE - use all values, no filtering
-    const calculateKDE = (values: number[], numPoints: number = 100) => {
-      if (values.length === 0) return { x: [], y: [] };
-
-      // Filter out non-finite values
-      const cleanValues = values.filter(v => Number.isFinite(v));
-      if (cleanValues.length === 0) return { x: [], y: [] };
-
-      const localMin = cleanValues.reduce((a, b) => Math.min(a, b), Infinity);
-      const localMax = cleanValues.reduce((a, b) => Math.max(a, b), -Infinity);
-      const localRange = localMax - localMin;
-
-      // Handle case where all values are the same
-      if (localRange === 0) {
-        return {
-          x: [localMin - 1, localMin, localMin + 1],
-          y: [0, cleanValues.length, 0]
-        };
-      }
-
-      // Silverman's rule of thumb for bandwidth
-      const mean = cleanValues.reduce((a, b) => a + b, 0) / cleanValues.length;
-      const std = Math.sqrt(cleanValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / cleanValues.length);
-      // Ensure minimum bandwidth to avoid numerical issues
-      const bandwidth = Math.max(1e-10, 1.06 * std * Math.pow(cleanValues.length, -0.2));
-
-      const x: number[] = [];
-      const y: number[] = [];
-
-      for (let i = 0; i < numPoints; i++) {
-        const xi = localMin + (localRange * i) / (numPoints - 1);
-        x.push(xi);
-
-        // Gaussian kernel - use normalized calculation for numerical stability
-        let yi = 0;
-        for (const v of cleanValues) {
-          const z = (xi - v) / bandwidth;
-          yi += Math.exp(-0.5 * z * z);
-        }
-        y.push(yi / (cleanValues.length * bandwidth * Math.sqrt(2 * Math.PI)));
-      }
-
-      return { x, y };
-    };
-
+    // KDE calculation is shared via @/lib/kde
     const traces: Array<{
       x: number[];
       y: number[];

@@ -149,7 +149,7 @@ export default function PathwayTable({
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <Download className="w-4 h-4" />
-            Export CSV
+            Export Current Page
           </button>
         </div>
       </div>
@@ -247,6 +247,13 @@ export default function PathwayTable({
                 </td>
               </tr>
             ))}
+            {filteredData.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  No results match your filters
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

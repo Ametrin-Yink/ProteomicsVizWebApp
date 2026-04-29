@@ -371,7 +371,7 @@ export default function VolcanoPlot({
       <div
         ref={plotRef}
         data-testid="volcano-plot"
-        className={`w-full h-[500px] ${selectionMode === 'click' ? 'volcano-plot-click-mode' : ''}`}
+        className={`w-full h-[400px] sm:h-[500px] lg:h-[550px] ${selectionMode === 'click' ? 'volcano-plot-click-mode' : ''}`}
       >
         {data.length > 0 ? (
           <Plot
@@ -396,6 +396,22 @@ export default function VolcanoPlot({
         {filters.s0 > 0
           ? `Hyperbolic cutoff: S0 = ${(filters.s0 * filters.foldChange).toFixed(2)} (${(filters.s0 * 100).toFixed(0)}% of log₂FC threshold ±${filters.foldChange}), P-value = ${filters.pValue}`
           : `Threshold lines: Fold Change = ±${filters.foldChange}, P-value = ${filters.pValue}`}
+      </div>
+
+      {/* Color legend */}
+      <div className="mt-3 flex items-center justify-center gap-6 text-xs text-gray-600">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E73564' }}></span>
+          <span>Upregulated (Treatment &gt; Control)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#00ADEF' }}></span>
+          <span>Downregulated (Control &gt; Treatment)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#6B7280' }}></span>
+          <span>Not Significant</span>
+        </div>
       </div>
     </div>
   );

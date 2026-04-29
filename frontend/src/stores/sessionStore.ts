@@ -48,7 +48,6 @@ export const useSessionStore = create<SessionStore>()(
       try {
         const { sessionsApi } = await import('@/lib/api-client');
         const sessions = await sessionsApi.list();
-        console.log(`Loaded ${sessions.length} sessions from backend`);
         set((state) => {
           state.sessions = sessions;
           state.isLoading = false;

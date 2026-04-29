@@ -219,7 +219,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   if (experiments.length > 1) {
     warnings.push({
       type: 'error',
-      message: 'Samples must be from the same experiment!',
+      message: 'Samples must be from the same experiment.',
       code: 'MULTIPLE_EXPERIMENTS',
     });
   }
@@ -228,7 +228,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   if (conditions.length > 2) {
     warnings.push({
       type: 'error',
-      message: 'Sample must be from 2 conditions for paired comparison!',
+      message: 'Samples must be from 2 conditions for paired comparison.',
       code: 'TOO_MANY_CONDITIONS',
     });
   } else if (conditions.length < 2 && selected.length > 0) {
@@ -254,7 +254,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   if (state.config.treatment && state.config.control && state.config.treatment === state.config.control) {
     warnings.push({
       type: 'error',
-      message: 'Treatment and Control must be different!',
+      message: 'Treatment and Control must be different.',
       code: 'SAME_TREATMENT_CONTROL',
     });
   }

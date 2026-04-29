@@ -94,14 +94,9 @@ export const CompoundDisplay: React.FC = () => {
   // Match compounds to conditions
   const matchedCompounds: MatchedCompound[] = useMemo(() => {
     if (!compoundFile || conditions.length === 0) {
-      console.log('No compound file or conditions', { compoundFile, conditions });
       return [];
     }
 
-    console.log('Matching compounds:', {
-      compoundFileCompounds: compoundFile.compounds,
-      conditions
-    });
 
     return conditions.map((condition) => {
       // Try exact match first, then case-insensitive
@@ -123,7 +118,6 @@ export const CompoundDisplay: React.FC = () => {
         );
       }
 
-      console.log('Match result:', { condition, compound });
       return { condition, compound: compound ?? null };
     });
   }, [compoundFile, conditions]);
@@ -234,7 +228,15 @@ export const CompoundDisplay: React.FC = () => {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {compoundFile.compounds
-                  .filter((c) => !conditions.includes(c.corp_id))
+                  .filter((c) => {
+                    const exactMatch = conditions.some(cond => cond === c.corp_id);
+                    const caseInsensitiveMatch = conditions.some(cond =>
+                      cond.toLowerCase() === c.corp_id.toLowerCase() ||
+                      cond.toLowerCase().includes(c.corp_id.toLowerCase()) ||
+                      c.corp_id.toLowerCase().includes(cond.toLowerCase())
+                    );
+                    return !exactMatch && !caseInsensitiveMatch;
+                  })
                   .map((c) => (
                     <span
                       key={c.corp_id}

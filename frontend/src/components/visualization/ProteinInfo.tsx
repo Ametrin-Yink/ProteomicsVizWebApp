@@ -97,8 +97,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
     // If we have more accessions than gene names, fetch the missing ones
     if (accessions.length > geneNames.length) {
       const missingIds = accessions.slice(geneNames.length);
-      fetchGeneNames(missingIds).then(fetched => {
-        setFetchedGeneNames(fetched);
+      fetchGeneNames(missingIds).then((fetched) => {
+        setFetchedGeneNames(new Map(Object.entries(fetched)));
       });
     }
   }, [protein]);

@@ -143,7 +143,6 @@ function AnalysisContent() {
       // Start processing before navigating - backend will wait for WebSocket
       try {
         await processingApi.start(sessionId);
-        console.log('Processing started successfully');
       } catch (processingError) {
         console.error('Failed to start processing:', processingError);
         addToast('error', 'Failed to start processing. Please try again.');

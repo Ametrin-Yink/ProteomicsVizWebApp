@@ -43,6 +43,7 @@ function ResultsContent() {
   // Fetch data on mount
   useEffect(() => {
     async function fetchData() {
+      if (!sessionId) return;
       setLoading(true);
       setError(null);
       try {
@@ -63,8 +64,9 @@ function ResultsContent() {
 
   // Fetch session config and restore visualization state
   useEffect(() => {
+    if (!sessionId) return;
     async function fetchSessionConfig() {
-      const session = await getSession(sessionId);
+      const session = await getSession(sessionId!);
       if (session) {
         const experiment = session.files?.proteomics?.[0]?.experiment ?? '';
         setSessionConfig({
@@ -156,6 +158,7 @@ function ResultsContent() {
   // Save markers to backend when they change (debounced)
   useEffect(() => {
     const markersArray = Array.from(markedProteins);
+    if (!sessionId) return;
     const timer = setTimeout(async () => {
       try {
         await updateSessionVisualizationState(sessionId, { markers: markersArray });
@@ -168,6 +171,7 @@ function ResultsContent() {
 
   // Save filters to backend when they change (debounced)
   useEffect(() => {
+    if (!sessionId) return;
     const timer = setTimeout(async () => {
       try {
         await updateSessionVisualizationState(sessionId, { volcano_filters: filters });
@@ -297,6 +301,7 @@ function ResultsContent() {
               adjPValue={filters.adjPValue}
               s0={filters.s0}
               onChange={(newFilters) => setFilters(newFilters)}
+              onReset={() => setFilters({ foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 })}
             />
 
             {/* Volcano Plot */}

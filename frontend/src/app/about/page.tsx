@@ -25,7 +25,7 @@ const pipelineSteps = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-gray-50 pt-14">
-      <div className="max-w-5xl mx-auto px-8 py-12">
+      <div className="max-w-4xl mx-auto px-8 py-12">
 
         {/* Hero */}
         <div className="text-center mb-12">
@@ -48,7 +48,7 @@ export default function AboutPage() {
             { title: 'PDF Reports', desc: 'Export comprehensive analysis reports', icon: FileDown },
           ].map((f) => (
             <div key={f.title} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <f.icon className="w-8 h-8 text-[#00ADEF] mb-3" />
+              <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded-lg p-2 inline-flex mb-3"><f.icon className="w-8 h-8 text-white" /></div>
               <h3 className="text-lg font-semibold text-gray-900 mb-1">{f.title}</h3>
               <p className="text-sm text-gray-600">{f.desc}</p>
             </div>
@@ -131,19 +131,19 @@ export default function AboutPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-[#E73564]" /> Frontend
+                <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-white" /></div> Frontend
               </h3>
               <p className="text-sm text-gray-600">Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js</p>
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-[#00ADEF]" /> Backend
+                <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-white" /></div> Backend
               </h3>
               <p className="text-sm text-gray-600">FastAPI, Python 3.11+, Pydantic, asyncio</p>
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-purple-600" /> Analysis
+                <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-white" /></div> Analysis
               </h3>
               <p className="text-sm text-gray-600">R 4.3+, msqrob2, QFeatures, limma, gseapy</p>
             </div>
@@ -196,7 +196,7 @@ npm run dev
           <p>ProteomicsViz v1.0.0</p>
           <p>
             Contact:{' '}
-            <a href="https://github.com/Ametrin-Yink" className="text-cyan-600 hover:text-cyan-700 font-medium">
+            <a href="https://github.com/Ametrin-Yink" target="_blank" rel="noopener noreferrer" className="text-[#00ADEF] hover:text-[#E73564] font-medium">
               Ametrin-Yink on GitHub
             </a>
           </p>
