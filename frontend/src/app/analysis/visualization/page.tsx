@@ -301,6 +301,7 @@ function ResultsContent() {
               adjPValue={filters.adjPValue}
               s0={filters.s0}
               onChange={(newFilters) => setFilters(newFilters)}
+              onReset={() => setFilters({ foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 })}
             />
 
             {/* Volcano Plot */}

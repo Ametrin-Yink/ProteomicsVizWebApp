@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { Slider } from '@/components/ui/Slider';
 
 interface FilterPanelProps {
@@ -10,9 +10,10 @@ interface FilterPanelProps {
   adjPValue: number;
   s0: number; // Stored as fraction of foldChange (0-1)
   onChange: (filters: { foldChange: number; pValue: number; adjPValue: number; s0: number }) => void;
+  onReset: () => void;
 }
 
-export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange }: FilterPanelProps) {
+export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onReset }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const actualS0 = s0 * foldChange;
@@ -31,6 +32,13 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange }: Fil
           className="p-1 hover:bg-gray-100 rounded"
         >
           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        <button
+          onClick={onReset}
+          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+          title="Reset filters to defaults"
+        >
+          <RotateCcw className="w-4 h-4" />
         </button>
       </div>
 
