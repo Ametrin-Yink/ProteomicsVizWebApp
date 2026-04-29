@@ -269,7 +269,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
   const status = statusConfig[session.status];
   const StatusIcon = status.icon;
   const [isEditing, setIsEditing] = React.useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [editName, setEditName] = React.useState(session.name);
 
   const handleStartEdit = (e: React.MouseEvent) => {
@@ -404,7 +404,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
                 Cancel
               </button>
               <button
-                onClick={() => { setShowDeleteConfirm(false); onDelete(); }}
+                onClick={() => { setShowDeleteConfirm(false); onDelete?.(); }}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
               >
                 Delete
