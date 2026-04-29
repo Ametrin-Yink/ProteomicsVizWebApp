@@ -119,7 +119,7 @@ export const useProcessingStore = create<ProcessingStore>()(
         }
 
         // Clear queued state when processing actually starts
-        if (message.status === 'started') {
+        if (message.status === 'started' || message.status === 'in_progress') {
           state.isQueued = false;
         }
 
@@ -216,6 +216,8 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Sync step progress from polling data (fallback when WebSocket is unavailable)
     syncStepProgress: (completedSteps: number[], currentStep: number) => {
       set((state) => {
+        // Don't clear queued state here - it should only be cleared when
+        // actual processing activity is detected (via WebSocket or logs)
         // Mark completed steps
         for (const stepNum of completedSteps) {
           const step = state.steps.find((s: ProcessingStep) => s.id === stepNum);

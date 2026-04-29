@@ -250,7 +250,8 @@ function ProcessingContent() {
           // Sync step progress from completed_steps and current_step
           if (logData.completed_steps && logData.current_step) {
             syncStepProgress(logData.completed_steps, logData.current_step);
-            clearQueued();
+            // Don't clear queued here - only clear when actual processing starts
+            // (WebSocket progress message with status='started')
           }
 
           // Check if queued
@@ -258,12 +259,15 @@ function ProcessingContent() {
             setQueued(logData.queue_position, logData.queue_length ?? 0);
           }
 
-          // If no pipeline state yet, check status endpoint for queue info
+          // Check status endpoint for queue/processing state
           if (logData.completed_steps.length === 0 && logData.current_step === 0) {
             try {
               const statusData = await processingAPI.getStatus(sessionId);
               if (statusData.queue_position && statusData.queue_position > 0) {
                 setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+              } else if (statusData.state === 'processing' || statusData.state === 'started') {
+                // Session transitioned from queued to processing
+                clearQueued();
               }
             } catch {
               // Status check failed, ignore
@@ -333,12 +337,14 @@ function ProcessingContent() {
           syncStepProgress(logData.completed_steps, logData.current_step);
         }
 
-        // If no pipeline state yet, check status endpoint for queue info
+        // If no pipeline state yet, check status endpoint for queue/processing state
         if (!logData || (logData.completed_steps.length === 0 && logData.current_step === 0)) {
           try {
             const statusData = await processingAPI.getStatus(sessionId);
             if (statusData.queue_position && statusData.queue_position > 0) {
               setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+            } else if (statusData.state === 'processing' || statusData.state === 'started') {
+              clearQueued();
             }
           } catch {
             // Status check failed, ignore

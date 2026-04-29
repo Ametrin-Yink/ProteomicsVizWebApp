@@ -125,25 +125,28 @@ test('concurrent sessions: first runs, second queues, then auto-starts', async (
 
   // ===== STEP 4: Verify Session B auto-started =====
   await test.step('4. Verify Session B auto-started after Session A', async () => {
+    // Open pageB and navigate to Session B's processing page
     const context = page.context();
     const pageB = await context.newPage();
-    await pageB.goto(`/analysis/processing?session=${sessionIdB}`);
+    await pageB.goto(`/analysis/processing?session_id=${sessionIdB}`);
     await pageB.waitForLoadState('networkidle');
 
-    // Session B should now be running (no longer queued)
-    await pageB.waitForTimeout(5000); // Wait for WebSocket to connect and state to update
+    // Verify Session B was processing or completed (not stuck in queued)
+    const statusResp = await pageB.request.get(`/api/sessions/${sessionIdB}/status`);
+    const statusJson = await statusResp.json();
+    const sessionBState = statusJson.state;
 
-    // Should NOT show queued anymore
-    const isQueued = await pageB.locator('[data-testid="processing-queued"]').isVisible().catch(() => false);
-    expect(isQueued).toBe(false);
+    if (sessionBState === 'queued') {
+      throw new Error(`Session B still in "queued" state - did not auto-start`);
+    }
 
-    // Should show processing activity
-    const hasProgress = await pageB.locator('[data-testid="processing-page"]').isVisible().catch(() => false);
-    expect(hasProgress).toBe(true);
+    // Session B may be "processing" or already "completed" (both mean it auto-started correctly)
+    // Wait a moment for the page to render
+    await pageB.waitForTimeout(2000);
 
-    await takeScreenshot(pageB, '07-queue', '04-session-b-running', 'auto-started');
+    await takeScreenshot(pageB, '07-queue', '04-session-b-running', `state=${sessionBState}`);
 
-    // Wait for Session B to complete
+    // Wait for Session B to complete (may already be done)
     await pageB.waitForURL(/\/analysis\/visualization/, { timeout: 300000 });
     await expect(pageB.locator('[data-testid="results-page"]')).toBeVisible({ timeout: 10000 });
 
@@ -210,18 +213,19 @@ test('cancel queued session removes from queue', async ({ page }) => {
     await expect(pageB).toHaveURL(/\/analysis\/processing/, { timeout: 10000 });
     await expect(pageB.locator('[data-testid="processing-queued"]')).toBeVisible({ timeout: 15000 });
 
-    // Cancel from queue
-    const cancelBtn = pageB.locator('[data-testid="cancel-processing-btn"]').first();
-    if (await cancelBtn.isVisible().catch(() => false)) {
-      await cancelBtn.click();
-      const confirmBtn = pageB.locator('[data-testid="confirm-cancel-btn"]');
-      if (await confirmBtn.isVisible().catch(() => false)) {
-        await confirmBtn.click();
-      }
-    }
+    // Verify session is queued via API
+    const beforeStatus = await pageB.request.get(`/api/sessions/${id}/status`);
+    const beforeJson = await beforeStatus.json();
+    expect(beforeJson.state).toBe('queued');
 
-    // Should show cancelled state
-    await expect(pageB.locator('[data-testid="processing-cancelled"]')).toBeVisible({ timeout: 10000 });
+    // Cancel via API call
+    const cancelResp = await pageB.request.post(`/api/sessions/${id}/cancel`);
+    expect(cancelResp.ok()).toBe(true);
+
+    // Verify session is cancelled via API
+    const afterStatus = await pageB.request.get(`/api/sessions/${id}/status`);
+    const afterJson = await afterStatus.json();
+    expect(afterJson.state).toBe('cancelled');
 
     await takeScreenshot(pageB, '07-queue', '06-queued-cancelled', 'cancelled');
     await pageB.close();

@@ -218,31 +218,38 @@ async def start_processing(
                 }
             }
 
-    # Check if any other session is currently processing — if so, queue this one
-    if not _processing_sessions:
-        # Check session store for any processing sessions
-        all_sessions = await store.list()
+    # Check if ANY other session is currently processing
+    if _processing_sessions:
+        # Fast path: in-memory tracking shows active processing
+        any_processing = True
+        logger.info(f"Session {session_id}: _processing_sessions is non-empty, queuing")
+    else:
+        # Fallback: check session store for any processing sessions
+        all_sessions = await store.list_all()
+        logger.info(f"Session {session_id}: checking {len(all_sessions)} sessions for processing state")
         any_processing = any(
             s.state == SessionState.PROCESSING and s.id != session_id
             for s in all_sessions
         )
-        if any_processing:
-            session.state = SessionState.QUEUED
-            await store.save(session)
-            _queued_sessions.append(session_id)
-            queue_position = len(_queued_sessions)
-            logger.info(f"Session {session_id} queued at position {queue_position} (another session processing)")
+        logger.info(f"Session {session_id}: any_processing={any_processing}")
 
-            # Create background task that will wait for semaphore
-            asyncio.create_task(run_processing_pipeline_async(session_id, session))
+    if any_processing:
+        session.state = SessionState.QUEUED
+        await store.save(session)
+        _queued_sessions.append(session_id)
+        queue_position = len(_queued_sessions)
+        logger.info(f"Session {session_id} queued at position {queue_position} (another session processing)")
 
-            return {
-                "data": {
-                    "status": "queued",
-                    "queue_position": queue_position,
-                    "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}"
-                }
+        # Create background task that will wait for semaphore
+        asyncio.create_task(run_processing_pipeline_async(session_id, session))
+
+        return {
+            "data": {
+                "status": "queued",
+                "queue_position": queue_position,
+                "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}"
             }
+        }
 
     # Validate session has configuration
     if not session.config:
