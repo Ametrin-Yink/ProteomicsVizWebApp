@@ -166,6 +166,22 @@ class ProcessingOrchestrator:
         # Queue-based batching for progress updates
         self._pending_queue: deque[ProcessingProgress] = deque()
         self._flush_task: Optional[asyncio.Task] = None
+        # Cancellation support
+        self._cancel_event: Optional[asyncio.Event] = None
+
+    def set_cancel_event(self, event: asyncio.Event) -> None:
+        """Set the cancellation event to monitor for abort signals."""
+        self._cancel_event = event
+
+    def _check_cancelled(self) -> None:
+        """Check if processing has been cancelled and raise if so."""
+        if self._cancel_event and self._cancel_event.is_set():
+            from app.core.exceptions import ProcessingError
+            raise ProcessingError(
+                message="Processing cancelled by user",
+                step=self._pipeline_state.data["current_step"],
+                recoverable=False,
+            )
 
     def register_progress_callback(
         self, callback: Callable[[ProcessingProgress], None]
@@ -380,6 +396,7 @@ class ProcessingOrchestrator:
                     1, "completed", 100, f"Combined {len(psm_df)} PSMs"
                 )
             )
+            self._check_cancelled()
 
             # Step 2: Generate Unique PSM
             await self._send_progress(
@@ -395,6 +412,7 @@ class ProcessingOrchestrator:
                     2, "completed", 100, f"Generated {len(psm_df)} unique PSMs"
                 )
             )
+            self._check_cancelled()
 
             # Step 3: Remove Razor (optional)
             await self._send_progress(
@@ -410,6 +428,7 @@ class ProcessingOrchestrator:
                     3, "completed", 100, f"Razor removal {'complete' if config.remove_razor else 'skipped'}, {len(psm_df)} PSMs remaining"
                 )
             )
+            self._check_cancelled()
 
             # Step 4: Remove Low Quality
             logger.info(f"Step 4: Starting with DataFrame shape: {psm_df.shape}, columns: {list(psm_df.columns)}")
@@ -433,6 +452,7 @@ class ProcessingOrchestrator:
                     4, "completed", 100, f"Quality filtering complete, {len(psm_df)} PSMs remaining"
                 )
             )
+            self._check_cancelled()
 
             # Step 5: Filter by Criteria
             logger.info(f"Step 5: Starting with DataFrame shape: {psm_df.shape}, columns: {list(psm_df.columns)}")
@@ -475,10 +495,11 @@ class ProcessingOrchestrator:
                     5, "completed", 100, f"Filtering complete, {len(psm_df)} PSMs remaining"
                 )
             )
+            self._check_cancelled()
 
             # Release PSM DataFrame from memory before R steps
             del psm_df
-            gc.collect()
+            await asyncio.to_thread(gc.collect)  # Offload to thread pool to avoid blocking event loop
             logger.info("Released PSM DataFrame from memory before R steps")
 
             # Step 6: Protein Abundance (R)
@@ -489,7 +510,7 @@ class ProcessingOrchestrator:
                 logger.info(f"Step 6: Input file size: {psm_input_for_r.stat().st_size} bytes")
                 # Log first few lines of input file for debugging
                 try:
-                    with open(psm_output, 'r') as f:
+                    with open(psm_input_for_r, 'r') as f:
                         header = f.readline().strip()
                         first_data = f.readline().strip()
                         logger.info(f"Step 6: Input file header: {header[:200]}...")
@@ -553,6 +574,7 @@ class ProcessingOrchestrator:
                     6, "completed", 100, f"Calculated {len(protein_df)} protein abundances"
                 )
             )
+            self._check_cancelled()
 
             # Step 7: Differential Expression (R)
             de_output = results_dir / "Diff_Expression.tsv"
@@ -587,6 +609,7 @@ class ProcessingOrchestrator:
                     f"Found {len(significant)} significant proteins",
                 )
             )
+            self._check_cancelled()
 
             # Step 8: QC Metrics (Python) - use Parquet if available for faster I/O
             qc_output = results_dir / "QC_Results.json"
@@ -611,6 +634,7 @@ class ProcessingOrchestrator:
             await self._send_progress(
                 self._create_progress(8, "completed", 100, "QC metrics calculated")
             )
+            self._check_cancelled()
 
             # Step 9: GSEA Analysis (Python)
             gsea_output = results_dir / "GSEA_Results.json"

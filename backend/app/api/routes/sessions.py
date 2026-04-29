@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.models.session import (
     Session, SessionCreate, SessionUpdate, SessionSummary,
-    SessionState, ProcessingStatus, SessionConfig, SessionFiles,
+    SessionState, SessionConfig, SessionFiles,
     VisualizationStateUpdate,
 )
 from app.core.config import settings
@@ -164,22 +164,3 @@ async def update_visualization_state(
     return session
 
 
-@router.get("/{session_id}/status", response_model=ProcessingStatus)
-async def get_session_status(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store)
-):
-    """Get session processing status."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
-    # Return default status
-    return ProcessingStatus(
-        state=session.state,
-        progress=0,
-        steps=[]
-    )

@@ -108,11 +108,11 @@ export interface LogMessage {
 
 // API Types
 export interface ProcessingStatusResponse {
-  session_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'error';
-  current_step: number;
-  overall_progress: number;
-  steps: ProcessingStep[];
+  session_id?: string;
+  state: 'created' | 'configuring' | 'queued' | 'processing' | 'completed' | 'error' | 'cancelled';
+  current_step?: number;
+  overall_progress?: number;
+  steps?: ProcessingStep[];
   queue_position?: number;
   queue_length?: number;
 }

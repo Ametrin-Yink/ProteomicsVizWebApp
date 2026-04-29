@@ -53,11 +53,15 @@ export const useSessionStore = create<SessionStore>()(
           state.isLoading = false;
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load sessions';
-        console.error('Session load failed:', error);
+        // Silently handle transient network errors (e.g. backend not ready yet)
+        // Store remains empty, user can retry via manual interaction
         set((state) => {
-          state.error = message;
+          state.sessions = [];
           state.isLoading = false;
+          // Only show error for non-network failures
+          if (error instanceof Error && !error.message.includes('fetch')) {
+            state.error = error.message;
+          }
         });
       }
     },

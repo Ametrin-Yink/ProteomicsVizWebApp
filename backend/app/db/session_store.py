@@ -23,21 +23,23 @@ logger = logging.getLogger("proteomics")
 class SessionStore:
     """
     JSON-based session storage.
-    
+
     Stores sessions as JSON files in the sessions directory.
     Each session has its own subdirectory: sessions/{session_id}/
     """
-    
+
+    # Class-level lock shared across all instances to prevent concurrent writes
+    _save_lock: asyncio.Lock = None  # type: ignore
+
     def __init__(self, sessions_dir: Optional[Path] = None):
         """
         Initialize session store.
-        
+
         Args:
             sessions_dir: Directory for session storage (defaults to settings)
         """
         self.sessions_dir = sessions_dir or settings.sessions_dir
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
-        self._save_lock = asyncio.Lock()
     
     def _get_session_dir(self, session_id: str) -> Path:
         """Get session directory path."""
@@ -216,6 +218,8 @@ class SessionStore:
         Args:
             session: Session to save
         """
+        if SessionStore._save_lock is None:
+            SessionStore._save_lock = asyncio.Lock()
         session_file = self._get_session_file(session.id)
         async with self._save_lock:
             async with aiofiles.open(session_file, 'w', encoding='utf-8') as f:
@@ -331,7 +335,7 @@ class SessionStore:
         """
         from datetime import timedelta
         
-        cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
         sessions = await self.list_all()
         
         cleaned = 0

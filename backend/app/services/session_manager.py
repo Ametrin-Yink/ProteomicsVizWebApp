@@ -572,12 +572,11 @@ class SessionManager:
                 logger.warning(f"Failed to send WebSocket message: {e}")
                 disconnected.append(websocket)
 
-        # Clean up disconnected websockets - ONLY in send_progress_update
-        # Don't actually unregister - let WebSocket handler clean up when connection closes
+        # Clean up disconnected websockets
         if disconnected:
             logger.warning(f"{len(disconnected)} WebSockets failed to receive progress for session {session_id}")
-        # for websocket in disconnected:
-        #     await self.unregister_websocket(session_id, websocket)
+            for websocket in disconnected:
+                await self.unregister_websocket(session_id, websocket)
 
     async def send_complete_message(self, session_id: str, outputs: dict, duration: float) -> None:
         """Send completion message to all WebSocket connections for a session.

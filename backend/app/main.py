@@ -12,12 +12,13 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from app.api.routes import sessions, upload, analysis, processing, visualization, reports, compounds
 from app.core.config import settings
-from app.core.exceptions import ProteomicsException, AppException
+from app.core.exceptions import AppException
 from app.db.session_store import SessionStore
+from app.models.analysis import STEP_DISPLAY_NAMES
 from app.services.session_manager import session_manager
 
 logger = logging.getLogger("proteomics")
@@ -76,22 +77,6 @@ app.add_middleware(
     expose_headers=["Content-Type"],
     max_age=3600,
 )
-
-
-# Exception handler
-@app.exception_handler(ProteomicsException)
-async def proteomics_exception_handler(request, exc: ProteomicsException):
-    """Handle custom proteomics exceptions."""
-    response = JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.message, "code": exc.code},
-    )
-    # Add CORS headers to exception responses
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    return response
 
 
 # Exception handler for AppException hierarchy
@@ -182,55 +167,44 @@ async def list_organisms():
 @app.websocket("/ws/sessions/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for session real-time updates."""
-    print(f"WebSocket connection requested for session {session_id}", flush=True)
     logger.info(f"WebSocket connection requested for session {session_id}")
 
     try:
         await websocket.accept()
-        print(f"WebSocket connection accepted for session {session_id}", flush=True)
     except Exception as e:
-        print(f"WebSocket accept failed for session {session_id}: {e}", flush=True)
         logger.error(f"WebSocket accept failed for session {session_id}: {e}", exc_info=True)
         return
 
     try:
         session_manager = app.state.session_manager
         if not session_manager:
-            print(f"ERROR: session_manager not initialized for session {session_id}", flush=True)
+            logger.error(f"session_manager not initialized for session {session_id}")
             await websocket.close(code=1011, reason="Server not ready")
             return
 
-        print(f"Got session_manager for session {session_id}", flush=True)
-
         # Register connection
         await session_manager.register_websocket(session_id, websocket)
-        print(f"WebSocket registered for session {session_id}", flush=True)
 
         # Keep connection alive and handle messages
-        print(f"Entering WebSocket message loop for session {session_id}", flush=True)
         while True:
             try:
                 # Receive message (ping/keepalive from client)
-                print(f"Waiting for message from session {session_id}...", flush=True)
                 # Use a longer timeout (60s) to allow for processing time
                 # Frontend sends ping every 30s, so 60s gives enough buffer
                 data = await asyncio.wait_for(
                     websocket.receive_text(),
                     timeout=60
                 )
-                print(f"Received message from session {session_id}: {data[:100]}...", flush=True)
-                
+                logger.debug(f"Received message from session {session_id}: {data[:100]}...")
+
                 # Handle ping
                 if data == "ping" or (data.startswith('{') and '"type":"ping"' in data.replace(' ', '')):
-                    print(f"Sending pong to session {session_id}", flush=True)
                     await websocket.send_text('{"type": "pong"}')
-                    print(f"Pong sent to session {session_id}", flush=True)
                     continue
-                
+
                 # Handle subscribe message from frontend
                 if data.startswith('{') and '"type":"subscribe"' in data.replace(' ', ''):
                     # Subscribe message received, connection is ready
-                    print(f"Subscribe message received for session {session_id}", flush=True)
 
                     # Send current processing state if available
                     try:
@@ -239,7 +213,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         if pipeline_state:
                             # Send historical logs first
                             logs = pipeline_state.get("logs", [])
-                            print(f"Sending {len(logs)} historical logs to session {session_id}", flush=True)
+                            logger.info(f"Sending {len(logs)} historical logs to session {session_id}")
                             for log in logs:
                                 try:
                                     log_msg = {
@@ -248,7 +222,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     }
                                     await websocket.send_json(log_msg)
                                 except Exception as e:
-                                    print(f"Error sending log to session {session_id}: {e}", flush=True)
+                                    logger.warning(f"Error sending log to session {session_id}: {e}")
                                     break
 
                             # Send current step progress
@@ -256,24 +230,23 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             completed_steps = pipeline_state.get("completed_steps", [])
 
                             # Send progress for completed steps
-                            print(f"Sending {len(completed_steps)} completed steps to session {session_id}: {completed_steps}", flush=True)
                             for step_num in completed_steps:
                                 try:
+                                    step_display_name = STEP_DISPLAY_NAMES.get(step_num, f"Step {step_num}")
                                     progress_msg = {
                                         "type": "progress",
                                         "payload": {
                                             "step": step_num,
-                                            "step_name": f"Step {step_num}",
+                                            "step_name": step_display_name,
                                             "status": "completed",
                                             "progress": 100,
-                                            "message": f"Step {step_num} completed",
+                                            "message": f"{step_display_name} completed",
                                             "overall_progress": int((len(completed_steps) / 9) * 100)
                                         }
                                     }
                                     await websocket.send_json(progress_msg)
-                                    print(f"Sent progress for completed step {step_num} to session {session_id}", flush=True)
                                 except Exception as e:
-                                    print(f"Error sending step {step_num} to session {session_id}: {e}", flush=True)
+                                    logger.warning(f"Error sending step {step_num} to session {session_id}: {e}")
                                     break
 
                             # Send completion message if pipeline is done
@@ -287,48 +260,43 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     }
                                 }
                                 await websocket.send_json(complete_msg)
-                                print(f"Sent completion message to session {session_id}", flush=True)
+                                logger.info(f"Sent completion message to session {session_id}")
                     except Exception as e:
-                        print(f"Error sending current state for session {session_id}: {e}", flush=True)
+                        logger.warning(f"Error sending current state for session {session_id}: {e}")
 
                     continue
-                
+
                 # Handle pong from frontend
                 if data.startswith('{') and '"type":"pong"' in data.replace(' ', ''):
-                    print(f"Pong received from session {session_id}", flush=True)
                     continue
-                    
+
             except asyncio.TimeoutError:
                 # Send ping to check connection
-                print(f"WebSocket timeout for session {session_id}, sending ping", flush=True)
                 try:
                     await websocket.send_text('{"type": "ping"}')
-                    print(f"Ping sent to session {session_id}", flush=True)
                 except Exception as e:
-                    print(f"Failed to send ping to session {session_id}: {e}", flush=True)
+                    logger.debug(f"Failed to send ping to session {session_id}: {e}")
                     break
             except WebSocketDisconnect:
-                print(f"WebSocket disconnected for session {session_id}", flush=True)
+                logger.info(f"WebSocket disconnected for session {session_id}")
                 break
             except Exception as e:
-                print(f"WebSocket receive error for session {session_id}: {type(e).__name__}: {e}", flush=True)
+                logger.warning(f"WebSocket receive error for session {session_id}: {type(e).__name__}: {e}")
                 break
-                
+
     except Exception as e:
-        print(f"WebSocket outer error for session {session_id}: {type(e).__name__}: {e}", flush=True)
         logger.error(f"WebSocket error for session {session_id}: {e}", exc_info=True)
     finally:
-        print(f"WebSocket connection closing for session {session_id}", flush=True)
         logger.info(f"WebSocket connection closing for session {session_id}")
         # Unregister connection
         try:
             await session_manager.unregister_websocket(session_id, websocket)
         except Exception as e:
-            print(f"Error unregistering WebSocket for session {session_id}: {e}", flush=True)
+            logger.warning(f"Error unregistering WebSocket for session {session_id}: {e}")
         try:
             await websocket.close()
         except Exception as e:
-            print(f"Error closing WebSocket for session {session_id}: {e}", flush=True)
+            logger.warning(f"Error closing WebSocket for session {session_id}: {e}")
 
 
 if __name__ == "__main__":

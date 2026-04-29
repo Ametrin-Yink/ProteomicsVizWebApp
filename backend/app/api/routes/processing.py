@@ -28,6 +28,68 @@ _queued_sessions: list[str] = []  # Ordered list of session_ids
 # Track sessions actively running inside the semaphore
 _processing_sessions: set[str] = set()
 
+# Cancellation events for active processing sessions
+_cancel_events: dict[str, asyncio.Event] = {}
+
+
+def _add_to_queue(session_id: str) -> int:
+    """Add session to queue, deduplicating first. Returns queue position (1-indexed)."""
+    try:
+        _queued_sessions.remove(session_id)
+    except ValueError:
+        pass
+    _queued_sessions.append(session_id)
+    return len(_queued_sessions)
+
+
+async def _is_any_session_processing(
+    store: SessionStore, exclude_session_id: str, current_session_id: str
+) -> bool:
+    """Check if any other session is actively processing (with 6-hour stale timeout).
+
+    Args:
+        store: Session store instance
+        exclude_session_id: Session ID to exclude (the one trying to start)
+        current_session_id: Used for logging context
+
+    Returns:
+        True if another session is actively processing
+    """
+    if _processing_sessions:
+        logger.info(f"Session {current_session_id}: _processing_sessions is non-empty, queuing")
+        return True
+
+    # Fallback: check session store for any processing sessions
+    from datetime import datetime, timezone as tz, timedelta
+
+    all_sessions = await store.list_all()
+    logger.info(f"Session {current_session_id}: checking {len(all_sessions)} sessions for processing state")
+    for s in all_sessions:
+        if s.state == SessionState.PROCESSING and s.id != exclude_session_id:
+            is_stale = False
+            pipeline_state = await store.load_pipeline_state(s.id)
+            if pipeline_state:
+                started_at = pipeline_state.get("started_at")
+                if started_at:
+                    try:
+                        started_time = datetime.fromisoformat(started_at)
+                        if started_time.tzinfo is None:
+                            started_time = started_time.replace(tzinfo=tz.utc)
+                        elapsed = datetime.now(tz.utc) - started_time
+                        if elapsed > timedelta(hours=6) and not pipeline_state.get("completed_at"):
+                            is_stale = True
+                            logger.warning(
+                                f"Stale processing state for session {s.id}: "
+                                f"started {elapsed.total_seconds()/3600:.1f}h ago, ignoring"
+                            )
+                    except (ValueError, TypeError):
+                        is_stale = True
+            if not is_stale:
+                logger.info(f"Session {s.id} is actively processing")
+                return True
+    logger.info(f"Session {current_session_id}: any_processing=False")
+    return False
+
 
 def get_session_store() -> SessionStore:
     """Dependency to get session store."""
@@ -50,7 +112,10 @@ async def get_processing_status(
     # Return default status based on session state
     queue_position = None
     if session_id in _queued_sessions:
-        queue_position = _queued_sessions.index(session_id) + 1
+        try:
+            queue_position = _queued_sessions.index(session_id) + 1
+        except ValueError:
+            pass  # Session was removed between check and index
 
     return ProcessingStatus(
         state=session.state,
@@ -113,33 +178,65 @@ async def retry_processing(
     session_id: str,
     store: SessionStore = Depends(get_session_store)
 ):
-    """Retry failed processing."""
+    """Retry failed processing. Routes through the same semaphore/queue logic as start_processing."""
+    # Delegate to start_processing — it already handles the case where session.state is ERROR
+    # (the session will pass the PROCESSING-state stale check and proceed to normal validation)
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found"
         )
-    
+
     if session.state != SessionState.ERROR:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can only retry failed sessions"
         )
-    
-    # Reset state and retry
+
+    # Validate session still has configuration and files
+    if not session.config:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session configuration is missing. Cannot retry without a valid config."
+        )
+
+    if not session.files or not session.files.proteomics:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No proteomics files found. Cannot retry without uploaded files."
+        )
+
+    if len(session.files.proteomics) < MIN_PROTEOMICS_FILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At least {MIN_PROTEOMICS_FILES} proteomics files required. Current: {len(session.files.proteomics)}"
+        )
+
+    # Reset to PROCESSING state and clear error — start_processing will handle queue/semaphore
     session.state = SessionState.PROCESSING
     session.error_message = None
     await store.save(session)
 
-    # Start processing in background using asyncio.create_task
-    asyncio.create_task(run_processing_pipeline_async(session_id, session))
+    # Create cancellation event
+    _cancel_events[session_id] = asyncio.Event()
 
-    return {
-        "message": "Processing retry initiated",
-        "session_id": session_id,
-        "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}"
-    }
+    # Reuse the same queue/semaphore decision as start_processing
+    any_processing = await _is_any_session_processing(store, session_id, session_id)
+
+    if any_processing:
+        session.state = SessionState.QUEUED
+        await store.save(session)
+        queue_position = _add_to_queue(session_id)
+        logger.info(f"Retry: Session {session_id} queued at position {queue_position}")
+        asyncio.create_task(run_processing_pipeline_async(session_id, session))
+        return {"data": {"status": "queued", "queue_position": queue_position}}
+
+    session.state = SessionState.PROCESSING
+    await store.save(session)
+    asyncio.create_task(run_processing_pipeline_async(session_id, session))
+    logger.info(f"Retry: Processing started for session {session_id}")
+    return {"data": {"status": "started"}}
 
 
 @router.post("/{session_id}/process")
@@ -196,15 +293,14 @@ async def start_processing(
                     is_stale = True
 
         if is_stale:
-            # Reset stale processing state and allow re-processing
-            session.state = SessionState.CREATED
+            # Reset stale processing state — use CONFIGURING since config and files are still valid
+            session.state = SessionState.CONFIGURING
             await store.save(session)
         else:
             # Add to queue instead of rejecting
             session.state = SessionState.QUEUED
             await store.save(session)
-            _queued_sessions.append(session_id)
-            queue_position = len(_queued_sessions)
+            queue_position = _add_to_queue(session_id)
             logger.info(f"Session {session_id} queued at position {queue_position}")
 
             # Create background task that will wait for semaphore
@@ -219,25 +315,12 @@ async def start_processing(
             }
 
     # Check if ANY other session is currently processing
-    if _processing_sessions:
-        # Fast path: in-memory tracking shows active processing
-        any_processing = True
-        logger.info(f"Session {session_id}: _processing_sessions is non-empty, queuing")
-    else:
-        # Fallback: check session store for any processing sessions
-        all_sessions = await store.list_all()
-        logger.info(f"Session {session_id}: checking {len(all_sessions)} sessions for processing state")
-        any_processing = any(
-            s.state == SessionState.PROCESSING and s.id != session_id
-            for s in all_sessions
-        )
-        logger.info(f"Session {session_id}: any_processing={any_processing}")
+    any_processing = await _is_any_session_processing(store, session_id, session_id)
 
     if any_processing:
         session.state = SessionState.QUEUED
         await store.save(session)
-        _queued_sessions.append(session_id)
-        queue_position = len(_queued_sessions)
+        queue_position = _add_to_queue(session_id)
         logger.info(f"Session {session_id} queued at position {queue_position} (another session processing)")
 
         # Create background task that will wait for semaphore
@@ -276,6 +359,9 @@ async def start_processing(
     session.state = SessionState.PROCESSING
     session.error_message = None
     await store.save(session)
+
+    # Create cancellation event for this session
+    _cancel_events[session_id] = asyncio.Event()
 
     # Start processing in background using asyncio.create_task
     # This properly schedules the async function to run
@@ -316,14 +402,25 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             _processing_sessions.add(session_id)
             logger.info(f"Session {session_id} acquired semaphore, starting processing")
 
-            # Update state to processing
+            # Re-check session state — may have been cancelled while waiting in queue
             session = await session_manager.get_session(session_id)
+            if session.state in (SessionState.CANCELLED, SessionState.ERROR):
+                logger.info(f"Session {session_id} was {session.state.value} while queued, skipping")
+                _processing_sessions.discard(session_id)
+                try:
+                    _queued_sessions.remove(session_id)
+                except ValueError:
+                    pass
+                return
+
             session.state = SessionState.PROCESSING
             await session_manager.update_session_state(session_id, SessionState.PROCESSING)
 
             # Remove from queue tracking
-            if session_id in _queued_sessions:
+            try:
                 _queued_sessions.remove(session_id)
+            except ValueError:
+                pass
 
             # Convert session config to AnalysisConfig
             config = AnalysisConfig(
@@ -348,6 +445,9 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             # Run the processing pipeline
             logger.info(f"Calling process_session for {session_id}")
             orchestrator = ProcessingOrchestrator(session_id=session_id)
+            cancel_event = _cancel_events.get(session_id)
+            if cancel_event:
+                orchestrator.set_cancel_event(cancel_event)
             result = await orchestrator.process_session(
                 config=config,
                 websocket_callback=websocket_callback
@@ -397,6 +497,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         )
     finally:
         _processing_sessions.discard(session_id)
+        _cancel_events.pop(session_id, None)
 
 
 @router.post("/{session_id}/cancel")
@@ -414,20 +515,24 @@ async def cancel_processing(
 
     # Handle queued sessions
     if session.state == SessionState.QUEUED:
-        if session_id in _queued_sessions:
+        try:
             _queued_sessions.remove(session_id)
+        except ValueError:
+            pass
         session.state = SessionState.CANCELLED
         await store.save(session)
         return {"data": {"status": "cancelled"}}
 
-    if session.state not in (SessionState.PROCESSING, SessionState.QUEUED):
+    if session.state != SessionState.PROCESSING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can only cancel sessions that are processing or queued"
         )
 
-    # Cancel processing
-    _processing_sessions.discard(session_id)
+    # Cancel processing — signal the background task to stop
+    if session_id in _cancel_events:
+        _cancel_events[session_id].set()
+        logger.info(f"Signalled cancel event for session {session_id}")
     session.state = SessionState.CANCELLED
     await store.save(session)
     return {"data": {"status": "cancelled"}}

@@ -111,6 +111,7 @@ class Msqrob2Wrapper:
             await asyncio.to_thread(process.wait, timeout=self.timeout)
         except subprocess.TimeoutExpired:
             process.kill()
+            await asyncio.to_thread(process.wait)  # Reap zombie on Windows
             await asyncio.to_thread(stdout_thread.join, timeout=5)
             await asyncio.to_thread(stderr_thread.join, timeout=5)
             raise

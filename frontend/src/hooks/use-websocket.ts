@@ -99,7 +99,9 @@ export const useWebSocket = (sessionId: string | null) => {
 
     // Close existing connection before creating new one
     if (ws.current) {
-      isManualClose.current = true;
+      // Don't flag as manual close — let the onclose handler see it wasn't manual
+      // so the reconnect logic can still fire if needed
+      ws.current.onclose = null;  // Prevent spurious reconnect attempts from old onclose
       ws.current.close();
       ws.current = null;
     }
@@ -188,8 +190,7 @@ export const useWebSocket = (sessionId: string | null) => {
       };
 
       ws.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        // Error event doesn't provide much info, let onclose handle reconnection
+        // WebSocket error events don't carry useful info — onclose handles reconnection
       };
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
@@ -219,7 +220,7 @@ export const useWebSocket = (sessionId: string | null) => {
         ws.current = null;
       }
     };
-  }, [sessionId, connect, handleMessage]);
+  }, [sessionId, connect]);
 
   // Keepalive ping
   useEffect(() => {

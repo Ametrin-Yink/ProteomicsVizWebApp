@@ -225,7 +225,7 @@ class GSEAService:
 
         # Clean gene names: strip isoform suffixes (e.g. P48729-2 -> P48729)
         # and take first gene from multi-ID entries (e.g. "Q9BXS6-6; Q9BXS6-7" -> Q9BXS6)
-        df['gene'] = df['gene'].str.split('[;]').str[0].str.strip()
+        df['gene'] = df['gene'].str.split(';').str[0].str.strip()
         df['gene'] = df['gene'].str.replace(r'-\d+$', '', regex=True)
 
         # Remove invalid values

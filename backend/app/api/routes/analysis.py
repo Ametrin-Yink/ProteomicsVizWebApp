@@ -23,35 +23,19 @@ async def start_analysis(
     session_id: str,
     store: SessionStore = Depends(get_session_store)
 ):
-    """Start the analysis pipeline."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
-        )
-    
-    # Validate session is ready
-    if not session.config:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Session configuration required"
-        )
-    
-    if len(session.files.proteomics) < MIN_PROTEOMICS_FILES:  # At least 3 per condition, 2 conditions
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least 6 proteomics files required (3 per condition)"
-        )
-    
-    # Update session state
-    session.state = SessionState.PROCESSING
-    await store.save(session)
-    
-    # Start processing in background
-    # TODO: Implement background task
-    
-    return {"message": "Analysis started", "session_id": session_id}
+    """Start the analysis pipeline.
+
+    Deprecated: use POST /{session_id}/process from the processing router instead.
+    This endpoint now redirects to the processing endpoint to avoid setting
+    PROCESSING state without actually starting anything.
+    """
+    from fastapi.responses import RedirectResponse
+
+    # Redirect to the actual processing endpoint
+    return RedirectResponse(
+        url=f"/api/sessions/{session_id}/process",
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT
+    )
 
 
 @router.post("/{session_id}/cancel")

@@ -50,7 +50,7 @@ async def upload_proteomics_files(
             raise ValidationError(
                 message=f"File {file.filename} exceeds maximum size of {settings.max_upload_size_mb}MB"
             )
-        
+
         # Parse and validate
         try:
             session_uploads_dir = Path(settings.sessions_dir) / session_id / "uploads"
@@ -62,9 +62,17 @@ async def upload_proteomics_files(
             )
             uploaded_files.append(file_info)
         except Exception as e:
+            # Clean up any files already written for this batch
+            for prev in uploaded_files:
+                try:
+                    prev_path = session_uploads_dir / prev.original_filename
+                    if prev_path.exists():
+                        prev_path.unlink()
+                except Exception:
+                    pass
             import traceback
             logger.error(f"Upload error for {file.filename}: {traceback.format_exc()}")
-            raise ValidationError(message=f"Error parsing {file.filename}: {str(e)}", details={"traceback": traceback.format_exc()})
+            raise ValidationError(message=f"Error parsing {file.filename}: {str(e)}")
     
     # Convert UploadedFileMetadata to ProteomicsFileInfo and update session
     response_files = []
@@ -187,11 +195,32 @@ async def delete_file(
         )
     
     if file_type == "proteomics":
+        # Remove from session metadata
         session.files.proteomics = [
             f for f in session.files.proteomics if f.filename != filename
         ]
+        # Also delete the actual file from disk
+        file_path = Path(settings.sessions_dir) / session_id / "uploads" / filename
+        try:
+            if file_path.exists():
+                file_path.unlink()
+        except Exception as e:
+            logger.warning(f"Failed to delete uploaded file {filename}: {e}")
     elif file_type == "compound":
-        session.files.compound = None
+        # Only delete if the filename matches the actual compound file
+        if session.files.compound and session.files.compound.filename == filename:
+            file_path = Path(settings.sessions_dir) / session_id / "uploads" / filename
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception as e:
+                logger.warning(f"Failed to delete compound file {filename}: {e}")
+            session.files.compound = None
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Compound file {filename} not found in session"
+            )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

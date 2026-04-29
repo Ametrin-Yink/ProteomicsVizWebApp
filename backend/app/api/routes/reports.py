@@ -5,7 +5,7 @@ Provides endpoints for PDF report generation and download.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -102,7 +102,7 @@ async def generate_report(
             # Update status
             status.status = "completed"
             status.progress = 100
-            status.completed_at = datetime.utcnow()
+            status.completed_at = datetime.now(timezone.utc)
             status.download_url = f"/api/sessions/{session_id}/reports/{report_id}/download"
             
             logger.info(f"Report generated: {generated_path}")

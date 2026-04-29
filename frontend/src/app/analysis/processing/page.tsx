@@ -231,7 +231,15 @@ function ProcessingContent() {
     clearQueued,
     syncStepProgress,
     retry,
+    reset: resetStore,
   } = useProcessingStore();
+
+  // Reset store when session ID changes — prevents state from leaking between sessions
+  useEffect(() => {
+    if (!sessionId) return;
+    resetStore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   // Initialize WebSocket connection
   useWebSocket(storeSessionId);
@@ -250,28 +258,18 @@ function ProcessingContent() {
           // Sync step progress from completed_steps and current_step
           if (logData.completed_steps && logData.current_step) {
             syncStepProgress(logData.completed_steps, logData.current_step);
-            // Don't clear queued here - only clear when actual processing starts
-            // (WebSocket progress message with status='started')
-          }
-
-          // Check if queued
-          if (logData.queue_position !== undefined && logData.queue_position !== null) {
-            setQueued(logData.queue_position, logData.queue_length ?? 0);
           }
 
           // Check status endpoint for queue/processing state
-          if (logData.completed_steps.length === 0 && logData.current_step === 0) {
-            try {
-              const statusData = await processingAPI.getStatus(sessionId);
-              if (statusData.queue_position && statusData.queue_position > 0) {
-                setQueued(statusData.queue_position, statusData.queue_length ?? 0);
-              } else if (statusData.state === 'processing' || statusData.state === 'started') {
-                // Session transitioned from queued to processing
-                clearQueued();
-              }
-            } catch {
-              // Status check failed, ignore
+          try {
+            const statusData = await processingAPI.getStatus(sessionId);
+            if (statusData.queue_position && statusData.queue_position > 0) {
+              setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+            } else if (statusData.state === 'processing') {
+              clearQueued();
             }
+          } catch {
+            // Status check failed, ignore
           }
 
           // Update logs
@@ -308,6 +306,11 @@ function ProcessingContent() {
           }
         }
       } catch (err) {
+        // Network errors during polling are expected during backend restarts
+        if (err instanceof TypeError && err.message.includes('fetch')) {
+          // Backend unreachable — polling will retry on next interval
+          return;
+        }
         console.error('Polling error:', err);
       }
     }, 3000); // Poll every 3 seconds
@@ -343,7 +346,7 @@ function ProcessingContent() {
             const statusData = await processingAPI.getStatus(sessionId);
             if (statusData.queue_position && statusData.queue_position > 0) {
               setQueued(statusData.queue_position, statusData.queue_length ?? 0);
-            } else if (statusData.state === 'processing' || statusData.state === 'started') {
+            } else if (statusData.state === 'processing') {
               clearQueued();
             }
           } catch {

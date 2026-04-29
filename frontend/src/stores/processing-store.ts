@@ -236,7 +236,9 @@ export const useProcessingStore = create<ProcessingStore>()(
         }
         // Update overall progress based on completed steps
         const completedCount = state.steps.filter((s: ProcessingStep) => s.status === 'completed').length;
-        state.overallProgress = Math.round((completedCount / state.steps.length) * 100);
+        state.overallProgress = state.steps.length > 0
+          ? Math.round((completedCount / state.steps.length) * 100)
+          : 0;
       });
     },
 

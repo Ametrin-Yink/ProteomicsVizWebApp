@@ -46,6 +46,17 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'active' | 'completed' | 'error'>('active');
   const [, setIsLoading] = React.useState(false);
+  // Sync active tab to the current session's status
+  React.useEffect(() => {
+    if (!currentSession) return;
+    if (currentSession.status === 'completed') {
+      setActiveTab('completed');
+    } else if (currentSession.status === 'error' || currentSession.status === 'cancelled') {
+      setActiveTab('error');
+    } else {
+      setActiveTab('active');
+    }
+  }, [currentSession?.id, currentSession?.status]);
 
   // Load sessions from backend on mount
   React.useEffect(() => {
@@ -67,7 +78,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       return { active: [], completed: [], error: [] };
     }
     const active = sortedSessions.filter((s) =>
-      ['created', 'uploading', 'uploaded', 'processing'].includes(s.status)
+      ['created', 'uploading', 'uploaded', 'processing', 'queued'].includes(s.status)
     );
     const completed = sortedSessions.filter((s) => s.status === 'completed');
     const error = sortedSessions.filter((s) =>

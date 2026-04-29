@@ -53,6 +53,7 @@ function mapBackendStatus(status: string): SessionStatus {
     'configuring': 'created',
     'uploading': 'uploading',
     'uploaded': 'uploaded',
+    'queued': 'queued',
     'processing': 'processing',
     'completed': 'completed',
     'error': 'error',

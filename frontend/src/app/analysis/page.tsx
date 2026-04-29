@@ -30,6 +30,14 @@ function AnalysisContent() {
   const canStart = canStartAnalysis(state);
   const { addToast } = useUIStore();
   
+  // Reset analysis store when session ID changes
+  const { reset: resetAnalysis } = useAnalysisStore();
+  useEffect(() => {
+    if (sessionId) {
+      resetAnalysis();
+    }
+  }, [sessionId, resetAnalysis]);
+
   // Initialize session on mount
   useEffect(() => {
     const initSession = async () => {

@@ -176,31 +176,3 @@ class ProcessingStatus(BaseModel):
     error_message: Optional[str] = None
     queue_position: Optional[int] = None
     queue_length: Optional[int] = None
-
-
-class PipelineState(BaseModel):
-    """Pipeline execution state for persistence."""
-    
-    current_step: int = Field(default=0, ge=0, le=9)
-    completed_steps: list[int] = Field(default_factory=list)
-    failed_step: Optional[int] = None
-    error: Optional[str] = None
-    outputs: dict[str, str] = Field(default_factory=dict)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    
-    def mark_completed(self, step: int, output_path: str) -> None:
-        """Mark a step as completed."""
-        if step not in self.completed_steps:
-            self.completed_steps.append(step)
-        self.outputs[f"step_{step}"] = output_path
-        self.current_step = step
-    
-    def mark_failed(self, step: int, error: str) -> None:
-        """Mark a step as failed."""
-        self.failed_step = step
-        self.error = error
-    
-    def is_step_completed(self, step: int) -> bool:
-        """Check if a step is completed."""
-        return step in self.completed_steps

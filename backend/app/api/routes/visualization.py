@@ -8,9 +8,10 @@ import asyncio
 from functools import lru_cache
 import json
 import logging
+import re
 import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -97,7 +98,7 @@ def create_response(data: Any) -> Dict[str, Any]:
     return {
         "data": data,
         "meta": {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "request_id": str(uuid.uuid4())
         }
     }
@@ -122,7 +123,7 @@ class FileCache:
         if len(self._cache) >= self._max_size:
             oldest_key = min(self._cache, key=lambda k: self._cache[k][0])
             del self._cache[oldest_key]
-        self._cache[key] = (datetime.utcnow(), value)
+        self._cache[key] = (datetime.now(timezone.utc), value)
 
     def invalidate(self, session_id: str) -> None:
         """Remove all cached entries for a session."""
@@ -807,7 +808,7 @@ async def load_protein_abundance(
         df = await asyncio.to_thread(pd.read_csv, abundance_file, sep='\t')
 
         # Find the protein row (handle multiple accessions separated by ;)
-        protein_row = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
+        protein_row = df[df['Master_Protein_Accessions'].str.contains(re.escape(protein_id), regex=True, na=False)]
 
         if protein_row.empty:
             return {"samples": [], "abundances": [], "conditions": []}

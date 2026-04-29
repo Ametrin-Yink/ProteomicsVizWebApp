@@ -67,6 +67,12 @@ const statusConfig: Record<Session['status'], {
     bgColor: 'bg-[#E73564]/10',
     label: 'Processing',
   },
+  queued: {
+    icon: Clock,
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-50',
+    label: 'Queued',
+  },
   completed: {
     icon: CheckCircle2,
     color: 'text-emerald-500',
