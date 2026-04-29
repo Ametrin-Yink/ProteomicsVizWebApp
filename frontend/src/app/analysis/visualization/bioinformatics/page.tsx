@@ -18,6 +18,7 @@ function BioinformaticsContent() {
   const [selectedDatabase, setSelectedDatabase] = useState<GSEADatabase>('go_bp');
   const [data, setData] = useState<GSEAData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPathway, setSelectedPathway] = useState<GSEAResult | null>(null);
 
@@ -31,6 +32,7 @@ function BioinformaticsContent() {
   const [totalResults, setTotalResults] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchData() {
       setLoading(true);
       setError(null);
@@ -44,20 +46,29 @@ function BioinformaticsContent() {
           significant_only: significantOnly,
           search,
         });
-        setData(gseaData);
-        // Backend returns total in the response
-        setTotalResults((gseaData as unknown as Record<string, unknown>).total as number || 0);
+        if (!cancelled) {
+          setData(gseaData);
+          // Backend returns total in the response
+          setTotalResults((gseaData as unknown as Record<string, unknown>).total as number || 0);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load GSEA data');
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load GSEA data');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setInitialLoad(false);
+        }
       }
     }
 
     fetchData();
+    return () => { cancelled = true; };
   }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, search]);
 
-  if (loading) {
+  // Full-page loading only on initial load
+  if (loading && initialLoad) {
     return (
       <div data-testid="gsea-loading" className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -90,40 +101,51 @@ function BioinformaticsContent() {
           </p>
         </div>
 
-        {/* Database Selector */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-8">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Select Database
-          </label>
-          <div data-testid="database-select" className="flex flex-wrap gap-2">
-            {DATABASES.map((db) => (
-              <button
-                key={db}
-                onClick={() => setSelectedDatabase(db)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  selectedDatabase === db
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {GSEADatabaseLabels[db]}
-              </button>
-            ))}
-          </div>
-          <div data-testid="current-database" className="mt-2 text-sm text-gray-600">
-            Current: {GSEADatabaseLabels[selectedDatabase]}
-          </div>
-        </div>
+        {/* Content with inline loading overlay */}
+        <div className="relative">
+          {loading && !initialLoad && (
+            <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
+              <div className="flex items-center gap-2 text-gray-600">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+                <span className="text-sm">Loading...</span>
+              </div>
+            </div>
+          )}
 
-        {/* Content */}
-        {data && data.results && Array.isArray(data.results) && data.results.length > 0 ? (
-          <div className="space-y-8">
-            {/* GSEA Dashboard */}
-            <GSEADashboard
-              data={data}
-              selectedPathway={selectedPathway}
-              onSelectPathway={setSelectedPathway}
-            />
+          {/* Database Selector */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-8">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Select Database
+            </label>
+            <div data-testid="database-select" className="flex flex-wrap gap-2">
+              {DATABASES.map((db) => (
+                <button
+                  key={db}
+                  onClick={() => setSelectedDatabase(db)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedDatabase === db
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {GSEADatabaseLabels[db]}
+                </button>
+              ))}
+            </div>
+            <div data-testid="current-database" className="mt-2 text-sm text-gray-600">
+              Current: {GSEADatabaseLabels[selectedDatabase]}
+            </div>
+          </div>
+
+          {/* Content */}
+          {data && data.results && Array.isArray(data.results) && data.results.length > 0 ? (
+            <div className="space-y-8">
+              {/* GSEA Dashboard */}
+              <GSEADashboard
+                data={data}
+                selectedPathway={selectedPathway}
+                onSelectPathway={setSelectedPathway}
+              />
 
             {/* Pathway Details and Plot */}
             {selectedPathway && (
@@ -155,6 +177,7 @@ function BioinformaticsContent() {
             <p className="text-gray-500">No GSEA data available</p>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
