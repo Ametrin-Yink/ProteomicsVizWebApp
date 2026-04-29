@@ -4,8 +4,7 @@
  * Styled documentation page rendering the README content.
  */
 
-import { FlaskConical, Upload, Settings, BarChart3, FileDown, Cpu, Layers, ArrowRight } from 'lucide-react';
-import Link from 'next/link';
+import { FlaskConical, Upload, Settings, BarChart3, FileDown, Cpu, Layers } from 'lucide-react';
 
 const steps = [
   { icon: '1', title: 'Create a Session', desc: 'From the welcome page, create a new analysis session and give it a name.' },
@@ -60,7 +59,7 @@ export default function AboutPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-12">
           <h2 className="text-2xl font-semibold text-gray-900 mb-6">How to Use</h2>
           <div className="space-y-6">
-            {steps.map((step, i) => (
+            {steps.map((step) => (
               <div key={step.title} className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-[#E73564] to-[#00ADEF] text-white font-bold flex items-center justify-center">
                   {step.icon}

@@ -167,7 +167,6 @@ function ProcessingContent() {
   const [isCancelling, setIsCancelling] = useState(false);
 
   const {
-    steps,
     logs,
     isConnected,
     isComplete,

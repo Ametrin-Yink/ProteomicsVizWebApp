@@ -4,6 +4,11 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { FileDown, X, Eye, RotateCcw, Loader2 } from 'lucide-react';
 import { reportsApi } from '@/lib/api-client';
 
+interface PlotlyGraphDiv {
+  data: unknown;
+  layout: unknown;
+}
+
 declare global {
   interface Window {
     Plotly?: {
@@ -134,7 +139,7 @@ async function capturePlotFromIframe(
 
   try {
     const Plotly = iframe.contentWindow.Plotly;
-    const gd = plotlyEl as any;
+    const gd = plotlyEl as unknown as PlotlyGraphDiv;
     if (!gd || !gd.data || !gd.layout) return null;
 
     return await capturePlotWithFonts(Plotly, gd.data, gd.layout);
@@ -144,7 +149,7 @@ async function capturePlotFromIframe(
 }
 
 /** Capture ALL Plotly charts matching a selector from an iframe. */
-async function captureAllFromIframe(
+async function _captureAllFromIframe(
   iframe: HTMLIFrameElement,
   containerSelector: string,
 ): Promise<string[]> {
@@ -163,7 +168,7 @@ async function captureAllFromIframe(
     if (!plotlyEl) continue;
     try {
       const Plotly = iframe.contentWindow.Plotly;
-      const gd = plotlyEl as any;
+      const gd = plotlyEl as unknown as PlotlyGraphDiv;
       if (!gd || !gd.data || !gd.layout) continue;
 
       const img = await capturePlotWithFonts(Plotly, gd.data, gd.layout);
@@ -205,13 +210,13 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     try {
       // 1. Capture volcano plot from the current page (clone to off-screen div, don't mutate)
       const volcanoContainer = document.querySelector('[data-testid="volcano-plot"]');
-      if (volcanoContainer && (window as any).Plotly) {
+      if (volcanoContainer && window.Plotly) {
         const plotlyEl = volcanoContainer.querySelector('.js-plotly-plot') as HTMLElement;
         if (plotlyEl) {
           try {
-            const gd = plotlyEl as any;
+            const gd = plotlyEl as unknown as PlotlyGraphDiv;
             if (gd.data && gd.layout) {
-              const img = await capturePlotWithFonts((window as any).Plotly, gd.data, gd.layout, 'full');
+              const img = await capturePlotWithFonts(window.Plotly, gd.data, gd.layout, 'full');
               if (img) images['volcano_plot'] = [img];
             }
           } catch { /* skip */ }
