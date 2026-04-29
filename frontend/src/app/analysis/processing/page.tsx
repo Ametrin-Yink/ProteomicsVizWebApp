@@ -48,7 +48,7 @@ const CancelledDisplay: React.FC<{
           The processing has been cancelled by the user.
         </p>
         <button
-          data-testid="cancel-btn"
+          data-testid="cancelled-back-btn"
           onClick={onBack}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
         >
@@ -106,7 +106,7 @@ const ErrorDisplay: React.FC<{
             </button>
           )}
           <button
-            data-testid="cancel-btn"
+            data-testid="error-back-btn"
             onClick={onBack}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
           >
@@ -434,7 +434,7 @@ function ProcessingContent() {
               {/* <ConnectionStatus isConnected={isConnected} /> */}
                 {!isComplete && !isCancelled && !error && (
                   <button
-                    data-testid="cancel-btn"
+                    data-testid="cancel-processing-btn"
                     onClick={handleCancelClick}
                     disabled={isCancelling}
                     className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
