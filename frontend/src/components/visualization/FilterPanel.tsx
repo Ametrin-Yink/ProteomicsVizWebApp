@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw, HelpCircle } from 'lucide-react';
 import { Slider } from '@/components/ui/Slider';
 
 interface FilterPanelProps {
@@ -142,6 +142,12 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 S0 Factor
+                <span className="group relative inline-block ml-1">
+                  <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 pointer-events-none">
+                    S0 factor widens the significance threshold at low fold changes. Higher values are more permissive, allowing proteins with small fold changes but high reproducibility to appear significant.
+                  </span>
+                </span>
               </label>
               <div className="flex items-center gap-2">
                 <Slider
