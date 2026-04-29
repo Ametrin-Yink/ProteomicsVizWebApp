@@ -228,7 +228,15 @@ export const CompoundDisplay: React.FC = () => {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {compoundFile.compounds
-                  .filter((c) => !conditions.includes(c.corp_id))
+                  .filter((c) => {
+                    const exactMatch = conditions.some(cond => cond === c.corp_id);
+                    const caseInsensitiveMatch = conditions.some(cond =>
+                      cond.toLowerCase() === c.corp_id.toLowerCase() ||
+                      cond.toLowerCase().includes(c.corp_id.toLowerCase()) ||
+                      c.corp_id.toLowerCase().includes(cond.toLowerCase())
+                    );
+                    return !exactMatch && !caseInsensitiveMatch;
+                  })
                   .map((c) => (
                     <span
                       key={c.corp_id}
