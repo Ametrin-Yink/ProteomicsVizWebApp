@@ -113,6 +113,8 @@ export interface ProcessingStatusResponse {
   current_step: number;
   overall_progress: number;
   steps: ProcessingStep[];
+  queue_position?: number;
+  queue_length?: number;
 }
 
 export interface StartProcessingRequest {

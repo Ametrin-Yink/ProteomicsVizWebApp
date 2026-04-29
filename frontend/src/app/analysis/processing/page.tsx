@@ -249,8 +249,20 @@ function ProcessingContent() {
           }
 
           // Check if queued
-          if (logData.queue_position !== undefined) {
+          if (logData.queue_position !== undefined && logData.queue_position !== null) {
             setQueued(logData.queue_position, logData.queue_length ?? 0);
+          }
+
+          // If no pipeline state yet, check status endpoint for queue info
+          if (logData.completed_steps.length === 0 && logData.current_step === 0) {
+            try {
+              const statusData = await processingAPI.getStatus(sessionId);
+              if (statusData.queue_position && statusData.queue_position > 0) {
+                setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+              }
+            } catch {
+              // Status check failed, ignore
+            }
           }
 
           // Update logs
@@ -314,6 +326,18 @@ function ProcessingContent() {
         // Sync step progress from API (recovers missed WebSocket messages)
         if (logData.completed_steps && logData.current_step) {
           syncStepProgress(logData.completed_steps, logData.current_step);
+        }
+
+        // If no pipeline state yet, check status endpoint for queue info
+        if (!logData || (logData.completed_steps.length === 0 && logData.current_step === 0)) {
+          try {
+            const statusData = await processingAPI.getStatus(sessionId);
+            if (statusData.queue_position && statusData.queue_position > 0) {
+              setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+            }
+          } catch {
+            // Status check failed, ignore
+          }
         }
 
         if (logData.logs && logData.logs.length > 0) {
