@@ -371,7 +371,7 @@ export default function VolcanoPlot({
       <div
         ref={plotRef}
         data-testid="volcano-plot"
-        className={`w-full h-[500px] ${selectionMode === 'click' ? 'volcano-plot-click-mode' : ''}`}
+        className={`w-full h-[400px] sm:h-[500px] lg:h-[550px] ${selectionMode === 'click' ? 'volcano-plot-click-mode' : ''}`}
       >
         {data.length > 0 ? (
           <Plot
