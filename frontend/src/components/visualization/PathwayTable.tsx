@@ -247,6 +247,13 @@ export default function PathwayTable({
                 </td>
               </tr>
             ))}
+            {filteredData.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  No results match your filters
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
