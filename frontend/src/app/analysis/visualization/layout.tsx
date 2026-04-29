@@ -87,6 +87,15 @@ export default function VisualizationLayout({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-2 text-sm text-gray-500 px-4 pt-4">
+          <a href="/" className="hover:text-gray-700">Home</a>
+          <span>/</span>
+          <a href="/analysis" className="hover:text-gray-700">Analysis</a>
+          <span>/</span>
+          <span className="text-gray-700">Results</span>
+        </nav>
+
         {/* Navigation Bar */}
         <Suspense fallback={<div className="bg-white border-b border-gray-200 h-14" />}>
           <Navigation />
