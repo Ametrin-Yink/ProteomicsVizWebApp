@@ -87,17 +87,10 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
   };
   
   const handleFiles = useCallback(async (files: FileList | null, isCompound: boolean = false) => {
-    console.log('handleFiles called:', { filesCount: files?.length, isCompound, sessionId });
     if (!files || files.length === 0) {
-      console.log('handleFiles: No files provided');
       return;
     }
     
-    console.log('handleFiles called:', { 
-      filesCount: files.length, 
-      isCompound,
-      fileNames: Array.from(files).map(f => f.name)
-    });
     
     // Check if sessionId is available
     if (!sessionId) {
@@ -108,11 +101,9 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     
     setIsUploading(true);
     setUploadError(null);
-    
-    const fileArray = Array.from(files);
-    console.log('handleFiles: Processing', fileArray.length, 'files');
 
     // Validate files - collect valid ones and errors separately
+    const fileArray = Array.from(files);
     const validFilesAfterValidation: File[] = [];
     const validationErrors: { name: string; error: string }[] = [];
 
@@ -151,8 +142,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         addToast('success', `Compound file uploaded successfully: ${result.compounds.length} compounds`);
       } else {
         // Handle proteomics files upload - validate filename pattern
-        console.log('Uploading proteomics files:', validFilesAfterValidation.map(f => f.name));
-
         const validFiles: File[] = [];
         for (const file of validFilesAfterValidation) {
           const parsed = parseFilename(file.name);
@@ -171,16 +160,12 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         }
         
         try {
-          console.log('Calling uploadApi.uploadProteomics for session:', sessionId);
           const results = await uploadApi.uploadProteomics(sessionId, validFiles, (name, progress) => {
-            console.log('Upload progress:', name, progress);
             setUploadProgress(name, progress, progress === 100 ? 'completed' : 'uploading');
           });
-          console.log('Upload results:', results);
           
           // Process all uploaded files
           for (const uploadedFile of results) {
-            console.log('Adding uploaded file to store:', uploadedFile);
             try {
               // Use parseFilename regex to correctly handle condition names with underscores
               const originalName = uploadedFile.filename || '';
@@ -206,7 +191,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                   columns: uploadedFile.columns || [],
                 });
               }
-              console.log('File added to store successfully');
             } catch (error) {
               console.error('Error adding file to store:', error);
             }
@@ -252,11 +236,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
   
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, isCompound: boolean = false) => {
     const files = e.target.files;
-    console.log('handleFileInputChange called:', { 
-      fileCount: files?.length || 0, 
-      isCompound,
-      fileNames: files ? Array.from(files).map(f => f.name) : []
-    });
     handleFiles(files, isCompound);
     e.target.value = ''; // Reset input
   }, [handleFiles]);

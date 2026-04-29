@@ -94,14 +94,9 @@ export const CompoundDisplay: React.FC = () => {
   // Match compounds to conditions
   const matchedCompounds: MatchedCompound[] = useMemo(() => {
     if (!compoundFile || conditions.length === 0) {
-      console.log('No compound file or conditions', { compoundFile, conditions });
       return [];
     }
 
-    console.log('Matching compounds:', {
-      compoundFileCompounds: compoundFile.compounds,
-      conditions
-    });
 
     return conditions.map((condition) => {
       // Try exact match first, then case-insensitive
@@ -123,7 +118,6 @@ export const CompoundDisplay: React.FC = () => {
         );
       }
 
-      console.log('Match result:', { condition, compound });
       return { condition, compound: compound ?? null };
     });
   }, [compoundFile, conditions]);

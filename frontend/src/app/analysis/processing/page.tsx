@@ -194,7 +194,6 @@ function ProcessingContent() {
     // Only poll if WebSocket is not connected
     if (isConnected) return;
 
-    console.log('WebSocket not connected, using polling fallback');
     const pollInterval = setInterval(async () => {
       try {
         const logData = await processingAPI.getLogs(sessionId);
@@ -258,7 +257,6 @@ function ProcessingContent() {
     const initFromServer = async () => {
       try {
         const logData = await processingAPI.getLogs(sessionId);
-        console.log('Initial logs fetched for session:', sessionId, logData);
 
         // Initialize steps based on server state
         initializeSteps(removeRazor);
@@ -277,7 +275,6 @@ function ProcessingContent() {
             timestamp: log.timestamp,
             step: log.step,
           }));
-          console.log('Setting initial logs:', logEntries.length, 'entries');
           setLogs(logEntries);
         }
 
