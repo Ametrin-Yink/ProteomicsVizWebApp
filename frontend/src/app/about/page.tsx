@@ -196,7 +196,7 @@ npm run dev
           <p>ProteomicsViz v1.0.0</p>
           <p>
             Contact:{' '}
-            <a href="https://github.com/Ametrin-Yink" className="text-[#00ADEF] hover:text-[#E73564] font-medium">
+            <a href="https://github.com/Ametrin-Yink" target="_blank" rel="noopener noreferrer" className="text-[#00ADEF] hover:text-[#E73564] font-medium">
               Ametrin-Yink on GitHub
             </a>
           </p>
