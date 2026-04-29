@@ -205,7 +205,7 @@ export default function ProteinTable({
             data-testid="export-csv-btn"
           >
             <Download className="w-4 h-4" />
-            Export CSV
+            Export Current Page
           </button>
         </div>
       </div>
