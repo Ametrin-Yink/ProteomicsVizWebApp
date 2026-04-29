@@ -575,14 +575,8 @@ function ProcessingContent() {
             </div>
           )}
 
-          {/* Activity Log - full width */}
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-500" />
-              Activity Log
-            </h2>
-            <LogPanel logs={logs} maxHeight="600px" />
-          </div>
+          {/* Processing Logs */}
+          <LogPanel logs={logs} maxHeight="600px" />
           {/* Cancel Confirmation Dialog */}
           {showCancelDialog && (
             <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

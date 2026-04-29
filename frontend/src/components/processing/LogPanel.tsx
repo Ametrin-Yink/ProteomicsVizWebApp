@@ -91,6 +91,11 @@ export const LogPanel: React.FC<LogPanelProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAutoScroll, setIsAutoScroll] = useState(true);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  const MAX_DISPLAY_LOGS = 50;
+  const hasOverflow = logs.length > MAX_DISPLAY_LOGS;
+  const visibleLogs = showAll || !hasOverflow ? logs : logs.slice(-MAX_DISPLAY_LOGS);
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -149,7 +154,7 @@ export const LogPanel: React.FC<LogPanelProps> = ({
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-zinc-500" />
           <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">
-            Processing Logs
+            Activity
           </h3>
           <span className="px-2 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded-full text-xs text-zinc-600 dark:text-zinc-400">
             {logs.length}
@@ -186,7 +191,7 @@ export const LogPanel: React.FC<LogPanelProps> = ({
             className="overflow-y-auto font-mono"
             style={{ maxHeight }}
           >
-            {logs.length === 0 ? (
+            {visibleLogs.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-zinc-400 text-sm">
                 <div className="flex flex-col items-center gap-2">
                   <Terminal className="w-6 h-6 opacity-50" />
@@ -195,12 +200,22 @@ export const LogPanel: React.FC<LogPanelProps> = ({
               </div>
             ) : (
               <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {logs.map((log) => (
+                {visibleLogs.map((log) => (
                   <LogEntryItem key={log.id} entry={log} />
                 ))}
               </div>
             )}
           </div>
+
+          {/* Hidden logs indicator */}
+          {hasOverflow && !showAll && (
+            <button
+              onClick={() => { setShowAll(true); handleScrollToBottom(); }}
+              className="w-full py-2 px-4 bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 text-xs font-medium transition-colors"
+            >
+              Show all {logs.length} logs ({logs.length - MAX_DISPLAY_LOGS} hidden)
+            </button>
+          )}
 
           {/* Scroll to bottom button */}
           {!isAutoScroll && logs.length > 0 && (
