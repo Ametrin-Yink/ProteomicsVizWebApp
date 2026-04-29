@@ -118,6 +118,11 @@ export const useProcessingStore = create<ProcessingStore>()(
           step.message = message.message;
         }
 
+        // Clear queued state when processing actually starts
+        if (message.status === 'started') {
+          state.isQueued = false;
+        }
+
         // Update overall progress
         state.overallProgress = message.overall_progress;
       });

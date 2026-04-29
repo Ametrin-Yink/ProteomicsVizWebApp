@@ -203,6 +203,10 @@ async def start_processing(
             _queued_sessions.append(session_id)
             queue_position = len(_queued_sessions)
             logger.info(f"Session {session_id} queued at position {queue_position}")
+
+            # Create background task that will wait for semaphore
+            asyncio.create_task(run_processing_pipeline_async(session_id, session))
+
             return {
                 "data": {
                     "status": "queued",

@@ -205,6 +205,11 @@ function ProcessingContent() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [statusCollapsed, setStatusCollapsed] = useState(false);
 
+  // Debug log
+  useEffect(() => {
+    console.log('[processing-page] render:', { sessionId, isQueued, queuePosition, queueLength, isComplete, isConnected });
+  });
+
   const {
     logs,
     isConnected,
@@ -332,11 +337,15 @@ function ProcessingContent() {
         if (!logData || (logData.completed_steps.length === 0 && logData.current_step === 0)) {
           try {
             const statusData = await processingAPI.getStatus(sessionId);
+            console.log('[processing-page] status check:', JSON.stringify(statusData));
             if (statusData.queue_position && statusData.queue_position > 0) {
+              console.log('[processing-page] setting queued:', statusData.queue_position, statusData.queue_length);
               setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+            } else {
+              console.log('[processing-page] not queued, queue_position:', statusData.queue_position);
             }
-          } catch {
-            // Status check failed, ignore
+          } catch (err) {
+            console.error('[processing-page] status check failed:', err);
           }
         }
 
