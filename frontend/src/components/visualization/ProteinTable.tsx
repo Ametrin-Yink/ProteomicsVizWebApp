@@ -283,7 +283,7 @@ export default function ProteinTable({
                     type="checkbox"
                     checked={markedProteins.has(item.master_protein_accessions)}
                     onChange={() => onToggleMark(item)}
-                    className="rounded border-gray-300 text-[#E73564] focus:ring-[#E73564] cursor-pointer"
+                    className="rounded border-border text-[#E73564] focus:ring-[#E73564] cursor-pointer"
                     data-testid="mark-checkbox"
                     title="Mark in volcano plot"
                   />

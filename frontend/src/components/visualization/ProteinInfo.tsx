@@ -164,9 +164,9 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
 
         {/* Gene Names - REMOVED as per user request */}
         {/*
-        <div data-testid="gene-name" className="flex justify-between items-center py-2 border-b border-gray-100">
+        <div data-testid="gene-name" className="flex justify-between items-center py-2 border-b border-border">
           <span className="text-sm text-gray-500">Gene Name(s)</span>
-          <span className="text-sm font-medium text-gray-900">{geneNames.join(', ') || '-'}</span>
+          <span className="text-sm font-medium text-text">{geneNames.join(', ') || '-'}</span>
         </div>
         */}
 
@@ -174,7 +174,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
           <span className="text-sm text-text-muted">Fold Change</span>
           <span
             className={`text-sm font-medium ${
-              protein.log_fc > 0 ? 'text-pink-600' : 'text-blue-600'
+              protein.log_fc > 0 ? 'text-primary' : 'text-blue-600'
             }`}
           >
             {formatNumber(Math.pow(2, protein.log_fc), 3)}
@@ -185,7 +185,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
           <span className="text-sm text-text-muted">Log2 Fold Change</span>
           <span
             className={`text-sm font-medium ${
-              protein.log_fc > 0 ? 'text-pink-600' : 'text-blue-600'
+              protein.log_fc > 0 ? 'text-primary' : 'text-blue-600'
             }`}
           >
             {formatNumber(protein.log_fc, 3)}
