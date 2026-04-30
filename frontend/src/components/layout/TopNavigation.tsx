@@ -22,11 +22,11 @@ export const TopNavigation: React.FC = () => {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-gray-700 text-white h-14 shadow-md">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-foreground text-white h-14 shadow-md">
       <div className="flex items-center h-full px-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 mr-8" data-testid="app-logo">
-          <FlaskConical className="w-6 h-6 text-cyan-400" />
+          <FlaskConical className="w-6 h-6 text-secondary" />
           <span className="text-xl font-semibold tracking-tight" data-testid="app-name">
             ProteomicsViz
           </span>
@@ -44,8 +44,8 @@ export const TopNavigation: React.FC = () => {
                 className={cn(
                   'px-4 py-2 text-sm font-medium rounded-md transition-colors',
                   isActive
-                    ? 'bg-gray-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-600 hover:text-white'
+                    ? 'bg-foreground/80 text-white'
+                    : 'text-text-muted hover:bg-foreground/60 hover:text-white'
                 )}
               >
                 {link.label}
