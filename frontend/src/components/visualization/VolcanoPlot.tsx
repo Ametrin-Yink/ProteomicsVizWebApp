@@ -59,31 +59,31 @@ export default function VolcanoPlot({
     });
 
     // Use Canvas scatter (not WebGL) for reliable click/hover hit detection
-    return [
-      {
-        x: points.map((p) => p.x),
-        y: points.map((p) => p.y),
-        mode: 'markers' as const,
-        type: 'scatter' as const,
-        marker: {
-          color: points.map((p) => p.color),
-          size: points.map((p) => p.size),
-          opacity: points.map((p) => p.opacity),
-          line: {
-            color: points.map((p) => p.lineColor),
-            width: points.map((p) => p.lineWidth),
-          },
+    const mainTrace = {
+      x: points.map((p) => p.x),
+      y: points.map((p) => p.y),
+      mode: 'markers' as const,
+      type: 'scatter' as const,
+      marker: {
+        color: points.map((p) => p.color),
+        size: points.map((p) => p.size),
+        opacity: points.map((p) => p.opacity),
+        line: {
+          color: points.map((p) => p.lineColor),
+          width: points.map((p) => p.lineWidth),
         },
-        text: hoverText,
-        hoverinfo: 'text',
-        customdata: points.map((p) => p.customdata),
-        name: 'Proteins',
       },
-      // Marker labels trace -- only for marked proteins
-      ...(() => {
-        const marked = data.filter((d) => markedProteins.has(d.master_protein_accessions));
-        if (marked.length === 0) return [];
-        return {
+      text: hoverText,
+      hoverinfo: 'text',
+      customdata: points.map((p) => p.customdata),
+      name: 'Proteins',
+    };
+
+    // Marker labels trace -- only for marked proteins
+    const marked = data.filter((d) => markedProteins.has(d.master_protein_accessions));
+
+    return marked.length > 0
+      ? [mainTrace, {
           x: marked.map((d) => d.log_fc),
           y: marked.map((d) => -Math.log10(d.pval || 1e-300)),
           mode: 'text' as const,
@@ -95,9 +95,8 @@ export default function VolcanoPlot({
           showlegend: false,
           marker: { size: 0, opacity: 0 },
           name: 'Markers',
-        };
-      })(),
-    ];
+        }]
+      : [mainTrace];
   }, [data, filters, selectedProteins, markedProteins]);
 
   // Calculate threshold lines
