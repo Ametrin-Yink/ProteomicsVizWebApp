@@ -81,7 +81,7 @@ export default function VisualizationLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex-1 overflow-y-auto bg-surface">
+    <div className="flex-1 overflow-y-auto bg-surface flex">
       {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-screen" />
 
