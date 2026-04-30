@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import type { QCData } from '@/types/api';
 import { transformPCARowBased } from '@/lib/utils';
@@ -21,27 +21,27 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
   const treatmentColor = '#E73564';
   const controlColor = '#00ADEF';
 
-  const getConditionColor = (condition: string) => {
+  const getConditionColor = useCallback((condition: string) => {
     if (treatment && condition.toLowerCase() === treatment.toLowerCase()) return treatmentColor;
     if (control && condition.toLowerCase() === control.toLowerCase()) return controlColor;
     // Fallback: if treatment/control not available, use default mapping
     if (condition.includes('INCZ')) return treatmentColor;
     if (condition === 'DMSO' || condition === 'Control') return controlColor;
     return '#94a3b8';
-  };
+  }, [treatment, control]);
 
   // Protein CV uses different colors from PSM CV for visual distinction
   const proteinTreatmentColor = '#F59E0B';
   const proteinControlColor = '#10B981';
 
-  const getProteinConditionColor = (condition: string) => {
+  const getProteinConditionColor = useCallback((condition: string) => {
     if (treatment && condition.toLowerCase() === treatment.toLowerCase()) return proteinTreatmentColor;
     if (control && condition.toLowerCase() === control.toLowerCase()) return proteinControlColor;
     // Fallback: if treatment/control not available, use default mapping
     if (condition.includes('INCZ')) return proteinTreatmentColor;
     if (condition === 'DMSO' || condition === 'Control') return proteinControlColor;
     return '#94a3b8';
-  };
+  }, [treatment, control]);
 
   // 1. PCA Plot - Color by sample
   const pcaPlot = useMemo(() => {
@@ -93,7 +93,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     };
 
     return { traces: [trace], layout };
-  }, [data.pca, treatment, control]);
+  }, [data.pca, getConditionColor]);
 
   // 2. P-value Distribution
   const pvalueDistPlot = useMemo(() => {
@@ -175,7 +175,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     };
 
     return { traces, layout };
-  }, [data.psm_cv, treatment, control]);
+  }, [data.psm_cv, getConditionColor]);
 
   // 3b. Protein CVs (with different colors) - show 95th percentile top
   const proteinCVPlot = useMemo(() => {
@@ -220,7 +220,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     };
 
     return { traces, layout };
-  }, [data.protein_cv, treatment, control]);
+  }, [data.protein_cv, getProteinConditionColor]);
 
   // 4. PSM Intensity Distribution - KDE curves (lines) showing all data
   const psmIntensityPlot = useMemo(() => {

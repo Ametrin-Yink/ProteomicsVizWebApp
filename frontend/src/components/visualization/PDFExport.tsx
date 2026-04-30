@@ -14,6 +14,7 @@ declare global {
     Plotly?: {
       toImage: (el: HTMLElement, opts: { format: string; width: number; height: number; scale: number }) => Promise<string>;
       newPlot: (el: HTMLElement, data: unknown[], layout: Record<string, unknown>, config?: Record<string, unknown>) => Promise<void>;
+      purge: (el: HTMLElement) => void;
     };
   }
 }
@@ -118,7 +119,7 @@ async function capturePlotWithFonts(
   } catch {
     return null;
   } finally {
-    (Plotly as any)?.purge?.(container);
+    Plotly?.purge(container);
     container.remove();
   }
 }

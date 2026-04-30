@@ -399,7 +399,7 @@ function ProcessingContent() {
     };
 
     initFromServer();
-  }, [sessionId, removeRazor, initializeSteps, syncStepProgress, setLogs, setSessionId, setComplete, setFirstStepProcessing]);
+  }, [sessionId, removeRazor, initializeSteps, syncStepProgress, setLogs, setSessionId, setComplete, setFirstStepProcessing, setQueued, clearQueued]);
 
   // Note: Processing is started by the analysis page before navigation
   // This page only connects to WebSocket and displays progress

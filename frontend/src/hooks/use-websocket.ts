@@ -189,7 +189,7 @@ export const useWebSocket = (sessionId: string | null) => {
         }
       };
 
-      ws.current.onerror = (error) => {
+      ws.current.onerror = (_error) => {
         // WebSocket error events don't carry useful info — onclose handles reconnection
       };
     } catch (error) {

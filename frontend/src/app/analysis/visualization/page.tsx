@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
@@ -232,13 +233,13 @@ function ResultsContent() {
         <div className="text-center text-text-secondary">
           <p className="text-lg text-text font-medium mb-2">No session selected</p>
           <p className="text-sm text-text-muted mb-4">Create a new analysis to get started.</p>
-          <a
+          <Link
             data-testid="start-analysis-link"
             href="/"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity"
           >
             Start New Analysis
-          </a>
+          </Link>
         </div>
       </div>
     );

@@ -18,6 +18,39 @@ interface SortState {
   direction: SortDirection;
 }
 
+interface TableHeaderProps {
+  field: SortField;
+  children: React.ReactNode;
+  className?: string;
+  onSort: (field: SortField) => void;
+  sort: SortState;
+}
+
+const SortIcon: React.FC<{ field: SortField; sort: SortState }> = ({ field, sort }) => {
+  if (sort.field !== field) {
+    return null;
+  }
+  return sort.direction === 'asc'
+    ? <ChevronUp className="w-4 h-4" />
+    : <ChevronDown className="w-4 h-4" />;
+};
+
+const TableHeader: React.FC<TableHeaderProps> = ({ field, children, className = '', onSort, sort }) => (
+  <th
+    onClick={() => onSort(field)}
+    className={`
+      px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider
+      cursor-pointer hover:bg-surface transition-colors select-none
+      ${className}
+    `}
+  >
+    <div className="flex items-center gap-1">
+      {children}
+      <SortIcon field={field} sort={sort} />
+    </div>
+  </th>
+);
+
 export const ExperimentTable: React.FC = () => {
   const [sort, setSort] = useState<SortState>({ field: 'filename', direction: 'asc' });
   const [filterText, setFilterText] = useState('');
@@ -110,38 +143,9 @@ export const ExperimentTable: React.FC = () => {
     }
   };
   
-  const areAllFilteredSelected = filteredAndSortedFiles.length > 0 && 
+  const areAllFilteredSelected = filteredAndSortedFiles.length > 0 &&
     filteredAndSortedFiles.every((file) => selectedFiles.has(file.filename));
-  
-  const SortIcon: React.FC<{ field: SortField }> = ({ field }) => {
-    if (sort.field !== field) {
-      return <div className="w-4 h-4" />;
-    }
-    return sort.direction === 'asc' 
-      ? <ChevronUp className="w-4 h-4" />
-      : <ChevronDown className="w-4 h-4" />;
-  };
-  
-  const TableHeader: React.FC<{
-    field: SortField;
-    children: React.ReactNode;
-    className?: string;
-  }> = ({ field, children, className = '' }) => (
-    <th
-      onClick={() => handleSort(field)}
-      className={`
-        px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider
-        cursor-pointer hover:bg-surface transition-colors select-none
-        ${className}
-      `}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        <SortIcon field={field} />
-      </div>
-    </th>
-  );
-  
+
   if (uploadedFiles.length === 0) {
     return (
       <div className="text-center py-12 bg-surface rounded-lg border border-dashed border-border">
@@ -219,10 +223,10 @@ export const ExperimentTable: React.FC = () => {
                   className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                 />
               </th>
-              <TableHeader field="filename">Filename</TableHeader>
-              <TableHeader field="experiment">Experiment</TableHeader>
-              <TableHeader field="condition">Condition</TableHeader>
-              <TableHeader field="replicate" className="text-right">Replicate</TableHeader>
+              <TableHeader field="filename" onSort={handleSort} sort={sort}>Filename</TableHeader>
+              <TableHeader field="experiment" onSort={handleSort} sort={sort}>Experiment</TableHeader>
+              <TableHeader field="condition" onSort={handleSort} sort={sort}>Condition</TableHeader>
+              <TableHeader field="replicate" className="text-right" onSort={handleSort} sort={sort}>Replicate</TableHeader>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
                 Actions
               </th>

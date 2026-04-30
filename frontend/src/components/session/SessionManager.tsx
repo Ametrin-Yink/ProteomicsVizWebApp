@@ -356,21 +356,21 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           </div>
         </div>
 
-        {/* Search + Controls */}
+        {/* Search + Controls in one row */}
         <div className="px-4 pb-2 flex-shrink-0">
-          {/* Search input */}
-          <div className="relative mb-2">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search sessions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-2 py-1.5 text-xs bg-surface border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-text-muted"
-            />
-          </div>
-          {/* Icon-only control buttons */}
-          <div className="flex gap-1 justify-center">
+          <div className="flex items-center gap-2">
+            {/* Search input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search sessions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-2 py-1.5 text-xs bg-surface border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-text-muted"
+              />
+            </div>
+            {/* Icon-only control buttons */}
             <button
               onClick={handleRefresh}
               disabled={isScanning}
@@ -439,7 +439,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
             <div className="text-center py-8">
               <Search className="w-8 h-8 text-text-muted mx-auto mb-3" />
               <p className="text-sm text-text-secondary">
-                No sessions matching "{searchQuery}"
+                No sessions matching &ldquo;{searchQuery}&rdquo;
               </p>
             </div>
           ) : filteredTabSessions.length === 0 ? (
