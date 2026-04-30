@@ -19,6 +19,7 @@ import pandas as pd
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.gsea_service import gsea_service
@@ -136,11 +137,6 @@ class FileCache:
 
 # Global cache instance
 viz_cache = FileCache(max_size=50)
-
-
-def get_session_store() -> SessionStore:
-    """Dependency to get session store."""
-    return SessionStore(settings.sessions_dir)
 
 
 async def load_diff_expression_results(results_dir: Path, session_id: str = "") -> List[Dict[str, Any]]:

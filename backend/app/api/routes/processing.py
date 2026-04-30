@@ -8,6 +8,7 @@ import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 
+from app.api.deps import get_session_store
 from app.core.config import settings, MIN_PROTEOMICS_FILES
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
@@ -89,11 +90,6 @@ async def _is_any_session_processing(
                 return True
     logger.info(f"Session {current_session_id}: any_processing=False")
     return False
-
-
-def get_session_store() -> SessionStore:
-    """Dependency to get session store."""
-    return SessionStore(settings.sessions_dir)
 
 
 @router.get("/{session_id}/status")

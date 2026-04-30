@@ -6,16 +6,12 @@ Analysis orchestration and control.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.deps import get_session_store
 from app.core.config import settings, MIN_PROTEOMICS_FILES
 from app.db.session_store import SessionStore
 from app.models.session import SessionState
 
 router = APIRouter()
-
-
-def get_session_store() -> SessionStore:
-    """Dependency to get session store."""
-    return SessionStore(settings.sessions_dir)
 
 
 @router.post("/{session_id}/start")

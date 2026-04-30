@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
 from fastapi.responses import JSONResponse
 
+from app.api.deps import get_session_store
 from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.db.session_store import SessionStore
@@ -19,11 +20,6 @@ from app.services.compound_service import CompoundService
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
-
-
-def get_session_store() -> SessionStore:
-    """Dependency to get session store."""
-    return SessionStore(settings.sessions_dir)
 
 
 @router.post("/{session_id}/upload/proteomics")

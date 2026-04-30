@@ -14,15 +14,10 @@ from app.models.session import (
     SessionState, SessionConfig, SessionFiles,
     VisualizationStateUpdate,
 )
-from app.core.config import settings
+from app.api.deps import get_session_store
 from app.db.session_store import SessionStore
 
 router = APIRouter()
-
-
-def get_session_store() -> SessionStore:
-    """Dependency to get session store."""
-    return SessionStore(settings.sessions_dir)
 
 
 @router.post("", response_model=Session, status_code=status.HTTP_201_CREATED)
