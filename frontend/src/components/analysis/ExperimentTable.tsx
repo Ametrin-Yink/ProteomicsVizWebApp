@@ -228,7 +228,7 @@ export const ExperimentTable: React.FC = () => {
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-border">
+          <tbody className="bg-background divide-y divide-border">
             {filteredAndSortedFiles.map((file, index) => {
               const isSelected = selectedFiles.has(file.filename);
               

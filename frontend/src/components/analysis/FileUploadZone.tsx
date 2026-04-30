@@ -261,8 +261,8 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             relative border-2 border-dashed rounded-xl p-8 cursor-pointer
             transition-all duration-200 ease-in-out
             ${isDragging
-              ? 'border-[#E73564] bg-primary/5'
-              : 'border-[#E73564]/40 hover:border-[#E73564] bg-primary/5 hover:bg-primary/10'
+              ? 'border-primary bg-primary/5'
+              : 'border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10'
             }
           `}
         >
@@ -279,11 +279,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           <div className="flex flex-col items-center text-center space-y-4">
             <div className={`
               p-4 rounded-full transition-colors duration-200
-              ${isDragging ? 'bg-primary/10' : 'bg-[#E73564]/10'}
+              ${isDragging ? 'bg-primary/10' : 'bg-primary/10'}
             `}>
               <Upload className={`
                 w-8 h-8 transition-colors duration-200
-                ${isDragging ? 'text-[#E73564]' : 'text-[#E73564]/70'}
+                ${isDragging ? 'text-primary' : 'text-primary/70'}
               `} />
             </div>
             

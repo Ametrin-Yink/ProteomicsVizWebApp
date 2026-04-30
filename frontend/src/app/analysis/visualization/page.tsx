@@ -199,15 +199,17 @@ function ResultsContent() {
 
   if (loading) {
     return (
-      <div className="mx-auto px-6 py-8 max-w-7xl">
-        <div className="h-8 bg-border/30 rounded-lg w-64 mb-6 animate-pulse" />
-        <div className="h-12 bg-border/30 rounded-lg mb-6 animate-pulse" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="h-48 bg-border/30 rounded-lg animate-pulse" />
+      <div className="flex-1 bg-surface">
+        <div className="mx-auto px-6 py-8 max-w-7xl">
+          <div className="h-8 bg-border/30 rounded-lg w-64 mb-6 animate-pulse" />
+          <div className="h-12 bg-border/30 rounded-lg mb-6 animate-pulse" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="h-48 bg-border/30 rounded-lg animate-pulse" />
+              <div className="h-96 bg-border/30 rounded-lg animate-pulse" />
+            </div>
             <div className="h-96 bg-border/30 rounded-lg animate-pulse" />
           </div>
-          <div className="h-96 bg-border/30 rounded-lg animate-pulse" />
         </div>
       </div>
     );
@@ -215,7 +217,7 @@ function ResultsContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="flex-1 bg-surface flex items-center justify-center">
         <div className="bg-error/5 border border-error/20 rounded-lg p-5 max-w-md">
           <h2 className="text-base font-semibold text-error mb-2">Error Loading Results</h2>
           <p className="text-error">{error}</p>
@@ -226,7 +228,7 @@ function ResultsContent() {
 
   if (!sessionId) {
     return (
-      <div data-testid="no-session-selected" className="min-h-screen bg-surface flex items-center justify-center">
+      <div data-testid="no-session-selected" className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
           <p className="text-lg text-text font-medium mb-2">No session selected</p>
           <p className="text-sm text-text-muted mb-4">Create a new analysis to get started.</p>
@@ -244,7 +246,7 @@ function ResultsContent() {
 
   if (!data) {
     return (
-      <div data-testid="no-results-message" className="min-h-screen bg-surface flex items-center justify-center">
+      <div data-testid="no-results-message" className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
           <p className="text-lg text-text">No results available</p>
           <a

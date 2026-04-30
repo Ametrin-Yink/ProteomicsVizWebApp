@@ -147,22 +147,22 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
       <div
         data-testid="new-analysis-dialog"
         className={cn(
-          'relative w-full max-w-lg bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto',
+          'relative w-full max-w-lg bg-background rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto',
           'animate-in fade-in zoom-in-95 duration-200',
           className
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#e2e8f0]">
+        <div className="flex items-center justify-between p-6 border-b border-border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#E73564]/10 flex items-center justify-center">
-              <FlaskConical className="w-5 h-5 text-[#E73564]" />
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <FlaskConical className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-[#1a1a2e]">
+              <h2 className="text-xl font-semibold text-text-text">
                 New Analysis Session
               </h2>
-              <p className="text-sm text-[#64748b]">
+              <p className="text-sm text-text-text-secondary">
                 Create a new proteomics analysis
               </p>
             </div>
@@ -194,7 +194,7 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
 
           {/* Template selection */}
           <div className="space-y-3">
-            <label className="text-sm font-medium text-[#1a1a2e]">
+            <label className="text-sm font-medium text-text-text">
               Analysis Template
             </label>
             
@@ -205,11 +205,11 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
                   className={cn(
                     'relative p-4 rounded-xl border-2 transition-all duration-200',
                     template.available
-                      ? 'cursor-pointer hover:border-[#E73564]/50 hover:bg-[#E73564]/5'
+                      ? 'cursor-pointer hover:border-primary/50 hover:bg-primary/5'
                       : 'opacity-60 cursor-not-allowed',
                     selectedTemplate === template.id
-                      ? 'border-[#E73564] bg-[#E73564]/5'
-                      : 'border-[#e2e8f0] bg-white'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border-border bg-background'
                   )}
                   onClick={() => handleTemplateSelect(template.id, template.available)}
                 >
@@ -219,27 +219,27 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
                       className={cn(
                         'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
                         selectedTemplate === template.id
-                          ? 'border-[#E73564]'
-                          : 'border-[#e2e8f0]'
+                          ? 'border-primary'
+                          : 'border-border-border'
                       )}
                     >
                       {selectedTemplate === template.id && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-[#E73564]" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-primary" />
                       )}
                     </div>
 
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-[#1a1a2e]">
+                        <span className="font-medium text-text-text">
                           {template.name}
                         </span>
                         {!template.available && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-[#e2e8f0] text-[#64748b] rounded-full">
+                          <span className="px-2 py-0.5 text-xs font-medium bg-border-border text-text-text-secondary rounded-full">
                             Coming Soon
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-[#64748b] mt-1">
+                      <p className="text-sm text-text-text-secondary mt-1">
                         {template.description}
                       </p>
                     </div>
@@ -250,7 +250,7 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#e2e8f0]">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border-border">
             <Button
               type="button"
               variant="outline"

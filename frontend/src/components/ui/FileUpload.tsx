@@ -131,21 +131,21 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     'relative flex flex-col items-center justify-center',
     'w-full min-h-[200px] p-8 rounded-xl border-2 border-dashed',
     'transition-all duration-200 cursor-pointer',
-    'bg-[#f8f9fc]',
+    'bg-surface',
     
     isDragging && !disabled && [
-      'border-[#E73564] bg-[#E73564]/5',
+      'border-primary bg-primary/5',
       'scale-[1.02]',
     ],
     
     !isDragging && !disabled && [
-      'border-[#e2e8f0] hover:border-[#E73564]/50',
-      'hover:bg-[#E73564]/5',
+      'border-border-border hover:border-primary/50',
+      'hover:bg-primary/5',
     ],
     
     disabled && [
       'opacity-50 cursor-not-allowed',
-      'border-[#e2e8f0]',
+      'border-border-border',
     ],
     
     className
@@ -175,28 +175,28 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           <div
             className={cn(
               'w-16 h-16 rounded-full flex items-center justify-center',
-              'bg-white shadow-sm',
-              isDragging && 'bg-[#E73564]/10'
+              'bg-background shadow-sm',
+              isDragging && 'bg-primary/10'
             )}
           >
             <Upload
               className={cn(
                 'w-8 h-8 transition-colors',
-                isDragging ? 'text-[#E73564]' : 'text-[#94a3b8]'
+                isDragging ? 'text-primary' : 'text-text-text-muted'
               )}
             />
           </div>
           
           <div className="space-y-1">
-            <p className="text-base font-medium text-[#1a1a2e]">
+            <p className="text-base font-medium text-text-text">
               {isDragging ? 'Drop files here' : 'Drag & drop files here'}
             </p>
-            <p className="text-sm text-[#64748b]">
+            <p className="text-sm text-text-text-secondary">
               or click to browse
             </p>
           </div>
           
-          <div className="text-xs text-[#94a3b8]">
+          <div className="text-xs text-text-text-muted">
             <p>Accepted: {accept}</p>
             <p>Max size: {formatFileSize(maxSize)} per file</p>
             <p>Max files: {maxFiles}</p>
@@ -207,7 +207,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       {/* File list */}
       {uploadedFiles.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-[#1a1a2e]">
+          <p className="text-sm font-medium text-text-text">
             Files ({uploadedFiles.length})
           </p>
           
@@ -217,37 +217,37 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 key={uploadedFile.id}
                 className={cn(
                   'flex items-center gap-3 p-3 rounded-lg border',
-                  'bg-white transition-all',
+                  'bg-background transition-all',
                   uploadedFile.state === 'error' && 'border-error/20 bg-error/5',
                   uploadedFile.state === 'success' && 'border-success/20 bg-success/5',
-                  uploadedFile.state === 'uploading' && 'border-[#e2e8f0]',
-                  uploadedFile.state === 'idle' && 'border-[#e2e8f0]'
+                  uploadedFile.state === 'uploading' && 'border-border-border',
+                  uploadedFile.state === 'idle' && 'border-border-border'
                 )}
               >
                 {/* File icon */}
                 <div className="flex-shrink-0">
-                  <File className="w-5 h-5 text-[#94a3b8]" />
+                  <File className="w-5 h-5 text-text-text-muted" />
                 </div>
                 
                 {/* File info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#1a1a2e] truncate">
+                  <p className="text-sm font-medium text-text-text truncate">
                     {uploadedFile.file.name}
                   </p>
-                  <p className="text-xs text-[#64748b]">
+                  <p className="text-xs text-text-text-secondary">
                     {formatFileSize(uploadedFile.file.size)}
                   </p>
                   
                   {/* Progress bar */}
                   {uploadedFile.state === 'uploading' && (
                     <div className="mt-2">
-                      <div className="w-full h-1.5 bg-[#e2e8f0] rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-border-border rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-[#E73564] rounded-full transition-all duration-300"
+                          className="h-full bg-primary rounded-full transition-all duration-300"
                           style={{ width: `${uploadedFile.progress}%` }}
                         />
                       </div>
-                      <p className="text-xs text-[#64748b] mt-1">
+                      <p className="text-xs text-text-text-secondary mt-1">
                         {uploadedFile.progress}%
                       </p>
                     </div>

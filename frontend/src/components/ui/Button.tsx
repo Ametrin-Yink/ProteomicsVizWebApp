@@ -57,28 +57,28 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // Variant classes
     const variantClasses: Record<ButtonVariant, string> = {
       primary: cn(
-        'bg-[#E73564] text-white',
-        'hover:bg-[#C42A52]',
-        'focus-visible:ring-[#E73564]',
+        'bg-primary text-white',
+        'hover:bg-primary-dark',
+        'focus-visible:ring-primary',
         'shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]',
         'hover:shadow-[0_6px_20px_0_rgba(231,53,100,0.45)]'
       ),
       secondary: cn(
-        'bg-[#00ADEF] text-white',
-        'hover:bg-[#0088CC]',
-        'focus-visible:ring-[#00ADEF]',
+        'bg-secondary text-white',
+        'hover:bg-secondary-dark',
+        'focus-visible:ring-secondary',
         'shadow-[0_4px_14px_0_rgba(0,173,239,0.39)]',
         'hover:shadow-[0_6px_20px_0_rgba(0,173,239,0.45)]'
       ),
       outline: cn(
-        'bg-transparent border-2 border-[#E73564] text-[#E73564]',
-        'hover:bg-[#E73564]/5',
-        'focus-visible:ring-[#E73564]'
+        'bg-transparent border-2 border-primary text-primary',
+        'hover:bg-primary/5',
+        'focus-visible:ring-primary'
       ),
       ghost: cn(
-        'bg-transparent text-[#1a1a2e]',
-        'hover:bg-[#E73564]/10 hover:text-[#E73564]',
-        'focus-visible:ring-[#E73564]'
+        'bg-transparent text-text',
+        'hover:bg-primary/10 hover:text-primary',
+        'focus-visible:ring-primary'
       ),
       danger: cn(
         'bg-error text-white',

@@ -270,7 +270,7 @@ export default function ProteinTable({
                 onClick={() => onSelectProtein(item)}
                 className={`cursor-pointer hover:bg-primary/5 transition-colors ${
                   selectedProteins.has(item.master_protein_accessions)
-                    ? 'bg-[#E73564]/10 ring-2 ring-[#E73564] ring-inset'
+                    ? 'bg-primary/10 ring-2 ring-primary ring-inset'
                     : ''
                 }`}
                 data-testid="protein-table-row"
@@ -283,7 +283,7 @@ export default function ProteinTable({
                     type="checkbox"
                     checked={markedProteins.has(item.master_protein_accessions)}
                     onChange={() => onToggleMark(item)}
-                    className="rounded border-border text-[#E73564] focus:ring-[#E73564] cursor-pointer"
+                    className="rounded border-border text-primary focus:ring-primary cursor-pointer"
                     data-testid="mark-checkbox"
                     title="Mark in volcano plot"
                   />

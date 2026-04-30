@@ -32,8 +32,8 @@ export const Spinner: React.FC<SpinnerProps> = ({
   };
 
   const colorClasses = {
-    primary: 'border-[#E73564] border-t-transparent',
-    secondary: 'border-[#00ADEF] border-t-transparent',
+    primary: 'border-primary border-t-transparent',
+    secondary: 'border-secondary border-t-transparent',
     white: 'border-white border-t-transparent',
   };
 
@@ -78,13 +78,13 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
         <div
           className={cn(
             'absolute inset-0 flex flex-col items-center justify-center gap-4',
-            'bg-white/80 z-50',
+            'bg-surface/80 z-50',
             blur && 'backdrop-blur-sm'
           )}
         >
           <Spinner size="lg" />
           {message && (
-            <p className="text-sm font-medium text-[#64748b]">
+            <p className="text-sm font-medium text-text-secondary">
               {message}
             </p>
           )}
@@ -125,7 +125,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   return (
     <div
       className={cn(
-        'animate-pulse bg-[#e2e8f0]',
+        'animate-pulse bg-border',
         variantClasses[variant],
         className
       )}
@@ -172,7 +172,7 @@ export interface SkeletonCardProps {
  */
 export const SkeletonCard: React.FC<SkeletonCardProps> = ({ className }) => {
   return (
-    <div className={cn('p-6 rounded-xl border border-[#e2e8f0] bg-white', className)}>
+    <div className={cn('p-6 rounded-xl border border-border bg-background', className)}>
       <div className="flex items-start gap-4">
         <Skeleton variant="circular" width={48} height={48} />
         <div className="flex-1 space-y-3">
@@ -207,15 +207,15 @@ export const PageLoading: React.FC<PageLoadingProps> = ({
       <div className="relative">
         <Spinner size="xl" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-2 h-2 bg-[#E73564] rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
         </div>
       </div>
       
       <div className="text-center space-y-2">
-        <p className="text-lg font-semibold text-[#1a1a2e]">
+        <p className="text-lg font-semibold text-text">
           {message}
         </p>
-        <p className="text-sm text-[#64748b]">
+        <p className="text-sm text-text-secondary">
           Please wait while we prepare your data
         </p>
       </div>
@@ -225,7 +225,7 @@ export const PageLoading: React.FC<PageLoadingProps> = ({
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="w-2 h-2 rounded-full bg-[#E73564] animate-bounce"
+            className="w-2 h-2 rounded-full bg-primary animate-bounce"
             style={{ animationDelay: `${i * 150}ms` }}
           />
         ))}
@@ -262,24 +262,24 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   };
 
   const colorClasses = {
-    primary: 'bg-[#E73564]',
-    secondary: 'bg-[#00ADEF]',
+    primary: 'bg-primary',
+    secondary: 'bg-secondary',
     success: 'bg-success',
   };
 
   return (
     <div className={cn('w-full', className)}>
       <div className="flex justify-between mb-1.5">
-        <span className="text-xs font-medium text-[#64748b]">Progress</span>
+        <span className="text-xs font-medium text-text-secondary">Progress</span>
         {showPercentage && (
-          <span className="text-xs font-semibold text-[#1a1a2e]">
+          <span className="text-xs font-semibold text-text">
             {Math.round(clampedProgress)}%
           </span>
         )}
       </div>
       <div
         className={cn(
-          'w-full bg-[#e2e8f0] rounded-full overflow-hidden',
+          'w-full bg-border rounded-full overflow-hidden',
           sizeClasses[size]
         )}
       >

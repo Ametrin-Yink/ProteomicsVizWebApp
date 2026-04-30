@@ -160,7 +160,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                 className="fixed inset-0 z-40"
                 onClick={() => setShowActions(false)}
               />
-              <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-border z-50 py-1">
+              <div className="absolute right-0 top-full mt-1 w-40 bg-background rounded-lg shadow-lg border border-border z-50 py-1">
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text hover:bg-surface"
                   onClick={(e) => {
@@ -455,13 +455,13 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
       )}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl border border-border p-6 max-w-sm w-full mx-4 shadow-2xl">
+          <div className="bg-background rounded-xl border border-border p-6 max-w-sm w-full mx-4 shadow-2xl">
             <h3 className="text-lg font-semibold text-text mb-2">Delete Session</h3>
             <p className="text-sm text-text-secondary mb-4">Are you sure you want to delete this session? This action cannot be undone.</p>
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-text-secondary bg-white border border-border rounded-lg hover:bg-surface"
+                className="px-4 py-2 text-sm font-medium text-text-secondary bg-background border border-border rounded-lg hover:bg-surface"
               >
                 Cancel
               </button>

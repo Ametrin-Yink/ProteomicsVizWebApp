@@ -258,8 +258,8 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-        <p className="text-red-700 text-sm mb-3">Failed to load visualization</p>
+      <div className="bg-error/5 border border-error/20 rounded-lg p-6 text-center">
+        <p className="text-error text-sm mb-3">Failed to load visualization</p>
         <p className="text-error text-xs mb-3">{error}</p>
         <p className="text-text-muted text-xs">Reload the page to retry.</p>
       </div>

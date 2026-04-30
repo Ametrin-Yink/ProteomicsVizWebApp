@@ -50,7 +50,7 @@ const CancelledDisplay: React.FC<{
         <button
           data-testid="cancelled-back-btn"
           onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Configuration
@@ -84,7 +84,7 @@ const ErrorDisplay: React.FC<{
         <p className="text-error mb-4">
           An error occurred during step {error.step}: {error.stepName}
         </p>
-        <div className="bg-white rounded-lg p-4 mb-4 border border-error/20">
+        <div className="bg-background rounded-lg p-4 mb-4 border border-error/20">
           <p className="text-sm text-text font-mono">
             {error.message}
           </p>
@@ -108,7 +108,7 @@ const ErrorDisplay: React.FC<{
           <button
             data-testid="error-back-btn"
             onClick={onBack}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Configuration
@@ -468,7 +468,7 @@ function ProcessingContent() {
   // Validation
   if (!sessionId) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
           <h1 className="text-xl font-semibold text-text mb-2">
@@ -489,14 +489,14 @@ function ProcessingContent() {
   }
 
   return (
-    <div data-testid="processing-page" className="min-h-screen bg-surface flex">
+    <div data-testid="processing-page" className="flex-1 bg-surface flex">
       {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-screen" />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-auto">
         {/* Header - reduced z-index to prevent overlay */}
-        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-border">
+        <header className="sticky top-0 z-30 bg-surface/80 backdrop-blur-md border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-4">
@@ -528,7 +528,7 @@ function ProcessingContent() {
                     data-testid="cancel-processing-btn"
                     onClick={handleCancelClick}
                     disabled={isCancelling}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-error/10 text-error hover:bg-error/15 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                   >
                     <X className="w-4 h-4" />
                     {isCancelling ? 'Cancelling...' : 'Cancel'}
@@ -586,7 +586,7 @@ function ProcessingContent() {
           {/* Cancel Confirmation Dialog */}
           {showCancelDialog && (
             <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              <div className="bg-white rounded-xl border border-border p-6 max-w-md w-full mx-4 shadow-2xl">
+              <div className="bg-background rounded-xl border border-border p-6 max-w-md w-full mx-4 shadow-2xl">
                 <h3 className="text-lg font-semibold text-text mb-2">
                   Cancel Processing?
                 </h3>
@@ -598,7 +598,7 @@ function ProcessingContent() {
                     data-testid="dismiss-cancel-btn"
                     onClick={handleDismissCancelDialog}
                     disabled={isCancelling}
-                    className="px-4 py-2 bg-white border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-background border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
                     No, Continue
                   </button>
@@ -625,7 +625,7 @@ function ProcessingContent() {
 
 export default function ProcessingPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center">
+    <Suspense fallback={<div className="flex-1 bg-surface flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         <p className="mt-4 text-text-secondary">Loading...</p>

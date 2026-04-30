@@ -188,7 +188,7 @@ function AnalysisContent() {
   
   if (isCreatingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
+      <div className="flex-1 flex items-center justify-center bg-surface">
         <div className="text-center">
           <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
           <h2 className="text-xl font-semibold text-text">Creating Session...</h2>

@@ -47,7 +47,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="antialiased font-sans bg-white">
+      <body className="antialiased font-sans bg-background">
         <SidebarProvider>
           {/* Top Navigation Bar */}
           <TopNavigation />

@@ -51,7 +51,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     );
 
     const labelClasses = cn(
-      'text-sm font-medium text-[#1a1a2e]',
+      'text-sm font-medium text-text',
       disabled && 'opacity-50'
     );
 
@@ -61,33 +61,33 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     );
 
     const inputClasses = cn(
-      'flex h-11 w-full rounded-lg border bg-white px-4',
-      'text-sm text-[#1a1a2e] placeholder:text-[#94a3b8]',
+      'flex h-11 w-full rounded-lg border bg-background px-4',
+      'text-sm text-text placeholder:text-text-muted',
       'transition-all duration-200',
       'focus:outline-none focus:ring-2 focus:ring-offset-0',
       'disabled:opacity-50 disabled:cursor-not-allowed',
-      
+
       // Error state
       error
         ? 'border-error focus:border-error focus:ring-error/20'
-        : 'border-[#e2e8f0] focus:border-[#E73564] focus:ring-[#E73564]/20',
-      
+        : 'border-border focus:border-primary focus:ring-primary/20',
+
       // Icon padding
       leftIcon && 'pl-11',
       rightIcon && 'pr-11',
-      
+
       className
     );
 
     const iconClasses = cn(
       'absolute flex items-center justify-center',
-      'text-[#94a3b8] pointer-events-none',
+      'text-text-muted pointer-events-none',
       'w-5 h-5'
     );
 
     const helperTextClasses = cn(
       'text-xs',
-      error ? 'text-error' : 'text-[#64748b]'
+      error ? 'text-error' : 'text-text-secondary'
     );
 
     return (
@@ -172,28 +172,28 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     );
 
     const labelClasses = cn(
-      'text-sm font-medium text-[#1a1a2e]',
+      'text-sm font-medium text-text',
       disabled && 'opacity-50'
     );
 
     const textareaClasses = cn(
-      'flex w-full rounded-lg border bg-white px-4 py-3',
-      'text-sm text-[#1a1a2e] placeholder:text-[#94a3b8]',
+      'flex w-full rounded-lg border bg-background px-4 py-3',
+      'text-sm text-text placeholder:text-text-muted',
       'transition-all duration-200 resize-y',
       'focus:outline-none focus:ring-2 focus:ring-offset-0',
       'disabled:opacity-50 disabled:cursor-not-allowed',
-      
+
       // Error state
       error
         ? 'border-error focus:border-error focus:ring-error/20'
-        : 'border-[#e2e8f0] focus:border-[#E73564] focus:ring-[#E73564]/20',
-      
+        : 'border-border focus:border-primary focus:ring-primary/20',
+
       className
     );
 
     const helperTextClasses = cn(
       'text-xs',
-      error ? 'text-error' : 'text-[#64748b]'
+      error ? 'text-error' : 'text-text-secondary'
     );
 
     return (

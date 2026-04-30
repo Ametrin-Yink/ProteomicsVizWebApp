@@ -70,17 +70,19 @@ function BioinformaticsContent() {
   // Full-page loading only on initial load
   if (loading && initialLoad) {
     return (
-      <div className="mx-auto px-6 py-8 max-w-7xl">
+      <div className="flex-1 bg-surface">
+        <div className="mx-auto px-6 py-8 max-w-7xl">
         <div className="h-8 bg-border/30 rounded-lg w-48 mb-6 animate-pulse" />
         <div className="h-12 bg-border/30 rounded-lg mb-6 animate-pulse" />
         <div className="h-48 bg-border/30 rounded-lg animate-pulse" />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="flex-1 bg-surface flex items-center justify-center">
         <div className="bg-error/5 border border-error/20 rounded-lg p-5 max-w-md">
           <h2 className="text-base font-semibold text-error mb-2">Error Loading GSEA Data</h2>
           <p className="text-error">{error}</p>

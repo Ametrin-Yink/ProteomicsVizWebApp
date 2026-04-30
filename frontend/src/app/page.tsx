@@ -172,7 +172,7 @@ export default function HomePage() {
 
                       {/* Loading overlay */}
                       {isCreating && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
+                        <div className="absolute inset-0 flex items-center justify-center bg-surface/80 rounded-xl">
                           <div className="flex items-center gap-2">
                             <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             <span className="text-sm font-medium text-primary">Creating session...</span>

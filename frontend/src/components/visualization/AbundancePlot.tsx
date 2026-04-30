@@ -113,7 +113,7 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
   );
 
   return (
-    <div className="w-full h-[450px] bg-white rounded-lg border border-border p-2">
+    <div className="w-full h-[450px] bg-background rounded-lg border border-border p-2">
       <Plot
         data={plotData}
         layout={layout}
@@ -235,7 +235,7 @@ export function PeptideAbundancePlot({ data, title = 'Peptide Abundance' }: Pept
   );
 
   return (
-    <div className="w-full bg-white rounded-lg border border-border p-2" style={{ height: `${plotHeight}px` }}>
+    <div className="w-full bg-background rounded-lg border border-border p-2" style={{ height: `${plotHeight}px` }}>
       <Plot
         data={plotData}
         layout={layout}
