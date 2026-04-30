@@ -73,7 +73,6 @@ export interface AnalysisParameters {
 export interface Session {
   id: string;
   name: string;
-  description: string;
   status: SessionStatus;
   currentStep: ProcessingStep;
   progress: number; // 0-100
@@ -185,14 +184,12 @@ export interface GSEAPathway {
 // Session creation request
 export interface CreateSessionRequest {
   name: string;
-  description?: string;
   template: AnalysisTemplate;
 }
 
 // Session update request
 export interface UpdateSessionRequest {
   name?: string;
-  description?: string;
   config?: Partial<AnalysisConfig>;
 }
 
@@ -217,6 +214,7 @@ export interface SessionActions {
   addSession: (session: Session) => void;
   updateSession: (id: string, updates: Partial<Session>) => void;
   deleteSession: (id: string) => void;
+  deleteSessions: (ids: string[]) => void;
   setCurrentSession: (session: Session | null) => void;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;

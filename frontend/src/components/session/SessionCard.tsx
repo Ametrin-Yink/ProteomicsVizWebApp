@@ -137,11 +137,6 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           <h4 className="font-semibold text-[#1a1a2e] truncate">
             {session.name}
           </h4>
-          {session.description && (
-            <p className="text-sm text-[#64748b] truncate mt-0.5">
-              {session.description}
-            </p>
-          )}
         </div>
 
         {/* Actions menu */}
@@ -261,6 +256,9 @@ export interface MiniSessionCardProps {
   onClick?: () => void;
   onDelete?: () => void;
   onRename?: (newName: string) => void;
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+  onSelectChange?: (checked: boolean) => void;
   className?: string;
 }
 
@@ -270,6 +268,9 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
   onClick,
   onDelete,
   onRename,
+  isSelectMode = false,
+  isSelected = false,
+  onSelectChange,
   className,
 }) => {
   const status = statusConfig[session.status];
@@ -315,24 +316,52 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
       data-testid="session-item"
       data-session-id={session.id}
       className={cn(
-        'flex items-center gap-3 p-3 rounded-lg cursor-pointer',
+        'flex items-center gap-3 p-3 rounded-lg',
         'transition-all duration-200',
-        'hover:bg-[#f8f9fc]',
-        isActive && 'bg-[#E73564]/5 ring-1 ring-[#E73564]',
+        isSelectMode
+          ? 'cursor-pointer hover:bg-[#f8f9fc]'
+          : 'cursor-pointer hover:bg-[#f8f9fc]',
+        isActive && !isSelectMode && 'bg-[#E73564]/5 ring-1 ring-[#E73564]',
         className
       )}
     >
-      <div
-        onClick={onClick}
-        className={cn(
-          'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-          status.bgColor
-        )}
-      >
-        <StatusIcon className={cn('w-4 h-4', status.color)} />
-      </div>
+      {/* Checkbox or status icon */}
+      {isSelectMode ? (
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectChange?.(!isSelected);
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onSelectChange?.(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+            className="accent-[#E73564] w-4 h-4"
+            data-testid="session-checkbox"
+          />
+        </div>
+      ) : (
+        <div
+          onClick={onClick}
+          className={cn(
+            'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+            status.bgColor
+          )}
+        >
+          <StatusIcon className={cn('w-4 h-4', status.color)} />
+        </div>
+      )}
 
-      <div className="flex-1 min-w-0" onClick={onClick}>
+      <div
+        className="flex-1 min-w-0"
+        onClick={isSelectMode
+          ? () => onSelectChange?.(!isSelected)
+          : onClick
+        }
+      >
         {isEditing ? (
           <div className="flex items-center gap-1">
             <input
@@ -371,14 +400,15 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
         )}
       </div>
 
-      {/* Action buttons */}
-      {!isEditing && (
+      {/* Action buttons - hidden in select mode */}
+      {!isEditing && !isSelectMode && (
         <div className="flex items-center gap-1">
           {onRename && (
             <button
               onClick={handleStartEdit}
               className="p-1.5 text-gray-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-colors"
               title="Rename session"
+              data-testid="session-rename-btn"
             >
               <Edit3 className="w-4 h-4" />
             </button>
@@ -391,6 +421,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
               }}
               className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
               title="Delete session"
+              data-testid="session-delete-btn"
             >
               <Trash2 className="w-4 h-4" />
             </button>

@@ -11,14 +11,13 @@ import { cn } from '@/lib/utils';
 import { X, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Input';
 import type { AnalysisTemplate } from '@/types/session';
 
 // Dialog props
 export interface SessionCreateDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (name: string, description: string, template: AnalysisTemplate) => void;
+  onCreate: (name: string, template: AnalysisTemplate) => void;
   className?: string;
 }
 
@@ -60,7 +59,6 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
   className,
 }) => {
   const [name, setName] = React.useState('');
-  const [description, setDescription] = React.useState('');
   const [selectedTemplate, setSelectedTemplate] = React.useState<AnalysisTemplate>('pairwise_comparison');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errors, setErrors] = React.useState<{ name?: string }>({});
@@ -69,7 +67,6 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
   React.useEffect(() => {
     if (isOpen) {
       setName('');
-      setDescription('');
       setSelectedTemplate('pairwise_comparison');
       setErrors({});
     }
@@ -122,7 +119,7 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
     setIsSubmitting(true);
     
     try {
-      await onCreate(name.trim(), description.trim(), selectedTemplate);
+      await onCreate(name.trim(), selectedTemplate);
       onClose();
     } catch (error) {
       console.error('Failed to create session:', error);
@@ -193,16 +190,6 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
             fullWidth
             autoFocus
             data-testid="session-name-input"
-          />
-
-          {/* Description */}
-          <Textarea
-            label="Description (optional)"
-            placeholder="Brief description of your analysis..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            fullWidth
           />
 
           {/* Template selection */}

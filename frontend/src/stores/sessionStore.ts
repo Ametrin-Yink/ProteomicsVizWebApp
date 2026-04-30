@@ -112,9 +112,25 @@ export const useSessionStore = create<SessionStore>()(
     deleteSession: (id: string) => {
       set((state) => {
         state.sessions = state.sessions.filter((s) => s.id !== id);
-        
+
         // Clear current session if it was deleted
         if (state.currentSession?.id === id) {
+          state.currentSession = null;
+        }
+      });
+    },
+
+    /**
+     * Delete multiple sessions by IDs
+     * Use this for bulk deletion
+     */
+    deleteSessions: (ids: string[]) => {
+      set((state) => {
+        const idSet = new Set(ids);
+        state.sessions = state.sessions.filter((s) => !idSet.has(s.id));
+
+        // Clear current session if it was among deleted
+        if (state.currentSession && idSet.has(state.currentSession.id)) {
           state.currentSession = null;
         }
       });

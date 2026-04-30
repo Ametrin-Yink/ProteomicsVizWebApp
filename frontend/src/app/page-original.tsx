@@ -97,21 +97,19 @@ export default function WelcomePage() {
 
   // Handle create session
   const handleCreateSession = async (
-    name: string, 
-    description: string, 
+    name: string,
     template: AnalysisTemplate
   ) => {
     // Create mock session
     const newSession: Session = {
       id: `session-${Date.now()}`,
       name,
-      description,
       status: 'created',
       currentStep: null,
       progress: 0,
       config: {
         name,
-        description,
+        description: '',
         template,
         conditions: [],
         replicates: {},

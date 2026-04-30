@@ -201,7 +201,6 @@ export const sessionsApi = {
     return {
       id: sessionId,
       name: backendSession.name || name || `Analysis ${sessionId.slice(0, 8)}`,
-      description: '',
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
@@ -226,14 +225,12 @@ export const sessionsApi = {
     const response = await fetch(apiUrl('/sessions'));
     const data = await handleResponse<BackendSession[]>(response);
 
-    // Map backend format to frontend format
     return (data || []).map(s => {
       const sessionId = s.id || s.session_id || '';
       const sessionStatus = s.state || s.status || 'created';
       return {
         id: sessionId,
         name: s.name || s.config?.experiment_name || `Analysis ${sessionId.slice(0, 8)}`,
-        description: '',
         status: mapBackendStatus(sessionStatus),
         currentStep: null,
         progress: sessionStatus === 'completed' ? 100 : 0,
@@ -267,7 +264,6 @@ export const sessionsApi = {
     return {
       id: sid,
       name: backendSession.name || backendSession.config?.experiment_name || `Analysis ${sid.slice(0, 8)}`,
-      description: '',
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
@@ -338,6 +334,13 @@ export const sessionsApi = {
         throw new APIError(`Rename failed (${response.status})`, 'RENAME_FAILED', response.status);
       }
     }
+  },
+
+  /**
+   * Delete multiple sessions
+   */
+  deleteMultiple: async (sessionIds: string[]): Promise<void> => {
+    await Promise.all(sessionIds.map((id) => sessionsApi.delete(id)));
   },
 };
 
