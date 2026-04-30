@@ -199,10 +199,15 @@ function ResultsContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading results...</p>
+      <div className="mx-auto px-6 py-8 max-w-7xl">
+        <div className="h-8 bg-border/30 rounded-lg w-64 mb-6 animate-pulse" />
+        <div className="h-12 bg-border/30 rounded-lg mb-6 animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="h-48 bg-border/30 rounded-lg animate-pulse" />
+            <div className="h-96 bg-border/30 rounded-lg animate-pulse" />
+          </div>
+          <div className="h-96 bg-border/30 rounded-lg animate-pulse" />
         </div>
       </div>
     );
@@ -211,9 +216,9 @@ function ResultsContent() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Results</h2>
-          <p className="text-red-600">{error}</p>
+        <div className="bg-error/5 border border-error/20 rounded-lg p-5 max-w-md">
+          <h2 className="text-base font-semibold text-error mb-2">Error Loading Results</h2>
+          <p className="text-error">{error}</p>
         </div>
       </div>
     );
@@ -222,13 +227,13 @@ function ResultsContent() {
   if (!sessionId) {
     return (
       <div data-testid="no-session-selected" className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center text-gray-500">
-          <p className="text-lg text-gray-700 font-medium mb-2">No session selected</p>
-          <p className="text-sm text-gray-500 mb-4">Create a new analysis to get started.</p>
+        <div className="text-center text-text-secondary">
+          <p className="text-lg text-text font-medium mb-2">No session selected</p>
+          <p className="text-sm text-text-muted mb-4">Create a new analysis to get started.</p>
           <a
             data-testid="start-analysis-link"
             href="/"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E73564] to-[#00ADEF] text-white rounded-lg hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity"
           >
             Start New Analysis
           </a>
@@ -240,12 +245,12 @@ function ResultsContent() {
   if (!data) {
     return (
       <div data-testid="no-results-message" className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center text-gray-500">
-          <p className="text-lg">No results available</p>
-          <a 
+        <div className="text-center text-text-secondary">
+          <p className="text-lg text-text">No results available</p>
+          <a
             data-testid="start-analysis-link"
-            href="/analysis" 
-            className="text-blue-600 hover:text-blue-800 mt-4 inline-block"
+            href="/analysis"
+            className="text-primary hover:opacity-80 mt-4 inline-block"
           >
             Start a new analysis
           </a>
@@ -255,43 +260,36 @@ function ResultsContent() {
   }
 
   return (
-    <div data-testid="results-page" className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div data-testid="results-page" className="flex-1 bg-surface">
+      <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Results</h1>
-          <p className="text-gray-600 mt-2">
-            {sessionConfig
-              ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
-              : 'Treatment vs Control'}
-          </p>
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold text-text">Differential Expression Results</h1>
         </div>
 
         {/* General Info Panel */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8" data-testid="general-info-panel">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">Total Proteins Identified</div>
-            <div className="text-2xl font-bold text-gray-900" data-testid="total-proteins">{data.total_proteins}</div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">Total DE Proteins</div>
-            <div className="text-2xl font-bold text-gray-900" data-testid="significant-proteins">{deCounts.total}</div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">Upregulated</div>
-            <div className="text-2xl font-bold text-pink-600" data-testid="upregulated-count">{deCounts.up}</div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-sm text-gray-500 mb-1">Downregulated</div>
-            <div className="text-2xl font-bold text-blue-600" data-testid="downregulated-count">{deCounts.down}</div>
-          </div>
+        <div className="flex items-center gap-4 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3" data-testid="general-info-panel">
+          <span className="font-semibold text-text">Results</span>
+          <span className="text-border">|</span>
+          <span className="text-text-secondary">
+            {sessionConfig
+              ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
+              : 'Treatment vs Control'}
+          </span>
+          <span className="text-border">|</span>
+          <span className="text-text-secondary">{data.total_proteins.toLocaleString()} proteins</span>
+          <span className="text-border">|</span>
+          <span className="text-text-secondary">
+            {deCounts.total} DE (
+            <span className="text-primary font-semibold">{deCounts.up}↑</span>
+            {' '}
+            <span className="text-secondary font-semibold">{deCounts.down}↓</span>
+            )
+          </span>
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Volcano Plot */}
           <div className="lg:col-span-2 space-y-6">
             {/* Filters */}
@@ -335,16 +333,16 @@ function ResultsContent() {
             {selectedProteins.size === 1 ? (
               <ProteinInfo protein={selectedProteinData} sessionId={sessionId} filters={filters} />
             ) : selectedProteins.size > 1 ? (
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="text-center text-gray-500 py-8">
+              <div className="bg-background rounded-lg border border-border p-6">
+                <div className="text-center text-text-secondary py-8">
                   <p className="text-lg font-medium">Multiple Proteins Selected</p>
                   <p className="text-sm mt-2">{selectedProteins.size} proteins selected.</p>
-                  <p className="text-sm text-gray-400 mt-1">
+                  <p className="text-sm text-text-muted mt-1">
                     Select a single protein to view detailed information.
                   </p>
                   <button
                     onClick={clearSelection}
-                    className="mt-4 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                    className="mt-4 px-4 py-2 bg-surface hover:bg-border/30 text-text-secondary rounded-lg text-sm font-medium transition-colors"
                   >
                     Clear Selection
                   </button>
@@ -364,8 +362,8 @@ export default function ResultsPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4 text-text-secondary">Loading...</p>
       </div>
     </div>}>
       <ResultsContent />

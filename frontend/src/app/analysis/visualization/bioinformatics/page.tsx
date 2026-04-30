@@ -70,33 +70,32 @@ function BioinformaticsContent() {
   // Full-page loading only on initial load
   if (loading && initialLoad) {
     return (
-      <div data-testid="gsea-loading" className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading GSEA results...</p>
-        </div>
+      <div className="mx-auto px-6 py-8 max-w-7xl">
+        <div className="h-8 bg-border/30 rounded-lg w-48 mb-6 animate-pulse" />
+        <div className="h-12 bg-border/30 rounded-lg mb-6 animate-pulse" />
+        <div className="h-48 bg-border/30 rounded-lg animate-pulse" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div data-testid="gsea-error" className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading GSEA Data</h2>
-          <p className="text-red-600">{error}</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-error/5 border border-error/20 rounded-lg p-5 max-w-md">
+          <h2 className="text-base font-semibold text-error mb-2">Error Loading GSEA Data</h2>
+          <p className="text-error">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div data-testid="bioinformatics-container" className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div data-testid="bioinformatics-container" className="flex-1 bg-surface">
+      <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Bioinformatics</h1>
-          <p className="text-gray-600 mt-2">
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold text-text">Bioinformatics</h1>
+          <p className="text-text-secondary mt-2">
             Gene Set Enrichment Analysis (GSEA) results
           </p>
         </div>
@@ -104,17 +103,17 @@ function BioinformaticsContent() {
         {/* Content with inline loading overlay */}
         <div className="relative">
           {loading && !initialLoad && (
-            <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
-              <div className="flex items-center gap-2 text-gray-600">
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 rounded-lg">
+              <div className="flex items-center gap-2 text-text-secondary">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
                 <span className="text-sm">Loading...</span>
               </div>
             </div>
           )}
 
           {/* Database Selector */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-8">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+          <div className="bg-background rounded-lg border border-border p-4 mb-8">
+            <label className="block text-sm font-medium text-text mb-3">
               Select Database
             </label>
             <div data-testid="database-select" className="flex flex-wrap gap-2">
@@ -124,22 +123,22 @@ function BioinformaticsContent() {
                   onClick={() => setSelectedDatabase(db)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     selectedDatabase === db
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-text-secondary hover:bg-border/30'
                   }`}
                 >
                   {GSEADatabaseLabels[db]}
                 </button>
               ))}
             </div>
-            <div data-testid="current-database" className="mt-2 text-sm text-gray-600">
+            <div data-testid="current-database" className="mt-2 text-sm text-text-secondary">
               Current: {GSEADatabaseLabels[selectedDatabase]}
             </div>
           </div>
 
           {/* Content */}
           {data && data.results && Array.isArray(data.results) && data.results.length > 0 ? (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {/* GSEA Dashboard */}
               <GSEADashboard
                 data={data}
@@ -173,8 +172,8 @@ function BioinformaticsContent() {
             />
           </div>
         ) : (
-          <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
-            <p className="text-gray-500">No GSEA data available</p>
+          <div className="bg-surface rounded-lg border border-border p-5 text-center">
+            <p className="text-text-secondary">No GSEA data available</p>
           </div>
         )}
         </div>
@@ -188,8 +187,8 @@ export default function BioinformaticsPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-text-secondary">Loading...</p>
         </div>
       </div>
     }>

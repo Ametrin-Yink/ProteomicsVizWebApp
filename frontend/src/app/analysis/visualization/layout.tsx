@@ -43,8 +43,8 @@ function Navigation() {
   const activeTab = getActiveTab();
 
   return (
-    <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-      <div className="max-w-7xl mx-auto px-4">
+    <div className="bg-background border-b border-border sticky top-0 z-10">
+      <div className="mx-auto px-6">
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-1">
             {tabs.map((tab) => {
@@ -58,8 +58,8 @@ function Navigation() {
                   data-testid={`${tab.id}-tab`}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-primary/5 text-primary'
+                      : 'text-text-secondary hover:bg-surface hover:text-text'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -81,23 +81,23 @@ export default function VisualizationLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="flex-1 overflow-y-auto bg-surface">
       {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-screen" />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-gray-500 px-4 pt-4">
-          <a href="/" className="hover:text-gray-700">Home</a>
-          <span>/</span>
-          <a href="/analysis" className="hover:text-gray-700">Analysis</a>
-          <span>/</span>
-          <span className="text-gray-700">Results</span>
+        <nav className="flex items-center gap-2 text-sm px-6 pt-3">
+          <a href="/" className="text-text-secondary hover:text-text">Home</a>
+          <span className="text-text-muted">/</span>
+          <a href="/analysis" className="text-text-secondary hover:text-text">Analysis</a>
+          <span className="text-text-muted">/</span>
+          <span className="text-text font-medium">Results</span>
         </nav>
 
         {/* Navigation Bar */}
-        <Suspense fallback={<div className="bg-white border-b border-gray-200 h-14" />}>
+        <Suspense fallback={<div className="bg-background border-b border-border h-14" />}>
           <Navigation />
         </Suspense>
 
