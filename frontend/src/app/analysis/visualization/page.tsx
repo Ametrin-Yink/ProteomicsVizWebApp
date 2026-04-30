@@ -322,9 +322,7 @@ function ResultsContent() {
 
           {/* Right Column - Protein Info */}
           <div className="lg:col-span-1">
-            {selectedProteins.size === 1 ? (
-              <ProteinInfo protein={selectedProteinData} sessionId={sessionId} filters={filters} />
-            ) : selectedProteins.size > 1 ? (
+            {selectedProteins.size > 1 ? (
               <div className="bg-background rounded-lg border border-border p-6">
                 <div className="text-center text-text-secondary py-8">
                   <p className="text-lg font-medium">Multiple Proteins Selected</p>
@@ -341,7 +339,11 @@ function ResultsContent() {
                 </div>
               </div>
             ) : (
-              <ProteinInfo protein={null} sessionId={sessionId} filters={filters} />
+              <ProteinInfo
+                protein={selectedProteins.size === 1 ? selectedProteinData : null}
+                sessionId={sessionId}
+                filters={filters}
+              />
             )}
           </div>
         </div>
