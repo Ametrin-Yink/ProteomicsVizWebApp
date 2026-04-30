@@ -231,7 +231,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
         <div
           data-testid="session-panel"
           className={cn(
-            'fixed left-0 top-0 h-full bg-white border-r border-border',
+            'fixed left-0 top-0 h-full bg-background border-r border-border',
             'flex flex-col items-center py-4 z-40',
             'w-16',
             className
@@ -300,7 +300,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       <div
         data-testid="session-panel"
         className={cn(
-          'fixed left-0 top-14 bottom-0 z-30 w-80 bg-white border-r border-border',
+          'fixed left-0 top-14 bottom-0 z-30 w-80 bg-background border-r border-border',
           'flex flex-col',
           className
         )}
