@@ -9,35 +9,26 @@
  * 5. Session manager: rename, delete sessions
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   createSession,
   uploadFiles,
   configureAnalysis,
-  cleanupSession,
+  cleanupAllSessions,
   purgeLegacyScreenshots,
-  takeScreenshot
+  takeScreenshot,
+  API_BASE_URL,
+  WEB_BASE_URL
 } from './helpers';
 
 const createdSessions: string[] = [];
-
-async function cleanupAllSessions(page: Page): Promise<void> {
-  for (const sessionId of createdSessions) {
-    try {
-      await cleanupSession(page, sessionId);
-    } catch (e) {
-      console.log(`Failed to cleanup session ${sessionId}: ${e}`);
-    }
-  }
-  createdSessions.length = 0;
-}
 
 test.beforeAll(() => {
   purgeLegacyScreenshots('02-session-persistence');
 });
 
 test.afterEach(async ({ page }) => {
-  await cleanupAllSessions(page);
+  await cleanupAllSessions(page, createdSessions);
 });
 
 test.describe('Session Persistence', () => {
@@ -239,7 +230,7 @@ test.describe('Session Manager', () => {
     createdSessions.push(sessionId);
 
     // Delete via API
-    await page.request.delete(`http://localhost:8000/api/sessions/${sessionId}`);
+    await page.request.delete(`${API_BASE_URL}/api/sessions/${sessionId}`);
 
     // Try to access deleted session
     await page.goto(`/analysis?session=${sessionId}`);
@@ -247,7 +238,7 @@ test.describe('Session Manager', () => {
 
     // Should show error or redirect
     const errorVisible = await page.locator('[data-testid="error-message"], [data-testid="toast-error"]').isVisible().catch(() => false);
-    const redirectedToHome = page.url().includes('/welcome') || page.url() === 'http://localhost:3000/';
+    const redirectedToHome = page.url().includes('/welcome') || page.url() === `${WEB_BASE_URL}/`;
 
     expect(errorVisible || redirectedToHome).toBe(true);
 

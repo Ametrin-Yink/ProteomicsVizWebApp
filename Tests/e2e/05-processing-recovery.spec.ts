@@ -9,35 +9,25 @@
  * 5. Cancel processing mid-way → Can resume
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   createSession,
   uploadFiles,
   configureAnalysis,
-  cleanupSession,
+  cleanupAllSessions,
   purgeLegacyScreenshots,
-  takeScreenshot
+  takeScreenshot,
+  WEB_BASE_URL
 } from './helpers';
 
 const createdSessions: string[] = [];
-
-async function cleanupAllSessions(page: Page): Promise<void> {
-  for (const sessionId of createdSessions) {
-    try {
-      await cleanupSession(page, sessionId);
-    } catch (e) {
-      console.log(`Failed to cleanup session ${sessionId}: ${e}`);
-    }
-  }
-  createdSessions.length = 0;
-}
 
 test.beforeAll(() => {
   purgeLegacyScreenshots('05-processing-recovery');
 });
 
 test.afterEach(async ({ page }) => {
-  await cleanupAllSessions(page);
+  await cleanupAllSessions(page, createdSessions);
 });
 
 test.describe('Processing Recovery', () => {
@@ -210,7 +200,7 @@ test.describe('Processing Recovery', () => {
     });
 
     // Navigate to processing page
-    await page.goto(`http://localhost:3000/analysis/processing?session=${sessionId}`);
+    await page.goto(`${WEB_BASE_URL}/analysis/processing?session=${sessionId}`);
     await page.waitForLoadState('networkidle');
 
     // Simulate network disconnect by going offline

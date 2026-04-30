@@ -8,35 +8,24 @@
  * 4. No description field in create dialog
  */
 
-import { test, expect, Page } from '@playwright/test';
-import { takeScreenshot, purgeLegacyScreenshots } from './helpers';
+import { test, expect } from '@playwright/test';
+import { takeScreenshot, purgeLegacyScreenshots, cleanupAllSessions, API_BASE_URL } from './helpers';
 
 const createdSessions: string[] = [];
-
-async function cleanupAllSessions(page: Page): Promise<void> {
-  for (const sessionId of createdSessions) {
-    try {
-      await page.request.delete(`http://localhost:8000/api/sessions/${sessionId}`);
-    } catch {
-      // ignore
-    }
-  }
-  createdSessions.length = 0;
-}
 
 test.beforeAll(() => {
   purgeLegacyScreenshots('08-session-manager-improvements');
 });
 
 test.afterEach(async ({ page }) => {
-  await cleanupAllSessions(page);
+  await cleanupAllSessions(page, createdSessions);
 });
 
 test.describe('Session Manager Improvements', () => {
 
   test('scan sessions button exists and triggers refresh', async ({ page }) => {
     // Create session via API to ensure name is set
-    const response = await page.request.post('http://localhost:8000/api/sessions', {
+    const response = await page.request.post(`${API_BASE_URL}/api/sessions`, {
       data: { name: 'Scan Test Session', template: 'protein_pairwise_comparison' },
     });
     expect(response.ok()).toBe(true);
@@ -86,7 +75,7 @@ test.describe('Session Manager Improvements', () => {
 
   test('session list displays with tabs', async ({ page }) => {
     // Create session via API
-    const response = await page.request.post('http://localhost:8000/api/sessions', {
+    const response = await page.request.post(`${API_BASE_URL}/api/sessions`, {
       data: { name: 'Tab Test Session', template: 'protein_pairwise_comparison' },
     });
     expect(response.ok()).toBe(true);
@@ -108,11 +97,11 @@ test.describe('Session Manager Improvements', () => {
 
   test('multi-select delete works', async ({ page }) => {
     // Create two sessions via API
-    const r1 = await page.request.post('http://localhost:8000/api/sessions', {
+    const r1 = await page.request.post(`${API_BASE_URL}/api/sessions`, {
       data: { name: 'Delete Me 1', template: 'protein_pairwise_comparison' },
     });
     const s1 = await r1.json();
-    const r2 = await page.request.post('http://localhost:8000/api/sessions', {
+    const r2 = await page.request.post(`${API_BASE_URL}/api/sessions`, {
       data: { name: 'Delete Me 2', template: 'protein_pairwise_comparison' },
     });
     const s2 = await r2.json();
@@ -152,7 +141,7 @@ test.describe('Session Manager Improvements', () => {
 
   test('select all toggles all checkboxes', async ({ page }) => {
     // Create session via API
-    const response = await page.request.post('http://localhost:8000/api/sessions', {
+    const response = await page.request.post(`${API_BASE_URL}/api/sessions`, {
       data: { name: 'Select All Test', template: 'protein_pairwise_comparison' },
     });
     expect(response.ok()).toBe(true);
@@ -180,7 +169,7 @@ test.describe('Session Manager Improvements', () => {
 
   test('sessions persist after page refresh (polling on mount)', async ({ page }) => {
     // Create session via API
-    const response = await page.request.post('http://localhost:8000/api/sessions', {
+    const response = await page.request.post(`${API_BASE_URL}/api/sessions`, {
       data: { name: 'Poll Test Session', template: 'protein_pairwise_comparison' },
     });
     expect(response.ok()).toBe(true);

@@ -13,6 +13,9 @@ import { Page, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
+export const API_BASE_URL = process.env.API_URL || 'http://localhost:8000';
+export const WEB_BASE_URL = process.env.WEB_URL || 'http://localhost:3000';
+
 // Screenshot directory (relative to project root)
 const SCREENSHOT_DIR = path.join(__dirname, '..', 'screenshots');
 
@@ -212,43 +215,33 @@ export async function startAnalysis(page: Page, timeout: number = 300000): Promi
 }
 
 /**
- * Create a complete session with uploaded files and processing results
+ * Clean up and delete multiple sessions
+ * Set PRESERVE_TEST_SESSIONS=true to preserve sessions for debugging
  */
-export async function createCompleteSession(
-  page: Page,
-  timeout: number = 120000
-): Promise<string> {
-  const sessionId = await createSession(page);
+export async function cleanupAllSessions(page: Page, sessionIds: string[]): Promise<void> {
+  const preserveSessions = process.env.PRESERVE_TEST_SESSIONS === 'true';
 
-  await uploadFiles(page, [
-    '../../SampleData/PSM_SampleData_DMSO_1.csv',
-    '../../SampleData/PSM_SampleData_DMSO_2.csv',
-    '../../SampleData/PSM_SampleData_DMSO_3.csv',
-    '../../SampleData/PSM_SampleData_INCZ123456_1.csv',
-    '../../SampleData/PSM_SampleData_INCZ123456_2.csv',
-    '../../SampleData/PSM_SampleData_INCZ123456_3.csv',
-  ]);
+  if (preserveSessions) {
+    console.log('[DEBUG] Preserving sessions for investigation');
+    return;
+  }
 
-  await configureAnalysis(page, {
-    treatment: 'INCZ123456',
-    control: 'DMSO',
-    organism: 'human',
-  });
-
-  await startAnalysis(page, timeout);
-
-  await page.goto(`/analysis/visualization?session=${sessionId}`);
-  await expect(page.locator('[data-testid="general-info-panel"]')).toBeVisible({ timeout: 10000 });
-
-  return sessionId;
+  for (const id of sessionIds) {
+    try {
+      await page.request.delete(`${API_BASE_URL}/api/sessions/${id}`);
+    } catch {
+      // Ignore cleanup failures
+    }
+  }
+  sessionIds.length = 0;
 }
 
 /**
- * Clean up and delete a session
- * Set PRESERVE_TEST_SESSIONS=false to clean up after debugging
+ * Clean up and delete a single session
+ * Set PRESERVE_TEST_SESSIONS=true to preserve sessions for debugging
  */
 export async function cleanupSession(page: Page, sessionId: string): Promise<void> {
-  const preserveSessions = process.env.PRESERVE_TEST_SESSIONS !== 'false';
+  const preserveSessions = process.env.PRESERVE_TEST_SESSIONS === 'true';
 
   if (preserveSessions) {
     console.log(`[DEBUG] Preserving session ${sessionId} for investigation`);
@@ -256,7 +249,7 @@ export async function cleanupSession(page: Page, sessionId: string): Promise<voi
   }
 
   try {
-    const response = await page.request.delete(`http://localhost:8000/api/sessions/${sessionId}`);
+    const response = await page.request.delete(`${API_BASE_URL}/api/sessions/${sessionId}`);
     if (!response.ok()) {
       console.log(`Failed to delete session ${sessionId}: ${response.status()}`);
     } else {

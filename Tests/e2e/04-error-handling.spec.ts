@@ -10,34 +10,23 @@
  * 6. Network errors → Handled gracefully
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   createSession,
   uploadFiles,
-  cleanupSession,
+  cleanupAllSessions,
   purgeLegacyScreenshots,
   takeScreenshot
 } from './helpers';
 
 const createdSessions: string[] = [];
 
-async function cleanupAllSessions(page: Page): Promise<void> {
-  for (const sessionId of createdSessions) {
-    try {
-      await cleanupSession(page, sessionId);
-    } catch (e) {
-      console.log(`Failed to cleanup session ${sessionId}: ${e}`);
-    }
-  }
-  createdSessions.length = 0;
-}
-
 test.beforeAll(() => {
   purgeLegacyScreenshots('04-error-handling');
 });
 
 test.afterEach(async ({ page }) => {
-  await cleanupAllSessions(page);
+  await cleanupAllSessions(page, createdSessions);
 });
 
 test.describe('Error Handling', () => {
