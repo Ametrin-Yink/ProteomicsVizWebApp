@@ -20,34 +20,36 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
   const s0Percent = Math.round(s0 * 100);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-background rounded-lg border border-border p-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-gray-700">
+        <div className="flex items-center gap-2 text-text">
           <SlidersHorizontal className="w-4 h-4" />
           <span className="font-medium">Filters</span>
         </div>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          aria-label="Toggle filters"
-          className="p-1 hover:bg-gray-100 rounded"
-        >
-          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-        <button
-          onClick={onReset}
-          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-          title="Reset filters to defaults"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onReset}
+            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text transition-colors"
+            title="Reset filters to defaults"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            aria-label="Toggle filters"
+            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text transition-colors"
+          >
+            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
       {isExpanded && (
-        <div className="space-y-4 pt-4 border-t border-gray-100 mt-4">
+        <div className="space-y-3 pt-3 border-t border-border mt-3">
           {/* Row 1: Fold Change + P-value */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-text mb-2">
                 log₂ Fold Change Threshold
               </label>
               <div className="flex items-center gap-2">
@@ -71,13 +73,13 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
                       onChange({ foldChange: value, pValue, adjPValue, s0 });
                     }
                   }}
-                  className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#E73564]"
+                  className="w-20 px-2 py-1 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-text mb-2">
                 P-value Threshold
               </label>
               <div className="flex items-center gap-2">
@@ -101,7 +103,7 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
                       onChange({ foldChange, pValue: value, adjPValue, s0 });
                     }
                   }}
-                  className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#E73564]"
+                  className="w-24 px-2 py-1 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
@@ -110,7 +112,7 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
           {/* Row 2: Adj P-value + S0 Factor */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-text mb-2">
                 Adj P-value Threshold
               </label>
               <div className="flex items-center gap-2">
@@ -134,17 +136,17 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
                       onChange({ foldChange, pValue, adjPValue: value, s0 });
                     }
                   }}
-                  className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#E73564]"
+                  className="w-24 px-2 py-1 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-text mb-2">
                 S0 Factor
                 <span className="group relative inline-block ml-1">
-                  <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 pointer-events-none">
+                  <HelpCircle className="w-3.5 h-3.5 text-text-muted cursor-help" />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 text-xs text-text bg-background border border-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 pointer-events-none">
                     S0 factor widens the significance threshold at low fold changes. Higher values are more permissive, allowing proteins with small fold changes but high reproducibility to appear significant.
                   </span>
                 </span>
@@ -170,9 +172,9 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
                       onChange({ foldChange, pValue, adjPValue, s0: pct / 100 });
                     }
                   }}
-                  className="w-16 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#E73564]"
+                  className="w-16 px-2 py-1 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-text-muted">
                   (S0 = {actualS0.toFixed(2)})
                 </span>
               </div>

@@ -112,7 +112,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
       <EmptyState
         title="No Protein Selected"
         description="Click on a point in the volcano plot or a row in the table to view protein details."
-        icon={<Microscope className="w-8 h-8 text-gray-400" />}
+        icon={<Microscope className="w-8 h-8 text-text-muted" />}
       />
     );
   }
@@ -135,15 +135,15 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
   });
 
   return (
-    <div data-testid="protein-info-panel" className="bg-white rounded-lg border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Protein Information</h3>
+    <div data-testid="protein-info-panel" className="bg-background rounded-lg border border-border p-6">
+      <h3 className="text-lg font-semibold text-text mb-4">Protein Information</h3>
 
       {/* Basic Info */}
       <div className="space-y-3 mb-6">
         {/* UniProt Accessions with Links */}
-        <div data-testid="protein-accession" className="py-2 border-b border-gray-100">
+        <div data-testid="protein-accession" className="py-2 border-b border-border">
           <div className="flex justify-between items-start">
-            <span className="text-sm text-gray-500">UniProt ID(s)</span>
+            <span className="text-sm text-text-muted">UniProt ID(s)</span>
           </div>
           <div className="mt-1 space-y-1">
             {accessions.map((acc, index) => (
@@ -152,11 +152,11 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
                   href={`https://www.uniprot.org/uniprotkb/${acc}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                  className="text-sm font-medium text-secondary hover:text-secondary-dark hover:underline"
                 >
                   {acc}
                 </a>
-                <span className="text-xs text-gray-500">{geneNames[index] || '-'}</span>
+                <span className="text-xs text-text-muted">{geneNames[index] || '-'}</span>
               </div>
             ))}
           </div>
@@ -170,8 +170,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
         </div>
         */}
 
-        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-          <span className="text-sm text-gray-500">Fold Change</span>
+        <div className="flex justify-between items-center py-2 border-b border-border">
+          <span className="text-sm text-text-muted">Fold Change</span>
           <span
             className={`text-sm font-medium ${
               protein.log_fc > 0 ? 'text-pink-600' : 'text-blue-600'
@@ -181,8 +181,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
           </span>
         </div>
 
-        <div data-testid="logfc-value" className="flex justify-between items-center py-2 border-b border-gray-100">
-          <span className="text-sm text-gray-500">Log2 Fold Change</span>
+        <div data-testid="logfc-value" className="flex justify-between items-center py-2 border-b border-border">
+          <span className="text-sm text-text-muted">Log2 Fold Change</span>
           <span
             className={`text-sm font-medium ${
               protein.log_fc > 0 ? 'text-pink-600' : 'text-blue-600'
@@ -192,25 +192,25 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
           </span>
         </div>
 
-        <div data-testid="pvalue-value" className="flex justify-between items-center py-2 border-b border-gray-100">
-          <span className="text-sm text-gray-500">P-value</span>
-          <span className="text-sm font-medium text-gray-900">{formatPValue(protein.pval)}</span>
+        <div data-testid="pvalue-value" className="flex justify-between items-center py-2 border-b border-border">
+          <span className="text-sm text-text-muted">P-value</span>
+          <span className="text-sm font-medium text-text">{formatPValue(protein.pval)}</span>
         </div>
 
-        <div data-testid="adjpvalue-value" className="flex justify-between items-center py-2 border-b border-gray-100">
-          <span className="text-sm text-gray-500">Adj P-value</span>
-          <span className="text-sm font-medium text-gray-900">{formatPValue(protein.adj_pval)}</span>
+        <div data-testid="adjpvalue-value" className="flex justify-between items-center py-2 border-b border-border">
+          <span className="text-sm text-text-muted">Adj P-value</span>
+          <span className="text-sm font-medium text-text">{formatPValue(protein.adj_pval)}</span>
         </div>
 
-        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-          <span className="text-sm text-gray-500">Number of PSMs</span>
-          <span className="text-sm font-medium text-gray-900">
+        <div className="flex justify-between items-center py-2 border-b border-border">
+          <span className="text-sm text-text-muted">Number of PSMs</span>
+          <span className="text-sm font-medium text-text">
             {protein.psm_count && protein.psm_count > 0 ? protein.psm_count : '-'}
           </span>
         </div>
 
         <div className="flex justify-between items-center py-2">
-          <span className="text-sm text-gray-500">Significance</span>
+          <span className="text-sm text-text-muted">Significance</span>
           {filters ? (
             (() => {
               const label = getSignificanceLabel(protein.log_fc, protein.pval, protein.adj_pval, filters);
@@ -219,7 +219,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
               return (
                 <span
                   className="text-sm font-medium px-2 py-1 rounded"
-                  style={{ backgroundColor: isSignificant ? color + '20' : '#F3F4F6', color: isSignificant ? color : '#6B7280' }}
+                  style={{ backgroundColor: isSignificant ? color + '20' : '#F3F4F6', color: isSignificant ? color : '#94a3b8' }}
                 >
                   {label}
                 </span>
@@ -230,7 +230,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
               className={`text-sm font-medium px-2 py-1 rounded ${
                 protein.significant
                   ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-600'
+                  : 'bg-surface text-text-muted'
               }`}
             >
               {protein.significant ? 'Significant' : 'Not Significant'}
@@ -242,8 +242,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
       {/* Abundance Plots */}
       {loading && (
         <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-sm text-gray-500 mt-2">Loading abundance data...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-text-muted mt-2">Loading abundance data...</p>
         </div>
       )}
 
@@ -255,7 +255,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
 
       {!loading && !error && proteinAbundance && (
         <div className="mb-6">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Protein Abundance</h4>
+          <h4 className="text-sm font-medium text-text mb-2">Protein Abundance</h4>
           <ProteinAbundancePlot data={proteinAbundance} />
         </div>
       )}
@@ -263,11 +263,11 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
       {/* Always show Peptide Abundance section if data exists */}
       {!loading && !error && peptideAbundance && (
         <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Peptide Abundance</h4>
+          <h4 className="text-sm font-medium text-text mb-2">Peptide Abundance</h4>
           {peptideAbundance.peptides.length > 0 ? (
             <PeptideAbundancePlot data={peptideAbundance} />
           ) : (
-            <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500 text-sm">
+            <div className="bg-surface rounded-lg p-4 text-center text-text-muted text-sm">
               No peptide data available for this protein
             </div>
           )}

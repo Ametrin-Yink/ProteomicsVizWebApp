@@ -27,7 +27,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     // Fallback: if treatment/control not available, use default mapping
     if (condition.includes('INCZ')) return treatmentColor;
     if (condition === 'DMSO' || condition === 'Control') return controlColor;
-    return '#6B7280';
+    return '#94a3b8';
   };
 
   // Protein CV uses different colors from PSM CV for visual distinction
@@ -40,7 +40,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     // Fallback: if treatment/control not available, use default mapping
     if (condition.includes('INCZ')) return proteinTreatmentColor;
     if (condition === 'DMSO' || condition === 'Control') return proteinControlColor;
-    return '#6B7280';
+    return '#94a3b8';
   };
 
   // 1. PCA Plot - Color by sample
@@ -517,16 +517,16 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
             <div
               key={plot.id}
               data-testid={`${plot.id}-plot`}
-              className="bg-white rounded-lg border border-gray-200 p-4"
+              className="bg-background rounded-lg border border-border p-4"
             >
               {/* Plot header with actions */}
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-700">{plot.title}</h3>
+                <h3 className="text-sm font-medium text-text">{plot.title}</h3>
                 <div className="flex items-center gap-2">
                   <button
                     data-testid={`expand-${plot.id}-btn`}
                     onClick={() => setExpandedPlot(plot.id)}
-                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                    className="p-1.5 text-text-muted hover:text-text hover:bg-surface rounded-md transition-colors"
                     title="Expand plot"
                   >
                     <Maximize2 className="w-4 h-4" />
@@ -534,7 +534,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
                   <button
                     data-testid={`download-${plot.id}-btn`}
                     onClick={() => handleDownload(plot.id)}
-                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                    className="p-1.5 text-text-muted hover:text-text hover:bg-surface rounded-md transition-colors"
                     title="Download plot"
                   >
                     <Download className="w-4 h-4" />
@@ -555,9 +555,9 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
             <div
               key={plot.id}
               data-testid={`${plot.id}-plot`}
-              className="bg-gray-50 rounded-lg border border-gray-200 p-4 flex items-center justify-center h-[400px]"
+              className="bg-surface rounded-lg border border-border p-4 flex items-center justify-center h-[400px]"
             >
-              <div data-testid="no-data" className="text-center text-gray-400">
+              <div data-testid="no-data" className="text-center text-text-muted">
                 <p className="text-lg font-medium">{plot.title}</p>
                 <p className="text-sm mt-2">No data available</p>
               </div>
@@ -574,17 +574,17 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
           onClick={() => setExpandedPlot(null)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-auto"
+            className="bg-background rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-text">
                 {plots.find(p => p.id === expandedPlot)?.title}
               </h2>
               <button
                 data-testid="close-modal-btn"
                 onClick={() => setExpandedPlot(null)}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                className="p-2 text-text-muted hover:text-text hover:bg-surface rounded-md transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

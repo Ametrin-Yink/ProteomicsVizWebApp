@@ -347,7 +347,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       <button
         data-testid="export-pdf-btn"
         onClick={handleExport}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
       >
         <FileDown className="w-4 h-4" />
         Export PDF
@@ -358,11 +358,11 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
   if (status === 'generating') {
     return (
       <div data-testid="pdf-generating" className="flex items-center gap-4">
-        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
+        <div className="flex items-center gap-2 px-4 py-2 bg-info/5 text-secondary rounded-lg">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Generating PDF...</span>
         </div>
-        <div data-testid="pdf-progress" className="text-sm text-gray-600">
+        <div data-testid="pdf-progress" className="text-sm text-text-muted">
           {progress}%
         </div>
         <button
@@ -383,7 +383,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         <button
           data-testid="download-pdf-btn"
           onClick={handleDownload}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-success text-white rounded-lg hover:bg-success/90 transition-colors"
         >
           <FileDown className="w-4 h-4" />
           Download PDF
@@ -391,7 +391,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         <button
           data-testid="preview-pdf-btn"
           onClick={handlePreview}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-surface text-text rounded-lg hover:bg-border transition-colors"
         >
           <Eye className="w-4 h-4" />
           Preview
@@ -399,7 +399,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         <button
           data-testid="retry-pdf-btn"
           onClick={() => { setStatus('idle'); setReportId(null); handleExport(); }}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-surface text-text rounded-lg hover:bg-border transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
           Regenerate
@@ -412,7 +412,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
             onClick={handleClosePreview}
           >
             <div
-              className="bg-white rounded-lg w-[90vw] h-[90vh] flex flex-col"
+              className="bg-background rounded-lg w-[90vw] h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between p-4 border-b">
@@ -420,12 +420,12 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
                 <button
                   data-testid="close-preview-btn"
                   onClick={handleClosePreview}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-surface rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="flex-1 p-4 bg-gray-100">
+              <div className="flex-1 p-4 bg-surface">
                 <iframe
                   data-testid="pdf-viewer"
                   src={previewUrl}
@@ -447,7 +447,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         <button
           data-testid="retry-pdf-btn"
           onClick={handleRetry}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
           Retry
