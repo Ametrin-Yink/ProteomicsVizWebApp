@@ -80,7 +80,7 @@ function BioinformaticsContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="bg-error/5 border border-error/20 rounded-lg p-5 max-w-md">
           <h2 className="text-base font-semibold text-error mb-2">Error Loading GSEA Data</h2>
           <p className="text-error">{error}</p>
@@ -185,7 +185,7 @@ function BioinformaticsContent() {
 export default function BioinformaticsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-text-secondary">Loading...</p>

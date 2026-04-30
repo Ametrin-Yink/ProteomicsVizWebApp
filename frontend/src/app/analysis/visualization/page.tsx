@@ -215,7 +215,7 @@ function ResultsContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="bg-error/5 border border-error/20 rounded-lg p-5 max-w-md">
           <h2 className="text-base font-semibold text-error mb-2">Error Loading Results</h2>
           <p className="text-error">{error}</p>
@@ -226,7 +226,7 @@ function ResultsContent() {
 
   if (!sessionId) {
     return (
-      <div data-testid="no-session-selected" className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div data-testid="no-session-selected" className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
           <p className="text-lg text-text font-medium mb-2">No session selected</p>
           <p className="text-sm text-text-muted mb-4">Create a new analysis to get started.</p>
@@ -244,7 +244,7 @@ function ResultsContent() {
 
   if (!data) {
     return (
-      <div data-testid="no-results-message" className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div data-testid="no-results-message" className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
           <p className="text-lg text-text">No results available</p>
           <a
@@ -360,7 +360,7 @@ function ResultsContent() {
 
 export default function ResultsPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         <p className="mt-4 text-text-secondary">Loading...</p>
