@@ -300,13 +300,13 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       <div
         data-testid="session-panel"
         className={cn(
-          'fixed left-0 top-14 z-30 w-80 h-[calc(100vh-3.5rem)] bg-white border-r border-[#e2e8f0]',
+          'fixed left-0 top-14 bottom-0 z-30 w-80 bg-white border-r border-[#e2e8f0]',
           'flex flex-col',
           className
         )}
       >
         {/* New session button */}
-        <div className="p-4 space-y-2 flex-shrink-0">
+        <div className="p-4 pb-1 space-y-1.5 flex-shrink-0">
           <Button
             variant="primary"
             fullWidth
@@ -349,7 +349,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
         </div>
 
         {/* Tabs */}
-        <div className="px-4 pb-2 flex-shrink-0">
+        <div className="px-4 pt-0 pb-2 flex-shrink-0">
           <div className="flex gap-0.5 p-0.5 bg-[#f8f9fc] rounded-lg">
             <button
               className={cn(
@@ -455,8 +455,15 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
         )}
 
         {/* Footer */}
-        <div className="p-4 border-t border-[#e2e8f0] text-center text-xs text-[#94a3b8] flex-shrink-0">
-          ProteomicsViz Analysis Platform
+        <div className="p-3 border-t border-[#e2e8f0] text-center flex-shrink-0">
+          <a
+            href="https://github.com/Ametrin-Yink"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-[#94a3b8] hover:text-[#E73564] transition-colors"
+          >
+            ProteomicsViz by Ametrin-Yink
+          </a>
         </div>
       </div>
 

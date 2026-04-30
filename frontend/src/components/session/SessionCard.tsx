@@ -278,6 +278,21 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
   const [isEditing, setIsEditing] = React.useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [editName, setEditName] = React.useState(session.name);
+  const [showActions, setShowActions] = React.useState(false);
+
+  const formatRelativeTime = (dateString: string): string => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -324,6 +339,8 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
         isActive && !isSelectMode && 'bg-[#E73564]/5 ring-1 ring-[#E73564]',
         className
       )}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => { setShowActions(false); }}
     >
       {/* Checkbox or status icon */}
       {isSelectMode ? (
@@ -393,16 +410,24 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
             <p data-testid="session-name" className="text-sm font-medium text-[#1a1a2e] line-clamp-2 break-words">
               {session.name}
             </p>
-            <p data-testid="session-status" className={cn('text-xs', status.color)}>
-              {status.label}
-            </p>
+            <div className="flex items-center gap-2">
+              <span data-testid="session-status" className={cn('text-xs', status.color)}>
+                {status.label}
+              </span>
+              <span className="text-xs text-[#94a3b8]">
+                {formatRelativeTime(session.createdAt)}
+              </span>
+            </div>
           </>
         )}
       </div>
 
-      {/* Action buttons - hidden in select mode */}
+      {/* Action buttons - hidden in select mode, shown on hover */}
       {!isEditing && !isSelectMode && (
-        <div className="flex items-center gap-1">
+        <div className={cn(
+          'flex items-center gap-1 transition-opacity duration-150',
+          showActions ? 'opacity-100' : 'opacity-0'
+        )}>
           {onRename && (
             <button
               onClick={handleStartEdit}

@@ -196,10 +196,6 @@ h6 { font-size: 1rem; }
   to { transform: rotate(360deg); }
 }
 
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-25%); }
-}
 
 /* Utility Classes */
 .animate-fade-in {
@@ -222,34 +218,9 @@ h6 { font-size: 1rem; }
   animation: spin 1s linear infinite;
 }
 
-.animate-bounce {
-  animation: bounce 1s infinite;
-}
 
-/* Gradient Text */
-.gradient-text {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
 
-/* Glass Effect */
-.glass {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
 
-/* Card Hover Effect */
-.card-hover {
-  transition: transform var(--transition-base), box-shadow var(--transition-base);
-}
-
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
 
 /* Button Base */
 .btn {
@@ -322,14 +293,3 @@ input:focus, textarea:focus, select:focus {
   100% { background-position: -200% 0; }
 }
 
-/* Force reload indicator - remove after verification */
-body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 10px;
-  height: 10px;
-  background: lime;
-  z-index: 9999;
-}

@@ -6,6 +6,7 @@ Initializes the FastAPI application with all routers, middleware, and WebSocket 
 
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -28,6 +29,24 @@ logger = logging.getLogger("proteomics")
 async def lifespan(app: FastAPI):
     """Application lifespan manager with timeout protection."""
     # Startup
+    # On Windows, uvicorn --reload in a venv spawns workers via sys._base_executable
+    # (system Python). If the venv parent dies, that worker becomes orphaned on port 8000.
+    # Clean up any stale process before we bind.
+    if sys.platform == "win32":
+        try:
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.5)
+                result = s.connect_ex(('127.0.0.1', settings.port))
+                if result == 0:
+                    logger.warning(
+                        f"Port {settings.port} is already in use — "
+                        "a stale uvicorn worker may be holding it. "
+                        "Please kill it with: taskkill //F //IM python.exe"
+                    )
+        except Exception as e:
+            logger.debug(f"Port check failed: {e}")
+
     try:
         settings.ensure_directories()
     except Exception as e:

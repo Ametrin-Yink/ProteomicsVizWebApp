@@ -38,47 +38,47 @@ async def generate_report(
 ):
     """
     Generate PDF report for a session.
-    
+
     Args:
         session_id: Session ID
         report_request: Optional report configuration
         background_tasks: Background tasks for async processing
         session_manager: Session manager instance
-        
+
     Returns:
         ReportStatus with generation status and download URL
     """
     try:
         # Get session
         session = await session_manager.get_session(session_id)
-        
+
         # Check if analysis is complete
         if session.state.value != "completed":
             raise HTTPException(
                 status_code=400,
                 detail="Analysis must be completed before generating report"
             )
-        
+
         # Use default report request if not provided
         if report_request is None:
             report_request = ReportRequest()
-        
+
         # Generate report ID
         import uuid
         report_id = str(uuid.uuid4())
-        
+
         # Determine output path
         results_dir = settings.sessions_dir / session_id / "results"
         results_dir.mkdir(parents=True, exist_ok=True)
         output_path = results_dir / f"report_{report_id}.pdf"
-        
+
         # Create initial status
         status = ReportStatus(
             report_id=report_id,
             status="generating",
             progress=0
         )
-        
+
         # Generate report (can be async in background)
         try:
             # Load analysis results
@@ -87,7 +87,7 @@ async def generate_report(
             # Actual file names from the pipeline
             qc_data_path = results_dir / "QC_Results.json"
             gsea_results_path = results_dir / "GSEA_Results.json"
-            
+
             # Generate report
             generated_path = await report_generator.generate_report_from_files(
                 session=session,
@@ -98,23 +98,23 @@ async def generate_report(
                 output_path=output_path,
                 report_request=report_request
             )
-            
+
             # Update status
             status.status = "completed"
             status.progress = 100
             status.completed_at = datetime.now(timezone.utc)
             status.download_url = f"/api/sessions/{session_id}/reports/{report_id}/download"
-            
+
             logger.info(f"Report generated: {generated_path}")
-            
+
         except Exception as e:
             logger.error(f"Report generation failed: {e}")
             status.status = "failed"
             status.error_message = str(e)
             raise HTTPException(status_code=500, detail=str(e))
-        
+
         return status
-        
+
     except SessionNotFoundError:
         raise HTTPException(status_code=404, detail="Session not found")
     except Exception as e:
@@ -130,23 +130,23 @@ async def download_report(
 ):
     """
     Download generated PDF report.
-    
+
     Args:
         session_id: Session ID
         report_id: Report ID
         session_manager: Session manager instance
-        
+
     Returns:
         PDF file response
     """
     try:
-        # Verify session exists
-        await session_manager.get_session(session_id)
-        
+        # Verify session exists and get config for filename
+        session = await session_manager.get_session(session_id)
+
         # Find report file
         results_dir = settings.sessions_dir / session_id / "results"
         report_path = results_dir / f"report_{report_id}.pdf"
-        
+
         if not report_path.exists():
             # Try to find any report file
             report_files = list(results_dir.glob("report_*.pdf"))
@@ -154,13 +154,19 @@ async def download_report(
                 report_path = report_files[0]
             else:
                 raise HTTPException(status_code=404, detail="Report not found")
-        
+
+        if session.config and session.files.proteomics:
+            experiment = session.files.proteomics[0].experiment
+            report_filename = f"{experiment}_{session.config.treatment}_vs_{session.config.control}.pdf"
+        else:
+            report_filename = f"proteomics_report_{session_id}.pdf"
+
         return FileResponse(
             path=report_path,
             media_type="application/pdf",
-            filename=f"proteomics_report_{session_id}.pdf"
+            filename=report_filename
         )
-        
+
     except SessionNotFoundError:
         raise HTTPException(status_code=404, detail="Session not found")
     except HTTPException:
@@ -177,30 +183,30 @@ async def list_reports(
 ):
     """
     List all reports for a session.
-    
+
     Args:
         session_id: Session ID
         session_manager: Session manager instance
-        
+
     Returns:
         List of report metadata
     """
     try:
         # Verify session exists
         await session_manager.get_session(session_id)
-        
+
         # Find all report files
         results_dir = settings.sessions_dir / session_id / "results"
         report_files = list(results_dir.glob("report_*.pdf"))
-        
+
         reports = []
         for report_file in report_files:
             # Extract report ID from filename
             report_id = report_file.stem.replace("report_", "")
-            
+
             # Get file stats
             stat = report_file.stat()
-            
+
             reports.append({
                 "report_id": report_id,
                 "filename": report_file.name,
@@ -208,12 +214,12 @@ async def list_reports(
                 "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
                 "download_url": f"/api/sessions/{session_id}/reports/{report_id}/download"
             })
-        
+
         # Sort by creation time (newest first)
         reports.sort(key=lambda x: x["created_at"], reverse=True)
-        
+
         return {"reports": reports}
-        
+
     except SessionNotFoundError:
         raise HTTPException(status_code=404, detail="Session not found")
     except Exception as e:
@@ -230,33 +236,33 @@ async def delete_report(
 ):
     """
     Delete a report.
-    
+
     Args:
         session_id: Session ID
         report_id: Report ID
         session_manager: Session manager instance
-        
+
     Returns:
         Success message
     """
     try:
         # Verify session exists
         await session_manager.get_session(session_id)
-        
+
         # Find report file
         results_dir = settings.sessions_dir / session_id / "results"
         report_path = results_dir / f"report_{report_id}.pdf"
-        
+
         if not report_path.exists():
             raise HTTPException(status_code=404, detail="Report not found")
-        
+
         # Delete file
         report_path.unlink()
-        
+
         logger.info(f"Report deleted: {report_path}")
-        
+
         return {"message": "Report deleted successfully"}
-        
+
     except SessionNotFoundError:
         raise HTTPException(status_code=404, detail="Session not found")
     except HTTPException:

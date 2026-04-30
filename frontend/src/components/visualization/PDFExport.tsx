@@ -300,15 +300,14 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
     if (!reportId) return;
 
     try {
-      const blob = await reportsApi.download(sessionId, reportId);
-      const url = window.URL.createObjectURL(blob);
+      // Link directly to download endpoint — server Content-Disposition triggers file save
+      const downloadUrl = `/api/sessions/${sessionId}/reports/${reportId}/download`;
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `proteomics-analysis-report-${sessionId.slice(0, 8)}.pdf`;
+      link.href = downloadUrl;
+      link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (error) {
       setStatus('error');
       setErrorMessage(error instanceof Error ? error.message : 'Download failed');

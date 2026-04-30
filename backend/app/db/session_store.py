@@ -78,28 +78,48 @@ class SessionStore:
     async def get(self, session_id: str) -> Session:
         """
         Get session by ID.
-        
+
         Args:
             session_id: Session ID
-            
+
         Returns:
             Session object
-            
+
         Raises:
             SessionNotFoundError: If session doesn't exist
         """
         session_file = self._get_session_file(session_id)
-        
+
         if not session_file.exists():
             raise SessionNotFoundError(
                 message=f"Session not found: {session_id}",
                 details={"session_id": session_id}
             )
-        
+
         async with aiofiles.open(session_file, 'r', encoding='utf-8') as f:
             content = await f.read()
+
+        if not content.strip():
+            # File is empty — likely a race condition from a concurrent write.
+            # Retry once with a short delay to let the writer finish.
+            await asyncio.sleep(0.05)
+            async with aiofiles.open(session_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+            if not content.strip():
+                raise SessionNotFoundError(
+                    message=f"Session file is empty: {session_id}",
+                    details={"session_id": session_id}
+                )
+
+        try:
             data = json.loads(content)
-        
+        except json.JSONDecodeError as e:
+            logger.warning(f"Corrupted JSON in session {session_id}: {e}")
+            raise SessionNotFoundError(
+                message=f"Session file is corrupted: {session_id}",
+                details={"session_id": session_id, "error": str(e)}
+            )
+
         return Session(**data)
     
     async def update(self, session: Session) -> Session:
@@ -213,7 +233,8 @@ class SessionStore:
     
     async def _save_session(self, session: Session) -> None:
         """
-        Save session to JSON file. Thread-safe via asyncio lock.
+        Save session to JSON file using atomic write-to-temp-then-rename.
+        This prevents concurrent reads from seeing an empty/truncated file.
 
         Args:
             session: Session to save
@@ -222,8 +243,18 @@ class SessionStore:
             SessionStore._save_lock = asyncio.Lock()
         session_file = self._get_session_file(session.id)
         async with self._save_lock:
-            async with aiofiles.open(session_file, 'w', encoding='utf-8') as f:
+            # Write to a temporary file in the same directory (ensures same filesystem
+            # for atomic rename), then replace the target file. This way, readers
+            # never see a truncated file.
+            tmp_path = session_file.with_suffix('.tmp')
+            async with aiofiles.open(tmp_path, 'w', encoding='utf-8') as f:
                 await f.write(session.model_dump_json(indent=2))
+                await f.flush()
+            # On Windows, os.replace requires the target not to exist in some cases.
+            # Remove the old file first, then do the atomic replace.
+            if session_file.exists():
+                session_file.unlink()
+            tmp_path.rename(session_file)
     
     def get_session_data_dir(self, session_id: str) -> Path:
         """
@@ -284,21 +315,35 @@ class SessionStore:
     async def load_pipeline_state(self, session_id: str) -> Optional[dict]:
         """
         Load pipeline state.
-        
+
         Args:
             session_id: Session ID
-            
+
         Returns:
             Pipeline state dictionary or None if not found
         """
         pipeline_file = self._get_pipeline_file(session_id)
-        
+
         if not pipeline_file.exists():
             return None
-        
+
         async with aiofiles.open(pipeline_file, 'r', encoding='utf-8') as f:
             content = await f.read()
+
+        if not content.strip():
+            # Retry once for race condition with concurrent write
+            await asyncio.sleep(0.05)
+            async with aiofiles.open(pipeline_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+            if not content.strip():
+                logger.warning(f"Pipeline state file is empty: {session_id}")
+                return None
+
+        try:
             return json.loads(content)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Pipeline state corrupted for {session_id}: {e}")
+            return None
     
     async def update_session_state(
         self,
