@@ -47,7 +47,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // Base classes
     const baseClasses = cn(
       'inline-flex items-center justify-center gap-2',
-      'font-semibold rounded-lg transition-all duration-200',
+      'font-semibold rounded-md transition-all duration-200',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
       'disabled:opacity-50 disabled:cursor-not-allowed',
       'active:scale-[0.98]',
@@ -81,9 +81,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         'focus-visible:ring-[#E73564]'
       ),
       danger: cn(
-        'bg-red-500 text-white',
-        'hover:bg-red-600',
-        'focus-visible:ring-red-500'
+        'bg-error text-white',
+        'hover:bg-error/90',
+        'focus-visible:ring-error'
       ),
     };
 

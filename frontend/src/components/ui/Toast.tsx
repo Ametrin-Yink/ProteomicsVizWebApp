@@ -31,26 +31,10 @@ const toastIcons: Record<ToastType, typeof CheckCircle> = {
 
 // Toast color mapping
 const toastColors: Record<ToastType, { bg: string; border: string; icon: string }> = {
-  success: {
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    icon: 'text-emerald-500',
-  },
-  error: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    icon: 'text-red-500',
-  },
-  warning: {
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    icon: 'text-amber-500',
-  },
-  info: {
-    bg: 'bg-[#00ADEF]/10',
-    border: 'border-[#00ADEF]/20',
-    icon: 'text-[#00ADEF]',
-  },
+  success: { bg: 'bg-success/5', border: 'border-success/20', icon: 'text-success' },
+  error: { bg: 'bg-error/5', border: 'border-error/20', icon: 'text-error' },
+  warning: { bg: 'bg-warning/5', border: 'border-warning/20', icon: 'text-warning' },
+  info: { bg: 'bg-info/5', border: 'border-info/20', icon: 'text-info' },
 };
 
 /**
@@ -123,7 +107,7 @@ export const Toast: React.FC<ToastProps> = ({
 
       {/* Message */}
       <div className="flex-1 pr-2">
-        <p className="text-sm font-medium text-[#1a1a2e]">
+        <p className="text-sm font-medium text-text">
           {message}
         </p>
       </div>
@@ -131,7 +115,7 @@ export const Toast: React.FC<ToastProps> = ({
       {/* Close button */}
       <button
         onClick={handleClose}
-        className="flex-shrink-0 text-[#94a3b8] hover:text-[#64748b] transition-colors"
+        className="flex-shrink-0 text-text-muted hover:text-text-secondary transition-colors"
         aria-label="Close notification"
       >
         <X className="w-4 h-4" />

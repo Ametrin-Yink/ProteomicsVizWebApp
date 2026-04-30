@@ -38,14 +38,14 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
     ref
   ) => {
     const baseClasses = cn(
-      'bg-white rounded-xl overflow-hidden',
+      'bg-background rounded-lg overflow-hidden',
       'transition-all duration-200'
     );
 
     const variantClasses: Record<CardVariant, string> = {
       default: cn(
         'shadow-[0_2px_8px_rgba(0,0,0,0.08)]',
-        'border border-[#e2e8f0]'
+        'border border-border'
       ),
       elevated: cn(
         'shadow-[0_8px_30px_rgba(0,0,0,0.12)]',
@@ -53,11 +53,11 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
       ),
       bordered: cn(
         'shadow-none',
-        'border-2 border-[#e2e8f0]'
+        'border-2 border-border'
       ),
       flat: cn(
         'shadow-none',
-        'border border-[#e2e8f0]'
+        'border border-border'
       ),
     };
 
@@ -75,7 +75,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
 
     const interactiveClasses = isInteractive && cn(
       'cursor-pointer',
-      'hover:border-[#E73564]/30',
+      'hover:border-primary/30',
       'active:scale-[0.99]'
     );
 
@@ -112,19 +112,19 @@ export const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
         ref={ref}
         className={cn(
           'flex items-start justify-between gap-4',
-          'pb-4 mb-4 border-b border-[#e2e8f0]',
+          'pb-4 mb-4 border-b border-border',
           className
         )}
         {...props}
       >
         <div className="flex-1 min-w-0">
           {title && (
-            <h3 className="text-lg font-semibold text-[#1a1a2e] leading-tight">
+            <h3 className="text-lg font-semibold text-text leading-tight">
               {title}
             </h3>
           )}
           {subtitle && (
-            <p className="mt-1 text-sm text-[#64748b]">
+            <p className="mt-1 text-sm text-text-secondary">
               {subtitle}
             </p>
           )}
@@ -164,7 +164,7 @@ export const CardFooter = React.forwardRef<
       ref={ref}
       className={cn(
         'flex items-center justify-end gap-3',
-        'pt-4 mt-4 border-t border-[#e2e8f0]',
+        'pt-4 mt-4 border-t border-border',
         className
       )}
       {...props}
