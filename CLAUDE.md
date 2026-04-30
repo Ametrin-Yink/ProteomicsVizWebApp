@@ -135,6 +135,9 @@ Input: PSM CSV Files -> Steps 1-5 (Python) -> Step 6: Protein Abundance (R/msqro
 
 ## Critical Constraints (Absolute Red Lines)
 
+### Tool call
+- **Read file before update** - No exceptions
+
 ### Test Location (CRITICAL)
 - **ALL test files MUST be in `Tests/` directory** - No exceptions
 - **Python tests:** `Tests/backend/unit/` and `Tests/backend/integration/`
