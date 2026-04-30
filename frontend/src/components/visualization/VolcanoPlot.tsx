@@ -14,7 +14,7 @@ interface VolcanoPlotProps {
   filters: VolcanoFilters;
   selectedProteins: Set<string>;
   markedProteins: Set<string>;
-  onSelectProteins: (proteins: string[]) => void;
+  onSelectProteins: (proteins: string[], mode?: 'click' | 'box' | 'lasso') => void;
   onClearSelection?: () => void;
 }
 
@@ -73,13 +73,13 @@ export default function VolcanoPlot({
         `Adj P-value: ${(d.adj_pval ?? 1).toExponential(2)}`;
     });
 
-    // Use arrays directly (WebGL handles rendering order efficiently)
+    // Use Canvas scatter (not WebGL) for reliable click/hover hit detection
     return [
       {
         x: xValues,
         y: yValues,
         mode: 'markers' as const,
-        type: 'scattergl' as const,
+        type: 'scatter' as const,
         marker: {
           color: colors,
           size: sizes,
@@ -213,6 +213,7 @@ export default function VolcanoPlot({
       shapes: thresholdShapes,
       showlegend: false,
       hovermode: 'closest' as const,
+      clickmode: 'event' as const,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
       margin: { l: 60, r: 30, t: 50, b: 60 },
@@ -232,23 +233,12 @@ export default function VolcanoPlot({
     []
   );
 
-  // Handle selection events (box/lasso) - kept for compatibility but only fires in click mode via handleClick
-  const handleSelected = useCallback(
-    (event: { points?: Array<{ customdata: string }> }) => {
-      if (event.points && event.points.length > 0) {
-        const selected = event.points.map((p) => p.customdata);
-        onSelectProteins(selected);
-      }
-    },
-    [onSelectProteins]
-  );
-
   // Handle click events - select single protein (replaces any existing selection)
   const handleClick = useCallback(
-    (event: { points?: Array<{ customdata: string }> }) => {
-      if (event.points && event.points.length > 0) {
+    (event?: { points?: Array<{ customdata: string }> }) => {
+      if (event?.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
-        onSelectProteins([protein]);
+        onSelectProteins([protein], 'click');
       }
     },
     [onSelectProteins]
@@ -256,10 +246,10 @@ export default function VolcanoPlot({
 
   // Handle double-click events - select single protein (same as single click)
   const handleDoubleClick = useCallback(
-    (event: { points?: Array<{ customdata: string }> }) => {
-      if (event.points && event.points.length > 0) {
+    (event?: { points?: Array<{ customdata: string }> }) => {
+      if (event?.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
-        onSelectProteins([protein]);
+        onSelectProteins([protein], 'click');
       }
     },
     [onSelectProteins]
@@ -320,7 +310,6 @@ export default function VolcanoPlot({
             data={plotData}
             layout={layoutWithDragMode}
             config={config}
-            onSelected={handleSelected}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
             style={{ width: '100%', height: '100%' }}
