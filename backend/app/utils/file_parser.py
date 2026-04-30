@@ -168,24 +168,6 @@ class FileParser:
         )
 
 
-# Required columns for PSM CSV files
-REQUIRED_COLUMNS = [
-    "Sequence",
-    "Modifications",
-    "Charge",
-    "Contaminant",
-    "Master Protein Accessions",
-    "Quan Info",
-]
-
-# Pattern for PSM filenames: PSM_ExperimentName_Condition_ReplicateNumber.csv
-# Using non-greedy matching (+?) to properly handle underscores in condition names
-PSM_FILENAME_PATTERN = re.compile(
-    r'^PSM_(?P<experiment>.+?)_(?P<condition>.+?)_(?P<replicate>\d+)\.csv$',
-    re.IGNORECASE
-)
-
-
 def parse_psm_filename(filename: str) -> ParsedFilename:
     """
     Parse PSM filename to extract experiment, condition, and replicate.
