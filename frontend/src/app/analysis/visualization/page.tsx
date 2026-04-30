@@ -302,7 +302,6 @@ function ResultsContent() {
               selectedProteins={selectedProteins}
               markedProteins={markedProteins}
               onSelectProteins={handleSelectProteins}
-              onSelectionModeChange={(_mode) => void _mode}
               onClearSelection={clearSelection}
             />
 

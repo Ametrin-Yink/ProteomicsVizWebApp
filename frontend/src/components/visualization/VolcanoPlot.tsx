@@ -1,32 +1,22 @@
 'use client';
 
-import React, { useMemo, useCallback, useState, useRef } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import type { DEResult, VolcanoFilters } from '@/types/api';
 import { getVolcanoPointColor } from '@/lib/utils';
-import { MousePointer2, Square, Lasso, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 // Dynamically import Plotly to avoid SSR issues
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
-
-// CSS to disable drag layer pointer events in click mode
-const CLICK_MODE_CSS = `
-  .volcano-plot-click-mode .js-plotly-plot .draglayer {
-    pointer-events: none !important;
-  }
-`;
 
 interface VolcanoPlotProps {
   data: DEResult[];
   filters: VolcanoFilters;
   selectedProteins: Set<string>;
   markedProteins: Set<string>;
-  onSelectProteins: (proteins: string[], mode?: 'click' | 'box' | 'lasso') => void;
-  onSelectionModeChange?: (mode: 'click' | 'box' | 'lasso') => void;
+  onSelectProteins: (proteins: string[]) => void;
   onClearSelection?: () => void;
 }
-
-type SelectionMode = 'click' | 'box' | 'lasso';
 
 export default function VolcanoPlot({
   data,
@@ -34,17 +24,9 @@ export default function VolcanoPlot({
   selectedProteins,
   markedProteins,
   onSelectProteins,
-  onSelectionModeChange,
   onClearSelection,
 }: VolcanoPlotProps) {
-  const [selectionMode, setSelectionModeState] = useState<SelectionMode>('click');
   const plotRef = useRef<HTMLDivElement>(null);
-
-  // Notify parent when selection mode changes
-  const setSelectionMode = useCallback((mode: SelectionMode) => {
-    setSelectionModeState(mode);
-    onSelectionModeChange?.(mode);
-  }, [onSelectionModeChange]);
 
   // Prepare plot data
   const plotData = useMemo(() => {
@@ -250,137 +232,97 @@ export default function VolcanoPlot({
     []
   );
 
-  // Handle selection events (box/lasso)
+  // Handle selection events (box/lasso) - kept for compatibility but only fires in click mode via handleClick
   const handleSelected = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
       if (event.points && event.points.length > 0) {
         const selected = event.points.map((p) => p.customdata);
-        onSelectProteins(selected, selectionMode);
+        onSelectProteins(selected);
       }
     },
-    [onSelectProteins, selectionMode]
+    [onSelectProteins]
   );
 
   // Handle click events - select single protein (replaces any existing selection)
   const handleClick = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
-      if (selectionMode === 'click' && event.points && event.points.length > 0) {
+      if (event.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
-        onSelectProteins([protein], 'click');
+        onSelectProteins([protein]);
       }
     },
-    [onSelectProteins, selectionMode]
+    [onSelectProteins]
   );
 
   // Handle double-click events - select single protein (same as single click)
   const handleDoubleClick = useCallback(
     (event: { points?: Array<{ customdata: string }> }) => {
-      if (selectionMode === 'click' && event.points && event.points.length > 0) {
+      if (event.points && event.points.length > 0) {
         const protein = event.points[0].customdata;
-        onSelectProteins([protein], 'click');
+        onSelectProteins([protein]);
       }
     },
-    [onSelectProteins, selectionMode]
+    [onSelectProteins]
   );
 
-  // Get dragmode based on selection mode
-  const dragmode = useMemo(() => {
-    switch (selectionMode) {
-      case 'box':
-        return 'select' as const;
-      case 'lasso':
-        return 'lasso' as const;
-      default:
-        return false as const; // Disable drag/selection in click mode to allow point clicking
-    }
-  }, [selectionMode]);
-
-  // Update layout with current dragmode
+  // Layout with click-mode settings (no drag, no zoom/pan)
   const layoutWithDragMode = useMemo(() => ({
     ...layout,
-    dragmode,
+    dragmode: false as const,
     xaxis: {
       ...layout.xaxis,
-      fixedrange: selectionMode === 'click', // Disable zoom/pan in click mode
+      fixedrange: true,
     },
     yaxis: {
       ...layout.yaxis,
-      fixedrange: selectionMode === 'click', // Disable zoom/pan in click mode
+      fixedrange: true,
     },
-  }), [layout, dragmode, selectionMode]);
+  }), [layout]);
 
   return (
     <div className="w-full bg-background rounded-lg border border-border p-4">
-      {/* Inject CSS for click mode */}
-      {selectionMode === 'click' && <style>{CLICK_MODE_CSS}</style>}
-
-      {/* Selection mode buttons */}
+      {/* Legend bar */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-text-secondary mr-2">Selection Mode:</span>
-          <button
-            data-testid="mode-click"
-            onClick={() => setSelectionMode('click')}
-            className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              selectionMode === 'click'
-                ? 'bg-primary/10 text-primary border-primary/30'
-                : 'bg-background text-text-secondary border-border hover:bg-surface'
-            }`}
-          >
-            <MousePointer2 className="w-4 h-4" />
-            Click
-          </button>
-          <button
-            data-testid="mode-box"
-            onClick={() => setSelectionMode('box')}
-            className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              selectionMode === 'box'
-                ? 'bg-primary/10 text-primary border-primary/30'
-                : 'bg-background text-text-secondary border-border hover:bg-surface'
-            }`}
-          >
-            <Square className="w-4 h-4" />
-            Box
-          </button>
-          <button
-            data-testid="mode-lasso"
-            onClick={() => setSelectionMode('lasso')}
-            className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              selectionMode === 'lasso'
-                ? 'bg-primary/10 text-primary border-primary/30'
-                : 'bg-background text-text-secondary border-border hover:bg-surface'
-            }`}
-          >
-            <Lasso className="w-4 h-4" />
-            Lasso
-          </button>
+        <div className="flex items-center gap-4 text-xs text-text-secondary">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E73564' }}></span>
+            <span>Upregulated (Treatment &gt; Control)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#00ADEF' }}></span>
+            <span>Downregulated (Control &gt; Treatment)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#6B7280' }}></span>
+            <span>Not Significant</span>
+          </div>
         </div>
 
-          <button
-            data-testid="clear-selection-btn"
-            onClick={onClearSelection}
-            disabled={selectedProteins.size === 0}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-error bg-background border-error/30 rounded-md hover:bg-error/5 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <X className="w-4 h-4" />
-            Clear Selection
-          </button>
+        <button
+          data-testid="clear-selection-btn"
+          onClick={onClearSelection}
+          disabled={selectedProteins.size === 0}
+          className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-error bg-background border-error/30 rounded-md hover:bg-error/5 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <X className="w-4 h-4" />
+          Clear Selection
+        </button>
       </div>
 
       {/* Volcano plot */}
       <div
         ref={plotRef}
         data-testid="volcano-plot"
-        className={`w-full h-[400px] sm:h-[500px] lg:h-[550px] ${selectionMode === 'click' ? 'volcano-plot-click-mode' : ''}`}
+        className="volcano-plot-click-mode w-full h-[400px] sm:h-[500px] lg:h-[550px]"
       >
         {data.length > 0 ? (
           <Plot
             data={plotData}
             layout={layoutWithDragMode}
             config={config}
-            onSelected={selectionMode !== 'click' ? handleSelected : undefined}
-            onClick={selectionMode === 'click' ? handleClick : undefined}
-            onDoubleClick={selectionMode === 'click' ? handleDoubleClick : undefined}
+            onSelected={handleSelected}
+            onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />
@@ -396,22 +338,6 @@ export default function VolcanoPlot({
         {filters.s0 > 0
           ? `Hyperbolic cutoff: S0 = ${(filters.s0 * filters.foldChange).toFixed(2)} (${(filters.s0 * 100).toFixed(0)}% of log₂FC threshold ±${filters.foldChange}), P-value = ${filters.pValue}`
           : `Threshold lines: Fold Change = ±${filters.foldChange}, P-value = ${filters.pValue}`}
-      </div>
-
-      {/* Color legend */}
-      <div className="mt-3 flex items-center justify-center gap-6 text-xs text-text-secondary">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E73564' }}></span>
-          <span>Upregulated (Treatment &gt; Control)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#00ADEF' }}></span>
-          <span>Downregulated (Control &gt; Treatment)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#6B7280' }}></span>
-          <span>Not Significant</span>
-        </div>
       </div>
     </div>
   );
