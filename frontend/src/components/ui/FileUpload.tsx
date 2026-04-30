@@ -218,8 +218,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 className={cn(
                   'flex items-center gap-3 p-3 rounded-lg border',
                   'bg-white transition-all',
-                  uploadedFile.state === 'error' && 'border-red-200 bg-red-50',
-                  uploadedFile.state === 'success' && 'border-emerald-200 bg-emerald-50',
+                  uploadedFile.state === 'error' && 'border-error/20 bg-error/5',
+                  uploadedFile.state === 'success' && 'border-success/20 bg-success/5',
                   uploadedFile.state === 'uploading' && 'border-[#e2e8f0]',
                   uploadedFile.state === 'idle' && 'border-[#e2e8f0]'
                 )}
@@ -255,7 +255,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   
                   {/* Error message */}
                   {uploadedFile.state === 'error' && uploadedFile.error && (
-                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <p className="text-xs text-error mt-1 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" />
                       {uploadedFile.error}
                     </p>
@@ -265,10 +265,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 {/* Status icon */}
                 <div className="flex-shrink-0">
                   {uploadedFile.state === 'success' && (
-                    <Check className="w-5 h-5 text-emerald-500" />
+                    <Check className="w-5 h-5 text-success" />
                   )}
                   {uploadedFile.state === 'error' && (
-                    <AlertCircle className="w-5 h-5 text-red-500" />
+                    <AlertCircle className="w-5 h-5 text-error" />
                   )}
                 </div>
                 

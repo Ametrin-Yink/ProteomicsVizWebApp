@@ -164,17 +164,17 @@ export const ExperimentTable: React.FC = () => {
             placeholder="Search files..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
-        
+
         {experiments.length > 0 && (
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-text-muted" />
             <select
               value={filterExperiment}
               onChange={(e) => setFilterExperiment(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             >
               <option value="all">All Experiments</option>
               {experiments.map((exp) => (
@@ -189,7 +189,7 @@ export const ExperimentTable: React.FC = () => {
             <select
               value={filterCondition}
               onChange={(e) => setFilterCondition(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             >
               <option value="all">All Conditions</option>
               {conditions.map((cond) => (
@@ -216,7 +216,7 @@ export const ExperimentTable: React.FC = () => {
                   type="checkbox"
                   checked={areAllFilteredSelected}
                   onChange={handleSelectAll}
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                 />
               </th>
               <TableHeader field="filename">Filename</TableHeader>
@@ -245,7 +245,7 @@ export const ExperimentTable: React.FC = () => {
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleFileSelection(file.filename)}
-                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                      className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -275,7 +275,7 @@ export const ExperimentTable: React.FC = () => {
                     <button
                       data-testid={`remove-file-${index}`}
                       onClick={() => removeUploadedFile(file.filename)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      className="p-1.5 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors"
                       title="Remove file"
                     >
                       <X className="w-4 h-4" />

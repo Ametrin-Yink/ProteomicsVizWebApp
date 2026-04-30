@@ -100,7 +100,7 @@ export default function GSEADashboard({
           <div data-testid="significant-pathways" className="text-2xl font-bold text-text-primary">
             {data.significant_pathways}
           </div>
-          <div className="text-xs text-gray-400">FDR &lt; 0.25 and |NES| &ge; 1</div>
+          <div className="text-xs text-text-muted">FDR &lt; 0.25 and |NES| &ge; 1</div>
         </div>
 
         <div className="bg-background rounded-lg border border-border p-4">
@@ -108,7 +108,7 @@ export default function GSEADashboard({
           <div data-testid="overrepresented-count" className="text-2xl font-bold text-primary">
             {data.overrepresented}
           </div>
-          <div className="text-xs text-gray-400">NES &gt; 0</div>
+          <div className="text-xs text-text-muted">NES &gt; 0</div>
         </div>
 
         <div className="bg-background rounded-lg border border-border p-4">
@@ -116,7 +116,7 @@ export default function GSEADashboard({
           <div data-testid="underrepresented-count" className="text-2xl font-bold text-secondary">
             {data.underrepresented}
           </div>
-          <div className="text-xs text-gray-400">NES &lt; 0</div>
+          <div className="text-xs text-text-muted">NES &lt; 0</div>
         </div>
       </div>
 

@@ -264,7 +264,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   const colorClasses = {
     primary: 'bg-[#E73564]',
     secondary: 'bg-[#00ADEF]',
-    success: 'bg-emerald-500',
+    success: 'bg-success',
   };
 
   return (

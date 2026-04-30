@@ -69,7 +69,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       
       // Error state
       error
-        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+        ? 'border-error focus:border-error focus:ring-error/20'
         : 'border-[#e2e8f0] focus:border-[#E73564] focus:ring-[#E73564]/20',
       
       // Icon padding
@@ -87,7 +87,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
     const helperTextClasses = cn(
       'text-xs',
-      error ? 'text-red-500' : 'text-[#64748b]'
+      error ? 'text-error' : 'text-[#64748b]'
     );
 
     return (
@@ -185,7 +185,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       
       // Error state
       error
-        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+        ? 'border-error focus:border-error focus:ring-error/20'
         : 'border-[#e2e8f0] focus:border-[#E73564] focus:ring-[#E73564]/20',
       
       className
@@ -193,7 +193,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 
     const helperTextClasses = cn(
       'text-xs',
-      error ? 'text-red-500' : 'text-[#64748b]'
+      error ? 'text-error' : 'text-[#64748b]'
     );
 
     return (

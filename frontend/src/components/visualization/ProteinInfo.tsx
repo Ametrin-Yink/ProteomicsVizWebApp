@@ -174,7 +174,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
           <span className="text-sm text-text-muted">Fold Change</span>
           <span
             className={`text-sm font-medium ${
-              protein.log_fc > 0 ? 'text-primary' : 'text-blue-600'
+              protein.log_fc > 0 ? 'text-primary' : 'text-secondary'
             }`}
           >
             {formatNumber(Math.pow(2, protein.log_fc), 3)}
@@ -185,7 +185,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
           <span className="text-sm text-text-muted">Log2 Fold Change</span>
           <span
             className={`text-sm font-medium ${
-              protein.log_fc > 0 ? 'text-primary' : 'text-blue-600'
+              protein.log_fc > 0 ? 'text-primary' : 'text-secondary'
             }`}
           >
             {formatNumber(protein.log_fc, 3)}
@@ -219,7 +219,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
               return (
                 <span
                   className="text-sm font-medium px-2 py-1 rounded"
-                  style={{ backgroundColor: isSignificant ? color + '20' : '#F3F4F6', color: isSignificant ? color : '#94a3b8' }}
+                  style={{ backgroundColor: isSignificant ? color + '20' : 'var(--color-surface, #f1f5f9)', color: isSignificant ? color : '#94a3b8' }}
                 >
                   {label}
                 </span>
@@ -229,7 +229,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
             <span
               className={`text-sm font-medium px-2 py-1 rounded ${
                 protein.significant
-                  ? 'bg-green-100 text-green-800'
+                  ? 'bg-success/10 text-success'
                   : 'bg-surface text-text-muted'
               }`}
             >
@@ -248,8 +248,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <p className="text-sm text-red-600">{error}</p>
+        <div className="bg-error/5 border border-error/20 rounded-lg p-4 mb-4">
+          <p className="text-sm text-error">{error}</p>
         </div>
       )}
 

@@ -35,22 +35,22 @@ import {
 const CancelledDisplay: React.FC<{
   onBack: () => void;
 }> = ({ onBack }) => (
-  <div data-testid="processing-cancelled" className="rounded-xl border border-gray-200 bg-gray-50 p-6">
+  <div data-testid="processing-cancelled" className="rounded-xl border border-border bg-surface p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-gray-100 rounded-full">
-        <X className="w-6 h-6 text-gray-600" />
+      <div className="p-3 bg-surface rounded-full">
+        <X className="w-6 h-6 text-text-secondary" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+        <h3 className="text-lg font-semibold text-text mb-2">
           Processing Cancelled
         </h3>
-        <p className="text-gray-600 mb-4">
+        <p className="text-text-secondary mb-4">
           The processing has been cancelled by the user.
         </p>
         <button
           data-testid="cancelled-back-btn"
           onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Configuration
@@ -72,25 +72,25 @@ const ErrorDisplay: React.FC<{
   onRetry: () => void;
   onBack: () => void;
 }> = ({ error, onRetry, onBack }) => (
-  <div data-testid="processing-error" className="rounded-xl border border-red-200 bg-red-50 p-6">
+  <div data-testid="processing-error" className="rounded-xl border border-error/20 bg-error/5 p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-red-100 rounded-full">
-        <AlertCircle className="w-6 h-6 text-red-600" />
+      <div className="p-3 bg-error/10 rounded-full">
+        <AlertCircle className="w-6 h-6 text-error" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-red-900 mb-2">
+        <h3 className="text-lg font-semibold text-error mb-2">
           Processing Failed
         </h3>
-        <p className="text-red-700 mb-4">
+        <p className="text-error mb-4">
           An error occurred during step {error.step}: {error.stepName}
         </p>
-        <div className="bg-white rounded-lg p-4 mb-4 border border-red-200">
-          <p className="text-sm text-gray-700 font-mono">
+        <div className="bg-white rounded-lg p-4 mb-4 border border-error/20">
+          <p className="text-sm text-text font-mono">
             {error.message}
           </p>
         </div>
         {error.suggestion && (
-          <p data-testid="error-suggestion" className="text-sm text-amber-600 mb-4">
+          <p data-testid="error-suggestion" className="text-sm text-warning mb-4">
             <strong>Suggestion:</strong> {error.suggestion}
           </p>
         )}
@@ -99,7 +99,7 @@ const ErrorDisplay: React.FC<{
             <button
               data-testid="retry-btn"
               onClick={onRetry}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-error hover:bg-error/90 text-white rounded-lg font-medium transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
               Retry Processing
@@ -108,7 +108,7 @@ const ErrorDisplay: React.FC<{
           <button
             data-testid="error-back-btn"
             onClick={onBack}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Configuration
@@ -124,16 +124,16 @@ const CompletionDisplay: React.FC<{
   duration: number | null;
   onNavigate: () => void;
 }> = ({ duration, onNavigate }) => (
-  <div data-testid="processing-complete" className="rounded-xl border border-green-200 bg-green-50 p-6">
+  <div data-testid="processing-complete" className="rounded-xl border border-success/20 bg-success/5 p-6">
     <div className="flex items-start gap-4">
-      <div className="p-3 bg-green-100 rounded-full">
-        <CheckCircle2 className="w-6 h-6 text-green-600" />
+      <div className="p-3 bg-success/10 rounded-full">
+        <CheckCircle2 className="w-6 h-6 text-success" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-green-900 mb-2">
+        <h3 className="text-lg font-semibold text-success mb-2">
           Processing Complete!
         </h3>
-        <p className="text-green-700 mb-4">
+        <p className="text-success mb-4">
           All 9 steps have been completed successfully.
           {duration && (
             <span className="flex items-center gap-1 mt-1">
@@ -142,12 +142,12 @@ const CompletionDisplay: React.FC<{
             </span>
           )}
         </p>
-        <p className="text-sm text-green-600 mb-4">
+        <p className="text-sm text-success mb-4">
           Redirecting to visualization page in 2 seconds...
         </p>
         <button
           onClick={onNavigate}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-success hover:bg-success/90 text-white rounded-lg font-medium transition-colors"
         >
           <FileText className="w-4 h-4" />
           View Results
@@ -162,29 +162,29 @@ const CompletionDisplay: React.FC<{
 function QueuedDisplay({ queuePosition, queueLength }: { queuePosition: number; queueLength: number }) {
   return (
     <div data-testid="processing-queued" className="mb-8">
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-6">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
-            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-              <Clock className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Clock className="w-6 h-6 text-primary" />
             </div>
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-blue-900 mb-1">Queued for Processing</h3>
-            <p className="text-sm text-blue-700 mb-4">
+            <h3 className="text-lg font-semibold text-primary mb-1">Queued for Processing</h3>
+            <p className="text-sm text-primary mb-4">
               Another analysis is currently running. Your session is next in line.
             </p>
-            <div className="flex items-center gap-3 text-sm text-blue-600">
+            <div className="flex items-center gap-3 text-sm text-primary">
               <div className="flex items-center gap-2">
                 <span className="font-medium">Queue position:</span>
                 <span className="text-lg font-bold">#{queuePosition}</span>
               </div>
-              <span className="text-blue-400">|</span>
+              <span className="text-text-muted">|</span>
               <div>
                 <span className="font-medium">{queueLength} session{queueLength !== 1 ? 's' : ''} waiting</span>
               </div>
             </div>
-            <p className="text-xs text-blue-500 mt-3">
+            <p className="text-xs text-text-muted mt-3">
               This page will automatically update when your analysis starts.
             </p>
           </div>
@@ -468,18 +468,18 @@ function ProcessingContent() {
   // Validation
   if (!sessionId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">
+          <AlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
+          <h1 className="text-xl font-semibold text-text mb-2">
             No Session ID
           </h1>
-          <p className="text-gray-600 mb-4">
+          <p className="text-text-secondary mb-4">
             Please start from the data input page.
           </p>
           <button
             onClick={() => router.push('/analysis')}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            className="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors"
           >
             Go to Data Input
           </button>
@@ -489,32 +489,32 @@ function ProcessingContent() {
   }
 
   return (
-    <div data-testid="processing-page" className="min-h-screen bg-gray-50 flex">
+    <div data-testid="processing-page" className="min-h-screen bg-surface flex">
       {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-screen" />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-auto">
         {/* Header - reduced z-index to prevent overlay */}
-        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200">
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-4">
                 <button
                   onClick={handleBack}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 text-text-muted hover:text-text hover:bg-surface rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Activity className="w-5 h-5 text-blue-600" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Activity className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h1 className="text-lg font-semibold text-gray-900">
+                    <h1 className="text-lg font-semibold text-text">
                       Processing Data
                     </h1>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-text-muted">
                       Session: {sessionId.slice(0, 8)}...
                     </p>
                   </div>
@@ -552,7 +552,7 @@ function ProcessingContent() {
             <div className="mb-4">
               <button
                 onClick={() => setStatusCollapsed(!statusCollapsed)}
-                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-2"
+                className="flex items-center gap-2 text-sm text-text-muted hover:text-text mb-2"
               >
                 {statusCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                 {statusCollapsed ? 'Show' : 'Hide'} processing status
@@ -565,12 +565,12 @@ function ProcessingContent() {
                     <CompletionDisplay duration={processingDuration} onNavigate={handleNavigateToResults} />
                   )}
                   {startError && !error && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="rounded-xl border border-warning/20 bg-warning/5 p-4">
                       <div className="flex items-center gap-3">
-                        <AlertCircle className="w-5 h-5 text-amber-600" />
-                        <p className="text-amber-700">{startError}</p>
+                        <AlertCircle className="w-5 h-5 text-warning" />
+                        <p className="text-warning">{startError}</p>
                         <button onClick={handleRetry}
-                          className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-lg transition-colors">
+                          className="ml-auto px-3 py-1.5 bg-warning hover:bg-warning/90 text-white text-sm rounded-lg transition-colors">
                           Retry
                         </button>
                       </div>
@@ -586,11 +586,11 @@ function ProcessingContent() {
           {/* Cancel Confirmation Dialog */}
           {showCancelDialog && (
             <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-md w-full mx-4 shadow-2xl">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <div className="bg-white rounded-xl border border-border p-6 max-w-md w-full mx-4 shadow-2xl">
+                <h3 className="text-lg font-semibold text-text mb-2">
                   Cancel Processing?
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-text-secondary mb-6">
                   Are you sure you want to cancel the current processing? This action cannot be undone.
                 </p>
                 <div className="flex items-center justify-end gap-3">
@@ -598,7 +598,7 @@ function ProcessingContent() {
                     data-testid="dismiss-cancel-btn"
                     onClick={handleDismissCancelDialog}
                     disabled={isCancelling}
-                    className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-white border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
                     No, Continue
                   </button>
@@ -625,10 +625,10 @@ function ProcessingContent() {
 
 export default function ProcessingPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4 text-text-secondary">Loading...</p>
       </div>
     </div>}>
       <ProcessingContent />

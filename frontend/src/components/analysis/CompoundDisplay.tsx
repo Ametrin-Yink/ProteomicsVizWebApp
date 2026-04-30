@@ -37,8 +37,8 @@ function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string 
 
   if (!smiles) {
     return (
-      <div className="bg-gray-100 rounded-lg p-6 text-center">
-        <ImageOff className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+      <div className="bg-surface rounded-lg p-6 text-center">
+        <ImageOff className="w-12 h-12 mx-auto text-text-muted mb-2" />
         <p className="text-xs text-text-muted">No SMILES available</p>
       </div>
     );
@@ -46,8 +46,8 @@ function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string 
 
   if (imageError) {
     return (
-      <div className="bg-gray-100 rounded-lg p-6 text-center">
-        <ImageOff className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+      <div className="bg-surface rounded-lg p-6 text-center">
+        <ImageOff className="w-12 h-12 mx-auto text-text-muted mb-2" />
         <p className="text-xs text-text-muted mb-2">Failed to load structure</p>
         <button
           onClick={handleRetry}

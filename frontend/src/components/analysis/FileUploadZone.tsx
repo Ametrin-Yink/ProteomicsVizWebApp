@@ -299,7 +299,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
               </p>
             </div>
             
-            <div className="flex items-center gap-2 text-xs text-gray-400">
+            <div className="flex items-center gap-2 text-xs text-text-muted">
               <span>Supported: CSV files</span>
               <span>•</span>
               <span>Max {formatFileSize(MAX_FILE_SIZE)}</span>
@@ -336,13 +336,13 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                     key={file.filename}
                     className={`
                       flex items-center justify-between p-3 rounded-lg border
-                      ${hasError ? 'bg-red-50 border-red-200' : 'bg-background border-border'}
+                      ${hasError ? 'bg-error/5 border-error/20' : 'bg-background border-border'}
                     `}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <File className={`
                         w-5 h-5 flex-shrink-0
-                        ${hasError ? 'text-red-500' : isCompleted ? 'text-green-500' : 'text-gray-400'}
+                        ${hasError ? 'text-error' : isCompleted ? 'text-success' : 'text-text-muted'}
                       `} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-text truncate">
@@ -372,18 +372,18 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                         )}
                         
                         {isCompleted && (
-                          <p className="text-xs text-green-600 mt-1" data-testid="upload-success">Upload complete</p>
+                          <p className="text-xs text-success mt-1" data-testid="upload-success">Upload complete</p>
                         )}
                         
                         {hasError && progress?.error && (
-                          <p className="text-xs text-red-600 mt-1" data-testid="upload-error">{progress.error}</p>
+                          <p className="text-xs text-error mt-1" data-testid="upload-error">{progress.error}</p>
                         )}
                       </div>
                     </div>
                     
                     <button
                       onClick={() => removeUploadedFile(file.filename)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      className="p-1.5 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors"
                       title="Remove file"
                     >
                       <X className="w-4 h-4" />
@@ -395,7 +395,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           </div>
         )}
       </div>
-      
+
       {/* Compound File Upload */}
       <div className="space-y-4 pt-6 border-t border-border">
         <h3 className="text-lg font-semibold text-text">Compound Information (Optional)</h3>
@@ -424,7 +424,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             </div>
             <button
               onClick={() => setCompoundFile(null)}
-              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+              className="p-1.5 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors"
             >
               <X className="w-4 h-4" />
             </button>

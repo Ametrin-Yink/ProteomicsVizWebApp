@@ -76,7 +76,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       
       // Error state
       error
-        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+        ? 'border-error focus:border-error focus:ring-error/20'
         : 'border-[#e2e8f0] focus:border-[#E73564] focus:ring-[#E73564]/20',
       
       className
@@ -90,7 +90,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
 
     const helperTextClasses = cn(
       'text-xs',
-      error ? 'text-red-500' : 'text-[#64748b]'
+      error ? 'text-error' : 'text-[#64748b]'
     );
 
     return (
@@ -214,7 +214,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     'disabled:opacity-50 disabled:cursor-not-allowed',
     
     error
-      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+      ? 'border-error focus:border-error focus:ring-error/20'
       : 'border-[#e2e8f0] focus:border-[#E73564] focus:ring-[#E73564]/20',
     
     isOpen && 'border-[#E73564] ring-2 ring-[#E73564]/20'
