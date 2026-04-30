@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.responses import JSONResponse
 
 from app.api.routes import sessions, upload, analysis, processing, visualization, reports, compounds
 from app.core.config import settings
@@ -62,7 +61,6 @@ async def lifespan(app: FastAPI):
     # Scan existing sessions with timeout protection
     # Use asyncio.wait_for to prevent hanging on corrupted files
     try:
-        import asyncio
         await asyncio.wait_for(
             app.state.session_manager.scan_existing_sessions(),
             timeout=30.0  # 30 second timeout for session scanning
