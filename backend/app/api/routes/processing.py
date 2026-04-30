@@ -6,6 +6,7 @@ Processing status and control endpoints.
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 
 from app.api.deps import get_session_store
@@ -31,6 +32,16 @@ _processing_sessions: set[str] = set()
 
 # Cancellation events for active processing sessions
 _cancel_events: dict[str, asyncio.Event] = {}
+
+
+def _is_session_stale(started_at: str, max_age_hours: int = 6) -> bool:
+    """Check if a session's processing has exceeded the max age threshold."""
+    try:
+        started = datetime.fromisoformat(started_at)
+        elapsed = datetime.now(timezone.utc) - started
+        return elapsed.total_seconds() > max_age_hours * 3600
+    except (ValueError, TypeError):
+        return False
 
 
 def _add_to_queue(session_id: str) -> int:
@@ -61,8 +72,6 @@ async def _is_any_session_processing(
         return True
 
     # Fallback: check session store for any processing sessions
-    from datetime import datetime, timezone as tz, timedelta
-
     all_sessions = await store.list_all()
     logger.info(f"Session {current_session_id}: checking {len(all_sessions)} sessions for processing state")
     for s in all_sessions:
@@ -72,19 +81,16 @@ async def _is_any_session_processing(
             if pipeline_state:
                 started_at = pipeline_state.get("started_at")
                 if started_at:
-                    try:
+                    if _is_session_stale(started_at):
+                        is_stale = True
                         started_time = datetime.fromisoformat(started_at)
                         if started_time.tzinfo is None:
-                            started_time = started_time.replace(tzinfo=tz.utc)
-                        elapsed = datetime.now(tz.utc) - started_time
-                        if elapsed > timedelta(hours=6) and not pipeline_state.get("completed_at"):
-                            is_stale = True
-                            logger.warning(
-                                f"Stale processing state for session {s.id}: "
-                                f"started {elapsed.total_seconds()/3600:.1f}h ago, ignoring"
-                            )
-                    except (ValueError, TypeError):
-                        is_stale = True
+                            started_time = started_time.replace(tzinfo=timezone.utc)
+                        elapsed = datetime.now(timezone.utc) - started_time
+                        logger.warning(
+                            f"Stale processing state for session {s.id}: "
+                            f"started {elapsed.total_seconds()/3600:.1f}h ago, ignoring"
+                        )
             if not is_stale:
                 logger.info(f"Session {s.id} is actively processing")
                 return True
@@ -271,22 +277,27 @@ async def start_processing(
         if pipeline_state:
             started_at = pipeline_state.get("started_at")
             if started_at:
-                try:
-                    from datetime import datetime, timezone, timedelta
+                parse_failed = False
+                if _is_session_stale(started_at):
+                    is_stale = True
                     started_time = datetime.fromisoformat(started_at)
                     if started_time.tzinfo is None:
                         started_time = started_time.replace(tzinfo=timezone.utc)
                     elapsed = datetime.now(timezone.utc) - started_time
-                    # If processing started more than 6 hours ago with no completion, consider it stale
-                    if elapsed > timedelta(hours=6) and not pipeline_state.get("completed_at"):
+                    logger.warning(
+                        f"Stale processing state detected for {session_id}: "
+                        f"started {elapsed.total_seconds()/3600:.1f}h ago, resetting"
+                    )
+                else:
+                    # Helper returned False — could be not-stale OR parse failure
+                    try:
+                        datetime.fromisoformat(started_at)
+                    except (ValueError, TypeError):
+                        parse_failed = True
                         is_stale = True
-                        logger.warning(
-                            f"Stale processing state detected for {session_id}: "
-                            f"started {elapsed.total_seconds()/3600:.1f}h ago, resetting"
-                        )
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Failed to parse pipeline started_at for {session_id}: {e}")
-                    is_stale = True
+
+                if parse_failed:
+                    logger.warning(f"Failed to parse pipeline started_at for {session_id}")
 
         if is_stale:
             # Reset stale processing state — use CONFIGURING since config and files are still valid
@@ -502,8 +513,6 @@ async def _recover_orphaned_sessions(store: SessionStore) -> None:
     QUEUED sessions are reset to CONFIGURING (safe — user files/config preserved).
     PROCESSING sessions are checked for staleness (6-hour timeout) and reset if stale.
     """
-    from datetime import datetime, timezone as tz, timedelta
-
     all_sessions = await store.list_all()
     recovered = 0
     for session in all_sessions:
@@ -516,14 +525,7 @@ async def _recover_orphaned_sessions(store: SessionStore) -> None:
             pipeline_state = await store.load_pipeline_state(session.id)
             is_stale = False
             if pipeline_state and pipeline_state.get("started_at"):
-                try:
-                    started_time = datetime.fromisoformat(pipeline_state["started_at"])
-                    if started_time.tzinfo is None:
-                        started_time = started_time.replace(tzinfo=tz.utc)
-                    elapsed = datetime.now(tz.utc) - started_time
-                    if elapsed > timedelta(hours=6) and not pipeline_state.get("completed_at"):
-                        is_stale = True
-                except (ValueError, TypeError):
+                if _is_session_stale(pipeline_state["started_at"]):
                     is_stale = True
             else:
                 # No pipeline state or no started_at — likely orphaned from restart
