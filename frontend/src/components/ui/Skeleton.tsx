@@ -19,14 +19,14 @@ export function Skeleton({ className }: SkeletonProps) {
 // Preset skeleton layouts
 export function ProteinInfoSkeleton() {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+    <div className="bg-background rounded-lg border border-border p-6 space-y-4">
       <Skeleton className="h-6 w-48" />
       <div className="space-y-2">
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
       </div>
-      <div className="pt-4 border-t border-gray-100">
+      <div className="pt-4 border-t border-border">
         <Skeleton className="h-32 w-full" />
       </div>
     </div>
