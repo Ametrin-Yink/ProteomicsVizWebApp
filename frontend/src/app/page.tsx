@@ -134,7 +134,7 @@ export default function HomePage() {
                       data-testid="template-protein-pairwise"
                       className={cn(
                         'relative group cursor-pointer rounded-xl border-2 transition-all duration-200',
-                        'bg-white border-gray-200 hover:border-primary hover:shadow-lg'
+                        'bg-background border-border hover:border-primary'
                       )}
                       onClick={() => handleTemplateSelect(template)}
                       onMouseEnter={() => setHoveredTemplate(template.id)}
