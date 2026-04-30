@@ -14,7 +14,7 @@ interface FilterPanelProps {
 }
 
 export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onReset }: FilterPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const actualS0 = s0 * foldChange;
   const s0Percent = Math.round(s0 * 100);

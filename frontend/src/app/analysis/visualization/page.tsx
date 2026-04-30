@@ -295,16 +295,6 @@ function ResultsContent() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Volcano Plot */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Filters */}
-            <FilterPanel
-              foldChange={filters.foldChange}
-              pValue={filters.pValue}
-              adjPValue={filters.adjPValue}
-              s0={filters.s0}
-              onChange={(newFilters) => setFilters(newFilters)}
-              onReset={() => setFilters({ foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 })}
-            />
-
             {/* Volcano Plot */}
             <VolcanoPlot
               data={data.results}
@@ -314,6 +304,16 @@ function ResultsContent() {
               onSelectProteins={handleSelectProteins}
               onSelectionModeChange={(_mode) => void _mode}
               onClearSelection={clearSelection}
+            />
+
+            {/* Filters (collapsed by default) */}
+            <FilterPanel
+              foldChange={filters.foldChange}
+              pValue={filters.pValue}
+              adjPValue={filters.adjPValue}
+              s0={filters.s0}
+              onChange={(newFilters) => setFilters(newFilters)}
+              onReset={() => setFilters({ foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 })}
             />
 
             {/* Protein Table */}
