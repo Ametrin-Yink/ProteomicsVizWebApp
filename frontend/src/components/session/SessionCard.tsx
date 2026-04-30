@@ -278,7 +278,6 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
   const [isEditing, setIsEditing] = React.useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [editName, setEditName] = React.useState(session.name);
-  const [showActions, setShowActions] = React.useState(false);
 
   const formatRelativeTime = (dateString: string): string => {
     const now = new Date();
@@ -331,7 +330,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
       data-testid="session-item"
       data-session-id={session.id}
       className={cn(
-        'flex items-center gap-3 p-3 rounded-lg',
+        'group relative flex items-center gap-3 p-3 rounded-lg',
         'transition-all duration-200',
         isSelectMode
           ? 'cursor-pointer hover:bg-surface'
@@ -339,8 +338,6 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
         isActive && !isSelectMode && 'bg-primary/5 ring-1 ring-primary',
         className
       )}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => { setShowActions(false); }}
     >
       {/* Checkbox or status icon */}
       {isSelectMode ? (
@@ -422,11 +419,12 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
         )}
       </div>
 
-      {/* Action buttons - hidden in select mode, shown on hover */}
+      {/* Action buttons - overlay on hover, no reserved space */}
       {!isEditing && !isSelectMode && (
         <div className={cn(
-          'flex items-center gap-1 transition-opacity duration-150',
-          showActions ? 'opacity-100' : 'opacity-0'
+          'absolute right-2 bottom-1.5 flex items-center gap-1',
+          'opacity-0 group-hover:opacity-100 transition-opacity duration-150',
+          'bg-background/80 backdrop-blur-sm rounded-md px-1 py-0.5',
         )}>
           {onRename && (
             <button

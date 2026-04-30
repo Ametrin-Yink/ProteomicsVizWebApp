@@ -417,7 +417,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
         )}
 
         {/* Sessions list */}
-        <div data-testid="session-list" className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+        <div data-testid="session-list" className="flex-1 overflow-y-auto px-4 pt-1 pb-4 space-y-1">
           {sessionsList.length === 0 ? (
             <div data-testid="no-sessions-message" className="text-center py-8">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
