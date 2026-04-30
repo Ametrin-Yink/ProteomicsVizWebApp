@@ -80,8 +80,9 @@ export default function VolcanoPlot({
         name: 'Proteins',
       },
       // Marker labels trace -- only for marked proteins
-      (() => {
+      ...(() => {
         const marked = data.filter((d) => markedProteins.has(d.master_protein_accessions));
+        if (marked.length === 0) return null;
         return {
           x: marked.map((d) => d.log_fc),
           y: marked.map((d) => -Math.log10(d.pval || 1e-300)),
