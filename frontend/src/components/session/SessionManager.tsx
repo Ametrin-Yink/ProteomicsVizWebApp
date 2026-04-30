@@ -18,8 +18,8 @@ import {
   CheckCircle2,
   RefreshCw,
   Trash2,
-  CheckSquare,
-  Square,
+  Search,
+  ListChecks,
 } from 'lucide-react';
 import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessionStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -51,6 +51,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const [isScanning, setIsScanning] = React.useState(false);
   const [isSelectMode, setIsSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = React.useState('');
   // Sync active tab to the current session's status
   React.useEffect(() => {
     if (!currentSession) return;
@@ -95,6 +96,13 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     if (activeTab === 'active') return groupedSessions.active;
     return groupedSessions.completed;
   }, [activeTab, groupedSessions]);
+
+  // Filter sessions by search query
+  const filteredTabSessions = React.useMemo(() => {
+    if (!searchQuery.trim()) return tabSessions;
+    const query = searchQuery.toLowerCase();
+    return tabSessions.filter((s) => s.name.toLowerCase().includes(query));
+  }, [tabSessions, searchQuery]);
 
   // Handle session click
   const handleSessionClick = (session: Session) => {
@@ -196,12 +204,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     });
   };
 
-  // Select all sessions in current tab
+  // Select all sessions in current tab (filtered)
   const toggleSelectAll = () => {
-    if (selectedIds.size === tabSessions.length) {
+    if (selectedIds.size === filteredTabSessions.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(tabSessions.map((s) => s.id)));
+      setSelectedIds(new Set(filteredTabSessions.map((s) => s.id)));
     }
   };
 
@@ -348,50 +356,62 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           </div>
         </div>
 
-        {/* Operation buttons row: Refresh Sessions + Select */}
+        {/* Search + Controls */}
         <div className="px-4 pb-2 flex-shrink-0">
-          <div className="flex gap-1">
+          {/* Search input */}
+          <div className="relative mb-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search sessions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-2 py-1.5 text-xs bg-surface border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-text-muted"
+            />
+          </div>
+          {/* Icon-only control buttons */}
+          <div className="flex gap-1 justify-center">
             <button
               onClick={handleRefresh}
               disabled={isScanning}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex-1 justify-center',
+                'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
                 'text-text-secondary hover:text-text hover:bg-surface',
                 isScanning && 'opacity-60 cursor-not-allowed'
               )}
+              title="Refresh sessions"
               data-testid="refresh-sessions-btn"
             >
-              <RefreshCw className={cn('w-3.5 h-3.5', isScanning && 'animate-spin')} />
-              <span>Refresh Sessions</span>
+              <RefreshCw className={cn('w-4 h-4', isScanning && 'animate-spin')} />
             </button>
             <button
               onClick={toggleSelectMode}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex-1 justify-center',
+                'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
                 isSelectMode
                   ? 'bg-primary/10 text-primary'
                   : 'text-text-secondary hover:text-text hover:bg-surface'
               )}
+              title={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
               data-testid="select-mode-btn"
             >
-              {isSelectMode ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-              <span>Select</span>
+              <ListChecks className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Select All bar */}
-        {isSelectMode && tabSessions.length > 0 && (
+        {isSelectMode && filteredTabSessions.length > 0 && (
           <div className="px-4 pb-2 flex items-center gap-2 flex-shrink-0">
             <input
               type="checkbox"
-              checked={selectedIds.size === tabSessions.length && tabSessions.length > 0}
+              checked={selectedIds.size === filteredTabSessions.length && filteredTabSessions.length > 0}
               onChange={toggleSelectAll}
               className="accent-primary w-4 h-4"
               data-testid="select-all-checkbox"
             />
             <span className="text-xs text-text-secondary">
-              Select All ({tabSessions.length})
+              Select All ({filteredTabSessions.length})
             </span>
           </div>
         )}
@@ -415,7 +435,14 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 {sessionError ? 'Click Refresh Sessions to retry' : 'Create your first analysis'}
               </p>
             </div>
-          ) : tabSessions.length === 0 ? (
+          ) : filteredTabSessions.length === 0 && searchQuery.trim() ? (
+            <div className="text-center py-8">
+              <Search className="w-8 h-8 text-text-muted mx-auto mb-3" />
+              <p className="text-sm text-text-secondary">
+                No sessions matching "{searchQuery}"
+              </p>
+            </div>
+          ) : filteredTabSessions.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-text-secondary">
                 No {activeTab} sessions
@@ -423,7 +450,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
             </div>
           ) : (
             <div className="space-y-1">
-              {tabSessions.map((session) => (
+              {filteredTabSessions.map((session) => (
                 <MiniSessionCard
                   key={session.id}
                   session={session}
