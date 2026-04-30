@@ -47,7 +47,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
           data-testid="progress-bar"
           data-value={clampedProgress}
           className={cn(
-            'flex-1 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden',
+            'flex-1 rounded-full bg-border overflow-hidden',
             sizes.container
           )}
           role="progressbar"
@@ -58,7 +58,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         >
           <div
             className={cn(
-              'h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600',
+              'h-full rounded-full bg-gradient-to-r from-primary to-primary-dark',
               'transition-all duration-500 ease-out',
               animated && 'animate-pulse'
             )}
@@ -70,7 +70,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         {showPercentage && (
           <span
             className={cn(
-              'font-medium text-zinc-700 dark:text-zinc-300 tabular-nums',
+              'font-medium text-text tabular-nums',
               sizes.text
             )}
           >

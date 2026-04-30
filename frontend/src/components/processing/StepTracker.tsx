@@ -51,9 +51,9 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
       data-testid={`step-${step.id}`}
       className={cn(
         'relative flex items-start gap-4 p-4 rounded-xl transition-all duration-300',
-        isActive && 'bg-amber-50/50 dark:bg-amber-950/20 ring-1 ring-amber-200 dark:ring-amber-800 in-progress',
+        isActive && 'bg-warning/5 ring-1 ring-warning in-progress',
         isCompleted && 'opacity-70 completed',
-        isError && 'bg-rose-50/50 dark:bg-rose-950/20 ring-1 ring-rose-200 dark:ring-rose-800 error',
+        isError && 'bg-error/5 ring-1 ring-error error',
         step.status === 'not_started' && 'opacity-50 not-started'
       )}
     >
@@ -63,10 +63,10 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
         <span
           className={cn(
             'text-xs font-medium tabular-nums',
-            isActive && 'text-amber-600 dark:text-amber-400',
-            isCompleted && 'text-emerald-600 dark:text-emerald-400',
-            isError && 'text-rose-600 dark:text-rose-400',
-            step.status === 'not_started' && 'text-zinc-400'
+            isActive && 'text-warning',
+            isCompleted && 'text-success',
+            isError && 'text-error',
+            step.status === 'not_started' && 'text-text-muted'
           )}
         >
           {step.id}
@@ -80,8 +80,8 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
             className={cn(
               'p-1.5 rounded-md',
               isActive
-                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                ? 'bg-warning/20 text-warning'
+                : 'bg-border/20 text-text-secondary'
             )}
           >
             {getStepIcon(step.id)}
@@ -89,23 +89,23 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
           <h3
             className={cn(
               'font-semibold text-sm',
-              isActive && 'text-amber-900 dark:text-amber-100',
-              isError && 'text-rose-900 dark:text-rose-100',
-              'text-zinc-900 dark:text-zinc-100'
+              isActive && 'text-warning',
+              isError && 'text-error',
+              'text-text'
             )}
           >
             {step.name}
           </h3>
         </div>
 
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2 line-clamp-2">
+        <p className="text-xs text-text-secondary mb-2 line-clamp-2">
           {step.description}
         </p>
 
         {/* Package/Function info - hidden as per user request */}
         {/*
-        <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
-          <span className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded">
+        <div className="flex items-center gap-2 text-xs text-text-secondary">
+          <span className="px-1.5 py-0.5 bg-border/20 rounded">
             {step.package}
           </span>
           <span className="font-mono">{step.function}</span>
@@ -124,7 +124,7 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
           <p
             className={cn(
               'mt-2 text-xs',
-              isError ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+              isError ? 'text-error' : 'text-primary'
             )}
           >
             {step.message}
@@ -138,8 +138,8 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
           className={cn(
             'absolute left-[2.25rem] top-14 w-px h-8',
             isCompleted
-              ? 'bg-emerald-300 dark:bg-emerald-700'
-              : 'bg-zinc-200 dark:bg-zinc-700'
+              ? 'bg-success'
+              : 'bg-border'
           )}
         />
       )}
@@ -150,7 +150,7 @@ const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
 export const StepTracker: React.FC<StepTrackerProps> = ({ steps, className }) => {
   if (steps.length === 0) {
     return (
-      <div className={cn('p-8 text-center text-zinc-500', className)}>
+      <div className={cn('p-8 text-center text-text-secondary', className)}>
         <div className="animate-pulse">Loading steps...</div>
       </div>
     );

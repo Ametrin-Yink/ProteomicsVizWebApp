@@ -3,7 +3,7 @@
  * Following AGENTS/11-websocket-protocol.md and AGENTS/10-processing-pipeline.md
  */
 
-export type StepStatus = 'not_started' | 'in_progress' | 'completed' | 'error';
+export type StepStatus = 'not_started' | 'in_progress' | 'completed' | 'error' | 'cancelled';
 export type LogLevel = 'info' | 'warning' | 'error';
 export type WSMessageType = 'subscribe' | 'progress' | 'complete' | 'error' | 'log' | 'ping' | 'pong';
 

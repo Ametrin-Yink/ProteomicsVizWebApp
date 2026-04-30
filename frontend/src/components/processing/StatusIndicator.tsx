@@ -28,27 +28,33 @@ const statusConfig: Record<StepStatus, {
 }> = {
   not_started: {
     icon: Circle,
-    color: 'text-zinc-400',
-    bgColor: 'bg-zinc-100',
+    color: 'text-text-muted',
+    bgColor: 'bg-border/20',
     label: 'Not Started',
   },
   in_progress: {
     icon: Loader2,
-    color: 'text-amber-500',
-    bgColor: 'bg-amber-50',
+    color: 'text-warning',
+    bgColor: 'bg-warning/5',
     label: 'In Progress',
   },
   completed: {
     icon: CheckCircle2,
-    color: 'text-emerald-500',
-    bgColor: 'bg-emerald-50',
+    color: 'text-success',
+    bgColor: 'bg-success/5',
     label: 'Completed',
   },
   error: {
     icon: XCircle,
-    color: 'text-rose-500',
-    bgColor: 'bg-rose-50',
+    color: 'text-error',
+    bgColor: 'bg-error/5',
     label: 'Error',
+  },
+  cancelled: {
+    icon: XCircle,
+    color: 'text-text-secondary',
+    bgColor: 'bg-border/10',
+    label: 'Cancelled',
   },
 };
 
