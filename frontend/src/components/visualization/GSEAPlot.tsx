@@ -247,8 +247,8 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
 
   if (!pathway) {
     return (
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 flex items-center justify-center h-[400px]">
-        <div className="text-center text-gray-400">
+      <div className="bg-surface rounded-lg border border-border p-4 flex items-center justify-center h-[400px]">
+        <div className="text-center text-text-muted">
           <p className="text-lg font-medium">GSEA Plot</p>
           <p className="text-sm mt-2">Select a pathway to view GSEA plot</p>
         </div>
@@ -261,17 +261,17 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
       <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
         <p className="text-red-700 text-sm mb-3">Failed to load visualization</p>
         <p className="text-red-500 text-xs mb-3">{error}</p>
-        <p className="text-gray-500 text-xs">Reload the page to retry.</p>
+        <p className="text-text-muted text-xs">Reload the page to retry.</p>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-center h-[400px]">
+      <div className="bg-background rounded-lg border border-border p-4 flex items-center justify-center h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-500 text-sm">Loading pathway visualization...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-text-muted text-sm">Loading pathway visualization...</p>
         </div>
       </div>
     );
@@ -284,7 +284,7 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
   };
 
   return (
-    <div data-testid="gsea-plot" className="bg-white rounded-lg border border-gray-200 p-4">
+    <div data-testid="gsea-plot" className="bg-background rounded-lg border border-border p-4">
       <div className="h-[400px]">
         {renderData && (
           <Plot

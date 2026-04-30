@@ -310,21 +310,21 @@ export default function VolcanoPlot({
   }), [layout, dragmode, selectionMode]);
 
   return (
-    <div className="w-full bg-white rounded-lg border border-gray-200 p-4">
+    <div className="w-full bg-background rounded-lg border border-border p-4">
       {/* Inject CSS for click mode */}
       {selectionMode === 'click' && <style>{CLICK_MODE_CSS}</style>}
 
       {/* Selection mode buttons */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700 mr-2">Selection Mode:</span>
+          <span className="text-sm font-medium text-text-secondary mr-2">Selection Mode:</span>
           <button
             data-testid="mode-click"
             onClick={() => setSelectionMode('click')}
             className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               selectionMode === 'click'
-                ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'bg-background text-text-secondary border-border hover:bg-surface'
             }`}
           >
             <MousePointer2 className="w-4 h-4" />
@@ -335,8 +335,8 @@ export default function VolcanoPlot({
             onClick={() => setSelectionMode('box')}
             className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               selectionMode === 'box'
-                ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'bg-background text-text-secondary border-border hover:bg-surface'
             }`}
           >
             <Square className="w-4 h-4" />
@@ -347,8 +347,8 @@ export default function VolcanoPlot({
             onClick={() => setSelectionMode('lasso')}
             className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               selectionMode === 'lasso'
-                ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'bg-background text-text-secondary border-border hover:bg-surface'
             }`}
           >
             <Lasso className="w-4 h-4" />
@@ -360,7 +360,7 @@ export default function VolcanoPlot({
             data-testid="clear-selection-btn"
             onClick={onClearSelection}
             disabled={selectedProteins.size === 0}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-error bg-background border-error/30 rounded-md hover:bg-error/5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-4 h-4" />
             Clear Selection
@@ -385,21 +385,21 @@ export default function VolcanoPlot({
             useResizeHandler={true}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex items-center justify-center h-full text-text-muted">
             No data available for volcano plot
           </div>
         )}
       </div>
 
       {/* Threshold lines indicator */}
-      <div data-testid="threshold-lines" className="mt-2 text-xs text-gray-500 text-center">
+      <div data-testid="threshold-lines" className="mt-2 text-xs text-text-muted text-center">
         {filters.s0 > 0
           ? `Hyperbolic cutoff: S0 = ${(filters.s0 * filters.foldChange).toFixed(2)} (${(filters.s0 * 100).toFixed(0)}% of log₂FC threshold ±${filters.foldChange}), P-value = ${filters.pValue}`
           : `Threshold lines: Fold Change = ±${filters.foldChange}, P-value = ${filters.pValue}`}
       </div>
 
       {/* Color legend */}
-      <div className="mt-3 flex items-center justify-center gap-6 text-xs text-gray-600">
+      <div className="mt-3 flex items-center justify-center gap-6 text-xs text-text-secondary">
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E73564' }}></span>
           <span>Upregulated (Treatment &gt; Control)</span>

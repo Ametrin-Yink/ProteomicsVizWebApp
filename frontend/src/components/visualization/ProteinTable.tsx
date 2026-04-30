@@ -28,7 +28,7 @@ interface SortIndicatorProps {
 
 const SortIndicator: React.FC<SortIndicatorProps> = ({ sortKey, columnKey, direction }) => {
   if (sortKey !== columnKey) {
-    return <span className="text-gray-300 ml-1" data-testid="sort-indicator">↕</span>;
+    return <span className="text-text-muted ml-1" data-testid="sort-indicator">↕</span>;
   }
   return direction === 'asc' ? (
     <ChevronUp className="w-4 h-4 ml-1 inline" data-testid="sort-indicator" />
@@ -151,12 +151,12 @@ export default function ProteinTable({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200" data-testid="protein-table">
+    <div className="bg-background rounded-lg border border-border" data-testid="protein-table">
       {/* Header with controls */}
-      <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+      <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <h3 className="text-lg font-semibold text-gray-900">Protein Results</h3>
-          <span className="text-sm text-gray-500">
+          <h3 className="text-lg font-semibold text-text-primary">Protein Results</h3>
+          <span className="text-sm text-text-muted">
             {filteredData.length} proteins
           </span>
         </div>
@@ -172,16 +172,16 @@ export default function ProteinTable({
               setFilterText(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
           />
           
           {selectedProteins.size > 0 && (
-            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
               <input
                 type="checkbox"
                 checked={showSelectedOnly}
                 onChange={onToggleShowSelected}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-border text-primary focus:ring-primary"
                 data-testid="significant-only-checkbox"
               />
               Show selected only ({selectedProteins.size})
@@ -191,7 +191,7 @@ export default function ProteinTable({
           {markedProteins.size > 0 && (
             <button
               onClick={onClearAllMarks}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-md hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-error bg-background border-error/30 rounded-md hover:bg-error/5 focus:outline-none focus:ring-2 focus:ring-error"
               data-testid="clear-all-marks-btn"
             >
               <Eraser className="w-4 h-4" />
@@ -201,7 +201,7 @@ export default function ProteinTable({
 
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-text-secondary bg-background border-border rounded-md hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
             data-testid="export-csv-btn"
           >
             <Download className="w-4 h-4" />
@@ -213,62 +213,62 @@ export default function ProteinTable({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-surface">
             <tr>
               <th
-                className="px-2 py-3 text-center font-medium text-gray-700 w-12"
+                className="px-2 py-3 text-center font-medium text-text-secondary w-12"
                 data-testid="table-header-mark"
               >
                 Mark
               </th>
               <th
                 onClick={() => handleSort('master_protein_accessions')}
-                className="px-4 py-3 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+                className="px-4 py-3 text-left font-medium text-text-secondary cursor-pointer hover:bg-surface"
                 data-testid="table-header-accession"
               >
                 Protein <SortIndicator columnKey="master_protein_accessions" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('gene_name')}
-                className="px-4 py-3 text-left font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+                className="px-4 py-3 text-left font-medium text-text-secondary cursor-pointer hover:bg-surface"
                 data-testid="table-header-gene"
               >
                 Gene Name <SortIndicator columnKey="gene_name" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('log_fc')}
-                className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+                className="px-4 py-3 text-right font-medium text-text-secondary cursor-pointer hover:bg-surface"
                 data-testid="table-header-logfc"
               >
                 Log2 FC <SortIndicator columnKey="log_fc" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('pval')}
-                className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+                className="px-4 py-3 text-right font-medium text-text-secondary cursor-pointer hover:bg-surface"
                 data-testid="table-header-pvalue"
               >
                 P-value <SortIndicator columnKey="pval" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('adj_pval')}
-                className="px-4 py-3 text-right font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+                className="px-4 py-3 text-right font-medium text-text-secondary cursor-pointer hover:bg-surface"
               >
                 Adj P-value <SortIndicator columnKey="adj_pval" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
               <th
                 onClick={() => handleSort('significant')}
-                className="px-4 py-3 text-center font-medium text-gray-700 cursor-pointer hover:bg-gray-100"
+                className="px-4 py-3 text-center font-medium text-text-secondary cursor-pointer hover:bg-surface"
               >
                 Significance <SortIndicator columnKey="significant" sortKey={sortConfig.key} direction={sortConfig.direction} />
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-border">
             {paginatedData.map((item) => (
               <tr
                 key={item.master_protein_accessions}
                 onClick={() => onSelectProtein(item)}
-                className={`cursor-pointer hover:bg-blue-50 transition-colors ${
+                className={`cursor-pointer hover:bg-primary/5 transition-colors ${
                   selectedProteins.has(item.master_protein_accessions)
                     ? 'bg-[#E73564]/10 ring-2 ring-[#E73564] ring-inset'
                     : ''
@@ -295,7 +295,7 @@ export default function ProteinTable({
                         href={`https://www.uniprot.org/uniprotkb/${acc.trim()}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 hover:underline"
+                        className="text-secondary hover:text-secondary-dark hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {acc.trim()}
@@ -304,18 +304,18 @@ export default function ProteinTable({
                     </span>
                   ))}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{item.gene_name || '-'}</td>
+                <td className="px-4 py-3 text-text-secondary">{item.gene_name || '-'}</td>
                 <td
                   className={`px-4 py-3 text-right font-medium ${
-                    item.log_fc > 0 ? 'text-pink-600' : 'text-blue-600'
+                    item.log_fc > 0 ? 'text-primary' : 'text-secondary'
                   }`}
                 >
                   {item.log_fc > 0 ? '+' : ''}{formatNumber(item.log_fc, 3)}
                 </td>
-                <td className="px-4 py-3 text-right text-gray-600">
+                <td className="px-4 py-3 text-right text-text-secondary">
                   {formatPValue(item.pval)}
                 </td>
-                <td className="px-4 py-3 text-right text-gray-600">
+                <td className="px-4 py-3 text-right text-text-secondary">
                   {formatPValue(item.adj_pval)}
                 </td>
                 <td className="px-4 py-3 text-center">
@@ -325,8 +325,8 @@ export default function ProteinTable({
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                           isSig
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-600'
+                            ? 'bg-success/10 text-success'
+                            : 'bg-surface text-text-secondary'
                         }`}
                       >
                         {isSig ? 'Yes' : 'No'}
@@ -342,8 +342,8 @@ export default function ProteinTable({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between" data-testid="pagination">
-          <div className="text-sm text-gray-500">
+        <div className="px-4 py-3 border-t border-border flex items-center justify-between" data-testid="pagination">
+          <div className="text-sm text-text-muted">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
             {Math.min(currentPage * ITEMS_PER_PAGE, sortedData.length)} of{' '}
             {sortedData.length} results
@@ -353,12 +353,12 @@ export default function ProteinTable({
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-sm font-medium text-text-secondary bg-background border-border rounded-md hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
 
-            <span className="text-sm text-gray-600" data-testid="page-number">
+            <span className="text-sm text-text-secondary" data-testid="page-number">
               Page {currentPage} of {totalPages}
             </span>
 
@@ -384,7 +384,7 @@ export default function ProteinTable({
                     (e.target as HTMLInputElement).value = String(currentPage);
                   }
                 }}
-                className="w-14 px-1 py-1 text-sm text-center border border-gray-300 rounded-md"
+                className="w-14 px-1 py-1 text-sm text-center border border-border rounded-md"
                 data-testid="page-input"
               />
             </div>
@@ -392,7 +392,7 @@ export default function ProteinTable({
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-sm font-medium text-text-secondary bg-background border-border rounded-md hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="next-page"
             >
               Next
