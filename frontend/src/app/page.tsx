@@ -102,24 +102,24 @@ export default function HomePage() {
       <SessionManager className="h-full" />
 
       {/* Right Panel - Template Selection */}
-      <main className="flex-1 h-full overflow-y-auto bg-gray-50">
+      <main className="flex-1 h-full overflow-y-auto bg-surface">
         <div className="max-w-4xl mx-auto px-8 py-12">
           {/* Header */}
           <div className="text-center mb-12" data-testid="welcome-title">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#E73564] to-[#00ADEF] flex items-center justify-center shadow-lg">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
               <FlaskConical className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              Welcome to <span className="text-cyan-600">ProteomicsViz</span>
+            <h1 className="text-4xl font-bold text-text mb-4">
+              Welcome to <span className="text-primary">ProteomicsViz</span>
             </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-xl text-text-secondary max-w-2xl mx-auto">
               Select an analysis template to get started with your proteomics data analysis.
             </p>
           </div>
 
           {/* Template Selection */}
           <div data-testid="template-section" className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">Choose Analysis Type</h2>
+            <h2 className="text-lg font-semibold text-text mb-4">Choose Analysis Type</h2>
             
             <div className="grid grid-cols-1 gap-4">
               {templates
@@ -134,7 +134,7 @@ export default function HomePage() {
                       data-testid="template-protein-pairwise"
                       className={cn(
                         'relative group cursor-pointer rounded-xl border-2 transition-all duration-200',
-                        'bg-white border-gray-200 hover:border-cyan-500 hover:shadow-lg'
+                        'bg-white border-gray-200 hover:border-primary hover:shadow-lg'
                       )}
                       onClick={() => handleTemplateSelect(template)}
                       onMouseEnter={() => setHoveredTemplate(template.id)}
@@ -144,8 +144,7 @@ export default function HomePage() {
                         {/* Icon */}
                         <div className={cn(
                           'w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0',
-                          'bg-gradient-to-br',
-                          template.color
+                          template.available ? 'bg-primary' : 'bg-border/30'
                         )}>
                           <Icon className="w-7 h-7 text-white" />
                         </div>
@@ -153,11 +152,11 @@ export default function HomePage() {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-lg font-semibold text-gray-900">
+                            <h3 className="text-lg font-semibold text-text">
                               {template.name}
                             </h3>
                           </div>
-                          <p className="text-gray-600 text-sm">
+                          <p className="text-text-secondary text-sm">
                             {template.description}
                           </p>
                         </div>
@@ -167,7 +166,7 @@ export default function HomePage() {
                           'flex-shrink-0 transition-transform duration-200',
                           isHovered ? 'translate-x-1' : ''
                         )}>
-                          <ChevronRight className="w-6 h-6 text-cyan-600" />
+                          <ChevronRight className="w-6 h-6 text-primary" />
                         </div>
                       </div>
 
@@ -175,8 +174,8 @@ export default function HomePage() {
                       {isCreating && (
                         <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
                           <div className="flex items-center gap-2">
-                            <div className="w-5 h-5 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm font-medium text-cyan-600">Creating session...</span>
+                            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-medium text-primary">Creating session...</span>
                           </div>
                         </div>
                       )}
@@ -186,7 +185,7 @@ export default function HomePage() {
             </div>
 
             <div className="mt-8 text-center">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-text-muted">
                 More analysis types coming soon: Multi-Condition, Time Course, Pathway Enrichment
               </p>
             </div>
@@ -194,12 +193,12 @@ export default function HomePage() {
 
           {/* Help Section */}
           <div className="mt-12 text-center">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-text-muted">
               Need help getting started?{' '}
               <a
                 href="/about"
                 data-testid="help-link"
-                className="text-cyan-600 hover:text-cyan-700 font-medium"
+                className="text-secondary hover:text-secondary-dark font-medium"
               >
                 View documentation
               </a>

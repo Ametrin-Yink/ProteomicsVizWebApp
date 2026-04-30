@@ -24,16 +24,16 @@ const pipelineSteps = [
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-gray-50 pt-14">
+    <div className="min-h-screen bg-surface pt-14">
       <div className="max-w-4xl mx-auto px-8 py-12">
 
         {/* Hero */}
         <div className="text-center mb-12">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#E73564] to-[#00ADEF] flex items-center justify-center shadow-lg">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
             <FlaskConical className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Proteomics Visualization Web App</h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <h1 className="text-4xl font-bold text-text mb-4">Proteomics Visualization Web App</h1>
+          <p className="text-xl text-text-secondary max-w-2xl mx-auto">
             Full-stack scientific web application for proteomics data analysis and visualization.
           </p>
         </div>
@@ -47,26 +47,26 @@ export default function AboutPage() {
             { title: 'Session Management', desc: 'Persistent sessions that survive server restarts', icon: Layers },
             { title: 'PDF Reports', desc: 'Export comprehensive analysis reports', icon: FileDown },
           ].map((f) => (
-            <div key={f.title} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded-lg p-2 inline-flex mb-3"><f.icon className="w-8 h-8 text-white" /></div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">{f.title}</h3>
-              <p className="text-sm text-gray-600">{f.desc}</p>
+            <div key={f.title} className="bg-background border border-border rounded-lg p-5">
+              <div className="bg-primary/10 rounded-lg p-2 inline-flex mb-3"><f.icon className="w-8 h-8 text-primary" /></div>
+              <h3 className="text-lg font-semibold text-text mb-1">{f.title}</h3>
+              <p className="text-sm text-text-secondary">{f.desc}</p>
             </div>
           ))}
         </div>
 
         {/* How to Use */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-12">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6">How to Use</h2>
+        <div className="bg-background border border-border rounded-lg p-5 mb-12">
+          <h2 className="text-2xl font-semibold text-text mb-6">How to Use</h2>
           <div className="space-y-6">
             {steps.map((step) => (
               <div key={step.title} className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-[#E73564] to-[#00ADEF] text-white font-bold flex items-center justify-center">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-white font-bold flex items-center justify-center">
                   {step.icon}
                 </div>
                 <div className="pt-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{step.title}</h3>
-                  <p className="text-gray-600 text-sm">{step.desc}</p>
+                  <h3 className="text-lg font-semibold text-text mb-1">{step.title}</h3>
+                  <p className="text-text-secondary text-sm">{step.desc}</p>
                 </div>
               </div>
             ))}
@@ -74,20 +74,20 @@ export default function AboutPage() {
         </div>
 
         {/* File Requirements */}
-        <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl border border-cyan-200 p-8 mb-12">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Input File Requirements</h2>
-          <div className="space-y-3 text-gray-700">
+        <div className="bg-info/5 border-info/20 rounded-lg p-5 mb-12">
+          <h2 className="text-2xl font-semibold text-text mb-4">Input File Requirements</h2>
+          <div className="space-y-3 text-text">
             <p><strong>Filename pattern:</strong></p>
-            <code className="block bg-white rounded-lg px-4 py-2 border border-cyan-200 font-mono text-sm text-gray-800">
+            <code className="block bg-surface rounded-lg px-4 py-2 border border-info/20 font-mono text-sm text-text">
               PSM_ExperimentName_Condition_ReplicateNumber.csv
             </code>
-            <p className="text-sm text-gray-600 mt-4">
-              Examples: <code className="bg-white px-2 py-0.5 rounded border border-cyan-200 text-xs">PSM_Exp1_Control_1.csv</code>, <code className="bg-white px-2 py-0.5 rounded border border-cyan-200 text-xs">PSM_Exp1_Treated_1.csv</code>
+            <p className="text-sm text-text-secondary mt-4">
+              Examples: <code className="bg-surface px-2 py-0.5 rounded border border-info/20 text-xs">PSM_Exp1_Control_1.csv</code>, <code className="bg-surface px-2 py-0.5 rounded border border-info/20 text-xs">PSM_Exp1_Treated_1.csv</code>
             </p>
             <p className="mt-4"><strong>Required CSV columns:</strong></p>
             <div className="flex flex-wrap gap-2">
               {['Sequence', 'Modifications', 'Charge', 'Contaminant', 'Master Protein Accessions', 'Quan Info', 'Abundance'].map(c => (
-                <span key={c} className="bg-white px-3 py-1 rounded-full text-xs font-medium border border-cyan-200 text-gray-700">{c}</span>
+                <span key={c} className="bg-surface px-3 py-1 rounded-full text-xs font-medium border border-info/20 text-text">{c}</span>
               ))}
             </div>
             <p className="mt-2"><strong>Minimum replicates:</strong> 3 per condition</p>
@@ -95,28 +95,28 @@ export default function AboutPage() {
         </div>
 
         {/* Processing Pipeline */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-12">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Processing Pipeline</h2>
+        <div className="bg-background border border-border rounded-lg p-5 mb-12">
+          <h2 className="text-2xl font-semibold text-text mb-6">Processing Pipeline</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Step</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Description</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Technology</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 font-semibold text-text">Step</th>
+                  <th className="text-left py-3 px-4 font-semibold text-text">Description</th>
+                  <th className="text-left py-3 px-4 font-semibold text-text">Technology</th>
                 </tr>
               </thead>
               <tbody>
                 {pipelineSteps.map((s) => (
-                  <tr key={s.range} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={s.range} className="border-b border-border hover:bg-surface">
                     <td className="py-3 px-4">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-xs font-bold text-gray-700">
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-surface text-xs font-bold text-text">
                         {s.range}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-gray-700">{s.desc}</td>
+                    <td className="py-3 px-4 text-text">{s.desc}</td>
                     <td className="py-3 px-4">
-                      <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">{s.tech}</span>
+                      <span className="bg-surface text-text px-3 py-1 rounded-full text-xs font-medium">{s.tech}</span>
                     </td>
                   </tr>
                 ))}
@@ -126,37 +126,37 @@ export default function AboutPage() {
         </div>
 
         {/* Tech Stack */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-12">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Tech Stack</h2>
+        <div className="bg-background border border-border rounded-lg p-5 mb-12">
+          <h2 className="text-2xl font-semibold text-text mb-4">Tech Stack</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-white" /></div> Frontend
+              <h3 className="font-semibold text-text mb-2 flex items-center gap-2">
+                <div className="bg-primary/10 rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-primary" /></div> Frontend
               </h3>
-              <p className="text-sm text-gray-600">Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js</p>
+              <p className="text-sm text-text-secondary">Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js</p>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-white" /></div> Backend
+              <h3 className="font-semibold text-text mb-2 flex items-center gap-2">
+                <div className="bg-primary/10 rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-primary" /></div> Backend
               </h3>
-              <p className="text-sm text-gray-600">FastAPI, Python 3.11+, Pydantic, asyncio</p>
+              <p className="text-sm text-text-secondary">FastAPI, Python 3.11+, Pydantic, asyncio</p>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <div className="bg-gradient-to-br from-[#E73564] to-[#00ADEF] rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-white" /></div> Analysis
+              <h3 className="font-semibold text-text mb-2 flex items-center gap-2">
+                <div className="bg-primary/10 rounded p-1 inline-flex"><Cpu className="w-4 h-4 text-primary" /></div> Analysis
               </h3>
-              <p className="text-sm text-gray-600">R 4.3+, msqrob2, QFeatures, limma, gseapy</p>
+              <p className="text-sm text-text-secondary">R 4.3+, msqrob2, QFeatures, limma, gseapy</p>
             </div>
           </div>
         </div>
 
         {/* Quick Setup */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-12">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Quick Setup</h2>
+        <div className="bg-background border border-border rounded-lg p-5 mb-12">
+          <h2 className="text-2xl font-semibold text-text mb-6">Quick Setup</h2>
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium text-gray-900 mb-2">1. Install R Packages</h3>
-              <pre className="bg-gray-100 rounded-lg p-4 text-sm text-gray-800 overflow-x-auto">
+              <h3 className="font-medium text-text mb-2">1. Install R Packages</h3>
+              <pre className="bg-surface rounded-lg p-4 text-sm text-text overflow-x-auto">
 {`Rscript -e "
 if (!require('BiocManager', quietly = TRUE))
     install.packages('BiocManager')
@@ -165,8 +165,8 @@ BiocManager::install(c('msqrob2', 'QFeatures', 'limma'))
               </pre>
             </div>
             <div>
-              <h3 className="font-medium text-gray-900 mb-2">2. Install Dependencies</h3>
-              <pre className="bg-gray-100 rounded-lg p-4 text-sm text-gray-800 overflow-x-auto">
+              <h3 className="font-medium text-text mb-2">2. Install Dependencies</h3>
+              <pre className="bg-surface rounded-lg p-4 text-sm text-text overflow-x-auto">
 {`# Backend (from project root)
 pip install -r backend/requirements.txt
 
@@ -175,8 +175,8 @@ cd frontend && npm install`}
               </pre>
             </div>
             <div>
-              <h3 className="font-medium text-gray-900 mb-2">3. Start the App</h3>
-              <pre className="bg-gray-100 rounded-lg p-4 text-sm text-gray-800 overflow-x-auto">
+              <h3 className="font-medium text-text mb-2">3. Start the App</h3>
+              <pre className="bg-surface rounded-lg p-4 text-sm text-text overflow-x-auto">
 {`# Terminal 1 - Backend
 cd backend
 .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
@@ -192,11 +192,11 @@ npm run dev
         </div>
 
         {/* Footer */}
-        <div className="text-center text-gray-500 text-sm space-y-2">
+        <div className="text-center text-text-muted text-sm space-y-2">
           <p>ProteomicsViz v1.0.0</p>
           <p>
             Contact:{' '}
-            <a href="https://github.com/Ametrin-Yink" target="_blank" rel="noopener noreferrer" className="text-[#00ADEF] hover:text-[#E73564] font-medium">
+            <a href="https://github.com/Ametrin-Yink" target="_blank" rel="noopener noreferrer" className="text-secondary hover:text-primary font-medium">
               Ametrin-Yink on GitHub
             </a>
           </p>
