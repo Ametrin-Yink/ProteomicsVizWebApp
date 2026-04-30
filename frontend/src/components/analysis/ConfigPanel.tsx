@@ -56,16 +56,16 @@ export const ConfigPanel: React.FC = () => {
     label: string;
     description?: string;
   }> = ({ checked, onChange, label, description }) => (
-    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+    <div className="flex items-center justify-between p-3 bg-background rounded-lg border border-border hover:border-gray-300 transition-colors">
       <div className="flex-1 pr-4">
-        <label className="text-base font-semibold text-gray-900 flex items-center gap-2">
+        <label className="text-base font-semibold text-text flex items-center gap-2">
           {label}
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${checked ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${checked ? 'bg-success/10 text-success' : 'bg-surface text-text-muted'}`}>
             {checked ? 'ON' : 'OFF'}
           </span>
         </label>
         {description && (
-          <p className="text-sm text-gray-500 mt-1">{description}</p>
+          <p className="text-sm text-text-muted mt-1">{description}</p>
         )}
       </div>
       <button
@@ -75,8 +75,8 @@ export const ConfigPanel: React.FC = () => {
         onClick={() => onChange(!checked)}
         className={`
           relative inline-flex h-8 w-16 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
-          transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2
-          ${checked ? 'bg-cyan-600' : 'bg-gray-300'}
+          transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+          ${checked ? 'bg-primary' : 'bg-gray-300'}
         `}
       >
         <span
@@ -94,22 +94,22 @@ export const ConfigPanel: React.FC = () => {
     <div className="space-y-6" data-testid="config-form">
       {/* Header */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">Analysis Configuration</h3>
-        <p className="text-sm text-gray-500 mt-1">
+        <h3 className="text-lg font-semibold text-text">Analysis Configuration</h3>
+        <p className="text-sm text-text-muted mt-1">
           Configure parameters for differential expression analysis
         </p>
       </div>
       
       {/* Treatment/Control Setup */}
-      <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-        <h4 className="text-sm font-medium text-gray-900 uppercase tracking-wider">
+      <div className="space-y-4 p-4 bg-surface rounded-lg">
+        <h4 className="text-sm font-medium text-text uppercase tracking-wider">
           Treatment / Control Setup
         </h4>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Treatment Dropdown */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-text">
               Treatment
               <span className="text-red-500 ml-1">*</span>
             </label>
@@ -120,7 +120,7 @@ export const ConfigPanel: React.FC = () => {
               disabled={conditions.length === 0}
               className={`
                 block w-full rounded-md border-gray-300 shadow-sm
-                focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm
+                focus:border-primary focus:ring-primary sm:text-sm
                 disabled:bg-gray-100 disabled:text-gray-500
                 ${!isTreatmentControlValid ? 'border-red-300' : ''}
               `}
@@ -133,7 +133,7 @@ export const ConfigPanel: React.FC = () => {
               ))}
             </select>
             {conditions.length === 0 && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-text-muted">
                 Upload files to see available conditions
               </p>
             )}
@@ -141,7 +141,7 @@ export const ConfigPanel: React.FC = () => {
           
           {/* Control Dropdown */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-text">
               Control
               <span className="text-red-500 ml-1">*</span>
             </label>
@@ -152,7 +152,7 @@ export const ConfigPanel: React.FC = () => {
               disabled={conditions.length === 0}
               className={`
                 block w-full rounded-md border-gray-300 shadow-sm
-                focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm
+                focus:border-primary focus:ring-primary sm:text-sm
                 disabled:bg-gray-100 disabled:text-gray-500
                 ${!isTreatmentControlValid ? 'border-red-300' : ''}
               `}
@@ -178,13 +178,13 @@ export const ConfigPanel: React.FC = () => {
       
       {/* Organism Selection */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-text">
           Organism
           <span className="text-red-500 ml-1">*</span>
         </label>
         
         {isLoadingOrganisms ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+          <div className="flex items-center gap-2 text-sm text-text-muted py-2">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span>Loading organisms...</span>
           </div>
@@ -198,7 +198,7 @@ export const ConfigPanel: React.FC = () => {
             data-testid="organism-select"
             value={config.organism}
             onChange={(e) => setConfig({ organism: e.target.value })}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm"
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
           >
             <option value="">Select organism...</option>
             {organisms
@@ -212,7 +212,7 @@ export const ConfigPanel: React.FC = () => {
         )}
         
         {organisms.filter((org) => !org.available).length > 0 && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-text-muted">
             {organisms.filter((org) => !org.available).length} organism(s) unavailable
           </p>
         )}
@@ -221,8 +221,8 @@ export const ConfigPanel: React.FC = () => {
       {/* Remove Razor Information */}
       <div data-testid="advanced-options-toggle">
         <div className="space-y-4">
-          <h4 className="text-sm font-medium text-gray-900 uppercase tracking-wider flex items-center gap-2">
-            <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
+            <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
+            <span className="w-2 h-2 bg-primary rounded-full"></span>
             Razor Peptide Handling
           </h4>
           <div data-testid="remove-razor-checkbox">
@@ -246,8 +246,8 @@ export const ConfigPanel: React.FC = () => {
 
         {/* Strict Filtering */}
         <div className="space-y-4 mt-4">
-          <h4 className="text-sm font-medium text-gray-900 uppercase tracking-wider flex items-center gap-2">
-            <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
+          <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
+            <span className="w-2 h-2 bg-primary rounded-full"></span>
             Data Quality Filtering
           </h4>
           <div data-testid="strict-filtering-checkbox">
@@ -259,7 +259,7 @@ export const ConfigPanel: React.FC = () => {
             />
           </div>
           
-          <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <div className="flex items-start gap-3 p-3 bg-info/5 border-info/20 rounded-lg text-sm text-secondary">
             <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <span>
               <strong>Tip:</strong> Use strict filtering for high-confidence results. 
@@ -270,24 +270,24 @@ export const ConfigPanel: React.FC = () => {
       </div>
       
       {/* Configuration Summary */}
-      <div data-testid="config-summary" className="border-t border-gray-200 pt-4">
-        <h4 className="text-sm font-medium text-gray-900 mb-3">Configuration Summary</h4>
+      <div data-testid="config-summary" className="border-t border-border pt-4">
+        <h4 className="text-sm font-medium text-text mb-3">Configuration Summary</h4>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-500">Treatment:</span>
-            <span className={config.treatment ? 'text-gray-900 font-medium' : 'text-gray-400'}>
+            <span className="text-text-muted">Treatment:</span>
+            <span className={config.treatment ? 'text-text font-medium' : 'text-text-muted'}>
               {config.treatment || 'Not selected'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Control:</span>
-            <span className={config.control ? 'text-gray-900 font-medium' : 'text-gray-400'}>
+            <span className="text-text-muted">Control:</span>
+            <span className={config.control ? 'text-text font-medium' : 'text-text-muted'}>
               {config.control || 'Not selected'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Organism:</span>
-            <span className={config.organism ? 'text-gray-900 font-medium' : 'text-gray-400'}>
+            <span className="text-text-muted">Organism:</span>
+            <span className={config.organism ? 'text-text font-medium' : 'text-text-muted'}>
               {config.organism 
                 ? organisms.find(o => o.id === config.organism)?.display_name || config.organism
                 : 'Not selected'
@@ -295,14 +295,14 @@ export const ConfigPanel: React.FC = () => {
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Remove Razor:</span>
-            <span className={config.remove_razor ? 'text-green-600' : 'text-gray-600'}>
+            <span className="text-text-muted">Remove Razor:</span>
+            <span className={config.remove_razor ? 'text-success' : 'text-text-secondary'}>
               {config.remove_razor ? 'Yes' : 'No'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Strict Filtering:</span>
-            <span className={config.strict_filtering ? 'text-green-600' : 'text-gray-600'}>
+            <span className="text-text-muted">Strict Filtering:</span>
+            <span className={config.strict_filtering ? 'text-success' : 'text-text-secondary'}>
               {config.strict_filtering ? 'Yes' : 'No'}
             </span>
           </div>

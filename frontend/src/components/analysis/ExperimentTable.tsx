@@ -130,8 +130,8 @@ export const ExperimentTable: React.FC = () => {
     <th
       onClick={() => handleSort(field)}
       className={`
-        px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider
-        cursor-pointer hover:bg-gray-100 transition-colors select-none
+        px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider
+        cursor-pointer hover:bg-surface transition-colors select-none
         ${className}
       `}
     >
@@ -144,9 +144,9 @@ export const ExperimentTable: React.FC = () => {
   
   if (uploadedFiles.length === 0) {
     return (
-      <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-        <p className="text-gray-500">No files uploaded yet</p>
-        <p className="text-sm text-gray-400 mt-1">
+      <div className="text-center py-12 bg-surface rounded-lg border border-dashed border-border">
+        <p className="text-text-muted">No files uploaded yet</p>
+        <p className="text-sm text-text-muted mt-1">
           Upload PSM files to see experiment structure
         </p>
       </div>
@@ -156,25 +156,25 @@ export const ExperimentTable: React.FC = () => {
   return (
     <div data-testid="experiment-structure" className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 p-4 bg-gray-50 rounded-lg">
+      <div className="flex flex-wrap items-center gap-3 p-4 bg-surface rounded-lg">
         <div className="flex items-center gap-2">
-          <Search className="w-4 h-4 text-gray-400" />
+          <Search className="w-4 h-4 text-text-muted" />
           <input
             type="text"
             placeholder="Search files..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
         
         {experiments.length > 0 && (
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
+            <Filter className="w-4 h-4 text-text-muted" />
             <select
               value={filterExperiment}
               onChange={(e) => setFilterExperiment(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             >
               <option value="all">All Experiments</option>
               {experiments.map((exp) => (
@@ -189,7 +189,7 @@ export const ExperimentTable: React.FC = () => {
             <select
               value={filterCondition}
               onChange={(e) => setFilterCondition(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             >
               <option value="all">All Conditions</option>
               {conditions.map((cond) => (
@@ -201,34 +201,34 @@ export const ExperimentTable: React.FC = () => {
         
         <div className="flex-1" />
         
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-text-secondary">
           {selected.length} of {uploadedFiles.length} selected
         </div>
       </div>
       
       {/* Table */}
-      <div className="overflow-x-auto border border-gray-200 rounded-lg">
-        <table data-testid="file-table" className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="overflow-x-auto border border-border rounded-lg">
+        <table data-testid="file-table" className="min-w-full divide-y divide-border">
+          <thead className="bg-surface">
             <tr>
               <th className="px-4 py-3 w-10">
                 <input
                   type="checkbox"
                   checked={areAllFilteredSelected}
                   onChange={handleSelectAll}
-                  className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                 />
               </th>
               <TableHeader field="filename">Filename</TableHeader>
               <TableHeader field="experiment">Experiment</TableHeader>
               <TableHeader field="condition">Condition</TableHeader>
               <TableHeader field="replicate" className="text-right">Replicate</TableHeader>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white divide-y divide-border">
             {filteredAndSortedFiles.map((file, index) => {
               const isSelected = selectedFiles.has(file.filename);
               
@@ -237,7 +237,7 @@ export const ExperimentTable: React.FC = () => {
                   key={file.filename}
                   className={`
                     transition-colors
-                    ${isSelected ? 'bg-cyan-50' : 'hover:bg-gray-50'}
+                    ${isSelected ? 'bg-primary/5' : 'hover:bg-surface'}
                   `}
                 >
                   <td className="px-4 py-3">
@@ -245,29 +245,29 @@ export const ExperimentTable: React.FC = () => {
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleFileSelection(file.filename)}
-                      className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
+                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-text">
                       {file.filename}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-text-muted">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span data-testid="experiment-name" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <span data-testid="experiment-name" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">
                       {file.experiment}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span data-testid={`condition-${file.condition}`} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <span data-testid={`condition-${file.condition}`} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
                       {file.condition}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className="text-sm text-gray-900 font-mono">
+                    <span className="text-sm text-text font-mono">
                       #{file.replicate}
                     </span>
                   </td>
@@ -289,13 +289,13 @@ export const ExperimentTable: React.FC = () => {
       </div>
       
       {filteredAndSortedFiles.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-text-muted">
           No files match the current filters
         </div>
       )}
       
       {/* Summary */}
-      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 pt-2">
+      <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary pt-2">
         <div className="flex items-center gap-2">
           <span className="font-medium">Experiments:</span>
           <span>{experiments.length > 0 ? experiments.join(', ') : 'None'}</span>

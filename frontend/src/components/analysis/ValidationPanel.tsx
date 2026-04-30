@@ -11,15 +11,15 @@ import { useAnalysisStore, getValidation, canStartAnalysis } from '@/stores/anal
 import type { ValidationWarning } from '@/types';
 
 const statusColors = {
-  valid: 'text-green-600 bg-green-50 border-green-200',
-  invalid: 'text-red-600 bg-red-50 border-red-200',
-  neutral: 'text-gray-600 bg-gray-50 border-gray-200',
+  valid: 'text-success bg-success/5 border-success/20',
+  invalid: 'text-error bg-error/5 border-error/20',
+  neutral: 'text-text-secondary bg-surface border-border',
 };
 
 const iconColors = {
-  valid: 'text-green-500',
-  invalid: 'text-red-500',
-  neutral: 'text-gray-400',
+  valid: 'text-success',
+  invalid: 'text-error',
+  neutral: 'text-text-muted',
 };
 
 const StatusItem: React.FC<{
@@ -40,9 +40,9 @@ const StatusItem: React.FC<{
 const WarningItem: React.FC<{ warning: ValidationWarning }> = ({ warning }) => {
   const Icon = warning.type === 'error' ? XCircle : AlertTriangle;
   const colors = warning.type === 'error'
-    ? 'bg-red-50 border-red-200 text-red-800'
-    : 'bg-amber-50 border-amber-200 text-amber-800';
-  const iconColor = warning.type === 'error' ? 'text-red-500' : 'text-amber-500';
+    ? 'bg-error/5 border-error/20 text-error'
+    : 'bg-warning/5 border-warning/20 text-warning';
+  const iconColor = warning.type === 'error' ? 'text-error' : 'text-warning';
 
   return (
     <div data-testid="validation-error" className={`flex items-start gap-3 p-3 rounded-lg border ${colors}`}>
@@ -77,12 +77,12 @@ export const ValidationPanel: React.FC = () => {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Validation Status</h3>
+        <h3 className="text-lg font-semibold text-text">Validation Status</h3>
         <div className={`
           px-3 py-1 rounded-full text-sm font-medium
           ${canStart 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-amber-100 text-amber-800'
+            ? 'bg-success/10 text-success' 
+            : 'bg-warning/10 text-warning'
           }
         `}>
           {canStart ? 'Ready to Start' : 'Validation Required'}
@@ -115,24 +115,24 @@ export const ValidationPanel: React.FC = () => {
       
       {/* Replicate Details */}
       {Object.keys(replicatesByCondition).length > 0 && (
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-3">Replicates per Condition</h4>
+        <div className="bg-surface rounded-lg p-4">
+          <h4 className="text-sm font-medium text-text mb-3">Replicates per Condition</h4>
           <div className="space-y-2">
             {Object.entries(replicatesByCondition).map(([condition, count]) => (
               <div key={condition} className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">{condition}</span>
+                <span className="text-sm text-text-secondary">{condition}</span>
                 <div className="flex items-center gap-2">
-                  <div className="w-24 bg-gray-200 rounded-full h-2">
+                  <div className="w-24 bg-border rounded-full h-2">
                     <div
                       className={`h-2 rounded-full transition-all ${
-                        count >= 3 ? 'bg-green-500' : 'bg-red-500'
+                        count >= 3 ? 'bg-success' : 'bg-error'
                       }`}
                       style={{ width: `${Math.min((count / 3) * 100, 100)}%` }}
                     />
                   </div>
                   <span className={`
                     text-sm font-medium
-                    ${count >= 3 ? 'text-green-600' : 'text-red-600'}
+                    ${count >= 3 ? 'text-success' : 'text-error'}
                   `}>
                     {count}/3 min
                   </span>
@@ -146,7 +146,7 @@ export const ValidationPanel: React.FC = () => {
       {/* Warnings */}
       {warnings.length > 0 && (
         <div className="space-y-3">
-          <h4 className="text-sm font-medium text-gray-700">Issues to Address</h4>
+          <h4 className="text-sm font-medium text-text">Issues to Address</h4>
           <div className="space-y-2">
             {errorWarnings.map((warning, index) => (
               <WarningItem key={`error-${index}`} warning={warning} />
@@ -160,9 +160,9 @@ export const ValidationPanel: React.FC = () => {
       
       {/* No Warnings */}
       {warnings.length === 0 && selectedFiles.length > 0 && (
-        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-          <p className="text-sm text-green-800">
+        <div className="flex items-center gap-3 p-4 bg-success/5 border border-success/20 rounded-lg">
+          <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+          <p className="text-sm text-success">
             All validation checks passed. Ready to start analysis.
           </p>
         </div>
@@ -170,9 +170,9 @@ export const ValidationPanel: React.FC = () => {
       
       {/* No Files */}
       {selectedFiles.length === 0 && (
-        <div className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <AlertCircle className="w-5 h-5 text-gray-400 flex-shrink-0" />
-          <p className="text-sm text-gray-600">
+        <div className="flex items-center gap-3 p-4 bg-surface border border-border rounded-lg">
+          <AlertCircle className="w-5 h-5 text-text-muted flex-shrink-0" />
+          <p className="text-sm text-text-secondary">
             Upload and select files to see validation status
           </p>
         </div>

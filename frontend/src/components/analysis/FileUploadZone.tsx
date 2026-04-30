@@ -261,8 +261,8 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             relative border-2 border-dashed rounded-xl p-8 cursor-pointer
             transition-all duration-200 ease-in-out
             ${isDragging
-              ? 'border-[#E73564] bg-pink-50'
-              : 'border-[#E73564]/40 hover:border-[#E73564] bg-pink-50/30 hover:bg-pink-50/50'
+              ? 'border-[#E73564] bg-primary/5'
+              : 'border-[#E73564]/40 hover:border-[#E73564] bg-primary/5 hover:bg-primary/10'
             }
           `}
         >
@@ -279,7 +279,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           <div className="flex flex-col items-center text-center space-y-4">
             <div className={`
               p-4 rounded-full transition-colors duration-200
-              ${isDragging ? 'bg-pink-100' : 'bg-[#E73564]/10'}
+              ${isDragging ? 'bg-primary/10' : 'bg-[#E73564]/10'}
             `}>
               <Upload className={`
                 w-8 h-8 transition-colors duration-200
@@ -288,14 +288,14 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             </div>
             
             <div>
-              <p className="text-base font-medium text-gray-900">
+              <p className="text-base font-medium text-text">
                 {isDragging ? 'Drop files here' : 'Drag & drop files here'}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-text-muted mt-1">
                 or click to browse
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Expected: <code className="px-1 py-0.5 bg-gray-100 rounded text-gray-600">PSM_Experiment_Condition_Rep.csv</code>
+              <p className="text-xs text-text-muted mt-1">
+                Expected: <code className="px-1 py-0.5 bg-surface rounded text-text-secondary">PSM_Experiment_Condition_Rep.csv</code>
               </p>
             </div>
             
@@ -314,7 +314,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             onClick={() => {
               addToast('info', 'Database upload feature coming soon (TBD)');
             }}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text bg-background border border-border rounded-lg hover:bg-surface focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
           >
             <Database className="w-4 h-4" />
             Upload from Database
@@ -324,7 +324,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         {/* Uploaded Files List */}
         {uploadedFiles.length > 0 && (
           <div className="mt-6" data-testid="uploaded-files-list">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">Uploaded Files ({uploadedFiles.length})</h4>
+            <h4 className="text-sm font-medium text-text mb-3">Uploaded Files ({uploadedFiles.length})</h4>
             <div className="space-y-2">
               {uploadedFiles.map((file) => {
                 const progress = getProgressForFile(file.filename);
@@ -336,7 +336,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                     key={file.filename}
                     className={`
                       flex items-center justify-between p-3 rounded-lg border
-                      ${hasError ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}
+                      ${hasError ? 'bg-red-50 border-red-200' : 'bg-background border-border'}
                     `}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -345,10 +345,10 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                         ${hasError ? 'text-red-500' : isCompleted ? 'text-green-500' : 'text-gray-400'}
                       `} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-text truncate">
                           {file.filename}
                         </p>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <div className="flex items-center gap-2 text-xs text-text-muted">
                           <span>{formatFileSize(file.size)}</span>
                           <span>•</span>
                           <span>Exp: {file.experiment}</span>
@@ -363,11 +363,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                           <div className="mt-2" data-testid="upload-progress">
                             <div className="w-full bg-gray-200 rounded-full h-1.5">
                               <div
-                                className="bg-cyan-500 h-1.5 rounded-full transition-all duration-300"
+                                className="bg-primary h-1.5 rounded-full transition-all duration-300"
                                 style={{ width: `${progress.progress}%` }}
                               />
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">{progress.progress}%</p>
+                            <p className="text-xs text-text-muted mt-1">{progress.progress}%</p>
                           </div>
                         )}
                         
@@ -398,11 +398,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
       
       {/* Compound File Upload */}
       <div className="space-y-4 pt-6 border-t border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Compound Information (Optional)</h3>
+        <h3 className="text-lg font-semibold text-text">Compound Information (Optional)</h3>
         
-        <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
-          <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-700">
+        <div className="flex items-start gap-3 p-4 bg-info/5 rounded-lg">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-secondary">
             <p className="font-medium">Optional: Upload compound file</p>
             <p className="mt-1">
               Upload a CSV with Corp ID and SMILES columns to display compound structures.
@@ -412,12 +412,12 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         </div>
         
         {compoundFile ? (
-          <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg" data-testid="compound-upload-success">
+          <div className="flex items-center justify-between p-3 bg-success/5 border border-success/20 rounded-lg" data-testid="compound-upload-success">
             <div className="flex items-center gap-3">
-              <File className="w-5 h-5 text-green-500" />
+              <File className="w-5 h-5 text-success" />
               <div>
-                <p className="text-sm font-medium text-gray-900">{compoundFile.filename}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm font-medium text-text">{compoundFile.filename}</p>
+                <p className="text-xs text-text-muted">
                   {formatFileSize(compoundFile.size)} • {compoundFile.compounds.length} compounds
                 </p>
               </div>
@@ -434,15 +434,15 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             onClick={() => compoundInputRef.current?.click()}
             onDragOver={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.add('border-cyan-500', 'bg-cyan-50');
+              e.currentTarget.classList.add('border-primary', 'bg-primary/5');
             }}
             onDragLeave={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.remove('border-cyan-500', 'bg-cyan-50');
+              e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
             }}
             onDrop={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.remove('border-cyan-500', 'bg-cyan-50');
+              e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
               handleFiles(e.dataTransfer.files, true);
             }}
             className="border-2 border-dashed border-gray-300 rounded-xl p-6 cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
@@ -456,9 +456,9 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
               className="hidden"
             />
             <div className="flex flex-col items-center text-center space-y-2">
-              <Upload className="w-6 h-6 text-gray-400" />
-              <p className="text-sm font-medium text-gray-700">Drag & drop compound file here</p>
-              <p className="text-xs text-gray-500">or click to browse • CSV with Corp ID and SMILES columns</p>
+              <Upload className="w-6 h-6 text-text-muted" />
+              <p className="text-sm font-medium text-text">Drag & drop compound file here</p>
+              <p className="text-xs text-text-muted">or click to browse • CSV with Corp ID and SMILES columns</p>
             </div>
           </div>
         )}

@@ -188,44 +188,44 @@ function AnalysisContent() {
   
   if (isCreatingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-surface">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 mx-auto mb-4 text-cyan-500 animate-spin" />
-          <h2 className="text-xl font-semibold text-gray-900">Creating Session...</h2>
-          <p className="text-gray-500 mt-2">Please wait while we set up your analysis</p>
+          <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
+          <h2 className="text-xl font-semibold text-text">Creating Session...</h2>
+          <p className="text-text-muted mt-2">Please wait while we set up your analysis</p>
         </div>
       </div>
     );
   }
   
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="flex-1 overflow-y-auto bg-surface flex">
       {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-screen" />
-      
+
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-background border-b border-border sticky top-0 z-10">
+        <div className="mx-auto px-6 max-w-7xl">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <button
                 onClick={handleBack}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-text-muted hover:text-text hover:bg-surface rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">
+                <h1 className="text-xl font-semibold text-text">
                   Data Input & Configuration
                 </h1>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-text-muted">
                   Session: {sessionId ? `${sessionId.slice(0, 8)}...` : 'Creating...'}
                 </p>
               </div>
             </div>
-            
+
             <button
               data-testid="start-analysis-btn"
               onClick={handleStartAnalysis}
@@ -234,8 +234,8 @@ function AnalysisContent() {
                 inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium
                 transition-all duration-200
                 ${canStart && !isStartingAnalysis
-                  ? 'bg-cyan-600 text-white hover:bg-cyan-700 shadow-sm hover:shadow'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow'
+                  : 'bg-border text-text-muted cursor-not-allowed'
                 }
               `}
             >
@@ -256,58 +256,58 @@ function AnalysisContent() {
       </header>
       
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <main className="mx-auto px-6 py-8 max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Data Input */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-6">
             {/* File Upload Section */}
-            <section className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">1. Data Input</h2>
-                <p className="text-sm text-gray-500 mt-1">
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border">
+                <h2 className="text-lg font-semibold text-text">1. Data Input</h2>
+                <p className="text-sm text-text-muted mt-1">
                   Upload proteomics data files and optional compound information
                 </p>
               </div>
-              <div className="p-6">
+              <div className="p-5">
                 <FileUploadZone sessionId={sessionId} />
               </div>
             </section>
-            
+
             {/* Experiment Table Section */}
-            <section className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">2. Experiment Structure</h2>
-                <p className="text-sm text-gray-500 mt-1">
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border">
+                <h2 className="text-lg font-semibold text-text">2. Experiment Structure</h2>
+                <p className="text-sm text-text-muted mt-1">
                   Review and select files for analysis
                 </p>
               </div>
-              <div className="p-6">
+              <div className="p-5">
                 <ExperimentTable />
               </div>
             </section>
-            
+
             {/* Validation Section */}
-            <section className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">3. Validation</h2>
-                <p className="text-sm text-gray-500 mt-1">
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border">
+                <h2 className="text-lg font-semibold text-text">3. Validation</h2>
+                <p className="text-sm text-text-muted mt-1">
                   Check experiment setup requirements
                 </p>
               </div>
-              <div className="p-6">
+              <div className="p-5">
                 <ValidationPanel />
               </div>
             </section>
-            
+
             {/* Compound Display Section */}
-            <section className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">4. Compound Information</h2>
-                <p className="text-sm text-gray-500 mt-1">
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border">
+                <h2 className="text-lg font-semibold text-text">4. Compound Information</h2>
+                <p className="text-sm text-text-muted mt-1">
                   View compound structures matched to conditions
                 </p>
               </div>
-              <div className="p-6">
+              <div className="p-5">
                 <CompoundDisplay />
               </div>
             </section>
@@ -315,44 +315,15 @@ function AnalysisContent() {
           
           {/* Right Column - Configuration */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Configuration</h2>
-                <p className="text-sm text-gray-500 mt-1">
+            <div className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border">
+                <h2 className="text-lg font-semibold text-text">Configuration</h2>
+                <p className="text-sm text-text-muted mt-1">
                   Set analysis parameters
                 </p>
               </div>
-              <div className="p-6">
+              <div className="p-5">
                 <ConfigPanel />
-              </div>
-              
-              {/* Start Analysis Button (Mobile/Sticky) */}
-              <div className="px-6 py-4 border-t border-gray-200 lg:hidden">
-                <button
-                  data-testid="start-analysis-btn"
-                  onClick={handleStartAnalysis}
-                  disabled={!canStart || isStartingAnalysis}
-                  className={`
-                    w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-medium
-                    transition-all duration-200
-                    ${canStart && !isStartingAnalysis
-                      ? 'bg-cyan-600 text-white hover:bg-cyan-700'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }
-                  `}
-                >
-                  {isStartingAnalysis ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4" />
-                      Start Analysis
-                    </>
-                  )}
-                </button>
               </div>
             </div>
           </div>
@@ -366,10 +337,10 @@ function AnalysisContent() {
 export default function AnalysisPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-surface">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 mx-auto mb-4 text-cyan-500 animate-spin" />
-          <h2 className="text-xl font-semibold text-gray-900">Loading...</h2>
+          <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
+          <h2 className="text-xl font-semibold text-text">Loading...</h2>
         </div>
       </div>
     }>
