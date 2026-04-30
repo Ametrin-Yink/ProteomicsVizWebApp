@@ -56,7 +56,7 @@ export const ConfigPanel: React.FC = () => {
     label: string;
     description?: string;
   }> = ({ checked, onChange, label, description }) => (
-    <div className="flex items-center justify-between p-3 bg-background rounded-lg border border-border hover:border-gray-300 transition-colors">
+    <div className="flex items-center justify-between p-3 bg-background rounded-lg border border-border hover:border-border transition-colors">
       <div className="flex-1 pr-4">
         <label className="text-base font-semibold text-text flex items-center gap-2">
           {label}
@@ -76,7 +76,7 @@ export const ConfigPanel: React.FC = () => {
         className={`
           relative inline-flex h-8 w-16 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
           transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
-          ${checked ? 'bg-primary' : 'bg-gray-300'}
+          ${checked ? 'bg-primary' : 'bg-border'}
         `}
       >
         <span
@@ -119,9 +119,9 @@ export const ConfigPanel: React.FC = () => {
               onChange={(e) => setConfig({ treatment: e.target.value })}
               disabled={conditions.length === 0}
               className={`
-                block w-full rounded-md border-gray-300 shadow-sm
+                block w-full rounded-md border-border shadow-sm
                 focus:border-primary focus:ring-primary sm:text-sm
-                disabled:bg-gray-100 disabled:text-gray-500
+                disabled:bg-surface disabled:text-text-muted
                 ${!isTreatmentControlValid ? 'border-red-300' : ''}
               `}
             >
@@ -151,9 +151,9 @@ export const ConfigPanel: React.FC = () => {
               onChange={(e) => setConfig({ control: e.target.value })}
               disabled={conditions.length === 0}
               className={`
-                block w-full rounded-md border-gray-300 shadow-sm
+                block w-full rounded-md border-border shadow-sm
                 focus:border-primary focus:ring-primary sm:text-sm
-                disabled:bg-gray-100 disabled:text-gray-500
+                disabled:bg-surface disabled:text-text-muted
                 ${!isTreatmentControlValid ? 'border-red-300' : ''}
               `}
             >
@@ -198,7 +198,7 @@ export const ConfigPanel: React.FC = () => {
             data-testid="organism-select"
             value={config.organism}
             onChange={(e) => setConfig({ organism: e.target.value })}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+            className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
           >
             <option value="">Select organism...</option>
             {organisms
@@ -235,7 +235,7 @@ export const ConfigPanel: React.FC = () => {
           </div>
 
           {!config.remove_razor && (
-            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+            <div className="flex items-start gap-3 p-3 bg-warning/5 border border-warning/20 rounded-lg text-sm text-warning">
               <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
               <span>
                 <strong>Warning:</strong> Bioinformatics analysis will be less accurate if razor information is not removed.

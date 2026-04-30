@@ -248,7 +248,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     <div className="space-y-6">
       {/* Proteomics File Upload */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">Proteomics Data Files</h3>
+        <h3 className="text-lg font-semibold text-text">Proteomics Data Files</h3>
         
         <div
           onDragOver={handleDragOver}
@@ -361,7 +361,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                         {/* Progress bar */}
                         {progress && progress.status === 'uploading' && (
                           <div className="mt-2" data-testid="upload-progress">
-                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                            <div className="w-full bg-border rounded-full h-1.5">
                               <div
                                 className="bg-primary h-1.5 rounded-full transition-all duration-300"
                                 style={{ width: `${progress.progress}%` }}
@@ -397,7 +397,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
       </div>
       
       {/* Compound File Upload */}
-      <div className="space-y-4 pt-6 border-t border-gray-200">
+      <div className="space-y-4 pt-6 border-t border-border">
         <h3 className="text-lg font-semibold text-text">Compound Information (Optional)</h3>
         
         <div className="flex items-start gap-3 p-4 bg-info/5 rounded-lg">
@@ -445,7 +445,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
               e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
               handleFiles(e.dataTransfer.files, true);
             }}
-            className="border-2 border-dashed border-gray-300 rounded-xl p-6 cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+            className="border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:border-border hover:bg-surface transition-all duration-200"
           >
             <input
               ref={compoundInputRef}

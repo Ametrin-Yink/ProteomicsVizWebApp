@@ -39,7 +39,7 @@ function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string 
     return (
       <div className="bg-gray-100 rounded-lg p-6 text-center">
         <ImageOff className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-        <p className="text-xs text-gray-500">No SMILES available</p>
+        <p className="text-xs text-text-muted">No SMILES available</p>
       </div>
     );
   }
@@ -48,7 +48,7 @@ function CompoundStructure({ smiles, corpId }: { smiles: string; corpId: string 
     return (
       <div className="bg-gray-100 rounded-lg p-6 text-center">
         <ImageOff className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-        <p className="text-xs text-gray-500 mb-2">Failed to load structure</p>
+        <p className="text-xs text-text-muted mb-2">Failed to load structure</p>
         <button
           onClick={handleRetry}
           className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-primary hover:text-primary-dark hover:bg-primary/5 rounded transition-colors"
@@ -202,7 +202,7 @@ export const CompoundDisplay: React.FC = () => {
               </div>
             ) : (
               <div className="text-center py-6">
-                <AlertCircle className="w-8 h-8 mx-auto text-amber-500 mb-2" />
+                <AlertCircle className="w-8 h-8 mx-auto text-warning mb-2" />
                 <p className="text-sm text-text-secondary">No matching compound</p>
                 <p className="text-xs text-text-muted mt-1">
                   No Corp ID matches &quot;{condition}&quot;
@@ -260,7 +260,7 @@ export const CompoundDisplay: React.FC = () => {
           {' '}conditions matched
         </div>
         {unmatchedConditions.length > 0 && (
-          <div className="text-xs text-amber-600">
+          <div className="text-xs text-warning">
             {unmatchedConditions.length} condition(s) without match
           </div>
         )}
