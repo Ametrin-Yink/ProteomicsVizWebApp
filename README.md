@@ -114,7 +114,8 @@ ProteomicsVizWebApp/
 ## Documentation
 
 - **[AGENTS/](AGENTS/)** — Developer guides covering architecture, coding standards, API contract, and more
-- **[docs/openapi.yaml](docs/openapi.yaml)** — Full API specification
+- **[docs/api/openapi.yaml](docs/api/openapi.yaml)** — Full API specification
+- **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** — Contributor guidelines
 
 ## Testing
 

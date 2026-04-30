@@ -18,7 +18,7 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 ProteomicsVizWebApp/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routes/        # 7 route modules
+│   │   ├── api/routes/        # 8 route modules
 │   │   ├── core/              # config, exceptions
 │   │   ├── db/                # JSON session store
 │   │   ├── models/            # Pydantic models
@@ -38,7 +38,7 @@ ProteomicsVizWebApp/
 │   ├── backend/               # pytest unit + integration
 │   ├── e2e/                   # Playwright E2E
 │   └── fixtures/              # Test data
-├── AGENTS/                    # Developer guides (8 files)
+├── AGENTS/                    # Developer guides
 ├── docs/
 │   └── openapi.yaml           # API specification
 └── backend/sessions/          # Runtime session storage
@@ -48,8 +48,8 @@ ProteomicsVizWebApp/
 
 | Purpose | Color | Hex |
 |---------|-------|-----|
-| Upregulated | Pink | `#E73564` |
-| Downregulated | Blue | `#00ADEF` |
+| Upregulated / Primary | Pink (Coral) | `#E73564` |
+| Downregulated / Secondary | Blue (Cyan) | `#00ADEF` |
 | Neutral | Gray | `#6B7280` |
 
 ## Key Guides
@@ -61,6 +61,6 @@ ProteomicsVizWebApp/
 | API contract | [04-api-contract.md](04-api-contract.md) |
 | State management | [05-state-management.md](05-state-management.md) |
 | Error handling | [06-error-handling.md](06-error-handling.md) |
-| Testing | [09-testing.md](09-testing.md) |
-| Pipeline | [10-processing-pipeline.md](10-processing-pipeline.md) |
-| Lessons learned | [13-lessons-learned.md](13-lessons-learned.md) |
+| Testing | [07-testing.md](07-testing.md) |
+| Pipeline | [08-processing-pipeline.md](08-processing-pipeline.md) |
+| Lessons learned | [09-lessons-learned.md](09-lessons-learned.md) |

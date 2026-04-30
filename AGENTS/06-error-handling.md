@@ -468,4 +468,4 @@ logger.error(
 
 ## Next Steps
 
-See [07-security.md](07-security.md) for security guidelines.
+See [07-testing.md](07-testing.md) for testing guidelines.

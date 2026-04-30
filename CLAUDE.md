@@ -199,9 +199,9 @@ Sessions persisted to `backend/sessions/{session_id}/`:
 - `frontend/next.config.ts` - Frontend config, API proxy to `http://127.0.0.1:8000`
 - `backend/scripts/msqrob2_protein.R` / `msqrob2_de.R` - Steps 6 & 7
 - `backend/app/services/processing_orchestrator.py` - Pipeline orchestration
-- `AGENTS/` - 9 developer guides
-- `docs/openapi.yaml` - API specification
-- `PROJECT_STRUCTURE.md` - Folder organization
+- `AGENTS/` - 9 developer guides (01-overview through 09-lessons-learned)
+- `docs/api/openapi.yaml` - API specification
+- `docs/CONTRIBUTING.md` - Contributor guidelines
 
 ## Troubleshooting
 
