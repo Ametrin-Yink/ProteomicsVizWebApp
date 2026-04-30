@@ -6,6 +6,7 @@ Tests R package availability and script execution.
 
 import subprocess
 import pytest
+from pathlib import Path
 
 
 class TestRPackageAvailability:
@@ -21,38 +22,16 @@ class TestRPackageAvailability:
 
         assert result.returncode == 0
 
-    def test_msqrob2_available(self):
-        """Verify msqrob2 package is installed."""
+    @pytest.mark.parametrize("package", ["msqrob2", "QFeatures", "limma"])
+    def test_r_package_available(self, package):
+        """Verify R package is installed."""
         result = subprocess.run(
-            ['Rscript', '-e', 'library(msqrob2); cat("OK")'],
+            ['Rscript', '-e', f'library({package})'],
             capture_output=True,
             text=True
         )
 
-        assert result.returncode == 0
-        assert "OK" in result.stdout
-
-    def test_qfeatures_available(self):
-        """Verify QFeatures package is installed."""
-        result = subprocess.run(
-            ['Rscript', '-e', 'library(QFeatures); cat("OK")'],
-            capture_output=True,
-            text=True
-        )
-
-        assert result.returncode == 0
-        assert "OK" in result.stdout
-
-    def test_limma_available(self):
-        """Verify limma package is installed."""
-        result = subprocess.run(
-            ['Rscript', '-e', 'library(limma); cat("OK")'],
-            capture_output=True,
-            text=True
-        )
-
-        assert result.returncode == 0
-        assert "OK" in result.stdout
+        assert result.returncode == 0, f"{package} not installed"
 
 
 class TestRScripts:
@@ -60,21 +39,18 @@ class TestRScripts:
 
     def test_verify_r_packages_script_exists(self):
         """Verify R package verification script exists."""
-        from pathlib import Path
         script_path = Path(__file__).parent.parent.parent.parent / "backend" / "scripts" / "verify_r_packages.R"
 
         assert script_path.exists()
 
     def test_msqrob2_protein_script_exists(self):
         """Verify protein abundance script exists."""
-        from pathlib import Path
         script_path = Path(__file__).parent.parent.parent.parent / "backend" / "scripts" / "msqrob2_protein.R"
 
         assert script_path.exists()
 
     def test_msqrob2_de_script_exists(self):
         """Verify DE analysis script exists."""
-        from pathlib import Path
         script_path = Path(__file__).parent.parent.parent.parent / "backend" / "scripts" / "msqrob2_de.R"
 
         assert script_path.exists()

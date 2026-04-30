@@ -9,6 +9,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
+from app.services.data_processor import DataProcessor, ProcessingConfig
+
 
 class TestDataProcessor:
     """Test DataProcessor class."""
@@ -16,7 +18,6 @@ class TestDataProcessor:
     @pytest.fixture
     def processor(self):
         """Create a DataProcessor instance."""
-        from app.services.data_processor import DataProcessor, ProcessingConfig
         config = ProcessingConfig()
         return DataProcessor(config)
 
@@ -156,7 +157,6 @@ class TestDataProcessor:
 
     def test_step5_strict_filtering(self):
         """Test strict filtering (20% threshold, very few missing allowed)."""
-        from app.services.data_processor import DataProcessor, ProcessingConfig
         strict_proc = DataProcessor(ProcessingConfig(strict_filtering=True))
 
         # Strict: 20% threshold, 4 replicates → max 0 missing allowed
@@ -191,7 +191,6 @@ class TestDataProcessor:
         incorrectly passing because the filter counted NAs in existing
         rows instead of checking actual replicate coverage.
         """
-        from app.services.data_processor import DataProcessor, ProcessingConfig
         proc = DataProcessor(ProcessingConfig(strict_filtering=False))
 
         # Build dataset that defines all 7 samples (4 DMSO + 3 INCB)
@@ -230,8 +229,6 @@ class TestDataProcessor:
 
     def test_processing_config_defaults(self):
         """Test ProcessingConfig default values."""
-        from app.services.data_processor import ProcessingConfig
-
         config = ProcessingConfig()
 
         assert config.remove_razor is False
@@ -239,8 +236,6 @@ class TestDataProcessor:
 
     def test_processing_config_custom(self):
         """Test ProcessingConfig with custom values."""
-        from app.services.data_processor import ProcessingConfig
-
         config = ProcessingConfig(remove_razor=True, strict_filtering=True)
 
         assert config.remove_razor is True

@@ -109,12 +109,6 @@ def mock_processing_state():
     }
 
 
-@pytest.fixture(autouse=True)
-def reset_state():
-    """Reset global state before each test."""
-    # Add any global state reset logic here
-    yield
-
 
 @pytest.fixture(scope="session")
 def test_data_dir() -> Path:
