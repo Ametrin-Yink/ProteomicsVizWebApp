@@ -165,7 +165,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
         {/* Gene Names - REMOVED as per user request */}
         {/*
         <div data-testid="gene-name" className="flex justify-between items-center py-2 border-b border-border">
-          <span className="text-sm text-gray-500">Gene Name(s)</span>
+          <span className="text-sm text-text-muted">Gene Name(s)</span>
           <span className="text-sm font-medium text-text">{geneNames.join(', ') || '-'}</span>
         </div>
         */}

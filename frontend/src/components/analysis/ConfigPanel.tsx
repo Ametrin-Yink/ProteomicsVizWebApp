@@ -111,7 +111,7 @@ export const ConfigPanel: React.FC = () => {
           <div className="space-y-2">
             <label className="block text-sm font-medium text-text">
               Treatment
-              <span className="text-red-500 ml-1">*</span>
+              <span className="text-error ml-1">*</span>
             </label>
             <select
               data-testid="treatment-select"
@@ -143,7 +143,7 @@ export const ConfigPanel: React.FC = () => {
           <div className="space-y-2">
             <label className="block text-sm font-medium text-text">
               Control
-              <span className="text-red-500 ml-1">*</span>
+              <span className="text-error ml-1">*</span>
             </label>
             <select
               data-testid="control-select"
@@ -169,7 +169,7 @@ export const ConfigPanel: React.FC = () => {
         
         {/* Validation Error */}
         {!isTreatmentControlValid && (
-          <div data-testid="config-error" className="flex items-center gap-2 text-sm text-red-600">
+          <div data-testid="config-error" className="flex items-center gap-2 text-sm text-error">
             <AlertCircle className="w-4 h-4" />
             <span>Treatment and Control must be different</span>
           </div>
@@ -180,7 +180,7 @@ export const ConfigPanel: React.FC = () => {
       <div className="space-y-2">
         <label className="block text-sm font-medium text-text">
           Organism
-          <span className="text-red-500 ml-1">*</span>
+          <span className="text-error ml-1">*</span>
         </label>
         
         {isLoadingOrganisms ? (
@@ -189,7 +189,7 @@ export const ConfigPanel: React.FC = () => {
             <span>Loading organisms...</span>
           </div>
         ) : loadError ? (
-          <div data-testid="config-error" className="flex items-center gap-2 text-sm text-red-600 py-2">
+          <div data-testid="config-error" className="flex items-center gap-2 text-sm text-error py-2">
             <AlertCircle className="w-4 h-4" />
             <span>{loadError}</span>
           </div>

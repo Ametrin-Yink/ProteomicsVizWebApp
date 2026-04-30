@@ -233,7 +233,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
 
   const helperTextClasses = cn(
     'text-xs',
-    error ? 'text-red-500' : 'text-[#64748b]'
+    error ? 'text-error' : 'text-[#64748b]'
   );
 
   return (

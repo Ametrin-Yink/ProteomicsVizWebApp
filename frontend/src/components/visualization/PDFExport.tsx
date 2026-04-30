@@ -368,7 +368,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         <button
           data-testid="cancel-pdf-btn"
           onClick={() => { setStatus('idle'); setProgress(0); }}
-          className="flex items-center gap-1 px-3 py-1 text-sm text-red-600 hover:text-red-800 transition-colors"
+          className="flex items-center gap-1 px-3 py-1 text-sm text-error hover:text-error transition-colors"
         >
           <X className="w-4 h-4" />
           Dismiss
@@ -443,7 +443,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
   if (status === 'error') {
     return (
       <div data-testid="pdf-error" className="flex items-center gap-4">
-        <span className="text-red-600">PDF generation failed: {errorMessage}</span>
+        <span className="text-error">PDF generation failed: {errorMessage}</span>
         <button
           data-testid="retry-pdf-btn"
           onClick={handleRetry}
