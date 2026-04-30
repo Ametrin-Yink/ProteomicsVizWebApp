@@ -316,8 +316,40 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           >
             New Analysis
           </Button>
+        </div>
 
-          {/* Operation buttons row: Refresh Sessions + Select */}
+        {/* Tabs */}
+        <div className="px-4 pb-2 flex-shrink-0">
+          <div className="flex gap-0.5 p-0.5 bg-surface rounded-lg">
+            <button
+              className={cn(
+                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
+                activeTab === 'active'
+                  ? 'bg-background text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text'
+              )}
+              onClick={() => setActiveTab('active')}
+            >
+              <Loader2 className="w-3.5 h-3.5" />
+              Active ({groupedSessions.active.length})
+            </button>
+            <button
+              className={cn(
+                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
+                activeTab === 'completed'
+                  ? 'bg-background text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text'
+              )}
+              onClick={() => setActiveTab('completed')}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Completed ({groupedSessions.completed.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Operation buttons row: Refresh Sessions + Select */}
+        <div className="px-4 pb-2 flex-shrink-0">
           <div className="flex gap-1">
             <button
               onClick={handleRefresh}
@@ -344,36 +376,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
             >
               {isSelectMode ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
               <span>Select</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="px-4 pt-0 pb-2 flex-shrink-0">
-          <div className="flex gap-0.5 p-0.5 bg-surface rounded-lg">
-            <button
-              className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
-                activeTab === 'active'
-                  ? 'bg-background text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text'
-              )}
-              onClick={() => setActiveTab('active')}
-            >
-              <Loader2 className="w-3.5 h-3.5" />
-              Active ({groupedSessions.active.length})
-            </button>
-            <button
-              className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
-                activeTab === 'completed'
-                  ? 'bg-background text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text'
-              )}
-              onClick={() => setActiveTab('completed')}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Completed ({groupedSessions.completed.length})
             </button>
           </div>
         </div>
