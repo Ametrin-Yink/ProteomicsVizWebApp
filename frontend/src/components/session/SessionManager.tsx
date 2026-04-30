@@ -231,14 +231,14 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
         <div
           data-testid="session-panel"
           className={cn(
-            'fixed left-0 top-0 h-full bg-white border-r border-[#e2e8f0]',
+            'fixed left-0 top-0 h-full bg-white border-r border-border',
             'flex flex-col items-center py-4 z-40',
             'w-16',
             className
           )}
         >
           {/* Logo */}
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E73564] to-[#00ADEF] flex items-center justify-center mb-6">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center mb-6">
             <FlaskConical className="w-5 h-5 text-white" />
           </div>
 
@@ -264,8 +264,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                   'w-10 h-10 rounded-lg flex items-center justify-center',
                   'transition-colors',
                   currentSession?.id === session.id
-                    ? 'bg-[#E73564]/10 text-[#E73564]'
-                    : 'hover:bg-[#f8f9fc] text-[#64748b]'
+                    ? 'bg-primary/10 text-primary'
+                    : 'hover:bg-surface text-text-secondary'
                 )}
                 title={session.name}
               >
@@ -300,7 +300,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       <div
         data-testid="session-panel"
         className={cn(
-          'fixed left-0 top-14 bottom-0 z-30 w-80 bg-white border-r border-[#e2e8f0]',
+          'fixed left-0 top-14 bottom-0 z-30 w-80 bg-white border-r border-border',
           'flex flex-col',
           className
         )}
@@ -324,7 +324,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               disabled={isScanning}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex-1 justify-center',
-                'text-[#64748b] hover:text-[#1a1a2e] hover:bg-[#f8f9fc]',
+                'text-text-secondary hover:text-text hover:bg-surface',
                 isScanning && 'opacity-60 cursor-not-allowed'
               )}
               data-testid="refresh-sessions-btn"
@@ -337,8 +337,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex-1 justify-center',
                 isSelectMode
-                  ? 'bg-[#E73564]/10 text-[#E73564]'
-                  : 'text-[#64748b] hover:text-[#1a1a2e] hover:bg-[#f8f9fc]'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-text-secondary hover:text-text hover:bg-surface'
               )}
               data-testid="select-mode-btn"
             >
@@ -350,13 +350,13 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
         {/* Tabs */}
         <div className="px-4 pt-0 pb-2 flex-shrink-0">
-          <div className="flex gap-0.5 p-0.5 bg-[#f8f9fc] rounded-lg">
+          <div className="flex gap-0.5 p-0.5 bg-surface rounded-lg">
             <button
               className={cn(
                 'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
                 activeTab === 'active'
-                  ? 'bg-white text-[#E73564] shadow-sm'
-                  : 'text-[#64748b] hover:text-[#1a1a2e]'
+                  ? 'bg-background text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text'
               )}
               onClick={() => setActiveTab('active')}
             >
@@ -367,8 +367,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               className={cn(
                 'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
                 activeTab === 'completed'
-                  ? 'bg-white text-[#E73564] shadow-sm'
-                  : 'text-[#64748b] hover:text-[#1a1a2e]'
+                  ? 'bg-background text-primary shadow-sm'
+                  : 'text-text-secondary hover:text-text'
               )}
               onClick={() => setActiveTab('completed')}
             >
@@ -385,10 +385,10 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               type="checkbox"
               checked={selectedIds.size === tabSessions.length && tabSessions.length > 0}
               onChange={toggleSelectAll}
-              className="accent-[#E73564] w-4 h-4"
+              className="accent-primary w-4 h-4"
               data-testid="select-all-checkbox"
             />
-            <span className="text-xs text-[#64748b]">
+            <span className="text-xs text-text-secondary">
               Select All ({tabSessions.length})
             </span>
           </div>
@@ -398,24 +398,24 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
         <div data-testid="session-list" className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
           {sessionsList.length === 0 ? (
             <div data-testid="no-sessions-message" className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#f8f9fc] flex items-center justify-center">
-                <FlaskConical className="w-8 h-8 text-[#94a3b8]" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
+                <FlaskConical className="w-8 h-8 text-muted" />
               </div>
-              <p className="text-sm text-[#64748b]">
+              <p className="text-sm text-text-secondary">
                 {sessionError ? 'Failed to load sessions' : 'No sessions yet'}
               </p>
               {sessionError && (
-                <p className="text-xs text-red-500 mt-1">
+                <p className="text-xs text-error mt-1">
                   {sessionError}
                 </p>
               )}
-              <p className="text-xs text-[#94a3b8] mt-1">
+              <p className="text-xs text-muted mt-1">
                 {sessionError ? 'Click Refresh Sessions to retry' : 'Create your first analysis'}
               </p>
             </div>
           ) : tabSessions.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-sm text-[#64748b]">
+              <p className="text-sm text-text-secondary">
                 No {activeTab} sessions
               </p>
             </div>
@@ -440,13 +440,13 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
         {/* Bulk delete bar */}
         {isSelectMode && selectedIds.size > 0 && (
-          <div className="p-4 border-t border-[#e2e8f0] bg-[#fef2f2] flex-shrink-0">
+          <div className="p-4 border-t border-border bg-error/5 flex-shrink-0">
             <Button
               variant="primary"
               fullWidth
               leftIcon={<Trash2 className="w-4 h-4" />}
               onClick={handleDeleteSelected}
-              className="!bg-red-600 hover:!bg-red-700"
+              className="!bg-error hover:!bg-error/90"
               data-testid="delete-selected-btn"
             >
               Delete Selected ({selectedIds.size})
@@ -455,12 +455,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
         )}
 
         {/* Footer */}
-        <div className="p-3 border-t border-[#e2e8f0] text-center flex-shrink-0">
+        <div className="p-3 border-t border-border text-center flex-shrink-0">
           <a
             href="https://github.com/Ametrin-Yink"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-[#94a3b8] hover:text-[#E73564] transition-colors"
+            className="text-xs text-muted hover:text-primary transition-colors"
           >
             ProteomicsViz by Ametrin-Yink
           </a>
