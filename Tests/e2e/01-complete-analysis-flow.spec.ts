@@ -21,7 +21,6 @@ import { test, expect, Page } from '@playwright/test';
 import {
   createSession,
   uploadFiles,
-  uploadCompoundFile,
   configureAnalysis,
   startAnalysis,
   cleanupSession,

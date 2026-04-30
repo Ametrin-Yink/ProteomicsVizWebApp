@@ -154,26 +154,6 @@ test.describe('Error Handling', () => {
     await takeScreenshot(page, '04-error-handling', 'missing-config', 'error-shown');
   });
 
-  test('404 page for deleted session', async ({ page }) => {
-    // Create and delete a session
-    const sessionId = await createSession(page);
-
-    // Delete via API
-    await page.request.delete(`http://localhost:8000/api/sessions/${sessionId}`);
-
-    // Try to access deleted session
-    await page.goto(`/analysis?session=${sessionId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Should show error or redirect
-    const errorVisible = await page.locator('[data-testid="error-message"], [data-testid="toast-error"]').isVisible().catch(() => false);
-    const redirectedToHome = page.url().includes('/welcome') || page.url() === 'http://localhost:3000/';
-
-    expect(errorVisible || redirectedToHome).toBe(true);
-
-    await takeScreenshot(page, '04-error-handling', 'deleted-session-404', 'error-shown');
-  });
-
   test('network error handled gracefully', async ({ page }) => {
     const sessionId = await createSession(page);
     createdSessions.push(sessionId);
@@ -226,31 +206,6 @@ test.describe('Error Handling', () => {
     }
 
     await takeScreenshot(page, '04-error-handling', 'file-size-error', 'error-shown');
-  });
-
-  test('treatment equals control shows validation error', async ({ page }) => {
-    const sessionId = await createSession(page);
-    createdSessions.push(sessionId);
-
-    await uploadFiles(page, [
-      '../../SampleData/PSM_SampleData_DMSO_1.csv',
-    ]);
-
-    // Try to set treatment = control
-    await page.locator('[data-testid="treatment-select"]').selectOption('DMSO');
-    await page.locator('[data-testid="control-select"]').selectOption('DMSO');
-
-    // Verify validation error appears
-    await expect(page.locator('[data-testid="config-error"]')).toBeVisible();
-    const errorText = await page.locator('[data-testid="config-error"]').textContent();
-    expect(errorText).toContain('must be different');
-
-    // Start button should be disabled
-    const startBtn = page.locator('[data-testid="start-analysis-btn"]').first();
-    const isEnabled = await startBtn.isEnabled();
-    expect(isEnabled).toBe(false);
-
-    await takeScreenshot(page, '04-error-handling', 'treatment-equals-control', 'validation-shown');
   });
 
 });

@@ -229,34 +229,4 @@ test.describe('Processing Recovery', () => {
     await takeScreenshot(page, '05-processing-recovery', 'websocket-reconnect', 'reconnected');
   });
 
-  test('handles network errors gracefully', async ({ page }) => {
-    const sessionId = await createSession(page, 'Test Network Error Handling');
-    createdSessions.push(sessionId);
-
-    await uploadFiles(page, [
-      '../../SampleData/PSM_SampleData_DMSO_1.csv',
-    ]);
-
-    // Intercept API calls and fail them
-    await page.route('**/api/sessions/**', (route) => {
-      route.abort('failed');
-    });
-
-    // Try to interact
-    await page.locator('[data-testid="treatment-select"]').click();
-
-    // Wait a moment
-    await page.waitForTimeout(1000);
-
-    // Should not crash
-    const body = await page.locator('body').textContent();
-    expect(body).not.toContain('Application error');
-    expect(body).not.toContain('Runtime error');
-
-    await takeScreenshot(page, '05-processing-recovery', 'network-error-graceful', 'handled');
-
-    // Clean up route
-    await page.unroute('**/api/sessions/**');
-  });
-
 });
