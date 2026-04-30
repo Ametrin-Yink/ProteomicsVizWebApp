@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { DEResult, ProteinAbundance, PeptideAbundanceData, VolcanoFilters } from '@/types/api';
-import { formatNumber, formatPValue, getSignificanceLabel, getVolcanoPointColor } from '@/lib/utils';
+import { formatNumber, formatPValue, getSignificanceLabel, getVolcanoPointColor, parseDelimited } from '@/lib/utils';
 import { getProteinAbundance, getPeptideAbundance } from '@/lib/api';
 import { fetchGeneNames } from '@/lib/uniprot';
 import { ProteinAbundancePlot, PeptideAbundancePlot } from './AbundancePlot';
@@ -25,17 +25,11 @@ interface ParsedProteinInfo {
 // Parse multiple UniProt IDs and gene names
 function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
   // Split accessions by comma or semicolon
-  const accessions = protein.master_protein_accessions
-    .split(/[,;]/)
-    .map(s => s.trim())
-    .filter(Boolean);
+  const accessions = parseDelimited(protein.master_protein_accessions);
 
   // Split gene names by comma or semicolon
   const geneNames = protein.gene_name
-    ? protein.gene_name
-        .split(/[,;]/)
-        .map(s => s.trim())
-        .filter(Boolean)
+    ? parseDelimited(protein.gene_name)
     : [];
 
   // If no gene names provided, return empty array for each accession

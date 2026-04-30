@@ -110,6 +110,11 @@ export function formatNumber(
   return value.toFixed(decimals);
 }
 
+// Parse comma/semicolon-delimited strings (e.g., UniProt accessions, gene names)
+export function parseDelimited(str: string): string[] {
+  return str.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+}
+
 // Format p-value with scientific notation if small
 export function formatPValue(value: number | undefined | null): string {
   if (value === undefined || value === null) return '-';

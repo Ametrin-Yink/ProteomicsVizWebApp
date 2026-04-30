@@ -3,7 +3,7 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import type { DEResult, VolcanoFilters } from '@/types/api';
-import { getVolcanoPointColor } from '@/lib/utils';
+import { getVolcanoPointColor, parseDelimited } from '@/lib/utils';
 import { X } from 'lucide-react';
 
 // Dynamically import Plotly to avoid SSR issues
@@ -14,7 +14,7 @@ interface VolcanoPlotProps {
   filters: VolcanoFilters;
   selectedProteins: Set<string>;
   markedProteins: Set<string>;
-  onSelectProteins: (proteins: string[], mode?: 'click' | 'box' | 'lasso') => void;
+  onSelectProteins: (proteins: string[]) => void;
   onClearSelection?: () => void;
 }
 
@@ -30,40 +30,25 @@ export default function VolcanoPlot({
 
   // Prepare plot data
   const plotData = useMemo(() => {
-    // Calculate -log10(p-value)
-    const xValues = data.map((d) => d.log_fc);
-    const yValues = data.map((d) => -Math.log10(d.pval || 1e-300));
-
-    // Determine colors based on significance
-    const colors = data.map((d) =>
-      getVolcanoPointColor(d.log_fc, d.pval, d.adj_pval, filters)
-    );
-
-    // Determine sizes based on selection
-    const sizes = data.map((d) =>
-      selectedProteins.has(d.master_protein_accessions) ? 12 : 6
-    );
-
-    // Determine opacities
-    const opacities = data.map((d) =>
-      selectedProteins.has(d.master_protein_accessions) ? 1.0 : 0.7
-    );
-
-    // Determine border colors
-    const lineColors = data.map((d) =>
-      selectedProteins.has(d.master_protein_accessions) ? '#000000' : 'transparent'
-    );
-
-    // Determine line widths
-    const lineWidths = data.map((d) =>
-      selectedProteins.has(d.master_protein_accessions) ? 2 : 0
-    );
+    // Single pass: build all point properties at once
+    const points = data.map((d) => {
+      const isSelected = selectedProteins.has(d.master_protein_accessions);
+      return {
+        x: d.log_fc,
+        y: -Math.log10(d.pval || 1e-300),
+        color: getVolcanoPointColor(d.log_fc, d.pval, d.adj_pval, filters),
+        size: isSelected ? 12 : 6,
+        opacity: isSelected ? 1.0 : 0.7,
+        lineColor: isSelected ? '#000000' : 'transparent',
+        lineWidth: isSelected ? 2 : 0,
+        customdata: d.master_protein_accessions,
+      };
+    });
 
     // Create hover text - handle multiple UniProt IDs
     const hoverText = data.map((d) => {
-      // Parse gene names for multiple accessions
-      const accessions = d.master_protein_accessions.split(/[,;]/).map(s => s.trim()).filter(Boolean);
-      const genes = d.gene_name ? d.gene_name.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [];
+      const accessions = parseDelimited(d.master_protein_accessions);
+      const genes = d.gene_name ? parseDelimited(d.gene_name) : [];
       const geneDisplay = genes.length > 0 ? genes.join(', ') : 'N/A';
 
       return `<b>${accessions.join(', ')}</b><br>` +
@@ -76,41 +61,41 @@ export default function VolcanoPlot({
     // Use Canvas scatter (not WebGL) for reliable click/hover hit detection
     return [
       {
-        x: xValues,
-        y: yValues,
+        x: points.map((p) => p.x),
+        y: points.map((p) => p.y),
         mode: 'markers' as const,
         type: 'scatter' as const,
         marker: {
-          color: colors,
-          size: sizes,
-          opacity: opacities,
+          color: points.map((p) => p.color),
+          size: points.map((p) => p.size),
+          opacity: points.map((p) => p.opacity),
           line: {
-            color: lineColors,
-            width: lineWidths,
+            color: points.map((p) => p.lineColor),
+            width: points.map((p) => p.lineWidth),
           },
         },
         text: hoverText,
         hoverinfo: 'text',
-        customdata: data.map((d) => d.master_protein_accessions),
+        customdata: points.map((p) => p.customdata),
         name: 'Proteins',
       },
       // Marker labels trace -- only for marked proteins
-      {
-        x: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => d.log_fc),
-        y: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => -Math.log10(d.pval || 1e-300)),
-        mode: 'text' as const,
-        type: 'scatter' as const,
-        text: data.filter((d) => markedProteins.has(d.master_protein_accessions)).map((d) => d.gene_name || d.master_protein_accessions.split(/[,;]/)[0].trim()),
-        textposition: 'top center' as const,
-        texttemplate: '%{text}',
-        hoverinfo: 'skip',
-        showlegend: false,
-        marker: {
-          size: 0,
-          opacity: 0,
-        },
-        name: 'Markers',
-      },
+      (() => {
+        const marked = data.filter((d) => markedProteins.has(d.master_protein_accessions));
+        return {
+          x: marked.map((d) => d.log_fc),
+          y: marked.map((d) => -Math.log10(d.pval || 1e-300)),
+          mode: 'text' as const,
+          type: 'scatter' as const,
+          text: marked.map((d) => d.gene_name || parseDelimited(d.master_protein_accessions)[0]),
+          textposition: 'top center' as const,
+          texttemplate: '%{text}',
+          hoverinfo: 'skip',
+          showlegend: false,
+          marker: { size: 0, opacity: 0 },
+          name: 'Markers',
+        };
+      })(),
     ];
   }, [data, filters, selectedProteins, markedProteins]);
 
@@ -217,7 +202,6 @@ export default function VolcanoPlot({
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
       margin: { l: 60, r: 30, t: 50, b: 60 },
-      dragmode: 'select' as const,
     }),
     [thresholdShapes]
   );
@@ -233,23 +217,11 @@ export default function VolcanoPlot({
     []
   );
 
-  // Handle click events - select single protein (replaces any existing selection)
-  const handleClick = useCallback(
+  // Handle click/double-click events - select single protein
+  const handlePointClick = useCallback(
     (event?: { points?: Array<{ customdata: string }> }) => {
       if (event?.points && event.points.length > 0) {
-        const protein = event.points[0].customdata;
-        onSelectProteins([protein], 'click');
-      }
-    },
-    [onSelectProteins]
-  );
-
-  // Handle double-click events - select single protein (same as single click)
-  const handleDoubleClick = useCallback(
-    (event?: { points?: Array<{ customdata: string }> }) => {
-      if (event?.points && event.points.length > 0) {
-        const protein = event.points[0].customdata;
-        onSelectProteins([protein], 'click');
+        onSelectProteins([event.points[0].customdata]);
       }
     },
     [onSelectProteins]
@@ -310,8 +282,8 @@ export default function VolcanoPlot({
             data={plotData}
             layout={layoutWithDragMode}
             config={config}
-            onClick={handleClick}
-            onDoubleClick={handleDoubleClick}
+            onClick={handlePointClick}
+            onDoubleClick={handlePointClick}
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />

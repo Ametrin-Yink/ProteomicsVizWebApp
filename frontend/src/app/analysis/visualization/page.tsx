@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
@@ -9,7 +9,7 @@ import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
 import { getDEResults, getSession, updateSessionVisualizationState } from '@/lib/api';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
-import { isSignificantVolcano } from '@/lib/utils';
+import { isSignificantVolcano, parseDelimited } from '@/lib/utils';
 
 
 function ResultsContent() {
@@ -96,18 +96,8 @@ function ResultsContent() {
   }, [sessionId]);
 
   // Handle protein selection from volcano plot
-  const handleSelectProteins = useCallback((proteins: string[], mode?: 'click' | 'box' | 'lasso') => {
-    if (mode === 'click') {
-      // Click mode: clear previous selection and select only the clicked protein
-      setSelectedProteins(new Set(proteins));
-    } else {
-      // Box/lasso mode: add to existing selection
-      setSelectedProteins((prev) => {
-        const newSet = new Set(prev);
-        proteins.forEach((p) => newSet.add(p));
-        return newSet;
-      });
-    }
+  const handleSelectProteins = useCallback((proteins: string[]) => {
+    setSelectedProteins(new Set(proteins));
 
     // Set the first selected protein as the active one for info panel
     if (proteins.length > 0 && data) {
@@ -117,8 +107,8 @@ function ResultsContent() {
         // Check if the clicked protein matches the full accessions string
         // or if the clicked protein is contained within the accessions
         return r.master_protein_accessions === clickedProtein ||
-               r.master_protein_accessions.split(/[,;]/).map(s => s.trim()).includes(clickedProtein) ||
-               clickedProtein.split(/[,;]/).map(s => s.trim()).some(p => r.master_protein_accessions.includes(p));
+               parseDelimited(r.master_protein_accessions).includes(clickedProtein) ||
+               parseDelimited(clickedProtein).some(p => r.master_protein_accessions.includes(p));
       });
       if (protein) {
         setSelectedProteinData(protein);
@@ -184,7 +174,7 @@ function ResultsContent() {
   }, [filters, sessionId]);
 
   // Calculate DE counts based on current filters
-  const deCounts = React.useMemo(() => {
+  const deCounts = useMemo(() => {
     if (!data) return { total: 0, up: 0, down: 0 };
 
     const significant = data.results.filter(
