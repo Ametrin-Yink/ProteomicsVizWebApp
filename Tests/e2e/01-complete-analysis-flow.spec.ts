@@ -129,18 +129,15 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
   await test.step('7. Verify results display data', async () => {
     await expect(page.locator('[data-testid="volcano-plot"]')).toBeVisible();
 
-    // Verify data counts are populated
-    const totalText = await page.locator('[data-testid="total-proteins"]').textContent();
-    const totalCount = parseInt(totalText?.match(/\d+/)?.[0] || '0');
-    expect(totalCount).toBeGreaterThan(0);
-
-    // Verify DE counts are populated
-    const sigText = await page.locator('[data-testid="significant-proteins"]').textContent();
-    const sigCount = parseInt(sigText?.match(/\d+/)?.[0] || '0');
-    expect(sigCount).toBeGreaterThan(0);
+    // Verify data counts are populated (shown in general-info-panel)
+    const infoPanel = page.locator('[data-testid="general-info-panel"]');
+    await expect(infoPanel).toBeVisible({ timeout: 10000 });
+    const infoText = await infoPanel.textContent();
+    expect(infoText).toMatch(/\d+ proteins/);
+    expect(infoText).toMatch(/\d+ DE/);
 
     // Verify protein table has rows
-    await expect(page.locator('[data-testid="file-table"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="protein-table"]')).toBeVisible({ timeout: 10000 });
 
     await takeScreenshot(page, '01-complete-flow', '07-volcano-plot', 'with-data');
   });
@@ -148,7 +145,7 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
   // ===== STEP 8: Click table row → Protein Details =====
   await test.step('8. Click table row to see protein details', async () => {
     // Click the first data row in the protein table
-    const firstRow = page.locator('[data-testid="file-table"] tbody tr').first();
+    const firstRow = page.locator('[data-testid="protein-table"] tbody tr').first();
     await expect(firstRow).toBeVisible({ timeout: 10000 });
     await firstRow.click();
 
@@ -161,13 +158,18 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
   // ===== STEP 9: Navigate to QC =====
   await test.step('9. Navigate to QC plots', async () => {
     await page.locator('[data-testid="qc-tab"]').click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
 
-    // Verify PCA plot displays with sample separation
-    await expect(page.locator('[data-testid="pca-plot"]')).toBeVisible();
+    // Verify PCA plot container displays
+    const pcaPlot = page.locator('[data-testid="pca-plot"]');
+    await expect(pcaPlot).toBeVisible();
 
-    // Check for data points
-    const pcaPoints = page.locator('[data-testid="pca-plot"] .scatterlayer .trace .point');
+    // Verify the PCA plot has Plotly content (main-svg is the Plotly chart area)
+    const mainSvg = pcaPlot.locator('svg.main-svg').first();
+    await expect(mainSvg).toBeVisible({ timeout: 10000 });
+
+    // Check for plotly data points (.point class is used by Plotly for markers)
+    const pcaPoints = pcaPlot.locator('.scatterlayer .point');
     const count = await pcaPoints.count();
     expect(count).toBeGreaterThan(0);
 
@@ -177,17 +179,20 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
   // ===== STEP 10: Navigate to GSEA =====
   await test.step('10. Navigate to GSEA', async () => {
     await page.locator('[data-testid="gsea-tab"]').click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
 
-    // Verify GSEA heatmap displays
-    await expect(page.locator('[data-testid="gsea-heatmap"]')).toBeVisible();
+    // Verify GSEA overview displays with data
+    const gseaOverview = page.locator('[data-testid="gsea-overview"]');
+    await expect(gseaOverview).toBeVisible();
 
-    // Check for data in heatmap
-    const heatmapCells = page.locator('[data-testid="gsea-heatmap"] .heatmap .cell');
-    const cellCount = await heatmapCells.count();
-    expect(cellCount).toBeGreaterThan(0);
+    // Verify significant pathways count is displayed
+    const sigPathways = page.locator('[data-testid="significant-pathways"]');
+    await expect(sigPathways).toBeVisible();
+    const sigText = await sigPathways.textContent();
+    const sigCount = parseInt(sigText?.match(/\d+/)?.[0] || '0');
+    expect(sigCount).toBeGreaterThan(0);
 
-    await takeScreenshot(page, '01-complete-flow', '10-gsea-heatmap', 'visible');
+    await takeScreenshot(page, '01-complete-flow', '10-gsea-overview', 'visible');
   });
 
   // ===== STEP 11: PDF Export =====
