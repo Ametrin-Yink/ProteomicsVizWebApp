@@ -206,13 +206,13 @@ class PipelineEngine:
         for step in pipeline.steps:
             self._check_cancelled(ctx)
             ctx.state.mark_step_started(step.number, f"Step {step.number}: {step.display_name}")
-            await self._send_progress(ctx, step.number, "started", 0, step.display_name)
+            await self._send_progress(ctx, step.number, "started", 0, step.display_name, len(pipeline.steps))
 
             try:
                 await step.handler(ctx)
             except Exception as e:
                 ctx.state.mark_failed(step.number, str(e))
-                await self._send_progress(ctx, step.number, "failed", 0, str(e))
+                await self._send_progress(ctx, step.number, "failed", 0, str(e), len(pipeline.steps))
                 raise
 
             if step.number in ctx.step_outputs:
@@ -221,7 +221,7 @@ class PipelineEngine:
                 ctx.state.mark_step_completed(step.number, message=f"{step.display_name} complete")
 
             await self._send_progress(
-                ctx, step.number, "completed", 100, f"{step.display_name} complete"
+                ctx, step.number, "completed", 100, f"{step.display_name} complete", len(pipeline.steps)
             )
 
         # Calculate processing time
@@ -250,8 +250,9 @@ class PipelineEngine:
         status: str,
         progress_pct: int,
         message: str,
+        total_steps: int = 9,
     ) -> None:
-        overall_progress = int(((step - 1) * 100 + progress_pct) / 9)
+        overall_progress = int(((step - 1) * 100 + progress_pct) / total_steps)
         overall_progress = max(0, min(100, overall_progress))
 
         progress = ProcessingProgress(

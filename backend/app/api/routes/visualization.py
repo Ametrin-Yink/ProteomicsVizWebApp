@@ -539,7 +539,7 @@ async def get_gsea_plot_data(
                     valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
                     valid['metric'] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
                     valid = valid.sort_values('metric', ascending=False)
-                    valid['gene'] = valid[gene_col].str.split('[;]').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
+                    valid['gene'] = valid[gene_col].str.split(';').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
                     ranked_genes = valid['gene'].tolist()
                     ranked_metrics = valid['metric'].tolist()
             except Exception as e:
@@ -932,7 +932,7 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
 
     try:
         # Filter rows for this protein
-        protein_rows = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False)]
+        protein_rows = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False, regex=False)]
 
         if protein_rows.empty:
             return {"peptides": []}
