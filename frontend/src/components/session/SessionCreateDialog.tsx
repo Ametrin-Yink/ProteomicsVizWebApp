@@ -26,7 +26,13 @@ const templates: Array<{ id: AnalysisTemplate; name: string; description: string
   {
     id: 'protein_pairwise_comparison',
     name: 'Protein Pair-wise Comparison',
-    description: 'Compare protein expression between two conditions',
+    description: 'Compare protein expression between two conditions using msqrob2/limma',
+    available: true,
+  },
+  {
+    id: 'msstats_pairwise_comparison',
+    name: 'MSstats Pair-wise Comparison',
+    description: 'Compare protein expression using MSstats with advanced normalization and imputation',
     available: true,
   },
   {
