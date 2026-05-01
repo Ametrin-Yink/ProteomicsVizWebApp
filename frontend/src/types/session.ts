@@ -73,6 +73,7 @@ export interface AnalysisParameters {
 export interface Session {
   id: string;
   name: string;
+  template: string;
   status: SessionStatus;
   currentStep: ProcessingStep;
   progress: number; // 0-100

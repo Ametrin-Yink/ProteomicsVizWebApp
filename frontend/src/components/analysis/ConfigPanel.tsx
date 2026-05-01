@@ -12,7 +12,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { organismsApi } from '@/lib/api-client';
 import type { Organism } from '@/types';
 
-export const ConfigPanel: React.FC = () => {
+export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
   const [organisms, setOrganisms] = useState<Organism[]>([]);
   const [isLoadingOrganisms, setIsLoadingOrganisms] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -262,12 +262,71 @@ export const ConfigPanel: React.FC = () => {
           <div className="flex items-start gap-3 p-3 bg-info/5 border-info/20 rounded-lg text-sm text-secondary">
             <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <span>
-              <strong>Tip:</strong> Use strict filtering for high-confidence results. 
+              <strong>Tip:</strong> Use strict filtering for high-confidence results.
               Disable for exploratory analysis to maximize coverage.
             </span>
           </div>
         </div>
       </div>
+
+      {/* MSstats Options */}
+      {template === "msstats_pairwise_comparison" && (
+        <div className="space-y-4 mt-4">
+          <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
+            <span className="w-2 h-2 bg-primary rounded-full"></span>
+            MSstats Options
+          </h4>
+
+          {/* Normalization Method */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-text">Normalization</label>
+            <select
+              value={config.msstats_normalization || "equalizeMedians"}
+              onChange={(e) => setConfig({ msstats_normalization: e.target.value })}
+              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+            >
+              <option value="equalizeMedians">Equalize Medians (default)</option>
+              <option value="quantile">Quantile</option>
+            </select>
+          </div>
+
+          {/* Feature Selection */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-text">Feature Selection</label>
+            <select
+              value={config.msstats_feature_selection || "all"}
+              onChange={(e) => setConfig({ msstats_feature_selection: e.target.value })}
+              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+            >
+              <option value="all">All Features (default)</option>
+              <option value="top3">Top 3 Features</option>
+            </select>
+          </div>
+
+          {/* Summary Method */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-text">Summary Method</label>
+            <select
+              value={config.msstats_summary_method || "TMP"}
+              onChange={(e) => setConfig({ msstats_summary_method: e.target.value })}
+              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+            >
+              <option value="TMP">Tukey Median Polish (default)</option>
+              <option value="linear">Linear Mixed Model</option>
+            </select>
+          </div>
+
+          {/* Imputation Toggle */}
+          <div>
+            <Toggle
+              checked={config.msstats_impute ?? true}
+              onChange={(checked) => setConfig({ msstats_impute: checked })}
+              label="Missing Value Imputation"
+              description="Use accelerated failure model to impute missing values. Recommended for most analyses."
+            />
+          </div>
+        </div>
+      )}
       
       {/* Configuration Summary */}
       <div data-testid="config-summary" className="border-t border-border pt-4">

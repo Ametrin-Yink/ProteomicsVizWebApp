@@ -67,7 +67,7 @@ export async function createSession(page: Page, name?: string): Promise<string> 
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  const pairwiseTemplate = page.locator('[data-testid="template-protein-pairwise"]');
+  const pairwiseTemplate = page.locator('[data-testid="template-protein_pairwise_comparison"]');
   await expect(pairwiseTemplate).toBeVisible({ timeout: 10000 });
   await pairwiseTemplate.click();
 

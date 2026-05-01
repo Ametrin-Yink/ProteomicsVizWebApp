@@ -51,6 +51,10 @@ export interface SessionConfig {
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
+  msstats_normalization?: string;
+  msstats_feature_selection?: string;
+  msstats_summary_method?: string;
+  msstats_impute?: boolean;
 }
 
 export interface SessionFiles {

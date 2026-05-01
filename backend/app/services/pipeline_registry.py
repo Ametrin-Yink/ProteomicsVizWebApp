@@ -12,6 +12,8 @@ from app.services.steps import (
     step_diff_expression_msqrob2,
     step_qc_metrics,
     step_gsea_analysis,
+    step_protein_abundance_msstats,
+    step_diff_expression_msstats,
 )
 
 PIPELINES: dict[str, PipelineDefinition] = {}
@@ -37,6 +39,28 @@ register(AnalysisTemplate.PROTEIN_PAIRWISE, [
                  step_protein_abundance_msqrob2),
     PipelineStep(7, "diff_expression", "Differential Expression (limma)",
                  step_diff_expression_msqrob2),
+    PipelineStep(8, "qc_metrics", "QC Metrics",
+                 step_qc_metrics),
+    PipelineStep(9, "gsea", "GSEA Analysis",
+                 step_gsea_analysis),
+])
+
+# Register MSstats pipeline
+register(AnalysisTemplate.MSSTATS_PAIRWISE, [
+    PipelineStep(1, "combine_replicates", "Combining Replicates",
+                 step_combine_replicates),
+    PipelineStep(2, "generate_unique_psm", "Generate Unique PSM",
+                 step_generate_unique_psm),
+    PipelineStep(3, "remove_razor", "Remove Razor Peptides",
+                 step_remove_razor),
+    PipelineStep(4, "remove_low_quality", "Remove Low Quality",
+                 step_remove_low_quality_default),
+    PipelineStep(5, "filter", "Filter by Criteria",
+                 step_filter_criteria_default),
+    PipelineStep(6, "protein_abundance", "Protein Abundance (MSstats)",
+                 step_protein_abundance_msstats),
+    PipelineStep(7, "diff_expression", "Differential Expression (MSstats)",
+                 step_diff_expression_msstats),
     PipelineStep(8, "qc_metrics", "QC Metrics",
                  step_qc_metrics),
     PipelineStep(9, "gsea", "GSEA Analysis",

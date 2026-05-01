@@ -14,7 +14,7 @@ from app.core.config import settings, MIN_PROTEOMICS_FILES
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
 from app.models.session import ProcessingStatus, SessionState, Session
-from app.models.analysis import AnalysisConfig, Organism
+from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism
 from app.services.processing_orchestrator import ProcessingOrchestrator
 from app.services.session_manager import session_manager
 
@@ -440,13 +440,25 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
                 pass
 
             # Convert session config to AnalysisConfig
-            config = AnalysisConfig(
-                treatment=session.config.treatment,
-                control=session.config.control,
-                organism=Organism(session.config.organism),
-                remove_razor=session.config.remove_razor,
-                strict_filtering=session.config.strict_filtering,
-            )
+            config_kwargs = {
+                "treatment": session.config.treatment,
+                "control": session.config.control,
+                "organism": Organism(session.config.organism),
+                "remove_razor": session.config.remove_razor,
+                "strict_filtering": session.config.strict_filtering,
+                "template": AnalysisTemplate(session.template),
+            }
+            # Pass MSstats-specific config fields if present
+            if hasattr(session.config, 'msstats_normalization') and session.config.msstats_normalization:
+                config_kwargs["msstats_normalization"] = session.config.msstats_normalization
+            if hasattr(session.config, 'msstats_feature_selection') and session.config.msstats_feature_selection:
+                config_kwargs["msstats_feature_selection"] = session.config.msstats_feature_selection
+            if hasattr(session.config, 'msstats_summary_method') and session.config.msstats_summary_method:
+                config_kwargs["msstats_summary_method"] = session.config.msstats_summary_method
+            if hasattr(session.config, 'msstats_impute') and session.config.msstats_impute is not None:
+                config_kwargs["msstats_impute"] = session.config.msstats_impute
+
+            config = AnalysisConfig(**config_kwargs)
             logger.info(f"Config created: treatment={config.treatment}, control={config.control}")
 
             # Create WebSocket callback for progress updates

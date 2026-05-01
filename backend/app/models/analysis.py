@@ -85,7 +85,14 @@ class AnalysisConfig(BaseModel):
     pvalue_threshold: float = Field(default=0.05, ge=0.001, le=0.5)
     logfc_threshold: float = Field(default=1.0, ge=0.1, le=5.0)
     min_peptides_per_protein: int = Field(default=1, ge=1, le=10)
-    
+
+    # MSstats-specific parameters (optional, used only for msstats_pairwise_comparison template)
+    msstats_normalization: str = Field(default="equalizeMedians")
+    msstats_feature_selection: str = Field(default="all")
+    msstats_summary_method: str = Field(default="TMP")
+    msstats_impute: bool = Field(default=True)
+    msstats_log_base: int = Field(default=2)
+
     @field_validator('control')
     @classmethod
     def control_differs_from_treatment(cls, v: str, info) -> str:

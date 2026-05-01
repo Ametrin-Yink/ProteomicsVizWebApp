@@ -6,6 +6,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
   return {
     id: `test-${Date.now()}-${Math.random()}`,
     name: 'Test Session',
+    template: 'protein_pairwise_comparison',
     status: 'created',
     currentStep: null,
     progress: 0,

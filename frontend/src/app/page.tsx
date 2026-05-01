@@ -35,6 +35,14 @@ const templates = [
     available: true,
   },
   {
+    id: 'msstats_pairwise_comparison',
+    name: 'MSstats Pair-wise Comparison',
+    description: 'Compare protein abundance between two conditions using MSstats statistical pipeline with advanced normalization and imputation.',
+    icon: FlaskConical,
+    color: 'from-[#8B5CF6] to-[#06B6D4]',
+    available: true,
+  },
+  {
     id: 'multi-condition',
     name: 'Multi-Condition Analysis',
     description: 'Analyze protein expression across multiple experimental conditions.',
@@ -131,7 +139,7 @@ export default function HomePage() {
                   return (
                     <div
                       key={template.id}
-                      data-testid="template-protein-pairwise"
+                      data-testid={`template-${template.id}`}
                       className={cn(
                         'relative group cursor-pointer rounded-xl border-2 transition-all duration-200',
                         'bg-background border-border hover:border-primary'

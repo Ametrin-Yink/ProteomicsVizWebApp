@@ -48,14 +48,14 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
 
     // Verify page elements
     await expect(page.locator('[data-testid="app-logo"]').first()).toBeVisible();
-    await expect(page.locator('[data-testid="template-protein-pairwise"]')).toBeVisible();
+    await expect(page.locator('[data-testid="template-protein_pairwise_comparison"]')).toBeVisible();
 
     await takeScreenshot(page, '01-complete-flow', '01-welcome', 'loaded');
   });
 
   // ===== STEP 2: Create Session =====
   const sessionId = await test.step('2. Click template to create session', async () => {
-    await page.locator('[data-testid="template-protein-pairwise"]').click();
+    await page.locator('[data-testid="template-protein_pairwise_comparison"]').click();
     await expect(page).toHaveURL(/\/analysis\?session=[a-f0-9-]+/, { timeout: 15000 });
 
     const url = page.url();

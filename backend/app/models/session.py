@@ -50,7 +50,12 @@ class SessionConfig(BaseModel):
         default=False,
         description="Use strict filtering criteria"
     )
-    
+    # MSstats-specific parameters (optional, used only for msstats_pairwise_comparison template)
+    msstats_normalization: Optional[str] = Field(default=None)
+    msstats_feature_selection: Optional[str] = Field(default=None)
+    msstats_summary_method: Optional[str] = Field(default=None)
+    msstats_impute: Optional[bool] = Field(default=None)
+
     @field_validator('control')
     @classmethod
     def control_differs_from_treatment(cls, v: str, info) -> str:

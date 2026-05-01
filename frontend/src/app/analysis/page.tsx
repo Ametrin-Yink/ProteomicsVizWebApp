@@ -22,6 +22,7 @@ function AnalysisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sessionId, setSessionId] = useState<string>('');
+  const [template, setTemplate] = useState<string>('');
   const [isCreatingSession, setIsCreatingSession] = useState(true);
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
   
@@ -72,6 +73,7 @@ function AnalysisContent() {
             // Try to get the session
             const session = await sessionsApi.get(sessionIdToLoad);
             setSessionId(session.id);
+            setTemplate(session.template);
             localStorage.setItem('currentSessionId', session.id);
 
             // Restore existing files from backend into analysis store
@@ -323,7 +325,7 @@ function AnalysisContent() {
                 </p>
               </div>
               <div className="p-5">
-                <ConfigPanel />
+                <ConfigPanel template={template} />
               </div>
             </div>
           </div>

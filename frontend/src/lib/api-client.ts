@@ -201,6 +201,7 @@ export const sessionsApi = {
     return {
       id: sessionId,
       name: backendSession.name || name || `Analysis ${sessionId.slice(0, 8)}`,
+      template: backendSession.template || template,
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
@@ -231,6 +232,7 @@ export const sessionsApi = {
     return {
       id: sid,
       name: backendSession.name || backendSession.config?.experiment_name || `Analysis ${sid.slice(0, 8)}`,
+      template: backendSession.template || 'protein_pairwise_comparison',
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
@@ -261,6 +263,7 @@ export const sessionsApi = {
       return {
         id: sessionId,
         name: s.name || s.config?.experiment_name || `Analysis ${sessionId.slice(0, 8)}`,
+        template: s.template || 'protein_pairwise_comparison',
         status: mapBackendStatus(sessionStatus),
         currentStep: null,
         progress: sessionStatus === 'completed' ? 100 : 0,

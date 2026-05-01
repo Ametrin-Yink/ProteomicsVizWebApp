@@ -6,6 +6,7 @@ import type { Session } from '@/types/session';
 const mockSession: Session = {
   id: 'test-1',
   name: 'Test Session',
+  template: 'protein_pairwise_comparison',
   status: 'created',
   currentStep: null,
   progress: 0,
