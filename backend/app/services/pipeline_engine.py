@@ -78,15 +78,31 @@ class PipelineState:
         self.data["started_at"] = datetime.now(timezone.utc).isoformat()
         self.save()
 
-    def mark_step_started(self, step: int) -> None:
+    def mark_step_started(self, step: int, message: str = None) -> None:
         self.data["current_step"] = step
+        if "logs" not in self.data:
+            self.data["logs"] = []
+        self.data["logs"].append({
+            "level": "info",
+            "message": message or f"Step {step} started",
+            "step": step,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
         self.save()
 
-    def mark_step_completed(self, step: int, output_path: Optional[Path] = None) -> None:
+    def mark_step_completed(self, step: int, output_path: Optional[Path] = None, message: str = None) -> None:
         if step not in self.data["completed_steps"]:
             self.data["completed_steps"].append(step)
         if output_path:
             self.data["outputs"][f"step_{step}"] = str(output_path)
+        if "logs" not in self.data:
+            self.data["logs"] = []
+        self.data["logs"].append({
+            "level": "info",
+            "message": message or f"Step {step} complete",
+            "step": step,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
         self.save()
 
     def mark_failed(self, step: int, error: str) -> None:
@@ -183,7 +199,7 @@ class PipelineEngine:
 
         for step in pipeline.steps:
             self._check_cancelled(ctx)
-            ctx.state.mark_step_started(step.number)
+            ctx.state.mark_step_started(step.number, f"Step {step.number}: {step.display_name}")
             await self._send_progress(ctx, step.number, "started", 0, step.display_name)
 
             try:
@@ -194,9 +210,9 @@ class PipelineEngine:
                 raise
 
             if step.number in ctx.step_outputs:
-                ctx.state.mark_step_completed(step.number, ctx.step_outputs[step.number])
+                ctx.state.mark_step_completed(step.number, ctx.step_outputs[step.number], f"{step.display_name} complete")
             else:
-                ctx.state.mark_step_completed(step.number)
+                ctx.state.mark_step_completed(step.number, message=f"{step.display_name} complete")
 
             await self._send_progress(
                 ctx, step.number, "completed", 100, f"{step.display_name} complete"
