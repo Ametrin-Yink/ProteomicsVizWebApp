@@ -408,7 +408,14 @@ class DataProcessor:
         total_replicates_per_condition = df.groupby('Condition')['Replicate'].nunique().to_dict()
 
         # Vectorized: count detected replicates per (Unique_PSM, Condition)
-        detected = df.groupby(['Unique_PSM', 'Condition'])['Replicate'].nunique().reset_index()
+        # Only count rows where abundance was actually detected (non-NaN).
+        # A PSM row with NaN abundance means it was not detected in that replicate.
+        detected = (
+            df.dropna(subset=['Abundance'])
+            .groupby(['Unique_PSM', 'Condition'])['Replicate']
+            .nunique()
+            .reset_index()
+        )
         detected.columns = ['Unique_PSM', 'Condition', 'detected_replicates']
         detected['total_replicates'] = detected['Condition'].map(total_replicates_per_condition)
         detected['missing_count'] = detected['total_replicates'] - detected['detected_replicates']

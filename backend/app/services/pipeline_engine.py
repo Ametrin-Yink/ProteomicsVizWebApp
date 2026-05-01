@@ -76,6 +76,12 @@ class PipelineState:
 
     def mark_started(self) -> None:
         self.data["started_at"] = datetime.now(timezone.utc).isoformat()
+        # Reset run-scoped fields for clean retry tracking
+        self.data["completed_steps"] = []
+        self.data["outputs"] = {}
+        self.data["failed_step"] = None
+        self.data["error"] = None
+        self.data["current_step"] = 0
         self.save()
 
     def mark_step_started(self, step: int, message: str = None) -> None:

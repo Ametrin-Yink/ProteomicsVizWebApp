@@ -9,13 +9,29 @@ import pytest
 from pathlib import Path
 
 
+def _rscript_available() -> bool:
+    """Check if Rscript is on PATH or at known Windows path."""
+    for cmd in ['Rscript', 'C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe']:
+        try:
+            result = subprocess.run([cmd, '--version'], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+    return False
+
+
+RSCRIPT_EXEC = 'C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe'
+
+
+@pytest.mark.skipif(not _rscript_available(), reason="Rscript not found on PATH or at known location")
 class TestRPackageAvailability:
     """Test R package availability."""
 
     def test_rscript_available(self):
         """Verify Rscript is available."""
         result = subprocess.run(
-            ['Rscript', '--version'],
+            [RSCRIPT_EXEC, '--version'],
             capture_output=True,
             text=True
         )
@@ -26,7 +42,7 @@ class TestRPackageAvailability:
     def test_r_package_available(self, package):
         """Verify R package is installed."""
         result = subprocess.run(
-            ['Rscript', '-e', f'library({package})'],
+            [RSCRIPT_EXEC, '-e', f'library({package})'],
             capture_output=True,
             text=True
         )

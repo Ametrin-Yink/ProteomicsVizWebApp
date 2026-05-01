@@ -433,7 +433,7 @@ export const processingApi = {
    * Get processing status
    */
   getStatus: async (sessionId: string): Promise<ProcessingStatus> => {
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/analysis/status`));
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/status`));
     return handleResponse<ProcessingStatus>(response);
   },
 };

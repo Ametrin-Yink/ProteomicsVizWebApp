@@ -33,6 +33,17 @@ _processing_sessions: set[str] = set()
 # Cancellation events for active processing sessions
 _cancel_events: dict[str, asyncio.Event] = {}
 
+# Store background task references to prevent GC
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _schedule_background_task(coro) -> asyncio.Task:
+    """Schedule a background task and store reference to prevent GC."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
 
 def _is_session_stale(started_at: str, max_age_hours: int = 6) -> bool:
     """Check if a session's processing has exceeded the max age threshold."""
@@ -231,12 +242,12 @@ async def retry_processing(
         await store.save(session)
         queue_position = _add_to_queue(session_id)
         logger.info(f"Retry: Session {session_id} queued at position {queue_position}")
-        asyncio.create_task(run_processing_pipeline_async(session_id, session))
+        _schedule_background_task(run_processing_pipeline_async(session_id, session))
         return {"data": {"status": "queued", "queue_position": queue_position}}
 
     session.state = SessionState.PROCESSING
     await store.save(session)
-    asyncio.create_task(run_processing_pipeline_async(session_id, session))
+    _schedule_background_task(run_processing_pipeline_async(session_id, session))
     logger.info(f"Retry: Processing started for session {session_id}")
     return {"data": {"status": "started"}}
 
@@ -311,7 +322,7 @@ async def start_processing(
             logger.info(f"Session {session_id} queued at position {queue_position}")
 
             # Create background task that will wait for semaphore
-            asyncio.create_task(run_processing_pipeline_async(session_id, session))
+            _schedule_background_task(run_processing_pipeline_async(session_id, session))
 
             return {
                 "data": {
@@ -331,7 +342,7 @@ async def start_processing(
         logger.info(f"Session {session_id} queued at position {queue_position} (another session processing)")
 
         # Create background task that will wait for semaphore
-        asyncio.create_task(run_processing_pipeline_async(session_id, session))
+        _schedule_background_task(run_processing_pipeline_async(session_id, session))
 
         return {
             "data": {
@@ -370,9 +381,8 @@ async def start_processing(
     # Create cancellation event for this session
     _cancel_events[session_id] = asyncio.Event()
 
-    # Start processing in background using asyncio.create_task
-    # This properly schedules the async function to run
-    asyncio.create_task(run_processing_pipeline_async(session_id, session))
+    # Start processing in background
+    _schedule_background_task(run_processing_pipeline_async(session_id, session))
 
     logger.info(f"Processing started for session {session_id} (async task created)")
 

@@ -42,7 +42,8 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   }
 
   const data: ApiResponse<T> = await response.json();
-  return data.data;
+  // Handle both wrapped ({ data: T }) and unwrapped (T) responses
+  return 'data' in data ? data.data : data as T;
 }
 
 // Session API

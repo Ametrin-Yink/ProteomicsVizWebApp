@@ -207,39 +207,49 @@ class TestStep5FilterByCriteria:
 
     def test_lenient_filtering(self, processor):
         """Lenient filtering allows 40% missing values."""
+        # 5 replicates, threshold=0.4, max_missing=int(5*0.4)=2
+        # PEP1: detected in 4/5 replicates (1 missing <= 2, PASS)
+        # PEP2: detected in 1/5 replicates (4 missing > 2, FAIL)
         df = pd.DataFrame({
-            'Sequence': ['PEP1', 'PEP2'],
-            'Modifications': ['', ''],
-            'Charge': [2, 2],
-            'Contaminant': [False, False],
-            'Master_Protein_Accessions': ['P1', 'P2'],
-            'Quan_Info': ['Valid', 'Valid'],
-            'Unique_PSM': ['PEP1||2', 'PEP2||2'],
-            'Condition': ['DMSO', 'DMSO'],
-            'Replicate': [1, 2],
-            'Abundance': [100.0, np.nan],  # 50% missing
+            'Sequence': ['PEP1']*5 + ['PEP2']*5,
+            'Modifications': ['']*10,
+            'Charge': [2]*10,
+            'Contaminant': [False]*10,
+            'Master_Protein_Accessions': ['P1']*5 + ['P2']*5,
+            'Quan_Info': ['Valid']*10,
+            'Unique_PSM': ['PEP1||2']*5 + ['PEP2||2']*5,
+            'Condition': ['DMSO']*10,
+            'Replicate': [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+            'Abundance': [100.0, 200.0, 300.0, 400.0, np.nan,  # PEP1 missing in rep 5
+                          100.0, np.nan, np.nan, np.nan, np.nan],  # PEP2 missing in reps 2-5
         })
 
         result = processor.step5_filter_by_criteria(df)
 
-        # PEP1 has 0% missing, PEP2 has 50% missing (>40%)
-        # Only PEP1 should remain
-        assert len(result) == 1
+        # Only PEP1 should remain (5 rows: 4 valid + 1 NaN)
+        assert len(result) == 5
         assert 'PEP1' in result['Sequence'].values
+        assert 'PEP2' not in result['Sequence'].values
 
     def test_strict_filtering(self, processor_strict):
         """Strict filtering allows only 20% missing values."""
+        # 5 replicates, threshold=0.2, max_missing=int(5*0.2)=1
+        # PEP1: 0 missing (PASS), PEP2: 0 missing (PASS), P1 has 2 PSMs -> stays
+        # PEP3: 4 missing (> 1, FAIL), PEP4: 4 missing (> 1, FAIL)
         df = pd.DataFrame({
-            'Sequence': ['PEP1', 'PEP2', 'PEP3', 'PEP4'],
-            'Modifications': ['', '', '', ''],
-            'Charge': [2, 2, 2, 2],
-            'Contaminant': [False, False, False, False],
-            'Master_Protein_Accessions': ['P1', 'P1', 'P2', 'P3'],  # P1 has 2 PSMs
-            'Quan_Info': ['Valid', 'Valid', 'Valid', 'Valid'],
-            'Unique_PSM': ['PEP1||2', 'PEP2||2', 'PEP3||2', 'PEP4||2'],
-            'Condition': ['DMSO', 'DMSO', 'DMSO', 'DMSO'],
-            'Replicate': [1, 2, 1, 2],
-            'Abundance': [100.0, 200.0, np.nan, np.nan],  # P1 has 0% missing, P2 has 100%, P3 has 100%
+            'Sequence': ['PEP1']*5 + ['PEP2']*5 + ['PEP3']*5 + ['PEP4']*5,
+            'Modifications': ['']*20,
+            'Charge': [2]*20,
+            'Contaminant': [False]*20,
+            'Master_Protein_Accessions': ['P1']*5 + ['P1']*5 + ['P2']*5 + ['P3']*5,
+            'Quan_Info': ['Valid']*20,
+            'Unique_PSM': ['PEP1||2']*5 + ['PEP2||2']*5 + ['PEP3||2']*5 + ['PEP4||2']*5,
+            'Condition': ['DMSO']*20,
+            'Replicate': list(range(1, 6)) * 4,
+            'Abundance': ([100.0, 200.0, 300.0, 400.0, 500.0] +   # PEP1 all detected
+                          [150.0, 250.0, 350.0, 450.0, 550.0] +   # PEP2 all detected
+                          [100.0, np.nan, np.nan, np.nan, np.nan] +  # PEP3 only rep 1
+                          [100.0, np.nan, np.nan, np.nan, np.nan]),  # PEP4 only rep 1
         })
 
         result = processor_strict.step5_filter_by_criteria(df)
@@ -247,30 +257,34 @@ class TestStep5FilterByCriteria:
         # P1 has 0% missing and 2 PSMs, should remain
         # P2 and P3 have >20% missing, should be removed
         # After filtering, only PEP1 and PEP2 (both mapping to P1) should remain
-        assert len(result) == 2
+        assert len(result) == 10
         assert 'PEP1' in result['Sequence'].values
         assert 'PEP2' in result['Sequence'].values
 
     def test_strict_removes_single_psm_proteins(self, processor_strict):
         """Strict filtering removes proteins with only 1 PSM."""
+        # 2 replicates, threshold=0.2, max_missing=int(2*0.2)=0
+        # PEP1: detected in 2/2 (PASS), PEP2: detected in 2/2 (PASS)
+        # PEP3: detected in 1/2 (1 missing > 0, FAIL)
+        # After missing filter: P1 has 2 PSMs, P2 has 0 PSMs -> P2 removed
         df = pd.DataFrame({
-            'Sequence': ['PEP1', 'PEP2', 'PEP3'],
-            'Modifications': ['', '', ''],
-            'Charge': [2, 2, 2],
-            'Contaminant': [False, False, False],
-            'Master_Protein_Accessions': ['P1', 'P1', 'P2'],
-            'Quan_Info': ['Valid', 'Valid', 'Valid'],
-            'Unique_PSM': ['PEP1||2', 'PEP2||2', 'PEP3||2'],
-            'Condition': ['DMSO', 'DMSO', 'DMSO'],
-            'Replicate': [1, 2, 3],
-            'Abundance': [100.0, 200.0, 300.0],
+            'Sequence': ['PEP1']*2 + ['PEP2']*2 + ['PEP3']*2,
+            'Modifications': ['']*6,
+            'Charge': [2]*6,
+            'Contaminant': [False]*6,
+            'Master_Protein_Accessions': ['P1']*2 + ['P1']*2 + ['P2']*2,
+            'Quan_Info': ['Valid']*6,
+            'Unique_PSM': ['PEP1||2']*2 + ['PEP2||2']*2 + ['PEP3||2']*2,
+            'Condition': ['DMSO']*6,
+            'Replicate': [1, 2, 1, 2, 1, 2],
+            'Abundance': [100.0, 200.0, 300.0, 400.0, 300.0, np.nan],
         })
 
         result = processor_strict.step5_filter_by_criteria(df)
 
-        # P1 has 2 PSMs, P2 has 1 PSM
+        # P1 has 2 PSMs, P2 has 1 PSM (PEP3 filtered out by missing check)
         # P2 should be removed in strict mode
-        assert len(result) == 2
+        assert len(result) == 4
         assert 'P2' not in result['Master_Protein_Accessions'].values
 
 

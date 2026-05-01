@@ -397,7 +397,7 @@ async def get_results(
     
     # Sort results
     reverse = sort_order.lower() == "desc"
-    all_results.sort(key=lambda x: x.get(sort_by, 0), reverse=reverse)
+    all_results.sort(key=lambda x: x.get(sort_by, 0) or 0, reverse=reverse)
     
     # Calculate summary statistics
     total_proteins = len(all_results)

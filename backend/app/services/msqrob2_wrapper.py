@@ -66,6 +66,7 @@ class Msqrob2Wrapper:
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
+            errors='replace',
             bufsize=1,  # Line buffered
             env={**os.environ, "R_NCORES": str(settings.r_n_cores)}
         )
