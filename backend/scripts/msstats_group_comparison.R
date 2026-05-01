@@ -123,7 +123,7 @@ group_comp <- tryCatch({
     MSstats::groupComparison(
         contrast.matrix = contrast_matrix,
         data = processed,
-        logBase = 2
+        log_base = 2
     )
 }, error = function(e) {
     cat("MSstats::groupComparison failed:", conditionMessage(e), "\n")

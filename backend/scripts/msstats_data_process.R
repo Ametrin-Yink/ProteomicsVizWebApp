@@ -140,11 +140,10 @@ processed <- tryCatch({
     MSstats::dataProcess(
         msstats_df,
         normalization = norm_method,
-        featureSelection = (feature_selection == "top3"),
-        MBimpute = impute,
+        logTrans = log_base,
+        featureSubset = feature_selection,
         summaryMethod = summary_method,
-        logBase = log_base,
-        removeSparseProteins = TRUE
+        MBimpute = impute
     )
 }, error = function(e) {
     cat("MSstats::dataProcess failed:", conditionMessage(e), "\n")
