@@ -118,7 +118,7 @@ test('concurrent sessions: first runs, second queues, then auto-starts', async (
   // ===== STEP 3: Wait for Session A to complete =====
   await test.step('3. Wait for Session A to complete', async () => {
     await page.waitForURL(/\/analysis\/visualization/, { timeout: 300000 });
-    await expect(page.locator('[data-testid="results-page"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="volcano-container"]')).toBeVisible({ timeout: 10000 });
 
     await takeScreenshot(page, '07-queue', '03-session-a-complete', 'results');
   });
@@ -148,7 +148,7 @@ test('concurrent sessions: first runs, second queues, then auto-starts', async (
 
     // Wait for Session B to complete (may already be done)
     await pageB.waitForURL(/\/analysis\/visualization/, { timeout: 300000 });
-    await expect(pageB.locator('[data-testid="results-page"]')).toBeVisible({ timeout: 10000 });
+    await expect(pageB.locator('[data-testid="volcano-container"]')).toBeVisible({ timeout: 10000 });
 
     await takeScreenshot(pageB, '07-queue', '05-session-b-complete', 'results');
     await pageB.close();
@@ -234,7 +234,7 @@ test('cancel queued session removes from queue', async ({ page }) => {
   // ===== STEP 3: Let Session A finish normally =====
   await test.step('3. Session A completes normally', async () => {
     await page.waitForURL(/\/analysis\/visualization/, { timeout: 300000 });
-    await expect(page.locator('[data-testid="results-page"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="volcano-container"]')).toBeVisible({ timeout: 10000 });
   });
 
   console.log(`Cancel queued test passed!`);

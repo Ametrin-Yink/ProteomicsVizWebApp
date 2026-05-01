@@ -220,8 +220,12 @@ export default function VolcanoPlot({
   // Handle click/double-click events - select single protein
   const handlePointClick = useCallback(
     (event?: { points?: Array<{ customdata: string }> }) => {
+      console.log('[VolcanoPlot] click event fired:', event);
       if (event?.points && event.points.length > 0) {
+        console.log('[VolcanoPlot] selected protein:', event.points[0].customdata);
         onSelectProteins([event.points[0].customdata]);
+      } else {
+        console.log('[VolcanoPlot] no points in click event');
       }
     },
     [onSelectProteins]

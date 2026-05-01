@@ -120,7 +120,7 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
     // Wait for processing to complete (up to 5 minutes)
     await page.waitForURL(/\/analysis\/visualization/, { timeout: 300000 });
 
-    await expect(page.locator('[data-testid="results-page"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="volcano-container"]')).toBeVisible({ timeout: 10000 });
 
     await takeScreenshot(page, '01-complete-flow', '06-processing-complete', 'results');
   });
@@ -176,7 +176,7 @@ test('complete analysis flow: welcome → results', async ({ page }) => {
 
   // ===== STEP 10: Navigate to GSEA =====
   await test.step('10. Navigate to GSEA', async () => {
-    await page.locator('[data-testid="bioinformatics-tab"]').click();
+    await page.locator('[data-testid="gsea-tab"]').click();
     await page.waitForTimeout(1000);
 
     // Verify GSEA heatmap displays

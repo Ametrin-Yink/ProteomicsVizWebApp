@@ -1,7 +1,7 @@
 """
 Visualization API routes.
 
-Plot data endpoints for results, QC, and bioinformatics.
+Plot data endpoints for results, QC, and GSEA.
 """
 
 import asyncio

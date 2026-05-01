@@ -258,7 +258,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       // 3. Capture GSEA dashboard from hidden iframe
       const gseaIframe = document.createElement('iframe');
       gseaIframe.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1280px;height:800px;';
-      gseaIframe.src = `${baseUrl}/analysis/visualization/bioinformatics?session_id=${sessionId}`;
+      gseaIframe.src = `${baseUrl}/analysis/visualization/gsea?session_id=${sessionId}`;
       document.body.appendChild(gseaIframe);
 
       await new Promise<void>((resolve) => {

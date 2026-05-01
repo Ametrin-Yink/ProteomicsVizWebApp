@@ -4,6 +4,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async redirects() {
+    return [
+      {
+        source: '/analysis/visualization/bioinformatics',
+        destination: '/analysis/visualization/gsea',
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

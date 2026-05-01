@@ -253,7 +253,7 @@ function ResultsContent() {
   }
 
   return (
-    <div data-testid="results-page" className="flex-1 bg-surface">
+    <div data-testid="volcano-container" className="flex-1 bg-surface">
       <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-6">

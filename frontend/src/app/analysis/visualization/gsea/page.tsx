@@ -11,7 +11,7 @@ import { getGSEAData } from '@/lib/api';
 
 const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
 
-function BioinformaticsContent() {
+function GSEAAnalysisContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
 
@@ -92,11 +92,11 @@ function BioinformaticsContent() {
   }
 
   return (
-    <div data-testid="bioinformatics-container" className="flex-1 bg-surface">
+    <div data-testid="gsea-container" className="flex-1 bg-surface">
       <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-text">Bioinformatics</h1>
+          <h1 className="text-xl font-semibold text-text">GSEA Analysis</h1>
           <p className="text-text-secondary mt-2">
             Gene Set Enrichment Analysis (GSEA) results
           </p>
@@ -184,7 +184,7 @@ function BioinformaticsContent() {
   );
 }
 
-export default function BioinformaticsPage() {
+export default function GSEAAnalysisPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-surface flex items-center justify-center">
@@ -194,7 +194,7 @@ export default function BioinformaticsPage() {
         </div>
       </div>
     }>
-      <BioinformaticsContent />
+      <GSEAAnalysisContent />
     </Suspense>
   );
 }

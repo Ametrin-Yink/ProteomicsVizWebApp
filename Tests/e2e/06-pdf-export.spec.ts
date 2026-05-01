@@ -62,7 +62,7 @@ test.describe('PDF Export', () => {
     const pdfBtn = page.locator('[data-testid="export-pdf-btn"]').first();
     await expect(pdfBtn).toBeVisible();
 
-    await takeScreenshot(page, '06-pdf-export', 'pdf-button-visible', 'results-page');
+    await takeScreenshot(page, '06-pdf-export', 'pdf-button-visible', 'volcano-container');
 
     // Setup download listener and trigger export
     const downloadPromise = page.waitForEvent('download', { timeout: 120000 });
