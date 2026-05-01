@@ -219,6 +219,36 @@ export const sessionsApi = {
   },
 
   /**
+   * Get a specific session
+   */
+  get: async (sessionId: string): Promise<Session> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}`));
+    const backendSession = await handleResponse<BackendSession>(response);
+
+    const sid = backendSession.id || backendSession.session_id || sessionId;
+    const sessionStatus = backendSession.state || backendSession.status || 'created';
+
+    return {
+      id: sid,
+      name: backendSession.name || backendSession.config?.experiment_name || `Analysis ${sid.slice(0, 8)}`,
+      status: mapBackendStatus(sessionStatus),
+      currentStep: null,
+      progress: sessionStatus === 'completed' ? 100 : 0,
+      config: defaultAnalysisConfig({
+        name: backendSession.config?.experiment_name || '',
+        conditions: backendSession.config?.conditions || [],
+      }),
+      createdAt: backendSession.created_at,
+      updatedAt: backendSession.updated_at,
+      completedAt: backendSession.completed_at ?? null,
+      errorMessage: backendSession.error_message,
+      uploadedFiles: [],
+      compoundFile: null,
+      results: sessionStatus === 'completed' ? defaultSessionResults() : null,
+    };
+  },
+
+  /**
    * List all sessions
    */
   list: async (): Promise<Session[]> => {
@@ -247,38 +277,6 @@ export const sessionsApi = {
         results: sessionStatus === 'completed' ? defaultSessionResults() : null,
       };
     });
-  },
-
-  /**
-   * Get a specific session
-   */
-  get: async (sessionId: string): Promise<Session> => {
-    const response = await fetch(apiUrl(`/sessions/${sessionId}`));
-    const backendSession = await handleResponse<BackendSession>(response);
-
-    // Use id or session_id (backend returns id)
-    const sid = backendSession.id || backendSession.session_id || sessionId;
-    const sessionStatus = backendSession.state || backendSession.status || 'created';
-
-    // Map backend format to frontend format
-    return {
-      id: sid,
-      name: backendSession.name || backendSession.config?.experiment_name || `Analysis ${sid.slice(0, 8)}`,
-      status: mapBackendStatus(sessionStatus),
-      currentStep: null,
-      progress: sessionStatus === 'completed' ? 100 : 0,
-      config: defaultAnalysisConfig({
-        name: backendSession.config?.experiment_name || '',
-        conditions: backendSession.config?.conditions || [],
-      }),
-      createdAt: backendSession.created_at,
-      updatedAt: backendSession.updated_at,
-      completedAt: backendSession.completed_at ?? null,
-      errorMessage: backendSession.error_message,
-      uploadedFiles: [],
-      compoundFile: null,
-      results: sessionStatus === 'completed' ? defaultSessionResults() : null,
-    };
   },
 
   /**
