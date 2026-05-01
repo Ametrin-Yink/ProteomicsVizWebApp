@@ -244,12 +244,10 @@ function ProcessingContent() {
   // Initialize WebSocket connection
   useWebSocket(storeSessionId);
 
-  // Polling fallback when WebSocket is not connected
+  // Always poll as safety net for completion detection (works alongside WebSocket)
+  // Polling provides reliable fallback when WebSocket drops during long R processing
   useEffect(() => {
     if (!sessionId || isComplete || error) return;
-
-    // Only poll if WebSocket is not connected
-    if (isConnected) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -261,19 +259,19 @@ function ProcessingContent() {
           }
 
           // Check status endpoint for queue/processing state
-          try {
-            const statusData = await processingAPI.getStatus(sessionId);
-            if (statusData.queue_position && statusData.queue_position > 0) {
-              setQueued(statusData.queue_position, statusData.queue_length ?? 0);
-            } else if (statusData.state === 'queued') {
-              // Session is queued but queue_position may be null (e.g. after backend restart)
-              // Show queued UI with position 1 since server-side queue tracking was lost
-              setQueued(1, 0);
-            } else if (statusData.state === 'processing') {
-              clearQueued();
+          if (!isConnected) {
+            try {
+              const statusData = await processingAPI.getStatus(sessionId);
+              if (statusData.queue_position && statusData.queue_position > 0) {
+                setQueued(statusData.queue_position, statusData.queue_length ?? 0);
+              } else if (statusData.state === 'queued') {
+                setQueued(1, 0);
+              } else if (statusData.state === 'processing') {
+                clearQueued();
+              }
+            } catch {
+              // Status check failed, ignore
             }
-          } catch {
-            // Status check failed, ignore
           }
 
           // Update logs
@@ -293,7 +291,7 @@ function ProcessingContent() {
             setLogs(logEntries);
           }
 
-          // Check if completed
+          // Check if completed — this is the critical safety net
           if (logData.is_complete) {
             setComplete({
               session_id: sessionId,
@@ -310,9 +308,7 @@ function ProcessingContent() {
           }
         }
       } catch (err) {
-        // Network errors during polling are expected during backend restarts
         if (err instanceof TypeError && err.message.includes('fetch')) {
-          // Backend unreachable — polling will retry on next interval
           return;
         }
         console.error('Polling error:', err);
