@@ -24,19 +24,19 @@ export interface SessionCreateDialogProps {
 // Template options
 const templates: Array<{ id: AnalysisTemplate; name: string; description: string; available: boolean }> = [
   {
-    id: 'pairwise_comparison',
+    id: 'protein_pairwise_comparison',
     name: 'Protein Pair-wise Comparison',
     description: 'Compare protein expression between two conditions',
     available: true,
   },
   {
-    id: 'time_series',
+    id: 'time_series_analysis',
     name: 'Time Series Analysis',
     description: 'Analyze protein changes over time points',
     available: false,
   },
   {
-    id: 'multi_condition',
+    id: 'multi_condition_comparison',
     name: 'Multi-Condition Analysis',
     description: 'Compare multiple conditions simultaneously',
     available: false,
@@ -59,7 +59,7 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
   className,
 }) => {
   const [name, setName] = React.useState('');
-  const [selectedTemplate, setSelectedTemplate] = React.useState<AnalysisTemplate>('pairwise_comparison');
+  const [selectedTemplate, setSelectedTemplate] = React.useState<AnalysisTemplate>('protein_pairwise_comparison');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errors, setErrors] = React.useState<{ name?: string }>({});
 
@@ -67,7 +67,7 @@ export const SessionCreateDialog: React.FC<SessionCreateDialogProps> = ({
   React.useEffect(() => {
     if (isOpen) {
       setName('');
-      setSelectedTemplate('pairwise_comparison');
+      setSelectedTemplate('protein_pairwise_comparison');
       setErrors({});
     }
   }, [isOpen]);

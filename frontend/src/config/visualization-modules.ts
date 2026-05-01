@@ -7,6 +7,8 @@ export interface VisualizationModule {
   href: string;
   icon: ComponentType<{ className?: string }>;
   description?: string;
+  /** Templates this module supports. Empty/missing = all templates. */
+  supportedTemplates?: string[];
 }
 
 export const VISUALIZATION_MODULES: VisualizationModule[] = [
@@ -16,6 +18,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization',
     icon: ChartScatter,
     description: 'Differential expression volcano plot and protein table',
+    supportedTemplates: ['protein_pairwise_comparison'],
   },
   {
     id: 'qc',
@@ -23,6 +26,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization/qc',
     icon: Activity,
     description: 'Quality control plots for proteomics analysis',
+    supportedTemplates: ['protein_pairwise_comparison'],
   },
   {
     id: 'gsea',
@@ -30,6 +34,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization/gsea',
     icon: Spline,
     description: 'Gene Set Enrichment Analysis results',
+    supportedTemplates: ['protein_pairwise_comparison'],
   },
 ];
 
@@ -46,4 +51,18 @@ export function getActiveModuleId(pathname: string): string {
 
 export function getModuleById(id: string): VisualizationModule | undefined {
   return VISUALIZATION_MODULES.find((m) => m.id === id);
+}
+
+/**
+ * Filter visualization modules by template.
+ * Modules with empty/missing supportedTemplates are available for all templates.
+ * If no module matches the template, return ALL modules (fallback for unknown templates).
+ */
+export function getModulesForTemplate(template: string): VisualizationModule[] {
+  const matched = VISUALIZATION_MODULES.filter((mod) => {
+    if (!mod.supportedTemplates || mod.supportedTemplates.length === 0) return true;
+    return mod.supportedTemplates.includes(template);
+  });
+  // Fallback: if no module matched, return all modules for unknown templates
+  return matched.length > 0 ? matched : VISUALIZATION_MODULES;
 }

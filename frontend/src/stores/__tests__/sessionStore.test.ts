@@ -12,7 +12,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     config: {
       name: 'Test',
       description: '',
-      template: 'pairwise_comparison',
+      template: 'protein_pairwise_comparison',
       conditions: [],
       replicates: {},
       parameters: {

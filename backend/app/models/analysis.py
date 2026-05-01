@@ -14,10 +14,11 @@ from pydantic import BaseModel, Field, field_validator
 
 class AnalysisTemplate(str, Enum):
     """Available analysis templates."""
-    
+
     PROTEIN_PAIRWISE = "protein_pairwise_comparison"
-    MULTI_CONDITION = "multi_condition_comparison"
-    TIME_SERIES = "time_series_analysis"
+    MSSTATS_PAIRWISE = "msstats_pairwise_comparison"    # reserved for Plan 2
+    MULTI_CONDITION = "multi_condition_comparison"       # reserved for Plan 3
+    TIME_SERIES = "time_series_analysis"                 # reserved for future
 
 
 class Organism(str, Enum):

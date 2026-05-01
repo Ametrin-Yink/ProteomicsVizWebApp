@@ -96,7 +96,7 @@ function defaultAnalysisConfig(override?: Partial<AnalysisConfig>): AnalysisConf
   return {
     name: '',
     description: '',
-    template: 'pairwise_comparison',
+    template: 'protein_pairwise_comparison',
     conditions: [],
     replicates: {},
     parameters: {

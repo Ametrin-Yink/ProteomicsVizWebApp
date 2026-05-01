@@ -33,7 +33,7 @@ describe('SessionCreateDialog', () => {
     fireEvent.click(submitBtn);
 
     await vi.waitFor(() => {
-      expect(onCreate).toHaveBeenCalledWith('My Test Session', 'pairwise_comparison');
+      expect(onCreate).toHaveBeenCalledWith('My Test Session', 'protein_pairwise_comparison');
     });
   });
 

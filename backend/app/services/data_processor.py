@@ -236,8 +236,10 @@ class DataProcessor:
         unique_psm_df = df.drop_duplicates(subset=['Unique_PSM'])[['Unique_PSM', 'Master_Protein_Accessions']]
 
         # Vectorized selection of best protein for each unique PSM
-        def select_best_for_psm(proteins_str: str) -> str:
-            proteins = [p.strip() for p in proteins_str.split(';') if p.strip()]
+        def select_best_for_psm(proteins_str) -> str:
+            if pd.isna(proteins_str):
+                return ''
+            proteins = [p.strip() for p in str(proteins_str).split(';') if p.strip()]
             if len(proteins) <= 1:
                 return proteins[0] if proteins else ''
             # Multiple proteins - select best one

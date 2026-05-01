@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 // Analysis templates
 const templates = [
   {
-    id: 'protein-pairwise',
+    id: 'protein_pairwise_comparison',
     name: 'Protein Pair-wise Comparison Analysis',
     description: 'Compare protein abundance between two experimental conditions using statistical testing and visualization.',
     icon: GitCompare,
