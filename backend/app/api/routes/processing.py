@@ -7,10 +7,10 @@ Processing status and control endpoints.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_session_store
-from app.core.config import settings, MIN_PROTEOMICS_FILES
+from app.core.config import MIN_PROTEOMICS_FILES
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
 from app.models.session import ProcessingStatus, SessionState, Session
@@ -457,6 +457,8 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
                 config_kwargs["msstats_summary_method"] = session.config.msstats_summary_method
             if hasattr(session.config, 'msstats_impute') and session.config.msstats_impute is not None:
                 config_kwargs["msstats_impute"] = session.config.msstats_impute
+            if hasattr(session.config, 'deqms_fit_method') and session.config.deqms_fit_method:
+                config_kwargs["deqms_fit_method"] = session.config.deqms_fit_method
 
             config = AnalysisConfig(**config_kwargs)
             logger.info(f"Config created: treatment={config.treatment}, control={config.control}")
@@ -467,7 +469,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
                 try:
                     logger.info(f"WebSocket callback: step {progress.step}, status {progress.status}")
                     await session_manager.send_progress_update(session_id, progress.model_dump())
-                    logger.info(f"WebSocket callback: sent successfully")
+                    logger.info("WebSocket callback: sent successfully")
                 except Exception as e:
                     logger.warning(f"Failed to send WebSocket progress update: {e}", exc_info=True)
 

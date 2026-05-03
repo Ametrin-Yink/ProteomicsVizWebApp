@@ -96,14 +96,37 @@ export const LogPanel: React.FC<LogPanelProps> = ({
   const [isAutoScroll, setIsAutoScroll] = useState(true);
   const [isExpanded, setIsExpanded] = useState(true);
   const [showAll, setShowAll] = useState(false);
+  const hasInitiallyLoaded = useRef(false);
 
   const MAX_DISPLAY_LOGS = 50;
+  const INITIAL_VISIBLE = 10;
   const hasOverflow = logs.length > MAX_DISPLAY_LOGS;
   const visibleLogs = showAll || !hasOverflow ? logs : logs.slice(-MAX_DISPLAY_LOGS);
 
-  // Auto-scroll to bottom when new logs arrive
+  // On initial bulk load, only scroll to the most recent few lines
   useEffect(() => {
-    if (isAutoScroll && scrollRef.current) {
+    if (logs.length > 0 && !hasInitiallyLoaded.current && scrollRef.current) {
+      hasInitiallyLoaded.current = true;
+      // If we have more than INITIAL_VISIBLE logs, scroll to show only the newest ones
+      if (logs.length > INITIAL_VISIBLE) {
+        const entryEl = scrollRef.current.querySelector('[data-testid="log-entry"]');
+        if (entryEl) {
+          const targetIndex = Math.max(0, logs.length - INITIAL_VISIBLE);
+          const entries = scrollRef.current.querySelectorAll('[data-testid="log-entry"]');
+          const target = entries[targetIndex];
+          if (target) {
+            target.scrollIntoView({ block: 'start' });
+          }
+        }
+      } else {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }
+  }, [logs.length, logs]);
+
+  // Auto-scroll to bottom when new logs arrive (after initial load)
+  useEffect(() => {
+    if (isAutoScroll && scrollRef.current && hasInitiallyLoaded.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [logs, isAutoScroll]);

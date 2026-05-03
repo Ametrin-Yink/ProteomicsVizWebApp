@@ -55,6 +55,7 @@ export interface SessionConfig {
   msstats_feature_selection?: string;
   msstats_summary_method?: string;
   msstats_impute?: boolean;
+  deqms_fit_method?: string;
 }
 
 export interface SessionFiles {

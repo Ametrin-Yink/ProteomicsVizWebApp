@@ -6,15 +6,13 @@ Provides endpoints for PDF report generation and download.
 
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 
 from app.core.config import settings
-from app.core.exceptions import SessionNotFoundError, ProcessingError
-from app.models.session import Session
+from app.core.exceptions import SessionNotFoundError
 from app.models.analysis import ReportRequest, ReportStatus
 from app.services.report_generator import report_generator
 from app.services.session_manager import SessionManager

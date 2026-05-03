@@ -5,7 +5,6 @@ Plot data endpoints for results, QC, and GSEA.
 """
 
 import asyncio
-from functools import lru_cache
 import json
 import logging
 import re
@@ -663,7 +662,7 @@ async def get_gsea_heatmap_data(
                 valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
                 valid['metric'] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
                 valid = valid.sort_values('metric', ascending=False)
-                valid['gene'] = valid[gene_col].str.split('[;]').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
+                valid['gene'] = valid[gene_col].str.split(';').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
                 for rank, gene in enumerate(valid['gene'].tolist()):
                     gene_rank_map[gene.upper()] = rank
         except Exception as e:

@@ -5,13 +5,10 @@ Provides endpoints for compound structure visualization using RDKit.
 """
 
 import logging
-from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 
-from app.core.config import settings
 from app.core.exceptions import SessionNotFoundError, ValidationError
 from app.services.compound_service import compound_service
 from app.services.session_manager import SessionManager
@@ -170,7 +167,6 @@ async def get_compound_image(
                 media_type="image/svg+xml"
             )
         else:
-            import base64
             return Response(
                 content=structure_image,
                 media_type="image/png"

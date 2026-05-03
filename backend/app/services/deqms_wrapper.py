@@ -1,8 +1,8 @@
 """
-R/msqrob2 integration via subprocess.
+R/DEqMS integration via subprocess.
 
 Handles protein abundance calculation and differential expression analysis
-using R's msqrob2 package through subprocess calls (NEVER rpy2).
+using R's DEqMS package through subprocess calls (NEVER rpy2).
 """
 
 import asyncio
@@ -19,13 +19,13 @@ from app.core.exceptions import RScriptError
 logger = logging.getLogger("proteomics")
 
 
-class Msqrob2Wrapper:
+class DeqmsWrapper:
     """
-    Wrapper for R/msqrob2 functionality via subprocess.
+    Wrapper for R/DEqMS functionality via subprocess.
 
-    Implements steps 6 and 7 of the pipeline:
-    - Step 6: Protein Abundance (aggregateFeatures)
-    - Step 7: Differential Expression (msqrob)
+    Implements steps 6 and 7 of the DEqMS pipeline:
+    - Step 6: Protein Abundance (medianSweeping)
+    - Step 7: Differential Expression (spectraCounteBayes)
     """
 
     def __init__(self):
@@ -53,13 +53,11 @@ class Msqrob2Wrapper:
         """
         logger.info(f"Starting R script with timeout {self.timeout}s")
 
-        # Get the running event loop for callback scheduling
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
 
-        # Use Popen for streaming output
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -67,7 +65,7 @@ class Msqrob2Wrapper:
             text=True,
             encoding='utf-8',
             errors='replace',
-            bufsize=1,  # Line buffered
+            bufsize=1,
             env={**os.environ, "R_NCORES": str(settings.r_n_cores)}
         )
 
@@ -95,7 +93,6 @@ class Msqrob2Wrapper:
             except Exception as e:
                 logger.error(f"Error reading {log_prefix}: {e}")
 
-        # Start threads to read stdout and stderr
         stdout_thread = threading.Thread(
             target=stream_output,
             args=(process.stdout, stdout_lines, "R", "info", log_callback, loop)
@@ -107,17 +104,15 @@ class Msqrob2Wrapper:
         stdout_thread.start()
         stderr_thread.start()
 
-        # Wait for process to complete with timeout (non-blocking)
         try:
             await asyncio.to_thread(process.wait, timeout=self.timeout)
         except subprocess.TimeoutExpired:
             process.kill()
-            await asyncio.to_thread(process.wait)  # Reap zombie on Windows
+            await asyncio.to_thread(process.wait)
             await asyncio.to_thread(stdout_thread.join, timeout=5)
             await asyncio.to_thread(stderr_thread.join, timeout=5)
             raise
 
-        # Wait for output threads to finish
         await asyncio.to_thread(stdout_thread.join)
         await asyncio.to_thread(stderr_thread.join)
 
@@ -145,29 +140,20 @@ class Msqrob2Wrapper:
         log_callback: Optional[callable] = None
     ) -> Path:
         """
-        Step 6: Calculate protein abundance using msqrob2.
-
-        Uses R's aggregateFeatures function to aggregate peptide-level
-        data to protein level.
+        Step 6: Calculate protein abundance using DEqMS medianSweeping.
 
         Args:
-            input_file: Path to PSM_Abundances.tsv
+            input_file: Path to PSM_Abundances.tsv/parquet
             output_file: Path for Protein_Abundances.tsv output
             gene_mapping_file: Optional protein to gene mapping file
-            log_callback: Optional callback function for real-time log messages (level, message)
+            log_callback: Optional callback for real-time log messages
 
         Returns:
             Path to output file
-
-        Raises:
-            RScriptError: If R script fails
         """
-        logger.info(
-            "Step 6: Calculating protein abundance with msqrob2",
-            extra={"session_id": "unknown", "input": str(input_file)}
-        )
+        logger.info("Step 6: Calculating protein abundance with DEqMS")
 
-        script_path = self.scripts_dir / "msqrob2_protein.R"
+        script_path = self.scripts_dir / "deqms_protein.R"
 
         if not script_path.exists():
             raise RScriptError(
@@ -175,29 +161,20 @@ class Msqrob2Wrapper:
                 details={"script": str(script_path)}
             )
 
-        # Build command
         cmd = [
             self.r_executable,
             str(script_path),
             str(input_file),
-            str(output_file)
+            str(output_file),
+            str(gene_mapping_file) if gene_mapping_file else "",
         ]
-
-        if gene_mapping_file:
-            cmd.append(str(gene_mapping_file))
 
         logger.info(f"R command: {' '.join(cmd)}")
 
         try:
             await self._run_r_script(cmd, script_path, log_callback)
-
-            logger.info(
-                "Step 6 complete: Protein abundance calculated",
-                extra={"output": str(output_file)}
-            )
-
+            logger.info(f"Step 6 complete: Protein abundance calculated, output: {output_file}")
             return output_file
-
         except subprocess.TimeoutExpired:
             raise RScriptError(
                 message=f"Protein abundance calculation timed out after {self.timeout}s",
@@ -218,37 +195,26 @@ class Msqrob2Wrapper:
         output_file: Path,
         treatment: str,
         control: str,
+        fit_method: str = "loess",
         log_callback: Optional[callable] = None
     ) -> Path:
         """
-        Step 7: Differential expression analysis using msqrob2.
-
-        Uses R's msqrob function to fit robust linear models and
-        calculate differential expression statistics.
+        Step 7: Differential expression analysis using DEqMS spectraCounteBayes.
 
         Args:
             input_file: Path to Protein_Abundances.tsv
             output_file: Path for Diff_Expression.tsv output
             treatment: Treatment condition name
             control: Control condition name
-            log_callback: Optional callback function for real-time log messages
+            fit_method: DEqMS fit method (loess, nls, spline)
+            log_callback: Optional callback for real-time log messages
 
         Returns:
             Path to output file
-
-        Raises:
-            RScriptError: If R script fails
         """
-        logger.info(
-            "Step 7: Running differential expression analysis with msqrob2",
-            extra={
-                "input": str(input_file),
-                "treatment": treatment,
-                "control": control
-            }
-        )
+        logger.info("Step 7: Running differential expression analysis with DEqMS")
 
-        script_path = self.scripts_dir / "msqrob2_de.R"
+        script_path = self.scripts_dir / "deqms_de.R"
 
         if not script_path.exists():
             raise RScriptError(
@@ -256,28 +222,22 @@ class Msqrob2Wrapper:
                 details={"script": str(script_path)}
             )
 
-        # Build command
         cmd = [
             self.r_executable,
             str(script_path),
             str(input_file),
             str(output_file),
             treatment,
-            control
+            control,
+            str(fit_method),
         ]
 
         logger.info(f"R command: {' '.join(cmd)}")
 
         try:
             await self._run_r_script(cmd, script_path, log_callback)
-
-            logger.info(
-                "Step 7 complete: Differential expression calculated",
-                extra={"output": str(output_file)}
-            )
-
+            logger.info(f"Step 7 complete: Differential expression calculated, output: {output_file}")
             return output_file
-
         except subprocess.TimeoutExpired:
             raise RScriptError(
                 message=f"Differential expression analysis timed out after {self.timeout}s",
@@ -299,19 +259,11 @@ class Msqrob2Wrapper:
         Returns:
             Dictionary with verification results
         """
-        script_path = self.scripts_dir / "verify_r_packages.R"
-
-        if not script_path.exists():
-            return {
-                "success": False,
-                "error": f"Verification script not found: {script_path}"
-            }
-
         try:
-            # Run R script using subprocess.run in a thread (Windows-compatible)
             def run_verify():
                 return subprocess.run(
-                    [self.r_executable, str(script_path)],
+                    [self.r_executable, "-e",
+                     "library(DEqMS); library(limma); library(ggplot2); cat('DEqMS packages OK\n')"],
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
@@ -320,32 +272,19 @@ class Msqrob2Wrapper:
 
             process = await asyncio.to_thread(run_verify)
 
-            stdout_str = process.stdout if process.stdout else ""
-            stderr_str = process.stderr if process.stderr else ""
-
             if process.returncode == 0:
-                return {
-                    "success": True,
-                    "output": stdout_str
-                }
+                return {"success": True, "output": process.stdout}
             else:
                 return {
                     "success": False,
-                    "error": stderr_str or "Unknown error",
-                    "output": stdout_str
+                    "error": process.stderr or "Unknown error",
+                    "output": process.stdout
                 }
-
         except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "error": "Verification timed out"
-            }
+            return {"success": False, "error": "Verification timed out"}
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
 
 
 # Global wrapper instance
-msqrob2_wrapper = Msqrob2Wrapper()
+deqms_wrapper = DeqmsWrapper()

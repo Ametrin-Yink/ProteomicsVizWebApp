@@ -55,6 +55,7 @@ class SessionConfig(BaseModel):
     msstats_feature_selection: Optional[str] = Field(default=None)
     msstats_summary_method: Optional[str] = Field(default=None)
     msstats_impute: Optional[bool] = Field(default=None)
+    deqms_fit_method: Optional[str] = Field(default=None)
 
     @field_validator('control')
     @classmethod

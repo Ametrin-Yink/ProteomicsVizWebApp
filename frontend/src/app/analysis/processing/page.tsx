@@ -493,7 +493,7 @@ function ProcessingContent() {
       <div className="flex-1 flex flex-col overflow-auto">
         {/* Header - reduced z-index to prevent overlay */}
         <header className="sticky top-0 z-30 bg-surface/80 backdrop-blur-md border-b border-border">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-4">
                 <button
@@ -536,7 +536,7 @@ function ProcessingContent() {
         </header>
 
         {/* Main content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
 
           {/* Queued state */}
           {isQueued && (

@@ -4,10 +4,7 @@ Custom exception classes for the Proteomics Visualization API.
 Defines the exception hierarchy and FastAPI exception handlers.
 """
 
-from typing import Any, Optional
-from datetime import datetime, timezone
-from fastapi import Request
-from fastapi.responses import JSONResponse
+from typing import Optional
 import logging
 
 logger = logging.getLogger("proteomics")

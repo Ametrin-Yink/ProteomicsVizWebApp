@@ -36,6 +36,12 @@ const templates: Array<{ id: AnalysisTemplate; name: string; description: string
     available: true,
   },
   {
+    id: 'deqms_pairwise_comparison',
+    name: 'DEqMS Pair-wise Comparison',
+    description: 'Compare protein expression using DEqMS with spectral-count-aware variance moderation',
+    available: true,
+  },
+  {
     id: 'time_series_analysis',
     name: 'Time Series Analysis',
     description: 'Analyze protein changes over time points',

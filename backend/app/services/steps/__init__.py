@@ -9,6 +9,9 @@ from .protein_abundance import step_protein_abundance_msqrob2
 from .protein_abundance_msstats import step_protein_abundance_msstats
 from .diff_expression import step_diff_expression_msqrob2
 from .diff_expression_msstats import step_diff_expression_msstats
+from .protein_abundance_deqms import step_protein_abundance_deqms
+from .diff_expression_deqms import step_diff_expression_deqms
+from .generate_unique_psm_deqms import step_generate_unique_psm_deqms
 from .qc_metrics import step_qc_metrics
 from .gsea_analysis import step_gsea_analysis
 
@@ -22,6 +25,9 @@ __all__ = [
     "step_protein_abundance_msstats",
     "step_diff_expression_msqrob2",
     "step_diff_expression_msstats",
+    "step_protein_abundance_deqms",
+    "step_diff_expression_deqms",
+    "step_generate_unique_psm_deqms",
     "step_qc_metrics",
     "step_gsea_analysis",
 ]

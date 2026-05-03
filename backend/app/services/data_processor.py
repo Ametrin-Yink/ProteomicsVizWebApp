@@ -11,11 +11,10 @@ This module implements the initial data processing steps:
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 import pandas as pd
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +150,12 @@ class DataProcessor:
             
             # Select required columns PLUS the abundance column
             columns_to_keep = self.REQUIRED_COLUMNS + [abundance_col]
+
+            # Include Total # PSMs if present (needed for DEqMS spectral counts)
+            psm_col = 'Total # PSMs'
+            if psm_col in df.columns:
+                columns_to_keep.append(psm_col)
+
             df = df[columns_to_keep].copy()
             
             # Rename columns to snake_case for consistency
@@ -321,7 +326,7 @@ class DataProcessor:
                 p: len(fasta_db.get(p, '')) for p in candidates
             }
             max_length = max(lengths.values())
-            candidates = [p for p, l in lengths.items() if l == max_length]
+            candidates = [p for p, length in lengths.items() if length == max_length]
             
             if len(candidates) == 1:
                 return candidates[0]

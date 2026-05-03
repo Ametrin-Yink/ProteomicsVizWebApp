@@ -182,7 +182,7 @@ class MsstatsWrapper:
         normalization = getattr(config, "msstats_normalization", "equalizeMedians") if config else "equalizeMedians"
         feature_selection = getattr(config, "msstats_feature_selection", "all") if config else "all"
         summary_method = getattr(config, "msstats_summary_method", "TMP") if config else "TMP"
-        impute = getattr(config, "msstats_impute", True) if config else True
+        impute = getattr(config, "msstats_impute", False) if config else False
         log_base = getattr(config, "msstats_log_base", 2) if config else 2
 
         # Build command
@@ -271,7 +271,8 @@ class MsstatsWrapper:
                 details={"script": str(script_path)}
             )
 
-        # Build command
+        # Build command - use parallel processing for groupComparison
+        n_cores = settings.r_n_cores
         cmd = [
             self.r_executable,
             str(script_path),
@@ -280,6 +281,7 @@ class MsstatsWrapper:
             treatment,
             control,
             str(gene_mapping_file) if gene_mapping_file else "",
+            str(n_cores),
         ]
 
         logger.info(f"R command: {' '.join(cmd)}")

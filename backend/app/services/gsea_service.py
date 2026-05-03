@@ -15,7 +15,6 @@ import pandas as pd
 import numpy as np
 import gseapy as gp
 
-from app.core.exceptions import ProcessingError
 from app.models.data import GSEAResults, GSEAResult
 from app.models.analysis import DatabaseType, DATABASE_NAMES
 from app.services.gsea_cache_service import gsea_cache_service, GSEACacheKey
@@ -513,17 +512,16 @@ class GSEAService:
                 return None
 
             # Filter to pathway genes that are in the protein data
-            available_genes = protein_df[gene_col].astype(str).str.upper().tolist()
+            available_genes = protein_df[gene_col].fillna('').astype(str).str.upper().tolist()
             lead_genes_upper = [g.upper() for g in lead_genes]
 
             # Build a lookup: uppercase gene name -> index
             gene_index_map: dict[str, int] = {}
             for i, gene in enumerate(available_genes):
                 # Split multi-gene entries and strip isoform suffixes
-                parts = gene.replace('[;]', ';').split(';')
-                for part in parts:
+                for part in gene.split(';'):
                     clean = part.strip().upper()
-                    if clean and clean not in gene_index_map:
+                    if clean and clean != 'NAN' and clean not in gene_index_map:
                         gene_index_map[clean] = i
 
             # Exact match against cleaned gene names
@@ -589,7 +587,6 @@ class GSEAService:
             results: GSEA results dictionary
             output_path: Path to save JSON
         """
-        import json
 
         results_dict = {
             db: result.model_dump() for db, result in results.items()

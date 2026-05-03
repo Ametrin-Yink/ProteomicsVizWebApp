@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 try:
-    import seaborn as sns
+    import seaborn  # noqa: F401  # imported for runtime availability check
     HAS_SEABORN = True
 except ImportError:
     HAS_SEABORN = False
@@ -50,7 +50,7 @@ class PlotGenerator:
         # Set default style
         try:
             plt.style.use('seaborn-v0_8-whitegrid')
-        except:
+        except Exception:
             plt.style.use('default')
         
         self.colors = {

@@ -16,7 +16,8 @@ class AnalysisTemplate(str, Enum):
     """Available analysis templates."""
 
     PROTEIN_PAIRWISE = "protein_pairwise_comparison"
-    MSSTATS_PAIRWISE = "msstats_pairwise_comparison"    # reserved for Plan 2
+    MSSTATS_PAIRWISE = "msstats_pairwise_comparison"
+    DEQMS_PAIRWISE = "deqms_pairwise_comparison"
     MULTI_CONDITION = "multi_condition_comparison"       # reserved for Plan 3
     TIME_SERIES = "time_series_analysis"                 # reserved for future
 
@@ -90,8 +91,11 @@ class AnalysisConfig(BaseModel):
     msstats_normalization: str = Field(default="equalizeMedians")
     msstats_feature_selection: str = Field(default="all")
     msstats_summary_method: str = Field(default="TMP")
-    msstats_impute: bool = Field(default=True)
+    msstats_impute: bool = Field(default=False)
     msstats_log_base: int = Field(default=2)
+
+    # DEqMS-specific parameters (optional, used only for deqms_pairwise_comparison template)
+    deqms_fit_method: str = Field(default="loess")
 
     @field_validator('control')
     @classmethod

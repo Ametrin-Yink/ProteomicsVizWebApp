@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import GSEADashboard from '@/components/visualization/GSEADashboard';
 import PathwayTable from '@/components/visualization/PathwayTable';
@@ -29,7 +29,16 @@ function GSEAAnalysisContent() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [significantOnly, setSignificantOnly] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [totalResults, setTotalResults] = useState(0);
+
+  // Debounce search input
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); };
+  }, [search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +53,7 @@ function GSEAAnalysisContent() {
           sort_by: sortBy,
           sort_order: sortOrder,
           significant_only: significantOnly,
-          search,
+          search: debouncedSearch,
         });
         if (!cancelled) {
           setData(gseaData);
@@ -65,7 +74,7 @@ function GSEAAnalysisContent() {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, search]);
+  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch]);
 
   // Full-page loading only on initial load
   if (loading && initialLoad) {
@@ -139,7 +148,7 @@ function GSEAAnalysisContent() {
           </div>
 
           {/* Content */}
-          {data && data.results && Array.isArray(data.results) && data.results.length > 0 ? (
+          {data ? (
             <div className="space-y-6">
               {/* GSEA Dashboard */}
               <GSEADashboard
@@ -157,7 +166,7 @@ function GSEAAnalysisContent() {
 
             {/* Pathway Table */}
             <PathwayTable
-              data={data.results}
+              data={data.results ?? []}
               selectedPathway={selectedPathway}
               onSelectPathway={setSelectedPathway}
               totalResults={totalResults}

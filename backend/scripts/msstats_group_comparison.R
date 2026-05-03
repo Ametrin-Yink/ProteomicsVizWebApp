@@ -18,9 +18,9 @@ cat("R packages loaded successfully\n")
 # Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 5) {
+if (length(args) < 6) {
     stop(paste("Usage: Rscript msstats_group_comparison.R <rds_file> <output_file>",
-               "<treatment> <control> <gene_mapping_file>"))
+               "<treatment> <control> <gene_mapping_file> <num_cores>"))
 }
 
 rds_file        <- args[1]
@@ -28,6 +28,7 @@ output_file     <- args[2]
 treatment       <- args[3]
 control         <- args[4]
 gene_mapping_file <- if (nzchar(args[5])) args[5] else NULL
+num_cores       <- as.integer(args[6])
 
 cat("Step 7: Running differential expression analysis with MSstats\n")
 cat("Arguments received:", length(args), "\n")
@@ -46,42 +47,30 @@ if (!file.exists(rds_file)) {
     stop(paste("RDS file not found:", rds_file))
 }
 
-# Load processed data from dataProcess step
+# Load RDS: contains both 'converted' (preprocessed) and 'processed' (dataProcess output)
 cat("Loading processed data from RDS...\n")
-processed <- readRDS(rds_file)
-cat("Loaded processed data\n")
+rds_data <- readRDS(rds_file)
+converted <- rds_data$converted
+processed <- rds_data$processed
+
+cat("Loaded RDS data\n")
 cat("Processed object class:", class(processed), "\n")
-cat("Processed object slots/names:", paste(names(processed), collapse = ", "), "\n")
+cat("Processed object names:", paste(names(processed), collapse = ", "), "\n")
 flush.console()
 
-# Get the annotation data from the processed object
-# MSstats stores condition info in the processed object
-cat("Extracting annotation data...\n")
-annotation <- processed$Annotation
-if (is.null(annotation)) {
-    # Fallback: try to get from QuantProtein (the quantified protein data)
-    annotation <- processed$QuantProtein
-}
-cat("Annotation rows:", ifelse(is.null(annotation), "NULL", nrow(annotation)), "\n")
-cat("Annotation columns:", ifelse(is.null(annotation), "NULL", paste(names(annotation), collapse = ", ")), "\n")
-flush.console()
-
-# Determine available condition levels from the processed object
-# MSstats stores conditions in the annotation/QuantProtein data
-if (!is.null(annotation) && "Condition" %in% names(annotation)) {
-    condition_levels <- unique(annotation$Condition)
+# Get condition levels from the ProteinLevelData inside the processed object
+# dataProcess() returns a list with ProteinLevelData containing GROUP column
+cat("Extracting condition levels from processed object...\n")
+if (!is.null(processed$ProteinLevelData) && "GROUP" %in% names(processed$ProteinLevelData)) {
+    condition_levels <- unique(processed$ProteinLevelData$GROUP)
+} else if (!is.null(processed$ProteinLevelData) && "Condition" %in% names(processed$ProteinLevelData)) {
+    condition_levels <- unique(processed$ProteinLevelData$Condition)
 } else {
-    # Fallback: try to infer from the dataProcess input stored in the object
-    if ("Input" %in% names(processed)) {
-        input_data <- processed$Input
-        if (!is.null(input_data) && "Condition" %in% names(input_data)) {
-            condition_levels <- unique(input_data$Condition)
-        } else {
-            stop("Could not determine condition levels from processed object")
-        }
-    } else {
-        stop("Could not find input data in processed object")
-    }
+    stop(paste("Could not determine condition levels. Processed names:",
+               paste(names(processed), collapse = ", "),
+               if (!is.null(processed$ProteinLevelData))
+                   paste("| ProteinLevelData cols:", paste(names(processed$ProteinLevelData), collapse = ", "))
+               else "| No ProteinLevelData"))
 }
 
 cat("Condition levels:", paste(condition_levels, collapse = ", "), "\n")
@@ -113,6 +102,7 @@ colnames(contrast_matrix) <- condition_levels
 
 cat("Contrast matrix:\n")
 print(contrast_matrix)
+cat("Using", num_cores, "cores for parallel processing\n")
 flush.console()
 
 # Call MSstats::groupComparison
@@ -123,7 +113,10 @@ group_comp <- tryCatch({
     MSstats::groupComparison(
         contrast.matrix = contrast_matrix,
         data = processed,
-        log_base = 2
+        log_base = 2,
+        numberOfCores = num_cores,
+        use_log_file = FALSE,
+        verbose = FALSE
     )
 }, error = function(e) {
     cat("MSstats::groupComparison failed:", conditionMessage(e), "\n")
@@ -238,11 +231,18 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
 # Handle NA gene names
 comparison_result$Gene_Name[is.na(comparison_result$Gene_Name)] <- sub("-\\d+$", "", protein_ids[is.na(comparison_result$Gene_Name)])
 
-# Add PSM_Count if available from the processed object
-if ("NumMeasurements" %in% names(comparison_result)) {
+# Add PSM_Count from the converted object's quantificationData
+# (one row per feature measurement in the preprocessed data)
+if (!is.null(converted$quantificationData) && "ProteinName" %in% names(converted$quantificationData)) {
+    psm_table <- table(converted$quantificationData$ProteinName)
+    protein_idx <- match(as.character(protein_ids), names(psm_table))
+    comparison_result$PSM_Count <- as.integer(psm_table[protein_idx])
+    comparison_result$PSM_Count[is.na(comparison_result$PSM_Count)] <- 0
+    cat("Mapped PSM counts for", sum(comparison_result$PSM_Count > 0), "of", length(protein_ids), "proteins\n")
+} else if ("NumMeasurements" %in% names(comparison_result)) {
     comparison_result$PSM_Count <- comparison_result$NumMeasurements
 } else {
-    comparison_result$PSM_Count <- NA_integer_
+    comparison_result$PSM_Count <- 0L
 }
 
 # Reorder columns

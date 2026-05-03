@@ -15,7 +15,6 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-from app.core.exceptions import ProcessingError
 from app.models.data import QCData, PCAResult, PValueDistribution, DataCompleteness
 
 logger = logging.getLogger("proteomics")
@@ -383,7 +382,6 @@ class QCCalculator:
 
         # Get total unique PSMs across the entire dataset first
         all_unique_psms = set(psm_df['Unique_PSM'].unique()) if 'Unique_PSM' in psm_df.columns else set()
-        total_unique_psms = len(all_unique_psms)
 
         # Group by condition and replicate
         if 'Replicate' in psm_df.columns and 'Condition' in psm_df.columns:

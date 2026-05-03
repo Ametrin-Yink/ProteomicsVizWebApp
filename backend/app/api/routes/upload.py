@@ -7,7 +7,6 @@ Handles proteomics and compound file uploads with validation.
 import logging
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
-from fastapi.responses import JSONResponse
 
 from app.api.deps import get_session_store
 from app.core.config import settings

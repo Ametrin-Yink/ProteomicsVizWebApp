@@ -5,7 +5,7 @@ Defines Pydantic models for proteomics data structures including
 PSM data, protein abundances, differential expression results, and QC metrics.
 """
 
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 

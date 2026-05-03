@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.core.exceptions import ProcessingError
 from app.models.session import Session
 from app.models.analysis import AnalysisResult, ReportRequest
-from app.models.data import QCData, GSEAResults, PCAResult
+from app.models.data import QCData, GSEAResults
 
 logger = logging.getLogger("proteomics")
 

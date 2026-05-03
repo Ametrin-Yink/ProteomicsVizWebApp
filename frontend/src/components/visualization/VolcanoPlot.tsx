@@ -99,6 +99,13 @@ export default function VolcanoPlot({
       : [mainTrace];
   }, [data, filters, selectedProteins, markedProteins]);
 
+  // Dynamic y-axis max: ceil the tallest -log10(p-value) and add 10% headroom, minimum 2
+  const dynamicMaxY = useMemo(() => {
+    if (data.length === 0) return 2;
+    const rawMaxY = Math.max(0, ...data.map((d) => -Math.log10(d.pval || 1e-300)));
+    return Math.max(2, Math.ceil(rawMaxY * 1.1));
+  }, [data]);
+
   // Calculate threshold lines
   const thresholdShapes = useMemo(() => {
     const shapes: Array<
@@ -106,7 +113,7 @@ export default function VolcanoPlot({
       | { type: 'path'; path: string; line: { color: string; width: number; dash: 'dash' } }
     > = [];
 
-    const maxY = 10;
+    const maxY = dynamicMaxY;
     const maxX = Math.max(...data.map((d) => Math.abs(d.log_fc))) * 1.1;
 
     const actualS0 = filters.s0 * filters.foldChange;
@@ -171,7 +178,7 @@ export default function VolcanoPlot({
     }
 
     return shapes;
-  }, [filters, data]);
+  }, [filters, data, dynamicMaxY]);
 
   // Layout configuration
   const layout = useMemo(
@@ -189,7 +196,7 @@ export default function VolcanoPlot({
       },
       yaxis: {
         title: { text: '-log₁₀(p-value)', font: { size: 14 } },
-        range: [0, 10],
+        range: [0, dynamicMaxY],
         zeroline: true,
         zerolinecolor: '#D1D5DB',
         zerolinewidth: 1,
@@ -203,7 +210,7 @@ export default function VolcanoPlot({
       paper_bgcolor: '#FFFFFF',
       margin: { l: 60, r: 30, t: 50, b: 60 },
     }),
-    [thresholdShapes]
+    [thresholdShapes, dynamicMaxY]
   );
 
   // Config for plot

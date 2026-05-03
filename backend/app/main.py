@@ -254,7 +254,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     break
 
                             # Send current step progress
-                            current_step = pipeline_state.get("current_step", 0)
                             completed_steps = pipeline_state.get("completed_steps", [])
 
                             # Send progress for completed steps

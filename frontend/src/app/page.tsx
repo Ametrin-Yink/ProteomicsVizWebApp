@@ -21,6 +21,7 @@ import {
   Route,
   ChevronRight,
   FlaskConical,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +41,14 @@ const templates = [
     description: 'Compare protein abundance between two conditions using MSstats statistical pipeline with advanced normalization and imputation.',
     icon: FlaskConical,
     color: 'from-[#8B5CF6] to-[#06B6D4]',
+    available: true,
+  },
+  {
+    id: 'deqms_pairwise_comparison',
+    name: 'DEqMS Pair-wise Comparison',
+    description: 'Compare protein expression using DEqMS with spectral-count-aware variance moderation for improved statistical accuracy.',
+    icon: TrendingUp,
+    color: 'from-[#10B981] to-[#059669]',
     available: true,
   },
   {

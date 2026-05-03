@@ -29,7 +29,6 @@ from app.models.session import (
 )
 from app.utils.file_parser import (
     parse_psm_filename,
-    parse_psm_csv,
     extract_columns_from_csv,
     get_file_size,
     parse_compound_csv

@@ -8,7 +8,6 @@ import re
 import asyncio
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
 from datetime import datetime
 
 import pandas as pd

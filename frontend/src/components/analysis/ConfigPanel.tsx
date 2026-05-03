@@ -327,7 +327,31 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
           </div>
         </div>
       )}
-      
+
+      {/* DEqMS Options */}
+      {template === "deqms_pairwise_comparison" && (
+        <div className="space-y-4 mt-4">
+          <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
+            <span className="w-2 h-2 bg-primary rounded-full"></span>
+            DEqMS Options
+          </h4>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-text">Variance Fit Method</label>
+            <select
+              value={config.deqms_fit_method || "loess"}
+              onChange={(e) => setConfig({ deqms_fit_method: e.target.value })}
+              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+            >
+              <option value="loess">LOESS (default, recommended)</option>
+              <option value="nls">Non-linear Least Squares</option>
+              <option value="spline">Spline</option>
+            </select>
+            <p className="text-xs text-text-muted">Method for modeling the relationship between variance and spectral count. LOESS is robust and recommended for most datasets.</p>
+          </div>
+        </div>
+      )}
+
       {/* Configuration Summary */}
       <div data-testid="config-summary" className="border-t border-border pt-4">
         <h4 className="text-sm font-medium text-text mb-3">Configuration Summary</h4>
