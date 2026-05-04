@@ -6,6 +6,7 @@ using R's MSstats package through subprocess calls (NEVER rpy2).
 """
 
 import asyncio
+import json
 import logging
 import os
 import subprocess
@@ -35,10 +36,7 @@ class MsstatsWrapper:
         self.scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 
     async def _run_r_script(
-        self,
-        cmd: list[str],
-        script_path: Path,
-        log_callback: Optional[callable] = None
+        self, cmd: list[str], script_path: Path, log_callback: Optional[callable] = None
     ) -> None:
         """
         Run an R script via subprocess with real-time output streaming.
@@ -65,29 +63,30 @@ class MsstatsWrapper:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding='utf-8',
-            errors='replace',
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,  # Line buffered
-            env={**os.environ, "R_NCORES": str(settings.r_n_cores)}
+            env={**os.environ, "R_NCORES": str(settings.r_n_cores)},
         )
 
         stdout_lines: list[str] = []
         stderr_lines: list[str] = []
 
-        def stream_output(pipe, lines_list, log_prefix, log_level="info", log_cb=None, event_loop=None):
+        def stream_output(
+            pipe, lines_list, log_prefix, log_level="info", log_cb=None, event_loop=None
+        ):
             """Stream output from pipe and log immediately."""
             try:
-                for line in iter(pipe.readline, ''):
+                for line in iter(pipe.readline, ""):
                     if not line:
                         break
-                    line = line.rstrip('\n\r')
+                    line = line.rstrip("\n\r")
                     lines_list.append(line)
                     logger.info(f"{log_prefix}: {line}")
                     if log_cb and event_loop:
                         try:
                             asyncio.run_coroutine_threadsafe(
-                                log_cb(log_level, line),
-                                event_loop
+                                log_cb(log_level, line), event_loop
                             )
                         except Exception:
                             pass
@@ -98,11 +97,11 @@ class MsstatsWrapper:
         # Start threads to read stdout and stderr
         stdout_thread = threading.Thread(
             target=stream_output,
-            args=(process.stdout, stdout_lines, "R", "info", log_callback, loop)
+            args=(process.stdout, stdout_lines, "R", "info", log_callback, loop),
         )
         stderr_thread = threading.Thread(
             target=stream_output,
-            args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop)
+            args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop),
         )
         stdout_thread.start()
         stderr_thread.start()
@@ -121,20 +120,22 @@ class MsstatsWrapper:
         await asyncio.to_thread(stdout_thread.join)
         await asyncio.to_thread(stderr_thread.join)
 
-        stdout_str = '\n'.join(stdout_lines)
-        stderr_str = '\n'.join(stderr_lines)
+        stdout_str = "\n".join(stdout_lines)
+        stderr_str = "\n".join(stderr_lines)
 
         if process.returncode != 0:
             error_msg = stderr_str if stderr_str else "Unknown error"
-            logger.error(f"R script failed with return code {process.returncode}: {error_msg}")
+            logger.error(
+                f"R script failed with return code {process.returncode}: {error_msg}"
+            )
             raise RScriptError(
                 message=error_msg,
                 details={
                     "returncode": process.returncode,
                     "stderr": error_msg[:500],
                     "stdout": stdout_str[:500],
-                    "script": str(script_path)
-                }
+                    "script": str(script_path),
+                },
             )
 
     async def data_process(
@@ -144,7 +145,7 @@ class MsstatsWrapper:
         rds_output: Path,
         gene_mapping_file: Optional[Path] = None,
         config: Optional[object] = None,
-        log_callback: Optional[callable] = None
+        log_callback: Optional[callable] = None,
     ) -> Path:
         """
         Step 6: Calculate protein abundance using MSstats dataProcess.
@@ -167,7 +168,7 @@ class MsstatsWrapper:
         """
         logger.info(
             "Step 6: Calculating protein abundance with MSstats",
-            extra={"session_id": "unknown", "input": str(input_file)}
+            extra={"session_id": "unknown", "input": str(input_file)},
         )
 
         script_path = self.scripts_dir / "msstats_data_process.R"
@@ -175,13 +176,21 @@ class MsstatsWrapper:
         if not script_path.exists():
             raise RScriptError(
                 message=f"R script not found: {script_path}",
-                details={"script": str(script_path)}
+                details={"script": str(script_path)},
             )
 
         # Extract config values with defaults
-        normalization = getattr(config, "msstats_normalization", "equalizeMedians") if config else "equalizeMedians"
-        feature_selection = getattr(config, "msstats_feature_selection", "all") if config else "all"
-        summary_method = getattr(config, "msstats_summary_method", "TMP") if config else "TMP"
+        normalization = (
+            getattr(config, "msstats_normalization", "equalizeMedians")
+            if config
+            else "equalizeMedians"
+        )
+        feature_selection = (
+            getattr(config, "msstats_feature_selection", "all") if config else "all"
+        )
+        summary_method = (
+            getattr(config, "msstats_summary_method", "TMP") if config else "TMP"
+        )
         impute = getattr(config, "msstats_impute", False) if config else False
         log_base = getattr(config, "msstats_log_base", 2) if config else 2
 
@@ -207,7 +216,7 @@ class MsstatsWrapper:
 
             logger.info(
                 "Step 6 complete: Protein abundance calculated",
-                extra={"output": str(output_file)}
+                extra={"output": str(output_file)},
             )
 
             return output_file
@@ -215,15 +224,16 @@ class MsstatsWrapper:
         except subprocess.TimeoutExpired:
             raise RScriptError(
                 message=f"Protein abundance calculation timed out after {self.timeout}s",
-                details={"timeout": self.timeout}
+                details={"timeout": self.timeout},
             )
         except RScriptError:
             raise
         except Exception as e:
             import traceback
+
             raise RScriptError(
                 message=f"Protein abundance calculation failed: {str(e)}",
-                details={"error": str(e), "traceback": traceback.format_exc()}
+                details={"error": str(e), "traceback": traceback.format_exc()},
             )
 
     async def group_comparison(
@@ -233,7 +243,7 @@ class MsstatsWrapper:
         treatment: str,
         control: str,
         gene_mapping_file: Optional[Path] = None,
-        log_callback: Optional[callable] = None
+        log_callback: Optional[callable] = None,
     ) -> Path:
         """
         Step 7: Differential expression analysis using MSstats groupComparison.
@@ -256,11 +266,7 @@ class MsstatsWrapper:
         """
         logger.info(
             "Step 7: Running differential expression analysis with MSstats",
-            extra={
-                "input": str(rds_file),
-                "treatment": treatment,
-                "control": control
-            }
+            extra={"input": str(rds_file), "treatment": treatment, "control": control},
         )
 
         script_path = self.scripts_dir / "msstats_group_comparison.R"
@@ -268,7 +274,7 @@ class MsstatsWrapper:
         if not script_path.exists():
             raise RScriptError(
                 message=f"R script not found: {script_path}",
-                details={"script": str(script_path)}
+                details={"script": str(script_path)},
             )
 
         # Build command - use parallel processing for groupComparison
@@ -291,7 +297,7 @@ class MsstatsWrapper:
 
             logger.info(
                 "Step 7 complete: Differential expression calculated",
-                extra={"output": str(output_file)}
+                extra={"output": str(output_file)},
             )
 
             return output_file
@@ -299,15 +305,95 @@ class MsstatsWrapper:
         except subprocess.TimeoutExpired:
             raise RScriptError(
                 message=f"Differential expression analysis timed out after {self.timeout}s",
-                details={"timeout": self.timeout}
+                details={"timeout": self.timeout},
             )
         except RScriptError:
             raise
         except Exception as e:
             import traceback
+
             raise RScriptError(
                 message=f"Differential expression analysis failed: {str(e)}",
-                details={"error": str(e), "traceback": traceback.format_exc()}
+                details={"error": str(e), "traceback": traceback.format_exc()},
+            )
+
+    async def group_comparison_multi(
+        self,
+        rds_file: Path,
+        output_dir: Path,
+        comparisons: list[dict[str, str]],
+        gene_mapping_file: Optional[Path] = None,
+        log_callback: Optional[callable] = None,
+    ) -> Path:
+        """
+        Step 7 (multi-condition): Run MSstats groupComparison for all contrasts.
+
+        Args:
+            rds_file: Path to MSstats_Processed.rds from dataProcess step
+            output_dir: Directory for per-comparison Diff_Expression_*.tsv files
+            comparisons: List of {treatment, control} dicts
+            gene_mapping_file: Optional protein to gene mapping file
+            log_callback: Optional callback function for real-time log messages
+
+        Returns:
+            Path to output directory
+
+        Raises:
+            RScriptError: If R script fails
+        """
+        logger.info(
+            "Step 7 (multi): Running multi-condition differential expression with MSstats",
+            extra={"input": str(rds_file), "comparisons": len(comparisons)},
+        )
+
+        script_path = self.scripts_dir / "msstats_group_comparison_multi.R"
+
+        if not script_path.exists():
+            raise RScriptError(
+                message=f"R script not found: {script_path}",
+                details={"script": str(script_path)},
+            )
+
+        comparisons_json = json.dumps(comparisons)
+        covariates_json = "{}"  # Placeholder for future covariate support
+
+        n_cores = settings.r_n_cores
+        cmd = [
+            self.r_executable,
+            str(script_path),
+            str(rds_file),
+            str(output_dir),
+            comparisons_json,
+            covariates_json,
+            str(gene_mapping_file) if gene_mapping_file else "",
+            str(n_cores),
+        ]
+
+        logger.info(f"R command: {' '.join(cmd[:5])}...")
+
+        try:
+            await self._run_r_script(cmd, script_path, log_callback)
+
+            logger.info(
+                "Step 7 (multi) complete: Multi-condition differential expression calculated",
+                extra={"output_dir": str(output_dir)},
+            )
+
+            return output_dir
+
+        except subprocess.TimeoutExpired:
+            raise RScriptError(
+                message=f"Multi-condition differential expression analysis timed out after {self.timeout}s",
+                details={"timeout": self.timeout},
+            )
+        except RScriptError:
+            raise
+        except Exception as e:
+            import traceback
+
+            raise RScriptError(
+                message=f"Multi-condition differential expression analysis failed: {str(e)}",
+                details={"error": str(e), "traceback": traceback.format_exc()},
             )
 
     async def verify_r_packages(self) -> dict:
@@ -322,7 +408,7 @@ class MsstatsWrapper:
         if not script_path.exists():
             return {
                 "success": False,
-                "error": f"Verification script not found: {script_path}"
+                "error": f"Verification script not found: {script_path}",
             }
 
         try:
@@ -332,8 +418,8 @@ class MsstatsWrapper:
                     [self.r_executable, str(script_path)],
                     capture_output=True,
                     text=True,
-                    encoding='utf-8',
-                    timeout=60
+                    encoding="utf-8",
+                    timeout=60,
                 )
 
             process = await asyncio.to_thread(run_verify)
@@ -342,27 +428,18 @@ class MsstatsWrapper:
             stderr_str = process.stderr if process.stderr else ""
 
             if process.returncode == 0:
-                return {
-                    "success": True,
-                    "output": stdout_str
-                }
+                return {"success": True, "output": stdout_str}
             else:
                 return {
                     "success": False,
                     "error": stderr_str or "Unknown error",
-                    "output": stdout_str
+                    "output": stdout_str,
                 }
 
         except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "error": "Verification timed out"
-            }
+            return {"success": False, "error": "Verification timed out"}
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
 
 
 # Global wrapper instance

@@ -49,9 +49,9 @@ const templates: Array<{ id: AnalysisTemplate; name: string; description: string
   },
   {
     id: 'multi_condition_comparison',
-    name: 'Multi-Condition Analysis',
-    description: 'Compare multiple conditions simultaneously',
-    available: false,
+    name: 'Multi-Condition Analysis (MSstats)',
+    description: 'MSstats-based multi-condition comparison with all pairwise contrasts computed simultaneously',
+    available: true,
   },
   {
     id: 'custom',

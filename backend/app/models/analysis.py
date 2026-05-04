@@ -18,13 +18,13 @@ class AnalysisTemplate(str, Enum):
     PROTEIN_PAIRWISE = "protein_pairwise_comparison"
     MSSTATS_PAIRWISE = "msstats_pairwise_comparison"
     DEQMS_PAIRWISE = "deqms_pairwise_comparison"
-    MULTI_CONDITION = "multi_condition_comparison"       # reserved for Plan 3
-    TIME_SERIES = "time_series_analysis"                 # reserved for future
+    MULTI_CONDITION = "multi_condition_comparison"  # reserved for Plan 3
+    TIME_SERIES = "time_series_analysis"  # reserved for future
 
 
 class Organism(str, Enum):
     """Supported organisms."""
-    
+
     HUMAN = "human"
     MOUSE = "mouse"
     RAT = "rat"
@@ -33,7 +33,7 @@ class Organism(str, Enum):
 
 class ProcessingStep(str, Enum):
     """Processing pipeline steps."""
-    
+
     COMBINE_REPLICATES = "combine_replicates"
     GENERATE_UNIQUE_PSM = "generate_unique_psm"
     REMOVE_RAZOR = "remove_razor"
@@ -72,44 +72,50 @@ STEP_DISPLAY_NAMES: dict[int, str] = {
 
 class AnalysisConfig(BaseModel):
     """Complete analysis configuration."""
-    
-    template: AnalysisTemplate = Field(
-        default=AnalysisTemplate.PROTEIN_PAIRWISE
-    )
-    treatment: str = Field(..., min_length=1)
-    control: str = Field(..., min_length=1)
+
+    template: AnalysisTemplate = Field(default=AnalysisTemplate.PROTEIN_PAIRWISE)
+    treatment: str = Field(default="")
+    control: str = Field(default="")
     organism: Organism = Field(default=Organism.HUMAN)
     remove_razor: bool = Field(default=False)
     strict_filtering: bool = Field(default=False)
-    
+
+    # Multi-condition: explicit list of comparison pairs
+    comparisons: list[dict[str, str]] = Field(default_factory=list)
+    # Multi-condition: per-sample metadata (filename -> {column -> value})
+    metadata: Optional[dict[str, dict[str, str]]] = Field(default=None)
+
     # Advanced parameters
     pvalue_threshold: float = Field(default=0.05, ge=0.001, le=0.5)
     logfc_threshold: float = Field(default=1.0, ge=0.1, le=5.0)
     min_peptides_per_protein: int = Field(default=1, ge=1, le=10)
 
-    # MSstats-specific parameters (optional, used only for msstats_pairwise_comparison template)
+    # MSstats-specific parameters
     msstats_normalization: str = Field(default="equalizeMedians")
     msstats_feature_selection: str = Field(default="all")
     msstats_summary_method: str = Field(default="TMP")
-    msstats_impute: bool = Field(default=False)
+    msstats_impute: bool = Field(default=True)
     msstats_log_base: int = Field(default=2)
+    msstats_censored_int: str = Field(default="NA")
+    msstats_max_quantile: float = Field(default=0.999)
+    msstats_remove50missing: bool = Field(default=False)
 
-    # DEqMS-specific parameters (optional, used only for deqms_pairwise_comparison template)
+    # DEqMS-specific parameters
     deqms_fit_method: str = Field(default="loess")
 
-    @field_validator('control')
+    @field_validator("control")
     @classmethod
     def control_differs_from_treatment(cls, v: str, info) -> str:
         """Ensure control differs from treatment."""
         values = info.data
-        if 'treatment' in values and v == values['treatment']:
-            raise ValueError('Control must differ from treatment')
+        if "treatment" in values and v == values["treatment"]:
+            raise ValueError("Control must differ from treatment")
         return v
 
 
 class VolcanoPlotPoint(BaseModel):
     """Single point for volcano plot."""
-    
+
     protein_id: str
     gene_name: Optional[str]
     log_fc: float
@@ -120,7 +126,7 @@ class VolcanoPlotPoint(BaseModel):
 
 class VolcanoPlotData(BaseModel):
     """Data for volcano plot visualization."""
-    
+
     points: list[VolcanoPlotPoint]
     thresholds: dict[str, float]
     summary: dict[str, int]
@@ -128,7 +134,7 @@ class VolcanoPlotData(BaseModel):
 
 class HeatmapData(BaseModel):
     """Data for heatmap visualization."""
-    
+
     proteins: list[str]
     samples: list[str]
     values: list[list[float]]  # 2D array
@@ -138,14 +144,14 @@ class HeatmapData(BaseModel):
 
 class BoxPlotData(BaseModel):
     """Data for box plot."""
-    
+
     categories: list[str]
     data: list[dict[str, Any]]  # Box plot statistics per category
 
 
 class DatabaseType(str, Enum):
     """GSEA database types."""
-    
+
     GO_BP = "go_bp"
     GO_MF = "go_mf"
     GO_CC = "go_cc"
@@ -164,22 +170,22 @@ DATABASE_NAMES: dict[DatabaseType, str] = {
 
 class AnalysisResult(BaseModel):
     """Complete analysis result."""
-    
+
     session_id: str
     completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     # File paths
     psm_abundances_path: Optional[str] = None
     protein_abundances_path: Optional[str] = None
     diff_expression_path: Optional[str] = None
     qc_results_path: Optional[str] = None
     gsea_results_path: Optional[str] = None
-    
+
     # Statistics
     total_psms: int = 0
     total_proteins: int = 0
     significant_proteins: int = 0
-    
+
     # Processing info
     processing_time_seconds: float = 0.0
     steps_completed: list[int] = Field(default_factory=list)
@@ -187,10 +193,10 @@ class AnalysisResult(BaseModel):
 
 class ProcessingProgress(BaseModel):
     """Processing progress update."""
-    
+
     step: int = Field(..., ge=1, le=9)
     step_name: str
-    status: str = Field(..., pattern=r'^(started|in_progress|completed|failed)$')
+    status: str = Field(..., pattern=r"^(started|in_progress|completed|failed)$")
     progress: int = Field(..., ge=0, le=100)
     message: Optional[str] = None
     overall_progress: int = Field(..., ge=0, le=100)
@@ -205,27 +211,31 @@ class ReportRequest(BaseModel):
     include_qc_plots: bool = Field(default=True)
     include_gsea_results: bool = Field(default=True)
     include_protein_table: bool = Field(default=True)
-    sections: list[str] = Field(default_factory=lambda: [
-        "summary",
-        "volcano_plot",
-        "protein_table",
-        "qc_analysis",
-        "gsea_analysis"
-    ])
+    sections: list[str] = Field(
+        default_factory=lambda: [
+            "summary",
+            "volcano_plot",
+            "protein_table",
+            "qc_analysis",
+            "gsea_analysis",
+        ]
+    )
     # User-adjustable volcano plot filters
     fold_change: float = Field(default=1.0, description="log2 Fold Change threshold")
     p_value: float = Field(default=0.05, description="P-value threshold")
     adj_p_value: float = Field(default=1.0, description="Adjusted P-value threshold")
     s0: float = Field(default=0.1, description="S0 factor as fraction of fold_change")
     # Frontend-captured plot images (base64 data URLs)
-    images: Optional[dict[str, list[str]]] = Field(default=None, description="{key: [base64 data URLs]}")
+    images: Optional[dict[str, list[str]]] = Field(
+        default=None, description="{key: [base64 data URLs]}"
+    )
 
 
 class ReportStatus(BaseModel):
     """Report generation status."""
-    
+
     report_id: str
-    status: str = Field(..., pattern=r'^(pending|generating|completed|failed)$')
+    status: str = Field(..., pattern=r"^(pending|generating|completed|failed)$")
     progress: int = Field(default=0, ge=0, le=100)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None

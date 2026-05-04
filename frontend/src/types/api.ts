@@ -44,10 +44,18 @@ export interface SessionConfig {
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
+  // Multi-condition
+  comparisons?: Array<{ treatment: string; control: string }>;
+  metadata_columns?: Record<string, Record<string, string>>;
+  // MSstats
   msstats_normalization?: string;
   msstats_feature_selection?: string;
   msstats_summary_method?: string;
   msstats_impute?: boolean;
+  msstats_log_base?: number;
+  msstats_censored_int?: string;
+  msstats_max_quantile?: number;
+  msstats_remove50missing?: boolean;
   deqms_fit_method?: string;
 }
 

@@ -84,6 +84,7 @@ export async function getDEResults(
     per_page?: number;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
+    comparison?: string;
   }
 ): Promise<DEResultsData> {
   const queryParams = new URLSearchParams();
@@ -93,6 +94,7 @@ export async function getDEResults(
   if (params?.per_page) queryParams.append('page_size', params.per_page.toString());
   if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
   if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+  if (params?.comparison) queryParams.append('comparison', params.comparison);
 
   const query = queryParams.toString();
   return fetchApi<DEResultsData>(`/api/sessions/${sessionId}/results${query ? `?${query}` : ''}`);
@@ -114,6 +116,7 @@ export async function getGSEAData(
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
     search?: string;
+    comparison?: string;
   }
 ): Promise<GSEAData> {
   const queryParams = new URLSearchParams();
@@ -124,6 +127,7 @@ export async function getGSEAData(
   if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
   if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
   if (params?.search) queryParams.append('search', params.search);
+  if (params?.comparison) queryParams.append('comparison', params.comparison);
 
   const query = queryParams.toString();
   return fetchApi<GSEAData>(`/api/sessions/${sessionId}/gsea/${database}${query ? `?${query}` : ''}`);
@@ -138,18 +142,40 @@ function encodeTerm(term: string): string {
 export async function getGSEAPlotData(
   sessionId: string,
   database: GSEADatabase,
-  term: string
+  term: string,
+  comparison?: string
 ): Promise<GSEAPlotData> {
-  return fetchApi<GSEAPlotData>(`/api/sessions/${sessionId}/gsea/${database}/plot?term=${encodeTerm(term)}`);
+  const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
+  return fetchApi<GSEAPlotData>(`/api/sessions/${sessionId}/gsea/${database}/plot?term=${encodeTerm(term)}${compParam}`);
 }
 
 // GSEA Heatmap Data (on-demand)
 export async function getGSEAHeatmapData(
   sessionId: string,
   database: GSEADatabase,
-  term: string
+  term: string,
+  comparison?: string
 ): Promise<GSEAHeatmapData> {
-  return fetchApi<GSEAHeatmapData>(`/api/sessions/${sessionId}/gsea/${database}/heatmap?term=${encodeTerm(term)}`);
+  const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
+  return fetchApi<GSEAHeatmapData>(`/api/sessions/${sessionId}/gsea/${database}/heatmap?term=${encodeTerm(term)}${compParam}`);
+}
+
+// GSEA On-Demand Run
+export async function runGSEA(
+  sessionId: string,
+  body: {
+    comparison: string;
+    databases: string[];
+    min_size?: number;
+    max_size?: number;
+    permutations?: number;
+  }
+): Promise<{ comparison: string; databases: string[]; summary: Record<string, { total_pathways: number; significant_pathways: number }> }> {
+  return fetchApi(`/api/sessions/${sessionId}/gsea/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 // Protein Abundance API

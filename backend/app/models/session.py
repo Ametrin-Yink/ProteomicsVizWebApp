@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class SessionState(str, Enum):
     """Session state enumeration."""
-    
+
     CREATED = "created"
     CONFIGURING = "configuring"
     QUEUED = "queued"
@@ -26,50 +26,53 @@ class SessionState(str, Enum):
 
 class SessionConfig(BaseModel):
     """Session configuration model."""
-    
-    treatment: str = Field(
-        ...,
-        min_length=1,
-        description="Treatment condition name"
-    )
-    control: str = Field(
-        ...,
-        min_length=1,
-        description="Control condition name"
-    )
+
+    treatment: str = Field(..., min_length=1, description="Treatment condition name")
+    control: str = Field(..., min_length=1, description="Control condition name")
     organism: str = Field(
         ...,
-        pattern=r'^[a-z]+$',
-        description="Organism identifier (e.g., 'human', 'mouse')"
+        pattern=r"^[a-z]+$",
+        description="Organism identifier (e.g., 'human', 'mouse')",
     )
     remove_razor: bool = Field(
-        default=False,
-        description="Whether to remove razor peptides"
+        default=False, description="Whether to remove razor peptides"
     )
     strict_filtering: bool = Field(
-        default=False,
-        description="Use strict filtering criteria"
+        default=False, description="Use strict filtering criteria"
     )
-    # MSstats-specific parameters (optional, used only for msstats_pairwise_comparison template)
+    # Multi-condition: explicit list of comparison pairs
+    comparisons: Optional[list[dict[str, str]]] = Field(
+        default=None,
+        description="List of {treatment, control} pairs for multi-condition analysis",
+    )
+    # Multi-condition: per-sample metadata columns (filename -> {column -> value})
+    metadata_columns: Optional[dict[str, dict[str, str]]] = Field(
+        default=None, description="Custom metadata columns per sample file"
+    )
+    # MSstats-specific parameters (optional, used only for msstats templates)
     msstats_normalization: Optional[str] = Field(default=None)
     msstats_feature_selection: Optional[str] = Field(default=None)
     msstats_summary_method: Optional[str] = Field(default=None)
     msstats_impute: Optional[bool] = Field(default=None)
+    msstats_log_base: Optional[int] = Field(default=None)
+    msstats_censored_int: Optional[str] = Field(default=None)
+    msstats_max_quantile: Optional[float] = Field(default=None)
+    msstats_remove50missing: Optional[bool] = Field(default=None)
     deqms_fit_method: Optional[str] = Field(default=None)
 
-    @field_validator('control')
+    @field_validator("control")
     @classmethod
     def control_differs_from_treatment(cls, v: str, info) -> str:
         """Ensure control differs from treatment."""
         values = info.data
-        if 'treatment' in values and v == values['treatment']:
-            raise ValueError('Control must differ from treatment')
+        if "treatment" in values and v == values["treatment"]:
+            raise ValueError("Control must differ from treatment")
         return v
 
 
 class FileInfo(BaseModel):
     """File metadata model."""
-    
+
     filename: str = Field(..., description="Original filename")
     size: int = Field(..., ge=0, description="File size in bytes")
     uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -78,7 +81,7 @@ class FileInfo(BaseModel):
 
 class ProteomicsFileInfo(FileInfo):
     """Proteomics file metadata with parsed filename info."""
-    
+
     experiment: str = Field(..., description="Experiment name from filename")
     condition: str = Field(..., description="Condition from filename")
     replicate: int = Field(..., ge=1, description="Replicate number")
@@ -86,14 +89,14 @@ class ProteomicsFileInfo(FileInfo):
 
 class SessionFiles(BaseModel):
     """Session files collection."""
-    
+
     proteomics: list[ProteomicsFileInfo] = Field(default_factory=list)
     compound: Optional[FileInfo] = None
 
 
 class Session(BaseModel):
     """Session model representing a complete analysis session."""
-    
+
     id: str = Field(..., description="Unique session ID (UUID)")
     name: str = Field(..., min_length=1, description="Session name")
     template: str = Field(default="protein_pairwise_comparison")
@@ -103,9 +106,15 @@ class Session(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     error_message: Optional[str] = None
-    markers: list[str] = Field(default_factory=list, description="Marked protein accessions for volcano plot labels")
-    volcano_filters: Optional[dict[str, Any]] = Field(default=None, description="Volcano plot filter settings (foldChange, pValue, adjPValue, s0)")
-    
+    markers: list[str] = Field(
+        default_factory=list,
+        description="Marked protein accessions for volcano plot labels",
+    )
+    volcano_filters: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Volcano plot filter settings (foldChange, pValue, adjPValue, s0)",
+    )
+
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
@@ -117,15 +126,15 @@ class Session(BaseModel):
                 "config": None,
                 "files": {"proteomics": [], "compound": None},
                 "created_at": "2026-03-16T10:00:00Z",
-                "updated_at": "2026-03-16T10:00:00Z"
+                "updated_at": "2026-03-16T10:00:00Z",
             }
-        }
+        },
     }
 
 
 class SessionCreate(BaseModel):
     """Session creation request."""
-    
+
     name: str = Field(..., min_length=1, max_length=200)
     template: str = Field(default="protein_pairwise_comparison")
 
@@ -139,29 +148,30 @@ class SessionUpdate(BaseModel):
 
 class VisualizationStateUpdate(BaseModel):
     """Partial update for visualization state (markers + volcano filters)."""
+
     markers: Optional[list[str]] = None
     volcano_filters: Optional[dict[str, Any]] = None
 
 
 class SessionSummary(BaseModel):
     """Session summary for list views."""
-    
+
     id: str
     name: str
     state: SessionState
     created_at: datetime
     updated_at: datetime
     has_results: bool = False
-    
+
     model_config = {"from_attributes": True}
 
 
 class ProcessingStepStatus(BaseModel):
     """Status of a single processing step."""
-    
+
     step: int = Field(..., ge=1, le=9)
     name: str
-    status: str = Field(..., pattern=r'^(pending|in_progress|completed|failed)$')
+    status: str = Field(..., pattern=r"^(pending|in_progress|completed|failed)$")
     progress: int = Field(default=0, ge=0, le=100)
     message: Optional[str] = None
     started_at: Optional[datetime] = None
@@ -171,7 +181,7 @@ class ProcessingStepStatus(BaseModel):
 
 class ProcessingStatus(BaseModel):
     """Complete processing status for a session."""
-    
+
     state: SessionState
     current_step: Optional[int] = None
     step_name: Optional[str] = None

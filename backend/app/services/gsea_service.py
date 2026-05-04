@@ -49,9 +49,13 @@ def _validate_and_repair_gmt_cache() -> None:
     for filename in required_files:
         gmt_path = cache_dir / filename
         if not gmt_path.exists():
-            logger.info(f"GMT cache missing for {filename}, gseapy will download on first use")
+            logger.info(
+                f"GMT cache missing for {filename}, gseapy will download on first use"
+            )
         elif gmt_path.stat().st_size == 0:
-            logger.warning(f"GMT cache file is empty: {gmt_path}. Remove it and gseapy will re-download")
+            logger.warning(
+                f"GMT cache file is empty: {gmt_path}. Remove it and gseapy will re-download"
+            )
 
 
 class GSEAService:
@@ -70,7 +74,7 @@ class GSEAService:
         diff_expression_path: Path,
         output_dir: Path,
         databases: Optional[list[DatabaseType]] = None,
-        protein_abundance_path: Optional[Path] = None
+        protein_abundance_path: Optional[Path] = None,
     ) -> dict[str, GSEAResults]:
         """
         Run GSEA analysis on all databases in parallel with caching.
@@ -90,14 +94,18 @@ class GSEAService:
         _validate_and_repair_gmt_cache()
 
         # Load differential expression data
-        diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_path, sep='\t')
+        diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_path, sep="\t")
 
         # Load protein abundance data for heatmap (if available)
         protein_df = None
         if protein_abundance_path and protein_abundance_path.exists():
             try:
-                protein_df = await asyncio.to_thread(pd.read_csv, protein_abundance_path, sep='\t')
-                logger.info(f"Loaded protein abundance data: {len(protein_df)} proteins")
+                protein_df = await asyncio.to_thread(
+                    pd.read_csv, protein_abundance_path, sep="\t"
+                )
+                logger.info(
+                    f"Loaded protein abundance data: {len(protein_df)} proteins"
+                )
             except Exception as e:
                 logger.warning(f"Could not load protein abundance data: {e}")
 
@@ -109,8 +117,14 @@ class GSEAService:
             return {}
 
         # Extract cache key components
-        protein_ids = diff_df['Master_Protein_Accessions'].tolist() if 'Master_Protein_Accessions' in diff_df.columns else []
-        gene_names = diff_df['Gene_Name'].tolist() if 'Gene_Name' in diff_df.columns else []
+        protein_ids = (
+            diff_df["Master_Protein_Accessions"].tolist()
+            if "Master_Protein_Accessions" in diff_df.columns
+            else []
+        )
+        gene_names = (
+            diff_df["Gene_Name"].tolist() if "Gene_Name" in diff_df.columns else []
+        )
 
         # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -128,14 +142,18 @@ class GSEAService:
         # running multiple databases in parallel.
         n_cores = os.cpu_count() or 4
         threads_per_db = min(4, n_cores)
-        logger.info(f"Allocating {threads_per_db} threads per database ({n_cores} cores available)")
+        logger.info(
+            f"Allocating {threads_per_db} threads per database ({n_cores} cores available)"
+        )
 
         async def run_single_db(db_type: DatabaseType) -> tuple[str, GSEAResults]:
             """Run GSEA for a single database with caching."""
             db_name = DATABASE_NAMES.get(db_type, db_type.value)
 
             # Check cache first
-            cache_key = GSEACacheKey.create(protein_ids, gene_names, ("Treatment", "Control"), db_type.value)
+            cache_key = GSEACacheKey.create(
+                protein_ids, gene_names, ("Treatment", "Control"), db_type.value
+            )
             cached_result = gsea_cache_service.get(cache_key)
 
             if cached_result is not None:
@@ -151,13 +169,15 @@ class GSEAService:
                     gene_set=db_name,
                     output_dir=output_dir / db_type.value,
                     protein_df=protein_df,
-                    threads=threads_per_db
+                    threads=threads_per_db,
                 )
 
                 # Cache result
                 gsea_cache_service.store(cache_key, result)
 
-                logger.info(f"GSEA complete for {db_name}: {result.significant_pathways} significant pathways")
+                logger.info(
+                    f"GSEA complete for {db_name}: {result.significant_pathways} significant pathways"
+                )
 
                 return (db_type.value, result)
 
@@ -169,7 +189,7 @@ class GSEAService:
                     significant_pathways=0,
                     overrepresented=0,
                     underrepresented=0,
-                    results=[]
+                    results=[],
                 )
                 return (db_type.value, result)
 
@@ -181,10 +201,12 @@ class GSEAService:
         results = dict(results_list)
 
         total_pathways = sum(r.significant_pathways for r in results.values())
-        logger.info(f"Step 9 complete: GSEA analysis finished, {total_pathways} total significant pathways")
+        logger.info(
+            f"Step 9 complete: GSEA analysis finished, {total_pathways} total significant pathways"
+        )
 
         return results
-    
+
     def _prepare_ranked_list(self, diff_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         """
         Prepare ranked gene list for GSEA.
@@ -204,11 +226,11 @@ class GSEAService:
 
         for col in diff_df.columns:
             col_lower = col.lower()
-            if 'gene' in col_lower or 'symbol' in col_lower:
+            if "gene" in col_lower or "symbol" in col_lower:
                 gene_col = col
-            elif 'pval' in col_lower and 'adj' not in col_lower:
+            elif "pval" in col_lower and "adj" not in col_lower:
                 pval_col = col
-            elif 'logfc' in col_lower or 'log2fc' in col_lower:
+            elif "logfc" in col_lower or "log2fc" in col_lower:
                 logfc_col = col
 
         if gene_col is None or pval_col is None or logfc_col is None:
@@ -220,37 +242,37 @@ class GSEAService:
 
         # Prepare data
         df = diff_df[[gene_col, pval_col, logfc_col]].copy()
-        df.columns = ['gene', 'pval', 'logfc']
+        df.columns = ["gene", "pval", "logfc"]
 
         # Clean gene names: strip isoform suffixes (e.g. P48729-2 -> P48729)
         # and take first gene from multi-ID entries (e.g. "Q9BXS6-6; Q9BXS6-7" -> Q9BXS6)
-        df['gene'] = df['gene'].str.split(';').str[0].str.strip()
-        df['gene'] = df['gene'].str.replace(r'-\d+$', '', regex=True)
+        df["gene"] = df["gene"].str.split(";").str[0].str.strip()
+        df["gene"] = df["gene"].str.replace(r"-\d+$", "", regex=True)
 
         # Remove invalid values
         df = df.dropna()
-        df = df[df['pval'] > 0]
-        df = df[df['pval'] <= 1]
+        df = df[df["pval"] > 0]
+        df = df[df["pval"] <= 1]
 
         if len(df) == 0:
             return None
 
         # Calculate ranking metric
-        df['metric'] = -np.log10(df['pval']) * np.sign(df['logfc'])
+        df["metric"] = -np.log10(df["pval"]) * np.sign(df["logfc"])
 
         # Sort by metric descending
-        df = df.sort_values('metric', ascending=False)
+        df = df.sort_values("metric", ascending=False)
 
         # Return only gene and metric columns
-        return df[['gene', 'metric']]
-    
+        return df[["gene", "metric"]]
+
     async def _run_single_gsea(
         self,
         rnk: pd.DataFrame,
         gene_set: str,
         output_dir: Path,
         protein_df: Optional[pd.DataFrame] = None,
-        threads: int = 4
+        threads: int = 4,
     ) -> GSEAResults:
         """
         Run GSEA for a single database.
@@ -279,7 +301,7 @@ class GSEAService:
                     max_size=500,
                     threads=threads,
                     seed=123,
-                    verbose=False
+                    verbose=False,
                 )
 
             pre_res = await asyncio.to_thread(_run_prerank)
@@ -294,7 +316,7 @@ class GSEAService:
                     significant_pathways=0,
                     overrepresented=0,
                     underrepresented=0,
-                    results=[]
+                    results=[],
                 )
 
             # Convert to GSEAResult objects
@@ -305,21 +327,25 @@ class GSEAService:
 
             for _, row in results_df.iterrows():
                 # Handle different column name formats
-                term = str(row.get('Term', row.get('term', '')))
-                nes = float(row.get('NES', row.get('nes', 0)))
-                pval = float(row.get('NOM p-val', row.get('pval', 1)))
-                fdr = float(row.get('FDR q-val', row.get('fdr', 1)))
-                es = float(row.get('ES', row.get('es', 0)))
+                term = str(row.get("Term", row.get("term", "")))
+                nes = float(row.get("NES", row.get("nes", 0)))
+                pval = float(row.get("NOM p-val", row.get("pval", 1)))
+                fdr = float(row.get("FDR q-val", row.get("fdr", 1)))
+                es = float(row.get("ES", row.get("es", 0)))
 
                 # Get lead genes if available
                 lead_genes = []
-                if 'Lead_genes' in row:
-                    lead_genes_str = str(row['Lead_genes'])
+                if "Lead_genes" in row:
+                    lead_genes_str = str(row["Lead_genes"])
                     # gseapy output uses semicolons to separate genes
-                    lead_genes = [g.strip() for g in lead_genes_str.split(';') if g.strip()]
+                    lead_genes = [
+                        g.strip() for g in lead_genes_str.split(";") if g.strip()
+                    ]
 
                 # Count matched genes
-                matched_genes = int(row.get('Tag %', '0').split('/')[0]) if 'Tag %' in row else 0
+                matched_genes = (
+                    int(row.get("Tag %", "0").split("/")[0]) if "Tag %" in row else 0
+                )
 
                 result = GSEAResult(
                     term=term,
@@ -329,7 +355,7 @@ class GSEAService:
                     pval=pval,
                     fdr=fdr,
                     lead_genes=lead_genes,
-                    matched_genes=matched_genes
+                    matched_genes=matched_genes,
                 )
 
                 gsea_results.append(result)
@@ -347,7 +373,7 @@ class GSEAService:
                 significant_pathways=significant,
                 overrepresented=overrepresented,
                 underrepresented=underrepresented,
-                results=gsea_results
+                results=gsea_results,
             )
 
         except Exception as e:
@@ -358,7 +384,7 @@ class GSEAService:
                 significant_pathways=0,
                 overrepresented=0,
                 underrepresented=0,
-                results=[]
+                results=[],
             )
 
     def generate_running_es_curve(
@@ -366,7 +392,7 @@ class GSEAService:
         ranked_genes: list[str],
         lead_genes: list[str],
         nes: float,
-        ranked_metrics: Optional[list[float]] = None
+        ranked_metrics: Optional[list[float]] = None,
     ) -> list[tuple[int, float]]:
         """
         Generate the running enrichment score curve using the classic GSEA algorithm.
@@ -471,9 +497,7 @@ class GSEAService:
         return curve
 
     def generate_heatmap_data(
-        self,
-        protein_df: pd.DataFrame,
-        lead_genes: list[str]
+        self, protein_df: pd.DataFrame, lead_genes: list[str]
     ) -> Optional[dict]:
         """
         Generate heatmap data for leading edge genes.
@@ -489,8 +513,14 @@ class GSEAService:
         """
         try:
             # Identify gene column and abundance columns
-            gene_id_cols = ['Master Protein Accessions', 'Gene_Name', 'Gene', 'Protein', 'Master_Protein_Accessions']
-            exclude_cols = set(gene_id_cols + ['PSM_Count', 'psm_count'])
+            gene_id_cols = [
+                "Master Protein Accessions",
+                "Gene_Name",
+                "Gene",
+                "Protein",
+                "Master_Protein_Accessions",
+            ]
+            exclude_cols = set(gene_id_cols + ["PSM_Count", "psm_count"])
 
             gene_col = None
             for col in gene_id_cols:
@@ -504,24 +534,28 @@ class GSEAService:
 
             # Get abundance columns (numeric columns excluding metadata)
             abundance_cols = [
-                col for col in protein_df.columns
-                if col not in exclude_cols and protein_df[col].dtype in ['float64', 'float32', 'int64']
+                col
+                for col in protein_df.columns
+                if col not in exclude_cols
+                and protein_df[col].dtype in ["float64", "float32", "int64"]
             ]
 
             if len(abundance_cols) == 0:
                 return None
 
             # Filter to pathway genes that are in the protein data
-            available_genes = protein_df[gene_col].fillna('').astype(str).str.upper().tolist()
+            available_genes = (
+                protein_df[gene_col].fillna("").astype(str).str.upper().tolist()
+            )
             lead_genes_upper = [g.upper() for g in lead_genes]
 
             # Build a lookup: uppercase gene name -> index
             gene_index_map: dict[str, int] = {}
             for i, gene in enumerate(available_genes):
                 # Split multi-gene entries and strip isoform suffixes
-                for part in gene.split(';'):
+                for part in gene.split(";"):
                     clean = part.strip().upper()
-                    if clean and clean != 'NAN' and clean not in gene_index_map:
+                    if clean and clean != "NAN" and clean not in gene_index_map:
                         gene_index_map[clean] = i
 
             # Exact match against cleaned gene names
@@ -547,7 +581,10 @@ class GSEAService:
                     mean = np.mean(values)
                     std = np.std(values)
                     if std > 0:
-                        z_row = [(v - mean) / std if not np.isnan(v) else 0 for v in row.values]
+                        z_row = [
+                            (v - mean) / std if not np.isnan(v) else 0
+                            for v in row.values
+                        ]
                     else:
                         z_row = [0] * len(row)
                 else:
@@ -555,16 +592,220 @@ class GSEAService:
                 z_scores.append(z_row)
 
             return {
-                'genes': matched_genes[:50],  # Limit to top 50 genes for display
-                'samples': abundance_cols,
-                'z_scores': z_scores[:50]
+                "genes": matched_genes[:50],  # Limit to top 50 genes for display
+                "samples": abundance_cols,
+                "z_scores": z_scores[:50],
             }
 
         except Exception as e:
             logger.warning(f"Could not generate heatmap data: {e}")
             return None
 
-    def get_results(self, results: dict[str, GSEAResults], database: Optional[str] = None) -> Optional[GSEAResults]:
+    async def run_gsea_for_comparison(
+        self,
+        diff_expression_path: Path,
+        comparison_name: str,
+        output_dir: Path,
+        databases: Optional[list[str]] = None,
+        protein_abundance_path: Optional[Path] = None,
+        min_size: int = 15,
+        max_size: int = 500,
+        permutations: int = 1000,
+        threads: int = 4,
+    ) -> dict[str, GSEAResults]:
+        """
+        Run GSEA on-demand for a specific comparison.
+
+        Args:
+            diff_expression_path: Path to Diff_Expression_<comparison>.tsv
+            comparison_name: Name of the comparison (e.g., 'A_vs_B')
+            output_dir: Directory for GSEA output (results_dir/gsea/<comparison>/)
+            databases: List of database names (e.g., ['go_bp', 'kegg'])
+            protein_abundance_path: Optional path to protein abundances for heatmap
+            min_size: Minimum gene set size
+            max_size: Maximum gene set size
+            permutations: Number of permutations
+            threads: Threads per database
+
+        Returns:
+            Dictionary mapping database name to GSEAResults
+        """
+        logger.info(
+            f"On-demand GSEA: comparison={comparison_name}, databases={databases}"
+        )
+
+        _validate_and_repair_gmt_cache()
+
+        diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_path, sep="\t")
+
+        protein_df = None
+        if protein_abundance_path and protein_abundance_path.exists():
+            try:
+                protein_df = await asyncio.to_thread(
+                    pd.read_csv, protein_abundance_path, sep="\t"
+                )
+            except Exception as e:
+                logger.warning(f"Could not load protein abundance data: {e}")
+
+        rnk = self._prepare_ranked_list(diff_df)
+        if rnk is None or len(rnk) == 0:
+            logger.warning("No valid data for GSEA analysis")
+            return {}
+
+        protein_ids = (
+            diff_df["Master_Protein_Accessions"].tolist()
+            if "Master_Protein_Accessions" in diff_df.columns
+            else []
+        )
+        gene_names = (
+            diff_df["Gene_Name"].tolist() if "Gene_Name" in diff_df.columns else []
+        )
+
+        # Map database names to enum values
+        db_types = []
+        for db_name in databases or [db.value for db in DatabaseType]:
+            try:
+                db_type = DatabaseType(db_name)
+                db_types.append(db_type)
+            except ValueError:
+                logger.warning(f"Unknown GSEA database: {db_name}")
+
+        async def run_single_db(db_type: DatabaseType) -> tuple[str, GSEAResults]:
+            full_db_name = DATABASE_NAMES.get(db_type, db_type.value)
+            cache_key = GSEACacheKey.create(
+                protein_ids, gene_names, (comparison_name,), db_type.value
+            )
+            cached_result = gsea_cache_service.get(cache_key)
+
+            if cached_result is not None:
+                logger.info(f"GSEA cache HIT for {full_db_name} ({comparison_name})")
+                return (db_type.value, cached_result)
+
+            try:
+                logger.info(f"Running GSEA for {full_db_name} ({comparison_name})")
+                result = await self._run_single_gsea_with_params(
+                    rnk=rnk,
+                    gene_set=full_db_name,
+                    output_dir=output_dir / db_type.value,
+                    protein_df=protein_df,
+                    threads=threads,
+                    min_size=min_size,
+                    max_size=max_size,
+                    permutation_num=permutations,
+                )
+                gsea_cache_service.store(cache_key, result)
+                return (db_type.value, result)
+            except Exception as e:
+                logger.error(f"GSEA failed for {full_db_name} ({comparison_name}): {e}")
+                return (
+                    db_type.value,
+                    GSEAResults(
+                        database=full_db_name,
+                        total_pathways=0,
+                        significant_pathways=0,
+                        overrepresented=0,
+                        underrepresented=0,
+                        results=[],
+                    ),
+                )
+
+        tasks = [run_single_db(db) for db in db_types]
+        results_list = await asyncio.gather(*tasks)
+        return dict(results_list)
+
+    async def _run_single_gsea_with_params(
+        self,
+        rnk: pd.DataFrame,
+        gene_set: str,
+        output_dir: Path,
+        protein_df: Optional[pd.DataFrame] = None,
+        threads: int = 4,
+        min_size: int = 15,
+        max_size: int = 500,
+        permutation_num: int = 1000,
+    ) -> GSEAResults:
+        """Run GSEA with configurable parameters (for on-demand GSEA)."""
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        def _run_prerank():
+            return gp.prerank(
+                rnk=rnk,
+                gene_sets=gene_set,
+                outdir=str(output_dir),
+                permutation_num=permutation_num,
+                min_size=min_size,
+                max_size=max_size,
+                threads=threads,
+                seed=123,
+                verbose=False,
+            )
+
+        pre_res = await asyncio.to_thread(_run_prerank)
+        results_df = pre_res.res2d
+
+        if results_df is None or len(results_df) == 0:
+            return GSEAResults(
+                database=gene_set,
+                total_pathways=0,
+                significant_pathways=0,
+                overrepresented=0,
+                underrepresented=0,
+                results=[],
+            )
+
+        gsea_results = []
+        overrepresented = 0
+        underrepresented = 0
+        significant = 0
+
+        for _, row in results_df.iterrows():
+            term = str(row.get("Term", row.get("term", "")))
+            nes = float(row.get("NES", row.get("nes", 0)))
+            pval = float(row.get("NOM p-val", row.get("pval", 1)))
+            fdr = float(row.get("FDR q-val", row.get("fdr", 1)))
+            es = float(row.get("ES", row.get("es", 0)))
+
+            lead_genes = []
+            if "Lead_genes" in row:
+                lead_genes_str = str(row["Lead_genes"])
+                lead_genes = [g.strip() for g in lead_genes_str.split(";") if g.strip()]
+
+            matched_genes = (
+                int(row.get("Tag %", "0").split("/")[0]) if "Tag %" in row else 0
+            )
+
+            result = GSEAResult(
+                term=term,
+                name=term,
+                es=es,
+                nes=nes,
+                pval=pval,
+                fdr=fdr,
+                lead_genes=lead_genes,
+                matched_genes=matched_genes,
+            )
+
+            gsea_results.append(result)
+
+            if result.significant:
+                significant += 1
+                if nes > 0:
+                    overrepresented += 1
+                else:
+                    underrepresented += 1
+
+        return GSEAResults(
+            database=gene_set,
+            total_pathways=len(gsea_results),
+            significant_pathways=significant,
+            overrepresented=overrepresented,
+            underrepresented=underrepresented,
+            results=gsea_results,
+        )
+
+    def get_results(
+        self, results: dict[str, GSEAResults], database: Optional[str] = None
+    ) -> Optional[GSEAResults]:
         """
         Get GSEA results.
 
@@ -588,11 +829,9 @@ class GSEAService:
             output_path: Path to save JSON
         """
 
-        results_dict = {
-            db: result.model_dump() for db, result in results.items()
-        }
+        results_dict = {db: result.model_dump() for db, result in results.items()}
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(results_dict, f, indent=2, default=str)
 
 

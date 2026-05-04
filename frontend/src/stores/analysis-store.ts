@@ -199,6 +199,21 @@ export const getConditions = (state: AnalysisState): string[] => {
   return Array.from(new Set(selected.map((f) => f.condition)));
 };
 
+/**
+ * Generate all pairwise comparisons from conditions.
+ * Returns array of { treatment, control } pairs.
+ */
+export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ treatment: string; control: string }> => {
+  const conditions = getConditions(state);
+  const comparisons: Array<{ treatment: string; control: string }> = [];
+  for (let i = 0; i < conditions.length; i++) {
+    for (let j = i + 1; j < conditions.length; j++) {
+      comparisons.push({ treatment: conditions[i], control: conditions[j] });
+    }
+  }
+  return comparisons;
+};
+
 export const getReplicatesByCondition = (state: AnalysisState): Record<string, number> => {
   const selected = getSelectedFiles(state);
   const counts: Record<string, number> = {};

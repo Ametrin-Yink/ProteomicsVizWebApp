@@ -14,6 +14,7 @@ from .diff_expression_deqms import step_diff_expression_deqms
 from .generate_unique_psm_deqms import step_generate_unique_psm_deqms
 from .qc_metrics import step_qc_metrics
 from .gsea_analysis import step_gsea_analysis
+from .group_comparison_multi import step_group_comparison_multi
 
 __all__ = [
     "step_combine_replicates",
@@ -30,4 +31,5 @@ __all__ = [
     "step_generate_unique_psm_deqms",
     "step_qc_metrics",
     "step_gsea_analysis",
+    "step_group_comparison_multi",
 ]

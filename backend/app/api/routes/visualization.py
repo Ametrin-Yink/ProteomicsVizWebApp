@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 import pandas as pd
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from app.api.deps import get_session_store
 from app.core.config import settings
@@ -50,9 +51,9 @@ def _get_pathway_genes(database: str, term: str) -> set[str]:
         return set()
 
     gene_sets: dict[str, set[str]] = {}
-    with open(gmt_path, 'r') as f:
+    with open(gmt_path, "r") as f:
         for line in f:
-            parts = line.strip().split('\t')
+            parts = line.strip().split("\t")
             if len(parts) >= 3:
                 name = parts[0]
                 genes = set(parts[2:])
@@ -99,8 +100,8 @@ def create_response(data: Any) -> Dict[str, Any]:
         "data": data,
         "meta": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "request_id": str(uuid.uuid4())
-        }
+            "request_id": str(uuid.uuid4()),
+        },
     }
 
 
@@ -138,28 +139,39 @@ class FileCache:
 viz_cache = FileCache(max_size=50)
 
 
-async def load_diff_expression_results(results_dir: Path, session_id: str = "") -> List[Dict[str, Any]]:
+async def load_diff_expression_results(
+    results_dir: Path,
+    session_id: str = "",
+    comparison: str = "",
+) -> List[Dict[str, Any]]:
     """Load differential expression results from TSV file.
 
     Args:
         results_dir: Path to session results directory
         session_id: Session ID for cache keying
+        comparison: Optional comparison name (e.g., 'A_vs_B').
+                   If empty, loads default Diff_Expression.tsv.
 
     Returns:
         List of protein results dictionaries
     """
-    cache_key = _cache_key(session_id, "diff_expression")
+    cache_key = _cache_key(
+        session_id, f"diff_expression_{comparison}" if comparison else "diff_expression"
+    )
     cached = viz_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    diff_file = results_dir / "Diff_Expression.tsv"
+    if comparison:
+        diff_file = results_dir / f"Diff_Expression_{comparison}.tsv"
+    else:
+        diff_file = results_dir / "Diff_Expression.tsv"
 
     if not diff_file.exists():
         return []
 
     try:
-        df = await asyncio.to_thread(pd.read_csv, diff_file, sep='\t')
+        df = await asyncio.to_thread(pd.read_csv, diff_file, sep="\t")
 
         # Convert to list of dictionaries
         # Field names must match frontend DEResult interface
@@ -176,7 +188,9 @@ async def load_diff_expression_results(results_dir: Path, session_id: str = "") 
                 log_fc = None
             if pd.isna(pval) or (isinstance(pval, float) and math.isinf(pval)):
                 pval = None
-            if pd.isna(adj_pval) or (isinstance(adj_pval, float) and math.isinf(adj_pval)):
+            if pd.isna(adj_pval) or (
+                isinstance(adj_pval, float) and math.isinf(adj_pval)
+            ):
                 adj_pval = None
             if pd.isna(psm_count):
                 psm_count = 0
@@ -190,7 +204,9 @@ async def load_diff_expression_results(results_dir: Path, session_id: str = "") 
                 t_stat = None
 
             result = {
-                "master_protein_accessions": str(row.get("Master_Protein_Accessions", "")),
+                "master_protein_accessions": str(
+                    row.get("Master_Protein_Accessions", "")
+                ),
                 "gene_name": str(row.get("Gene_Name", "")),
                 "log_fc": float(log_fc) if log_fc is not None else 0,
                 "pval": float(pval) if pval is not None else 1,
@@ -223,7 +239,14 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
 
     # Default empty structure with all required fields
     default_result = {
-        "pca": {"samples": [], "pc1": [], "pc2": [], "conditions": [], "pc1_variance": 0, "pc2_variance": 0},
+        "pca": {
+            "samples": [],
+            "pc1": [],
+            "pc2": [],
+            "conditions": [],
+            "pc1_variance": 0,
+            "pc2_variance": 0,
+        },
         "pvalue_distribution": {"bins": [], "counts": []},
         "psm_cv": {},
         "protein_cv": {},
@@ -236,14 +259,14 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
         "total_proteins": None,
         "avg_proteins_per_sample": None,
         "average_cv": None,
-        "completeness_rate": None
+        "completeness_rate": None,
     }
 
     if not qc_file.exists():
         return default_result
 
     try:
-        with open(qc_file, 'r') as f:
+        with open(qc_file, "r") as f:
             data = json.load(f)
 
         # Merge with defaults to ensure all fields exist
@@ -276,11 +299,13 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
             if psm_completeness and len(psm_completeness) > 0:
                 # Estimate from first sample's present count
                 first_sample = psm_completeness[0]
-                if hasattr(first_sample, 'get'):
+                if hasattr(first_sample, "get"):
                     estimated_unique = first_sample.get("present", 0)
                     if estimated_unique > 0 and estimated_unique < result["total_psms"]:
                         # Use the estimated unique count as a hint
-                        result["total_psms_note"] = f"Estimated ~{estimated_unique:,} unique PSMs (cached value may include duplicates)"
+                        result["total_psms_note"] = (
+                            f"Estimated ~{estimated_unique:,} unique PSMs (cached value may include duplicates)"
+                        )
 
         return result
     except Exception as e:
@@ -295,11 +320,13 @@ _gsea_file_cache: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
 
 def _load_gsea_json(filepath: Path) -> dict:
     """Load and parse a GSEA JSON file. Run via asyncio.to_thread to avoid blocking."""
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         return json.load(f)
 
 
-def load_gsea_results(results_dir: Path, database: str, session_id: str = "") -> Dict[str, Any]:
+def load_gsea_results(
+    results_dir: Path, database: str, session_id: str = ""
+) -> Dict[str, Any]:
     """Load GSEA results from JSON file with per-session memory caching.
 
     The GSEA results file can be hundreds of MB to multiple GB. We load it
@@ -317,13 +344,22 @@ def load_gsea_results(results_dir: Path, database: str, session_id: str = "") ->
     gsea_file = results_dir / "GSEA_Results.json"
 
     if not gsea_file.exists():
-        return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
+        return {
+            "results": [],
+            "database": database,
+            "total_pathways": 0,
+            "significant_pathways": 0,
+            "overrepresented": 0,
+            "underrepresented": 0,
+        }
 
     # Load entire file once per session, cache all databases in memory
     cache_key = str(gsea_file)
     if cache_key not in _gsea_file_cache:
         try:
-            logger.info(f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)")
+            logger.info(
+                f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)"
+            )
             all_results = _load_gsea_json(gsea_file)
             # Pre-process all databases at once
             processed = {}
@@ -331,21 +367,34 @@ def load_gsea_results(results_dir: Path, database: str, session_id: str = "") ->
                 results = db_data.get("results", [])
                 # Add significant field
                 for r in results:
-                    r["significant"] = abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.25
+                    r["significant"] = (
+                        abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.25
+                    )
                 processed[db_name] = results
             _gsea_file_cache[cache_key] = processed
             logger.info(f"GSEA results cached: {len(processed)} databases")
         except Exception as e:
             logger.error(f"Error loading GSEA results: {e}")
-            return {"results": [], "database": database, "total_pathways": 0, "significant_pathways": 0, "overrepresented": 0, "underrepresented": 0}
+            return {
+                "results": [],
+                "database": database,
+                "total_pathways": 0,
+                "significant_pathways": 0,
+                "overrepresented": 0,
+                "underrepresented": 0,
+            }
 
     db_results = _gsea_file_cache[cache_key].get(database, [])
     results = db_results
 
     # Calculate summary stats
     significant_count = sum(1 for p in results if p.get("significant", False))
-    overrepresented = sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) > 0)
-    underrepresented = sum(1 for p in results if p.get("significant", False) and p.get("nes", 0) < 0)
+    overrepresented = sum(
+        1 for p in results if p.get("significant", False) and p.get("nes", 0) > 0
+    )
+    underrepresented = sum(
+        1 for p in results if p.get("significant", False) and p.get("nes", 0) < 0
+    )
 
     return {
         "results": results,
@@ -353,7 +402,7 @@ def load_gsea_results(results_dir: Path, database: str, session_id: str = "") ->
         "total_pathways": len(results),
         "significant_pathways": significant_count,
         "overrepresented": overrepresented,
-        "underrepresented": underrepresented
+        "underrepresented": underrepresented,
     }
 
 
@@ -366,76 +415,85 @@ async def get_results(
     sort_order: str = Query("asc"),
     significant_only: bool = Query(False),
     search: str = Query(""),
-    store: SessionStore = Depends(get_session_store)
+    comparison: str = Query(""),
+    store: SessionStore = Depends(get_session_store),
 ):
     """Get differential expression results with pagination and filtering."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
-    
+
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
-    
-    # Load results from file
-    all_results = await load_diff_expression_results(results_dir, session_id)
-    
+
+    # Load results from file (supports per-comparison files)
+    all_results = await load_diff_expression_results(
+        results_dir, session_id, comparison
+    )
+
     # Apply filters
     if significant_only:
         all_results = [r for r in all_results if r["significant"]]
-    
+
     if search:
         search_lower = search.lower()
         all_results = [
-            r for r in all_results 
-            if search_lower in r.get("master_protein_accessions", "").lower() 
+            r
+            for r in all_results
+            if search_lower in r.get("master_protein_accessions", "").lower()
             or search_lower in r.get("gene_name", "").lower()
         ]
-    
+
     # Sort results
     reverse = sort_order.lower() == "desc"
     all_results.sort(key=lambda x: x.get(sort_by, 0) or 0, reverse=reverse)
-    
+
     # Calculate summary statistics
     total_proteins = len(all_results)
     significant_proteins = sum(1 for r in all_results if r.get("significant", False))
-    upregulated = sum(1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) > 0)
-    downregulated = sum(1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) < 0)
-    
+    upregulated = sum(
+        1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) > 0
+    )
+    downregulated = sum(
+        1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) < 0
+    )
+
     # Paginate
     total = len(all_results)
     start_idx = (page - 1) * page_size
     end_idx = start_idx + page_size
     paginated_results = all_results[start_idx:end_idx]
-    
-    return create_response({
-        "results": paginated_results,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size,
-        "total_proteins": total_proteins,
-        "significant_proteins": significant_proteins,
-        "upregulated": upregulated,
-        "downregulated": downregulated
-    })
+
+    return create_response(
+        {
+            "results": paginated_results,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+            "total_proteins": total_proteins,
+            "significant_proteins": significant_proteins,
+            "upregulated": upregulated,
+            "downregulated": downregulated,
+        }
+    )
 
 
 @router.get("/{session_id}/qc/plots")
 async def get_qc_plots(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store)
+    session_id: str, store: SessionStore = Depends(get_session_store)
 ):
     """Get QC plot data."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
-    
+
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
 
@@ -448,9 +506,9 @@ async def get_qc_plots(
         psm_file = results_dir / "PSM_Abundances.tsv"
         if psm_file.exists():
             try:
-                psm_df = pd.read_csv(psm_file, sep='\t')
-                if 'Unique_PSM' in psm_df.columns:
-                    correct_total = psm_df['Unique_PSM'].nunique()
+                psm_df = pd.read_csv(psm_file, sep="\t")
+                if "Unique_PSM" in psm_df.columns:
+                    correct_total = psm_df["Unique_PSM"].nunique()
                     qc_data["total_psms"] = int(correct_total)
             except Exception as e:
                 logger.error(f"Error recalculating total_psms: {e}")
@@ -463,24 +521,27 @@ async def get_gsea_plot_data(
     session_id: str,
     database: str,
     term: str = Query(..., description="Pathway term identifier"),
-    store: SessionStore = Depends(get_session_store)
+    comparison: str = Query("", description="Comparison name (for multi-condition)"),
+    store: SessionStore = Depends(get_session_store),
 ):
     """Get GSEA plot data (running ES curve + rank metric positions) for a specific pathway."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
 
-    # Get results directory
+    # Get results directory — for multi-condition, look in comparison subdir
     results_dir = settings.sessions_dir / session_id / "results"
+    if comparison:
+        results_dir = results_dir / "gsea" / comparison
 
     # Validate database name to prevent path traversal
     if database not in VALID_GSEA_DATABASES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}"
+            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}",
         )
 
     # Load slim GSEA results to get lead_genes and pathway metadata
@@ -497,7 +558,7 @@ async def get_gsea_plot_data(
     if pathway is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pathway '{term}' not found in {database}"
+            detail=f"Pathway '{term}' not found in {database}",
         )
 
     # Compute running ES curve on-demand from gseapy output files
@@ -509,7 +570,9 @@ async def get_gsea_plot_data(
     rnk_file = gsea_dir / "gseapy.gene_set.0.rnk"
     if rnk_file.exists():
         try:
-            rnk_df = await asyncio.to_thread(pd.read_csv, rnk_file, sep='\t', header=None)
+            rnk_df = await asyncio.to_thread(
+                pd.read_csv, rnk_file, sep="\t", header=None
+            )
             ranked_genes = rnk_df.iloc[:, 0].tolist()
             ranked_metrics = rnk_df.iloc[:, 1].tolist()
         except Exception as e:
@@ -519,7 +582,9 @@ async def get_gsea_plot_data(
         alt_rnk = next((gsea_dir.glob("*.rnk")), None)
         if alt_rnk is not None:
             try:
-                rnk_df = await asyncio.to_thread(pd.read_csv, alt_rnk, sep='\t', header=None)
+                rnk_df = await asyncio.to_thread(
+                    pd.read_csv, alt_rnk, sep="\t", header=None
+                )
                 ranked_genes = rnk_df.iloc[:, 0].tolist()
                 ranked_metrics = rnk_df.iloc[:, 1].tolist()
             except Exception as e:
@@ -530,28 +595,61 @@ async def get_gsea_plot_data(
         de_file = results_dir / "Diff_Expression.tsv"
         if de_file.exists():
             try:
-                de_df = await asyncio.to_thread(pd.read_csv, de_file, sep='\t')
-                gene_col = next((c for c in de_df.columns if 'gene' in c.lower() or 'symbol' in c.lower()), None)
-                pval_col = next((c for c in de_df.columns if 'pval' in c.lower() and 'adj' not in c.lower()), None)
-                logfc_col = next((c for c in de_df.columns if 'logfc' in c.lower() or 'log2fc' in c.lower()), None)
+                de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
+                gene_col = next(
+                    (
+                        c
+                        for c in de_df.columns
+                        if "gene" in c.lower() or "symbol" in c.lower()
+                    ),
+                    None,
+                )
+                pval_col = next(
+                    (
+                        c
+                        for c in de_df.columns
+                        if "pval" in c.lower() and "adj" not in c.lower()
+                    ),
+                    None,
+                )
+                logfc_col = next(
+                    (
+                        c
+                        for c in de_df.columns
+                        if "logfc" in c.lower() or "log2fc" in c.lower()
+                    ),
+                    None,
+                )
                 if gene_col and pval_col and logfc_col:
                     valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
-                    valid['metric'] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
-                    valid = valid.sort_values('metric', ascending=False)
-                    valid['gene'] = valid[gene_col].str.split(';').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
-                    ranked_genes = valid['gene'].tolist()
-                    ranked_metrics = valid['metric'].tolist()
+                    valid["metric"] = -np.log10(valid[pval_col]) * np.sign(
+                        valid[logfc_col]
+                    )
+                    valid = valid.sort_values("metric", ascending=False)
+                    valid["gene"] = (
+                        valid[gene_col]
+                        .str.split(";")
+                        .str[0]
+                        .str.strip()
+                        .str.replace(r"-\d+$", "", regex=True)
+                    )
+                    ranked_genes = valid["gene"].tolist()
+                    ranked_metrics = valid["metric"].tolist()
             except Exception as e:
-                logger.warning(f"Could not reconstruct ranked list from DE results: {e}")
+                logger.warning(
+                    f"Could not reconstruct ranked list from DE results: {e}"
+                )
 
     if not ranked_genes:
-        return create_response({
-            "term": term,
-            "es": pathway.get("es", 0),
-            "nes": pathway.get("nes", 0),
-            "running_es_curve": [],
-            "rank_metric_positions": [],
-        })
+        return create_response(
+            {
+                "term": term,
+                "es": pathway.get("es", 0),
+                "nes": pathway.get("nes", 0),
+                "running_es_curve": [],
+                "rank_metric_positions": [],
+            }
+        )
 
     lead_genes = pathway.get("lead_genes", [])
     nes = pathway.get("nes", 0)
@@ -559,7 +657,7 @@ async def get_gsea_plot_data(
     # Check cache first
     cache_key = _cache_key(session_id, "gsea_plot", database, term)
     cached = viz_cache.get(cache_key)
-    if cached is not None and 'pathway_gene_set_size' in cached:
+    if cached is not None and "pathway_gene_set_size" in cached:
         return create_response(cached)
 
     # Use full pathway gene set from GMT for curve generation (not just lead_genes)
@@ -602,24 +700,27 @@ async def get_gsea_heatmap_data(
     session_id: str,
     database: str,
     term: str = Query(..., description="Pathway term identifier"),
-    store: SessionStore = Depends(get_session_store)
+    comparison: str = Query("", description="Comparison name (for multi-condition)"),
+    store: SessionStore = Depends(get_session_store),
 ):
     """Get GSEA heatmap data (z-scores for leading edge genes) for a specific pathway."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
 
-    # Get results directory
+    # Get results directory — for multi-condition, look in comparison subdir
     results_dir = settings.sessions_dir / session_id / "results"
+    if comparison:
+        results_dir = results_dir / "gsea" / comparison
 
     # Validate database name to prevent path traversal
     if database not in VALID_GSEA_DATABASES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}"
+            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}",
         )
 
     # Load slim GSEA results to get lead_genes
@@ -636,7 +737,7 @@ async def get_gsea_heatmap_data(
     if pathway is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pathway '{term}' not found in {database}"
+            detail=f"Pathway '{term}' not found in {database}",
         )
 
     # Check cache first
@@ -654,16 +755,43 @@ async def get_gsea_heatmap_data(
     gene_rank_map: dict[str, int] = {}
     if de_file.exists():
         try:
-            de_df = await asyncio.to_thread(pd.read_csv, de_file, sep='\t')
-            gene_col = next((c for c in de_df.columns if 'gene' in c.lower() or 'symbol' in c.lower()), None)
-            pval_col = next((c for c in de_df.columns if 'pval' in c.lower() and 'adj' not in c.lower()), None)
-            logfc_col = next((c for c in de_df.columns if 'logfc' in c.lower() or 'log2fc' in c.lower()), None)
+            de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
+            gene_col = next(
+                (
+                    c
+                    for c in de_df.columns
+                    if "gene" in c.lower() or "symbol" in c.lower()
+                ),
+                None,
+            )
+            pval_col = next(
+                (
+                    c
+                    for c in de_df.columns
+                    if "pval" in c.lower() and "adj" not in c.lower()
+                ),
+                None,
+            )
+            logfc_col = next(
+                (
+                    c
+                    for c in de_df.columns
+                    if "logfc" in c.lower() or "log2fc" in c.lower()
+                ),
+                None,
+            )
             if gene_col and pval_col and logfc_col:
                 valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
-                valid['metric'] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
-                valid = valid.sort_values('metric', ascending=False)
-                valid['gene'] = valid[gene_col].str.split(';').str[0].str.strip().str.replace(r'-\d+$', '', regex=True)
-                for rank, gene in enumerate(valid['gene'].tolist()):
+                valid["metric"] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
+                valid = valid.sort_values("metric", ascending=False)
+                valid["gene"] = (
+                    valid[gene_col]
+                    .str.split(";")
+                    .str[0]
+                    .str.strip()
+                    .str.replace(r"-\d+$", "", regex=True)
+                )
+                for rank, gene in enumerate(valid["gene"].tolist()):
                     gene_rank_map[gene.upper()] = rank
         except Exception as e:
             logger.debug(f"Could not build gene rank map: {e}")
@@ -674,7 +802,7 @@ async def get_gsea_heatmap_data(
         return create_response({"genes": [], "samples": [], "z_scores": []})
 
     try:
-        protein_df = await asyncio.to_thread(pd.read_csv, protein_file, sep='\t')
+        protein_df = await asyncio.to_thread(pd.read_csv, protein_file, sep="\t")
     except Exception as e:
         logger.warning(f"Could not load protein abundance for heatmap: {e}")
         return create_response({"genes": [], "samples": [], "z_scores": []})
@@ -690,7 +818,14 @@ async def get_gsea_heatmap_data(
         genes_with_rank = []
         z_scores_by_gene = dict(zip(heatmap_data["genes"], heatmap_data["z_scores"]))
         for gene in heatmap_data["genes"]:
-            genes_with_rank.append((gene, gene_rank_map.get(gene.upper(), gene_rank_map.get(gene, float('inf')))))
+            genes_with_rank.append(
+                (
+                    gene,
+                    gene_rank_map.get(
+                        gene.upper(), gene_rank_map.get(gene, float("inf"))
+                    ),
+                )
+            )
         genes_with_rank.sort(key=lambda x: x[1])
         heatmap_data["genes"] = [g for g, _ in genes_with_rank]
         heatmap_data["z_scores"] = [z_scores_by_gene[g] for g in heatmap_data["genes"]]
@@ -704,6 +839,84 @@ async def get_gsea_heatmap_data(
     return create_response(heatmap_data)
 
 
+# ---- On-demand GSEA endpoints for multi-condition comparisons ----
+
+
+class GseaRunRequest(BaseModel):
+    """Request body for on-demand GSEA run."""
+
+    comparison: str
+    databases: list[str]
+    min_size: int = 15
+    max_size: int = 500
+    permutations: int = 1000
+
+
+@router.post("/{session_id}/gsea/run")
+async def run_gsea_on_demand(
+    session_id: str,
+    request: GseaRunRequest,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Run GSEA on-demand for a specific comparison."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    results_dir = settings.sessions_dir / session_id / "results"
+    de_file = results_dir / f"Diff_Expression_{request.comparison}.tsv"
+    if not de_file.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Differential expression file not found: {de_file.name}",
+        )
+
+    protein_file = results_dir / "Protein_Abundances.tsv"
+    gsea_output_dir = results_dir / "gsea" / request.comparison
+
+    try:
+        gsea_results = await gsea_service.run_gsea_for_comparison(
+            diff_expression_path=de_file,
+            comparison_name=request.comparison,
+            output_dir=gsea_output_dir,
+            databases=request.databases,
+            protein_abundance_path=protein_file if protein_file.exists() else None,
+            min_size=request.min_size,
+            max_size=request.max_size,
+            permutations=request.permutations,
+        )
+
+        # Save results to JSON for subsequent GET requests
+        results_dict = {db: result.model_dump() for db, result in gsea_results.items()}
+        gsea_output_dir.mkdir(parents=True, exist_ok=True)
+        results_file = gsea_output_dir / "GSEA_Results.json"
+        with open(results_file, "w", encoding="utf-8") as f:
+            json.dump(results_dict, f, indent=2, default=str)
+
+        return create_response(
+            {
+                "comparison": request.comparison,
+                "databases": list(gsea_results.keys()),
+                "summary": {
+                    db: {
+                        "total_pathways": r.total_pathways,
+                        "significant_pathways": r.significant_pathways,
+                    }
+                    for db, r in gsea_results.items()
+                },
+            }
+        )
+    except Exception as e:
+        logger.error(f"On-demand GSEA failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"GSEA failed: {str(e)}",
+        )
+
+
 @router.get("/{session_id}/gsea/{database}")
 async def get_gsea_results(
     session_id: str,
@@ -714,14 +927,14 @@ async def get_gsea_results(
     sort_order: str = Query("desc"),
     significant_only: bool = Query(False),
     search: str = Query(""),
-    store: SessionStore = Depends(get_session_store)
+    store: SessionStore = Depends(get_session_store),
 ):
     """Get GSEA results for a database with pagination and filtering."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
 
     # Get results directory
@@ -731,7 +944,7 @@ async def get_gsea_results(
     if database not in VALID_GSEA_DATABASES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}"
+            detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}",
         )
 
     # Load GSEA results (cached in memory after first load)
@@ -746,7 +959,8 @@ async def get_gsea_results(
     if search:
         search_lower = search.lower()
         results = [
-            r for r in results
+            r
+            for r in results
             if search_lower in r.get("name", "").lower()
             or search_lower in r.get("term", "").lower()
         ]
@@ -800,16 +1014,26 @@ async def load_protein_abundance(
         return {"samples": [], "abundances": [], "conditions": []}
 
     try:
-        df = await asyncio.to_thread(pd.read_csv, abundance_file, sep='\t')
+        df = await asyncio.to_thread(pd.read_csv, abundance_file, sep="\t")
 
         # Find the protein row (handle multiple accessions separated by ;)
-        protein_row = df[df['Master_Protein_Accessions'].str.contains(re.escape(protein_id), regex=True, na=False)]
+        protein_row = df[
+            df["Master_Protein_Accessions"].str.contains(
+                re.escape(protein_id), regex=True, na=False
+            )
+        ]
 
         if protein_row.empty:
             return {"samples": [], "abundances": [], "conditions": []}
 
         # Get abundance columns (all columns except metadata)
-        metadata_cols = ['Master_Protein_Accessions', 'Gene_Name', 'PSM_Count', 'psm_count', 'Protein']
+        metadata_cols = [
+            "Master_Protein_Accessions",
+            "Gene_Name",
+            "PSM_Count",
+            "psm_count",
+            "Protein",
+        ]
         abundance_cols = [col for col in df.columns if col not in metadata_cols]
 
         # Build arrays for frontend format - include ALL samples, even with NA/0 values
@@ -838,7 +1062,7 @@ async def load_protein_abundance(
         result = {
             "samples": samples,
             "abundances": abundances,
-            "conditions": conditions
+            "conditions": conditions,
         }
         viz_cache.set(cache_key, result)
         return result
@@ -849,18 +1073,16 @@ async def load_protein_abundance(
 
 @router.get("/{session_id}/protein/{protein_id}/abundance")
 async def get_protein_abundance(
-    session_id: str,
-    protein_id: str,
-    store: SessionStore = Depends(get_session_store)
+    session_id: str, protein_id: str, store: SessionStore = Depends(get_session_store)
 ):
     """Get protein abundance data."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
-    
+
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
 
@@ -870,7 +1092,9 @@ async def get_protein_abundance(
 
     # Load protein abundance from file
     abundance_data = await load_protein_abundance(
-        results_dir, protein_id, session_id,
+        results_dir,
+        protein_id,
+        session_id,
         control=control,
         treatment=treatment,
     )
@@ -878,7 +1102,9 @@ async def get_protein_abundance(
     return create_response(abundance_data)
 
 
-async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id: str = "") -> Dict[str, Any]:
+async def load_peptide_abundance(
+    results_dir: Path, protein_id: str, session_id: str = ""
+) -> Dict[str, Any]:
     """Load peptide abundance data from Parquet or TSV file.
 
     Aggregates PSMs into peptides by summing abundances for each unique
@@ -903,10 +1129,12 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
     norm_factors = {}
     if norm_coeff_file.exists():
         try:
-            coeff_df = await asyncio.to_thread(pd.read_csv, norm_coeff_file, sep='\t')
+            coeff_df = await asyncio.to_thread(pd.read_csv, norm_coeff_file, sep="\t")
             for _, row in coeff_df.iterrows():
-                norm_factors[row['Sample']] = float(row['LinearFactor'])
-            logger.debug(f"Loaded normalization coefficients for {len(norm_factors)} samples")
+                norm_factors[row["Sample"]] = float(row["LinearFactor"])
+            logger.debug(
+                f"Loaded normalization coefficients for {len(norm_factors)} samples"
+            )
         except Exception as e:
             logger.warning(f"Could not load normalization coefficients: {e}")
 
@@ -922,7 +1150,7 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
             return {"peptides": []}
     elif psm_tsv.exists():
         try:
-            df = await asyncio.to_thread(pd.read_csv, psm_tsv, sep='\t')
+            df = await asyncio.to_thread(pd.read_csv, psm_tsv, sep="\t")
         except Exception as e:
             logger.error(f"Error reading TSV file: {e}")
             return {"peptides": []}
@@ -931,22 +1159,26 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
 
     try:
         # Filter rows for this protein
-        protein_rows = df[df['Master_Protein_Accessions'].str.contains(protein_id, na=False, regex=False)]
+        protein_rows = df[
+            df["Master_Protein_Accessions"].str.contains(
+                protein_id, na=False, regex=False
+            )
+        ]
 
         if protein_rows.empty:
             return {"peptides": []}
 
         # Get unique samples
-        all_samples = sorted(protein_rows['Sample_Origination'].dropna().unique())
+        all_samples = sorted(protein_rows["Sample_Origination"].dropna().unique())
 
         # Group by Sequence to aggregate PSMs into peptides
         peptides = []
-        for sequence, group in protein_rows.groupby('Sequence'):
+        for sequence, group in protein_rows.groupby("Sequence"):
             # Sum abundances per sample for this peptide
             sample_sums = {}
             for _, row in group.iterrows():
-                sample = str(row.get('Sample_Origination', ''))
-                abundance = row.get('Abundance')
+                sample = str(row.get("Sample_Origination", ""))
+                abundance = row.get("Abundance")
                 if pd.notna(abundance) and sample:
                     sample_sums[sample] = sample_sums.get(sample, 0) + float(abundance)
 
@@ -962,12 +1194,14 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
                     abundances.append(val)
 
             if samples:
-                peptides.append({
-                    "peptide_id": sequence,
-                    "sequence": sequence,
-                    "abundances": abundances,
-                    "samples": samples,
-                })
+                peptides.append(
+                    {
+                        "peptide_id": sequence,
+                        "sequence": sequence,
+                        "abundances": abundances,
+                        "samples": samples,
+                    }
+                )
 
         result = {"peptides": peptides}
         viz_cache.set(cache_key, result)
@@ -979,16 +1213,14 @@ async def load_peptide_abundance(results_dir: Path, protein_id: str, session_id:
 
 @router.get("/{session_id}/protein/{protein_id}/peptide")
 async def get_protein_peptide(
-    session_id: str,
-    protein_id: str,
-    store: SessionStore = Depends(get_session_store)
+    session_id: str, protein_id: str, store: SessionStore = Depends(get_session_store)
 ):
     """Get peptide abundance data for a protein."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
 
     # Get results directory
