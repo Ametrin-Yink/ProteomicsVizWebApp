@@ -8,7 +8,7 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 |-------|------------|
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS v4, Zustand (5 stores with Immer), Plotly.js |
 | Backend | FastAPI, Python 3.12, Pydantic v2, asyncio |
-| Analysis | R 4.5+, msqrob2, QFeatures, limma (Bioconductor) |
+| Analysis | R 4.5+, msqrob2, QFeatures, limma, MSstats (Bioconductor) |
 | GSEA | gseapy |
 | Testing | pytest (backend), Playwright (E2E) |
 
@@ -18,14 +18,15 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 ProteomicsVizWebApp/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routes/        # 8 route modules
+│   │   ├── api/routes/        # 7 route modules
 │   │   ├── core/              # config, exceptions
 │   │   ├── db/                # JSON session store
 │   │   ├── models/            # Pydantic models
 │   │   ├── schemas/           # Request/response schemas
-│   │   ├── services/          # Business logic (11 modules)
+│   │   ├── services/          # Business logic (pipeline engine, wrappers, services)
+│   │   │   └── steps/          # Individual pipeline step handlers
 │   │   └── utils/             # validators, file_parser, helpers
-│   └── scripts/               # R scripts (msqrob2_protein.R, msqrob2_de.R)
+│   └── scripts/               # R scripts (msqrob2_protein.R, msqrob2_de_multi.R, MSstats, install/verify)
 ├── frontend/
 │   └── src/
 │       ├── app/               # Next.js pages

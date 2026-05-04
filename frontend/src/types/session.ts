@@ -41,9 +41,6 @@ export interface AnalysisConfig {
 
 // Available analysis templates
 export type AnalysisTemplate =
-  | 'protein_pairwise_comparison'
-  | 'msstats_pairwise_comparison'
-  | 'deqms_pairwise_comparison'
   | 'multi_condition_comparison'
   | 'time_series_analysis'
   | 'custom';

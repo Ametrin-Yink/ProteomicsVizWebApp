@@ -14,7 +14,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, icon, action }: EmptyStateProps) {
   return (
-    <div className="bg-surface rounded-lg border border-border p-8 text-center">
+    <div role="status" aria-live="polite" className="bg-surface rounded-lg border border-border p-8 text-center">
       {icon && (
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
           {icon}

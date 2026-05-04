@@ -108,6 +108,7 @@ export default function VolcanoPlot({
 
   // Calculate threshold lines
   const thresholdShapes = useMemo(() => {
+    if (data.length === 0) return [];
     const shapes: Array<
       | { type: 'line'; x0: number; x1: number; y0: number; y1: number; line: { color: string; width: number; dash: 'dash' } }
       | { type: 'path'; path: string; line: { color: string; width: number; dash: 'dash' } }

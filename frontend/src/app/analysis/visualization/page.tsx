@@ -51,6 +51,7 @@ function ResultsContent() {
         const results = await getDEResults(sessionId, {
           page: 1,
           per_page: 20000, // Get all for client-side filtering
+          // TODO: Implement server-side filtering to avoid fetching all rows
         });
         setData(results);
       } catch (err) {

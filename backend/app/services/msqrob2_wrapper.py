@@ -6,6 +6,7 @@ using R's msqrob2 package through subprocess calls (NEVER rpy2).
 """
 
 import asyncio
+import json
 import logging
 import os
 import subprocess
@@ -35,10 +36,7 @@ class Msqrob2Wrapper:
         self.scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 
     async def _run_r_script(
-        self,
-        cmd: list[str],
-        script_path: Path,
-        log_callback: Optional[callable] = None
+        self, cmd: list[str], script_path: Path, log_callback: Optional[callable] = None
     ) -> None:
         """
         Run an R script via subprocess with real-time output streaming.
@@ -65,29 +63,30 @@ class Msqrob2Wrapper:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding='utf-8',
-            errors='replace',
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,  # Line buffered
-            env={**os.environ, "R_NCORES": str(settings.r_n_cores)}
+            env={**os.environ, "R_NCORES": str(settings.r_n_cores)},
         )
 
         stdout_lines: list[str] = []
         stderr_lines: list[str] = []
 
-        def stream_output(pipe, lines_list, log_prefix, log_level="info", log_cb=None, event_loop=None):
+        def stream_output(
+            pipe, lines_list, log_prefix, log_level="info", log_cb=None, event_loop=None
+        ):
             """Stream output from pipe and log immediately."""
             try:
-                for line in iter(pipe.readline, ''):
+                for line in iter(pipe.readline, ""):
                     if not line:
                         break
-                    line = line.rstrip('\n\r')
+                    line = line.rstrip("\n\r")
                     lines_list.append(line)
                     logger.info(f"{log_prefix}: {line}")
                     if log_cb and event_loop:
                         try:
                             asyncio.run_coroutine_threadsafe(
-                                log_cb(log_level, line),
-                                event_loop
+                                log_cb(log_level, line), event_loop
                             )
                         except Exception:
                             pass
@@ -98,11 +97,11 @@ class Msqrob2Wrapper:
         # Start threads to read stdout and stderr
         stdout_thread = threading.Thread(
             target=stream_output,
-            args=(process.stdout, stdout_lines, "R", "info", log_callback, loop)
+            args=(process.stdout, stdout_lines, "R", "info", log_callback, loop),
         )
         stderr_thread = threading.Thread(
             target=stream_output,
-            args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop)
+            args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop),
         )
         stdout_thread.start()
         stderr_thread.start()
@@ -121,20 +120,22 @@ class Msqrob2Wrapper:
         await asyncio.to_thread(stdout_thread.join)
         await asyncio.to_thread(stderr_thread.join)
 
-        stdout_str = '\n'.join(stdout_lines)
-        stderr_str = '\n'.join(stderr_lines)
+        stdout_str = "\n".join(stdout_lines)
+        stderr_str = "\n".join(stderr_lines)
 
         if process.returncode != 0:
             error_msg = stderr_str if stderr_str else "Unknown error"
-            logger.error(f"R script failed with return code {process.returncode}: {error_msg}")
+            logger.error(
+                f"R script failed with return code {process.returncode}: {error_msg}"
+            )
             raise RScriptError(
                 message=error_msg,
                 details={
                     "returncode": process.returncode,
                     "stderr": error_msg[:500],
                     "stdout": stdout_str[:500],
-                    "script": str(script_path)
-                }
+                    "script": str(script_path),
+                },
             )
 
     async def step6_protein_abundance(
@@ -142,7 +143,7 @@ class Msqrob2Wrapper:
         input_file: Path,
         output_file: Path,
         gene_mapping_file: Optional[Path] = None,
-        log_callback: Optional[callable] = None
+        log_callback: Optional[callable] = None,
     ) -> Path:
         """
         Step 6: Calculate protein abundance using msqrob2.
@@ -164,7 +165,7 @@ class Msqrob2Wrapper:
         """
         logger.info(
             "Step 6: Calculating protein abundance with msqrob2",
-            extra={"session_id": "unknown", "input": str(input_file)}
+            extra={"session_id": "unknown", "input": str(input_file)},
         )
 
         script_path = self.scripts_dir / "msqrob2_protein.R"
@@ -172,16 +173,11 @@ class Msqrob2Wrapper:
         if not script_path.exists():
             raise RScriptError(
                 message=f"R script not found: {script_path}",
-                details={"script": str(script_path)}
+                details={"script": str(script_path)},
             )
 
         # Build command
-        cmd = [
-            self.r_executable,
-            str(script_path),
-            str(input_file),
-            str(output_file)
-        ]
+        cmd = [self.r_executable, str(script_path), str(input_file), str(output_file)]
 
         if gene_mapping_file:
             cmd.append(str(gene_mapping_file))
@@ -193,7 +189,7 @@ class Msqrob2Wrapper:
 
             logger.info(
                 "Step 6 complete: Protein abundance calculated",
-                extra={"output": str(output_file)}
+                extra={"output": str(output_file)},
             )
 
             return output_file
@@ -201,15 +197,16 @@ class Msqrob2Wrapper:
         except subprocess.TimeoutExpired:
             raise RScriptError(
                 message=f"Protein abundance calculation timed out after {self.timeout}s",
-                details={"timeout": self.timeout}
+                details={"timeout": self.timeout},
             )
         except RScriptError:
             raise
         except Exception as e:
             import traceback
+
             raise RScriptError(
                 message=f"Protein abundance calculation failed: {str(e)}",
-                details={"error": str(e), "traceback": traceback.format_exc()}
+                details={"error": str(e), "traceback": traceback.format_exc()},
             )
 
     async def step7_differential_expression(
@@ -218,7 +215,7 @@ class Msqrob2Wrapper:
         output_file: Path,
         treatment: str,
         control: str,
-        log_callback: Optional[callable] = None
+        log_callback: Optional[callable] = None,
     ) -> Path:
         """
         Step 7: Differential expression analysis using msqrob2.
@@ -244,8 +241,8 @@ class Msqrob2Wrapper:
             extra={
                 "input": str(input_file),
                 "treatment": treatment,
-                "control": control
-            }
+                "control": control,
+            },
         )
 
         script_path = self.scripts_dir / "msqrob2_de.R"
@@ -253,7 +250,7 @@ class Msqrob2Wrapper:
         if not script_path.exists():
             raise RScriptError(
                 message=f"R script not found: {script_path}",
-                details={"script": str(script_path)}
+                details={"script": str(script_path)},
             )
 
         # Build command
@@ -263,7 +260,7 @@ class Msqrob2Wrapper:
             str(input_file),
             str(output_file),
             treatment,
-            control
+            control,
         ]
 
         logger.info(f"R command: {' '.join(cmd)}")
@@ -273,7 +270,7 @@ class Msqrob2Wrapper:
 
             logger.info(
                 "Step 7 complete: Differential expression calculated",
-                extra={"output": str(output_file)}
+                extra={"output": str(output_file)},
             )
 
             return output_file
@@ -281,15 +278,101 @@ class Msqrob2Wrapper:
         except subprocess.TimeoutExpired:
             raise RScriptError(
                 message=f"Differential expression analysis timed out after {self.timeout}s",
-                details={"timeout": self.timeout}
+                details={"timeout": self.timeout},
             )
         except RScriptError:
             raise
         except Exception as e:
             import traceback
+
             raise RScriptError(
                 message=f"Differential expression analysis failed: {str(e)}",
-                details={"error": str(e), "traceback": traceback.format_exc()}
+                details={"error": str(e), "traceback": traceback.format_exc()},
+            )
+
+    async def step7_differential_expression_multi(
+        self,
+        input_file: Path,
+        output_dir: Path,
+        comparisons: list[dict[str, str]],
+        gene_mapping_file: Optional[Path] = None,
+        log_callback: Optional[callable] = None,
+    ) -> Path:
+        """
+        Step 7 (multi): Multi-condition differential expression analysis.
+
+        Handles N conditions with M arbitrary contrasts using limma's contrast
+        matrix capability. Writes one output file per comparison.
+
+        Args:
+            input_file: Path to Protein_Abundances.tsv
+            output_dir: Directory for Diff_Expression_*.tsv output files
+            comparisons: List of {"treatment": "A", "control": "B"} dicts
+            gene_mapping_file: Optional protein to gene mapping file
+            log_callback: Optional callback function for real-time log messages
+
+        Returns:
+            Path to output directory
+
+        Raises:
+            RScriptError: If R script fails
+        """
+        logger.info(
+            "Step 7 (multi): Running multi-condition differential expression",
+            extra={
+                "input": str(input_file),
+                "comparisons": comparisons,
+            },
+        )
+
+        script_path = self.scripts_dir / "msqrob2_de_multi.R"
+
+        if not script_path.exists():
+            raise RScriptError(
+                message=f"R script not found: {script_path}",
+                details={"script": str(script_path)},
+            )
+
+        # Serialize comparisons to JSON
+        comparisons_json = json.dumps(comparisons)
+
+        # Build command
+        cmd = [
+            self.r_executable,
+            str(script_path),
+            str(input_file),
+            str(output_dir),
+            comparisons_json,
+        ]
+
+        if gene_mapping_file:
+            cmd.append(str(gene_mapping_file))
+
+        logger.info(f"R command: {' '.join(cmd[:5])}...")
+
+        try:
+            await self._run_r_script(cmd, script_path, log_callback)
+
+            logger.info(
+                "Step 7 (multi) complete: Multi-condition DE calculated",
+                extra={"output_dir": str(output_dir)},
+            )
+
+            return output_dir
+
+        except subprocess.TimeoutExpired:
+            raise RScriptError(
+                message=f"Multi-condition DE analysis timed out after {self.timeout}s",
+                details={"timeout": self.timeout},
+            )
+        except RScriptError:
+            raise
+        except Exception as e:
+            import traceback
+
+            raise RScriptError(
+                message=f"Multi-condition DE analysis failed: {str(e)}",
+                details={"error": str(e), "traceback": traceback.format_exc()},
             )
 
     async def verify_r_packages(self) -> dict:
@@ -304,7 +387,7 @@ class Msqrob2Wrapper:
         if not script_path.exists():
             return {
                 "success": False,
-                "error": f"Verification script not found: {script_path}"
+                "error": f"Verification script not found: {script_path}",
             }
 
         try:
@@ -314,8 +397,8 @@ class Msqrob2Wrapper:
                     [self.r_executable, str(script_path)],
                     capture_output=True,
                     text=True,
-                    encoding='utf-8',
-                    timeout=60
+                    encoding="utf-8",
+                    timeout=60,
                 )
 
             process = await asyncio.to_thread(run_verify)
@@ -324,27 +407,18 @@ class Msqrob2Wrapper:
             stderr_str = process.stderr if process.stderr else ""
 
             if process.returncode == 0:
-                return {
-                    "success": True,
-                    "output": stdout_str
-                }
+                return {"success": True, "output": stdout_str}
             else:
                 return {
                     "success": False,
                     "error": stderr_str or "Unknown error",
-                    "output": stdout_str
+                    "output": stdout_str,
                 }
 
         except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "error": "Verification timed out"
-            }
+            return {"success": False, "error": "Verification timed out"}
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
 
 
 # Global wrapper instance

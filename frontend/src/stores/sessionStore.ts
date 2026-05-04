@@ -20,6 +20,9 @@ const createInitialState = (): SessionState => ({
   error: null,
 });
 
+// Module-level promise to deduplicate concurrent loadSessions calls
+let _loadSessionsPromise: Promise<void> | null = null;
+
 export const useSessionStore = create<SessionStore>()(
   immer((set) => ({
     // Initial state
@@ -40,31 +43,37 @@ export const useSessionStore = create<SessionStore>()(
      * Call this on app initialization
      */
     loadSessions: async () => {
+      // Request deduplication: return early if a load is already in flight
+      if (_loadSessionsPromise) return;
+
       set((state) => {
         state.isLoading = true;
         state.error = null;
       });
 
-      try {
-        const { sessionsApi } = await import('@/lib/api-client');
-        const sessions = await sessionsApi.list();
-        set((state) => {
-          state.sessions = sessions;
-          state.isLoading = false;
-        });
-      } catch (error) {
-        // Silently handle transient network errors (e.g. backend not ready yet)
-        // Keep existing sessions in the store so user doesn't see a blank list
-        set((state) => {
-          state.isLoading = false;
-          // Only show error for non-network failures
-          if (error instanceof Error && !error.message.includes('fetch')) {
-            state.error = error.message;
-          } else {
-            state.error = 'Could not connect to server. Sessions will appear once connected.';
-          }
-        });
-      }
+      _loadSessionsPromise = (async () => {
+        try {
+          const { sessionsApi } = await import('@/lib/api-client');
+          const sessions = await sessionsApi.list();
+          set((state) => {
+            state.sessions = sessions;
+            state.isLoading = false;
+          });
+        } catch (error) {
+          set((state) => {
+            state.isLoading = false;
+            if (error instanceof Error && !error.message.includes('fetch')) {
+              state.error = error.message;
+            } else {
+              state.error = 'Could not connect to server. Sessions will appear once connected.';
+            }
+          });
+        } finally {
+          _loadSessionsPromise = null;
+        }
+      })();
+
+      await _loadSessionsPromise;
     },
 
     /**
@@ -111,6 +120,7 @@ export const useSessionStore = create<SessionStore>()(
      */
     deleteSession: (id: string) => {
       set((state) => {
+        state.error = null;
         state.sessions = state.sessions.filter((s) => s.id !== id);
 
         // Clear current session if it was deleted
@@ -177,10 +187,12 @@ export const useSessionStore = create<SessionStore>()(
 
         state.sessions[sessionIndex].progress = progress;
         state.sessions[sessionIndex].currentStep = currentStep as import('@/types/session').ProcessingStep;
+        state.sessions[sessionIndex].updatedAt = new Date().toISOString();
 
         if (state.currentSession?.id === sessionId) {
           state.currentSession.progress = progress;
           state.currentSession.currentStep = currentStep as import('@/types/session').ProcessingStep;
+          state.currentSession.updatedAt = new Date().toISOString();
         }
       });
     },

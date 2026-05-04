@@ -16,6 +16,12 @@ interface QCPlotsProps {
   control?: string;
 }
 
+// KDE color palette shared by intensity plots (stable reference)
+const kdeSampleColors = [
+  '#00ADEF', '#E73564', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
+  '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#D946EF',
+];
+
 export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
   // Color by treatment/control groups from session config
   const treatmentColor = '#E73564';
@@ -222,11 +228,10 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     return { traces, layout };
   }, [data.protein_cv, getProteinConditionColor]);
 
-  // 4. PSM Intensity Distribution - KDE curves (lines) showing all data
-  const psmIntensityPlot = useMemo(() => {
+  // Pre-compute KDE data for PSM intensity distribution with memoization
+  const psmKDEData = useMemo(() => {
     if (!data.intensity_distributions?.psm) return null;
 
-    // Collect all values for range calculation (all data, not 90%)
     let allValues: number[] = [];
     Object.entries(data.intensity_distributions.psm).forEach(([, replicates]) => {
       Object.entries(replicates).forEach(([, values]) => {
@@ -234,11 +239,41 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
       });
     });
 
-    // Calculate min/max for range (use all data)
     const min = allValues.reduce((a, b) => Math.min(a, b), Infinity);
     const max = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
+    const range = { min, max };
 
-    // KDE calculation is shared via @/lib/kde
+    let colorIndex = 0;
+    const kdes: Array<{
+      name: string;
+      x: number[];
+      y: number[];
+      color: string;
+    }> = [];
+
+    Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
+      Object.entries(replicates).forEach(([replicate, values]) => {
+        const kde = calculateKDE(values);
+        if (kde.x.length > 0) {
+          const color = kdeSampleColors[colorIndex % kdeSampleColors.length];
+          colorIndex++;
+          kdes.push({
+            name: `${condition} - ${replicate}`,
+            x: kde.x,
+            y: kde.y,
+            color,
+          });
+        }
+      });
+    });
+
+    return { kdes, range };
+  }, [data.intensity_distributions?.psm]);
+
+  // 4. PSM Intensity Distribution - KDE curves (lines) showing all data
+  const psmIntensityPlot = useMemo(() => {
+    if (!psmKDEData) return null;
+
     const traces: Array<{
       x: number[];
       y: number[];
@@ -251,31 +286,17 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
       hovertemplate: string;
     }> = [];
 
-    // MAJ-007: Generate distinct colors for each sample
-    const sampleColors = [
-      '#00ADEF', '#E73564', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
-      '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#D946EF',
-    ];
-    let colorIndex = 0;
-
-    Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
-      Object.entries(replicates).forEach(([replicate, values]) => {
-        const kde = calculateKDE(values);
-        if (kde.x.length > 0) {
-          const color = sampleColors[colorIndex % sampleColors.length];
-          colorIndex++;
-          traces.push({
-            x: kde.x,
-            y: kde.y,
-            type: 'scatter',
-            mode: 'lines',
-            name: `${condition} - ${replicate}`,
-            line: { color, width: 2 },
-            fill: 'tozeroy',
-            fillcolor: color + '33', // 20% opacity hex
-            hovertemplate: 'Log2 Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
-          });
-        }
+    psmKDEData.kdes.forEach((kde) => {
+      traces.push({
+        x: kde.x,
+        y: kde.y,
+        type: 'scatter',
+        mode: 'lines',
+        name: kde.name,
+        line: { color: kde.color, width: 2 },
+        fill: 'tozeroy',
+        fillcolor: kde.color + '33', // 20% opacity hex
+        hovertemplate: 'Log2 Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
       });
     });
 
@@ -283,7 +304,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
       title: { text: 'PSM Intensity Distribution', font: { size: 14, color: '#111827' } },
       xaxis: {
         title: { text: 'Log2 Intensity', font: { size: 12 } },
-        range: [min, max],
+        range: [psmKDEData.range.min, psmKDEData.range.max],
         gridcolor: '#E5E7EB',
       },
       yaxis: {
@@ -298,23 +319,50 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     };
 
     return { traces, layout };
-  }, [data.intensity_distributions?.psm]);
+  }, [psmKDEData]);
 
-  // 5. Protein Intensity Distribution - Line plots (KDE) showing all data
-  const proteinIntensityPlot = useMemo(() => {
+  // Pre-compute KDE data for Protein intensity distribution with memoization
+  const proteinKDEData = useMemo(() => {
     if (!data.intensity_distributions?.protein) return null;
 
-    // Collect all values for range calculation (all data, not 90%)
     let allValues: number[] = [];
     Object.entries(data.intensity_distributions.protein).forEach(([, values]) => {
       allValues = allValues.concat(values);
     });
 
-    // Calculate min/max for range (use all data)
     const globalMin = allValues.reduce((a, b) => Math.min(a, b), Infinity);
     const globalMax = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
+    const range = { min: globalMin, max: globalMax };
 
-    // KDE calculation is shared via @/lib/kde
+    let colorIndex = 0;
+    const kdes: Array<{
+      name: string;
+      x: number[];
+      y: number[];
+      color: string;
+    }> = [];
+
+    Object.entries(data.intensity_distributions.protein).forEach(([sampleName, values]) => {
+      const kde = calculateKDE(values);
+      if (kde.x.length > 0) {
+        const color = kdeSampleColors[colorIndex % kdeSampleColors.length];
+        colorIndex++;
+        kdes.push({
+          name: sampleName,
+          x: kde.x,
+          y: kde.y,
+          color,
+        });
+      }
+    });
+
+    return { kdes, range };
+  }, [data.intensity_distributions?.protein]);
+
+  // 5. Protein Intensity Distribution - Line plots (KDE) showing all data
+  const proteinIntensityPlot = useMemo(() => {
+    if (!proteinKDEData) return null;
+
     const traces: Array<{
       x: number[];
       y: number[];
@@ -327,37 +375,25 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
       hovertemplate: string;
     }> = [];
 
-    // MAJ-008: Generate distinct colors for each sample
-    const sampleColors = [
-      '#00ADEF', '#E73564', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
-      '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#D946EF',
-    ];
-    let colorIndex = 0;
-
-    Object.entries(data.intensity_distributions.protein).forEach(([sampleName, values]) => {
-      const kde = calculateKDE(values);
-      if (kde.x.length > 0) {
-        const color = sampleColors[colorIndex % sampleColors.length];
-        colorIndex++;
-        traces.push({
-          x: kde.x,
-          y: kde.y,
-          type: 'scatter',
-          mode: 'lines',
-          name: sampleName,
-          line: { color, width: 2 },
-          fill: 'tozeroy',
-          fillcolor: color + '33', // 20% opacity hex
-          hovertemplate: 'Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
-        });
-      }
+    proteinKDEData.kdes.forEach((kde) => {
+      traces.push({
+        x: kde.x,
+        y: kde.y,
+        type: 'scatter',
+        mode: 'lines',
+        name: kde.name,
+        line: { color: kde.color, width: 2 },
+        fill: 'tozeroy',
+        fillcolor: kde.color + '33', // 20% opacity hex
+        hovertemplate: 'Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
+      });
     });
 
     const layout = {
       title: { text: 'Protein Intensity Distribution', font: { size: 14, color: '#111827' } },
       xaxis: {
         title: { text: 'Intensity', font: { size: 12 } },
-        range: [globalMin, globalMax],
+        range: [proteinKDEData.range.min, proteinKDEData.range.max],
         gridcolor: '#E5E7EB',
       },
       yaxis: {
@@ -372,7 +408,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     };
 
     return { traces, layout };
-  }, [data.intensity_distributions?.protein]);
+  }, [proteinKDEData]);
 
   // 6. Data Completeness - Protein Level
   const completenessPlot = useMemo(() => {
@@ -505,6 +541,9 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
           link.href = dataUrl;
           link.download = `${plotId}-plot.png`;
           link.click();
+        })
+        .catch((err: unknown) => {
+          console.error('Failed to download plot:', err);
         });
     }
   };

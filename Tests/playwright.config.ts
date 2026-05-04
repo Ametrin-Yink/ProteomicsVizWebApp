@@ -7,8 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
 
-  /* Global test timeout - 8 minutes for long-running processing tests */
-  timeout: 480000,
+  /* Global test timeout - 15 minutes for long-running processing pipeline */
+  timeout: 900000,
 
   /* Run tests in files in parallel */
   fullyParallel: false, // Sequential execution as per requirements

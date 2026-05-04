@@ -39,7 +39,7 @@ class PipelineState:
     def _load(self) -> dict:
         if self.state_file.exists():
             try:
-                with open(self.state_file, encoding='utf-8') as f:
+                with open(self.state_file, encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 logger.warning(f"Failed to load pipeline state: {e}")
@@ -57,18 +57,20 @@ class PipelineState:
 
     def save(self) -> None:
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.state_file, "w", encoding='utf-8') as f:
+        with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=2)
 
     def add_log(self, level: str, message: str, step: int = None) -> None:
         if "logs" not in self.data:
             self.data["logs"] = []
-        self.data["logs"].append({
-            "level": level,
-            "message": message,
-            "step": step,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        self.data["logs"].append(
+            {
+                "level": level,
+                "message": message,
+                "step": step,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         self.save()
 
     def get_logs(self) -> list:
@@ -88,27 +90,33 @@ class PipelineState:
         self.data["current_step"] = step
         if "logs" not in self.data:
             self.data["logs"] = []
-        self.data["logs"].append({
-            "level": "info",
-            "message": message or f"Step {step} started",
-            "step": step,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self.data["logs"].append(
+            {
+                "level": "info",
+                "message": message or f"Step {step} started",
+                "step": step,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         self.save()
 
-    def mark_step_completed(self, step: int, output_path: Optional[Path] = None, message: str = None) -> None:
+    def mark_step_completed(
+        self, step: int, output_path: Optional[Path] = None, message: str = None
+    ) -> None:
         if step not in self.data["completed_steps"]:
             self.data["completed_steps"].append(step)
         if output_path:
             self.data["outputs"][f"step_{step}"] = str(output_path)
         if "logs" not in self.data:
             self.data["logs"] = []
-        self.data["logs"].append({
-            "level": "info",
-            "message": message or f"Step {step} complete",
-            "step": step,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self.data["logs"].append(
+            {
+                "level": "info",
+                "message": message or f"Step {step} complete",
+                "step": step,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         self.save()
 
     def mark_failed(self, step: int, error: str) -> None:
@@ -135,6 +143,7 @@ class PipelineState:
 @dataclass
 class StepContext:
     """Mutable context passed between pipeline steps."""
+
     config: AnalysisConfig
     session_id: str
     file_paths: list[Path]
@@ -205,23 +214,40 @@ class PipelineEngine:
 
         for step in pipeline.steps:
             self._check_cancelled(ctx)
-            ctx.state.mark_step_started(step.number, f"Step {step.number}: {step.display_name}")
-            await self._send_progress(ctx, step.number, "started", 0, step.display_name, len(pipeline.steps))
+            ctx.state.mark_step_started(
+                step.number, f"Step {step.number}: {step.display_name}"
+            )
+            await self._send_progress(
+                ctx, step.number, "started", 0, step.display_name, len(pipeline.steps)
+            )
 
             try:
                 await step.handler(ctx)
             except Exception as e:
                 ctx.state.mark_failed(step.number, str(e))
-                await self._send_progress(ctx, step.number, "failed", 0, str(e), len(pipeline.steps))
+                await self._send_progress(
+                    ctx, step.number, "failed", 0, str(e), len(pipeline.steps)
+                )
                 raise
 
             if step.number in ctx.step_outputs:
-                ctx.state.mark_step_completed(step.number, ctx.step_outputs[step.number], f"{step.display_name} complete")
+                ctx.state.mark_step_completed(
+                    step.number,
+                    ctx.step_outputs[step.number],
+                    f"{step.display_name} complete",
+                )
             else:
-                ctx.state.mark_step_completed(step.number, message=f"{step.display_name} complete")
+                ctx.state.mark_step_completed(
+                    step.number, message=f"{step.display_name} complete"
+                )
 
             await self._send_progress(
-                ctx, step.number, "completed", 100, f"{step.display_name} complete", len(pipeline.steps)
+                ctx,
+                step.number,
+                "completed",
+                100,
+                f"{step.display_name} complete",
+                len(pipeline.steps),
             )
 
         # Calculate processing time

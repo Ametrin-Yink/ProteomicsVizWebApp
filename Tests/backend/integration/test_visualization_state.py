@@ -30,7 +30,7 @@ def sample_session():
     return Session(
         id="integration-test-session",
         name="Integration Test",
-        template="protein_pairwise_comparison",
+        template="multi_condition_comparison",
         state=SessionState.COMPLETED,
         config=SessionConfig(
             treatment="DMSO",
@@ -79,18 +79,26 @@ class TestVisualizationStatePersistence:
         assert restored.volcano_filters["s0"] == 0.15
 
     @pytest.mark.asyncio
-    async def test_session_json_file_contains_fields(self, store, sample_session, sessions_dir):
+    async def test_session_json_file_contains_fields(
+        self, store, sample_session, sessions_dir
+    ):
         """The session.json file on disk contains markers and volcano_filters."""
         await store.create(sample_session)
 
         session = await store.get(sample_session.id)
         session.markers = ["P00367"]
-        session.volcano_filters = {"foldChange": 1.5, "pValue": 0.05, "adjPValue": 1, "s0": 0.1}
+        session.volcano_filters = {
+            "foldChange": 1.5,
+            "pValue": 0.05,
+            "adjPValue": 1,
+            "s0": 0.1,
+        }
         await store.update(session)
 
         # Read the actual JSON file
         json_path = sessions_dir / sample_session.id / "session.json"
         import json
+
         with open(json_path) as f:
             data = json.load(f)
 

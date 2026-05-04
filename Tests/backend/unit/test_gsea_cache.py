@@ -29,7 +29,18 @@ class TestGSEACacheService:
             significant_pathways=5,
             overrepresented=3,
             underrepresented=2,
-            results=[GSEAResult(term="test", name="Test Pathway", es=0.5, nes=1.5, pval=0.01, fdr=0.05, lead_genes=["G1"], matched_genes=1)]
+            results=[
+                GSEAResult(
+                    term="test",
+                    name="Test Pathway",
+                    es=0.5,
+                    nes=1.5,
+                    pval=0.01,
+                    fdr=0.05,
+                    lead_genes=["G1"],
+                    matched_genes=1,
+                )
+            ],
         )
 
         gsea_cache_service.store(key, result)

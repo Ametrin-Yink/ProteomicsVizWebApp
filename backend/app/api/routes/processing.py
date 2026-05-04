@@ -46,13 +46,14 @@ def _schedule_background_task(coro) -> asyncio.Task:
 
 
 def _is_session_stale(started_at: str, max_age_hours: int = 6) -> bool:
-    """Check if a session's processing has exceeded the max age threshold."""
+    """Check if a session's processing has exceeded the max age threshold.
+    Returns True if the timestamp is unparseable (treat corrupt data as stale)."""
     try:
         started = datetime.fromisoformat(started_at)
         elapsed = datetime.now(timezone.utc) - started
         return elapsed.total_seconds() > max_age_hours * 3600
     except (ValueError, TypeError):
-        return False
+        return True
 
 
 def _add_to_queue(session_id: str) -> int:
@@ -513,11 +514,6 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
                 config_kwargs["msstats_remove50missing"] = (
                     session.config.msstats_remove50missing
                 )
-            if (
-                hasattr(session.config, "deqms_fit_method")
-                and session.config.deqms_fit_method
-            ):
-                config_kwargs["deqms_fit_method"] = session.config.deqms_fit_method
             # Multi-condition: comparisons and metadata
             if hasattr(session.config, "comparisons") and session.config.comparisons:
                 config_kwargs["comparisons"] = session.config.comparisons

@@ -139,13 +139,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     ],
     
     !isDragging && !disabled && [
-      'border-border-border hover:border-primary/50',
+      'border-border hover:border-primary/50',
       'hover:bg-primary/5',
     ],
     
     disabled && [
       'opacity-50 cursor-not-allowed',
-      'border-border-border',
+      'border-border',
     ],
     
     className
@@ -182,21 +182,21 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             <Upload
               className={cn(
                 'w-8 h-8 transition-colors',
-                isDragging ? 'text-primary' : 'text-text-text-muted'
+                isDragging ? 'text-primary' : 'text-text-muted'
               )}
             />
           </div>
           
           <div className="space-y-1">
-            <p className="text-base font-medium text-text-text">
+            <p className="text-base font-medium text-text">
               {isDragging ? 'Drop files here' : 'Drag & drop files here'}
             </p>
-            <p className="text-sm text-text-text-secondary">
+            <p className="text-sm text-text-secondary">
               or click to browse
             </p>
           </div>
           
-          <div className="text-xs text-text-text-muted">
+          <div className="text-xs text-text-muted">
             <p>Accepted: {accept}</p>
             <p>Max size: {formatFileSize(maxSize)} per file</p>
             <p>Max files: {maxFiles}</p>
@@ -207,7 +207,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       {/* File list */}
       {uploadedFiles.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-text-text">
+          <p className="text-sm font-medium text-text">
             Files ({uploadedFiles.length})
           </p>
           
@@ -220,34 +220,34 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   'bg-background transition-all',
                   uploadedFile.state === 'error' && 'border-error/20 bg-error/5',
                   uploadedFile.state === 'success' && 'border-success/20 bg-success/5',
-                  uploadedFile.state === 'uploading' && 'border-border-border',
-                  uploadedFile.state === 'idle' && 'border-border-border'
+                  uploadedFile.state === 'uploading' && 'border-border',
+                  uploadedFile.state === 'idle' && 'border-border'
                 )}
               >
                 {/* File icon */}
                 <div className="flex-shrink-0">
-                  <File className="w-5 h-5 text-text-text-muted" />
+                  <File className="w-5 h-5 text-text-muted" />
                 </div>
                 
                 {/* File info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-text truncate">
+                  <p className="text-sm font-medium text-text truncate">
                     {uploadedFile.file.name}
                   </p>
-                  <p className="text-xs text-text-text-secondary">
+                  <p className="text-xs text-text-secondary">
                     {formatFileSize(uploadedFile.file.size)}
                   </p>
                   
                   {/* Progress bar */}
                   {uploadedFile.state === 'uploading' && (
                     <div className="mt-2">
-                      <div className="w-full h-1.5 bg-border-border rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                         <div
                           className="h-full bg-primary rounded-full transition-all duration-300"
                           style={{ width: `${uploadedFile.progress}%` }}
                         />
                       </div>
-                      <p className="text-xs text-text-text-secondary mt-1">
+                      <p className="text-xs text-text-secondary mt-1">
                         {uploadedFile.progress}%
                       </p>
                     </div>

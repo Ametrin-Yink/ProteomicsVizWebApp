@@ -23,23 +23,26 @@ interface AnalysisState {
   uploadedFiles: ParsedFilename[];
   uploadProgress: UploadProgress[];
   compoundFile: CompoundFileData | null;
-  
+
   // Selection state
   selectedFiles: Set<string>;
-  
+
+  // Pipeline selection
+  selectedPipeline: 'msqrob2' | 'msstats' | null;
+
   // Configuration state
   config: SessionConfig;
-  
+
   // Organisms
   availableOrganisms: Organism[];
-  
+
   // Loading states
   isUploading: boolean;
   isLoadingOrganisms: boolean;
-  
+
   // Errors
   uploadError: string | null;
-  
+
   // Actions
   addUploadedFile: (file: ParsedFilename) => void;
   removeUploadedFile: (filename: string) => void;
@@ -48,6 +51,7 @@ interface AnalysisState {
   toggleFileSelection: (filename: string) => void;
   selectAllFiles: () => void;
   deselectAllFiles: () => void;
+  setPipeline: (pipeline: 'msqrob2' | 'msstats') => void;
   setConfig: (config: Partial<SessionConfig>) => void;
   setAvailableOrganisms: (organisms: Organism[]) => void;
   setIsUploading: (isUploading: boolean) => void;
@@ -60,8 +64,12 @@ const defaultConfig: SessionConfig = {
   treatment: '',
   control: '',
   organism: '',
+  pipeline: undefined,
   remove_razor: false,
   strict_filtering: false,
+  pvalue_threshold: 0.05,
+  logfc_threshold: 1.0,
+  min_peptides_per_protein: 1,
 };
 
 export const useAnalysisStore = create<AnalysisState>()(
@@ -71,13 +79,21 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadProgress: [],
     compoundFile: null,
     selectedFiles: new Set<string>(),
+    selectedPipeline: null,
     config: { ...defaultConfig },
     availableOrganisms: [],
     isUploading: false,
     isLoadingOrganisms: false,
     uploadError: null,
-    
+
     // Actions
+    setPipeline: (pipeline) => {
+      set((state) => {
+        state.selectedPipeline = pipeline;
+        state.config.pipeline = pipeline;
+      });
+    },
+
     addUploadedFile: (file) => {
       set((state) => {
         const exists = state.uploadedFiles.some((f: ParsedFilename) => f.filename === file.filename);
@@ -174,6 +190,7 @@ export const useAnalysisStore = create<AnalysisState>()(
         state.uploadProgress = [];
         state.compoundFile = null;
         state.selectedFiles.clear();
+        state.selectedPipeline = null;
         state.config = { ...defaultConfig };
         state.isUploading = false;
         state.uploadError = null;
@@ -223,6 +240,10 @@ export const getReplicatesByCondition = (state: AnalysisState): Record<string, n
   return counts;
 };
 
+/**
+ * Get validation state for the current analysis configuration.
+ * NOTE: Callers should memoize with useMemo() to avoid unnecessary recalculations on every render.
+ */
 export const getValidation = (state: AnalysisState): ExperimentValidation => {
   const selected = getSelectedFiles(state);
   const experiments = getExperiments(state);
@@ -239,17 +260,11 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
     });
   }
   
-  // Check exactly 2 conditions
-  if (conditions.length > 2) {
-    warnings.push({
-      type: 'error',
-      message: 'Samples must be from 2 conditions for paired comparison.',
-      code: 'TOO_MANY_CONDITIONS',
-    });
-  } else if (conditions.length < 2 && selected.length > 0) {
+  // Check at least 2 conditions
+  if (conditions.length < 2 && selected.length > 0) {
     warnings.push({
       type: 'warning',
-      message: 'Need 2 conditions for paired comparison',
+      message: 'Need at least 2 conditions for comparison',
       code: 'INSUFFICIENT_CONDITIONS',
     });
   }
@@ -292,8 +307,6 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   
   const isValid = warnings.filter((w) => w.type === 'error').length === 0 &&
     selected.length > 0 &&
-    state.config.treatment !== '' &&
-    state.config.control !== '' &&
     state.config.organism !== '';
   
   return {
@@ -308,5 +321,8 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
 
 export const canStartAnalysis = (state: AnalysisState): boolean => {
   const validation = getValidation(state);
-  return validation.isValid;
+  // For multi-condition: skip treatment/control requirement
+  const hasRequiredConfig = state.config.organism !== '' &&
+    state.selectedFiles.size > 0;
+  return validation.isValid && hasRequiredConfig;
 };

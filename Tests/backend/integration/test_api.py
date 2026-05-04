@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 def client():
     """Create FastAPI test client."""
     from app.main import app
+
     return TestClient(app)
 
 
@@ -29,26 +30,26 @@ class TestSessionAPI:
 
     def test_create_session_success(self, client):
         """Create new session successfully."""
-        response = client.post("/api/sessions", json={
-            "name": "Test Session",
-            "template": "protein_pairwise_comparison"
-        })
+        response = client.post(
+            "/api/sessions",
+            json={"name": "Test Session", "template": "multi_condition_comparison"},
+        )
 
         assert response.status_code == 201
         data = response.json()
         assert "id" in data
         assert len(data["id"]) == 36  # UUID format
         assert data["name"] == "Test Session"
-        assert data["template"] == "protein_pairwise_comparison"
+        assert data["template"] == "multi_condition_comparison"
         assert data["state"] == "created"
         assert data["config"] is None
         assert data["files"]["proteomics"] == []
 
     def test_create_session_missing_name(self, client):
         """Reject session without name."""
-        response = client.post("/api/sessions", json={
-            "template": "protein_pairwise_comparison"
-        })
+        response = client.post(
+            "/api/sessions", json={"template": "multi_condition_comparison"}
+        )
 
         assert response.status_code == 422
         error = response.json()
@@ -56,21 +57,22 @@ class TestSessionAPI:
 
     def test_create_session_default_template(self, client):
         """Session without template uses default."""
-        response = client.post("/api/sessions", json={
-            "name": "Test Session"
-        })
+        response = client.post("/api/sessions", json={"name": "Test Session"})
 
         assert response.status_code == 201
         data = response.json()
-        assert data["template"] == "protein_pairwise_comparison"
+        assert data["template"] == "multi_condition_comparison"
 
     def test_list_sessions(self, client):
         """List all sessions."""
         # Create a session first
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session List",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session List",
+                "template": "multi_condition_comparison",
+            },
+        )
         created_id = create_response.json()["id"]
 
         response = client.get("/api/sessions")
@@ -87,10 +89,13 @@ class TestSessionAPI:
     def test_get_session_success(self, client):
         """Get session by ID."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Get",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Get",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         # Get session
@@ -114,10 +119,13 @@ class TestSessionAPI:
     def test_delete_session_success(self, client):
         """Delete session successfully."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Delete",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Delete",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         # Delete session
@@ -142,20 +150,26 @@ class TestSessionConfigAPI:
     def test_update_session_config_success(self, client):
         """Update session configuration."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Config",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Config",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         # Update config
-        response = client.put(f"/api/sessions/{session_id}/config", json={
-            "treatment": "INCZ123456",
-            "control": "DMSO",
-            "organism": "human",
-            "remove_razor": True,
-            "strict_filtering": False
-        })
+        response = client.put(
+            f"/api/sessions/{session_id}/config",
+            json={
+                "treatment": "INCZ123456",
+                "control": "DMSO",
+                "organism": "human",
+                "remove_razor": True,
+                "strict_filtering": False,
+            },
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -169,18 +183,20 @@ class TestSessionConfigAPI:
     def test_update_config_treatment_equals_control(self, client):
         """Reject config where treatment equals control."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Config",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Config",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         # Update config with invalid values
-        response = client.put(f"/api/sessions/{session_id}/config", json={
-            "treatment": "DMSO",
-            "control": "DMSO",
-            "organism": "human"
-        })
+        response = client.put(
+            f"/api/sessions/{session_id}/config",
+            json={"treatment": "DMSO", "control": "DMSO", "organism": "human"},
+        )
 
         assert response.status_code == 422
         error = response.json()
@@ -189,18 +205,24 @@ class TestSessionConfigAPI:
     def test_update_config_invalid_organism(self, client):
         """Reject config with invalid organism."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Config",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Config",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         # Update config with invalid organism
-        response = client.put(f"/api/sessions/{session_id}/config", json={
-            "treatment": "INCZ123456",
-            "control": "DMSO",
-            "organism": "invalid_organism_123"
-        })
+        response = client.put(
+            f"/api/sessions/{session_id}/config",
+            json={
+                "treatment": "INCZ123456",
+                "control": "DMSO",
+                "organism": "invalid_organism_123",
+            },
+        )
 
         # Validation may fail at API level (422) or be accepted and fail later
         # The important thing is it's not silently accepted as valid
@@ -212,11 +234,10 @@ class TestSessionConfigAPI:
 
     def test_update_config_session_not_found(self, client):
         """Return 404 when updating non-existent session."""
-        response = client.put("/api/sessions/non-existent-id/config", json={
-            "treatment": "INCZ123456",
-            "control": "DMSO",
-            "organism": "human"
-        })
+        response = client.put(
+            "/api/sessions/non-existent-id/config",
+            json={"treatment": "INCZ123456", "control": "DMSO", "organism": "human"},
+        )
 
         assert response.status_code == 404
 
@@ -232,51 +253,57 @@ class TestFileUploadAPI:
     def test_upload_proteomics_files_success(self, client, sample_data_dir):
         """Upload proteomics files successfully."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Upload",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Upload",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         # Upload file
-        file_path = sample_data_dir / "PSM_SampleData_DMSO_1.csv"
+        file_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
         with open(file_path, "rb") as f:
             response = client.post(
                 f"/api/sessions/{session_id}/upload/proteomics",
-                files={"files": ("PSM_SampleData_DMSO_1.csv", f, "text/csv")}
+                files={"files": ("PSM_DOCK5Jurkat_DMSO_24h_1.csv", f, "text/csv")},
             )
 
         assert response.status_code == 200
         data = response.json()
         assert "files" in data
         assert len(data["files"]) == 1
-        assert data["files"][0]["filename"] == "PSM_SampleData_DMSO_1.csv"
+        assert data["files"][0]["filename"] == "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
         assert "size" in data["files"][0]
-        assert data["files"][0]["experiment"] == "SampleData"
-        assert data["files"][0]["condition"] == "DMSO"
+        assert data["files"][0]["experiment"] == "DOCK5Jurkat"
+        assert data["files"][0]["condition"] == "DMSO_24h"
         assert data["files"][0]["replicate"] == 1
 
     @pytest.mark.needs_sample_data
     def test_upload_multiple_proteomics_files(self, client, sample_data_dir):
         """Upload multiple proteomics files."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Multi",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Multi",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         # Upload multiple files
-        file1_path = sample_data_dir / "PSM_SampleData_DMSO_1.csv"
-        file2_path = sample_data_dir / "PSM_SampleData_DMSO_2.csv"
+        file1_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
+        file2_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_2.csv"
 
         with open(file1_path, "rb") as f1, open(file2_path, "rb") as f2:
             response = client.post(
                 f"/api/sessions/{session_id}/upload/proteomics",
                 files=[
-                    ("files", ("PSM_SampleData_DMSO_1.csv", f1, "text/csv")),
-                    ("files", ("PSM_SampleData_DMSO_2.csv", f2, "text/csv"))
-                ]
+                    ("files", ("PSM_DOCK5Jurkat_DMSO_24h_1.csv", f1, "text/csv")),
+                    ("files", ("PSM_DOCK5Jurkat_DMSO_24h_2.csv", f2, "text/csv")),
+                ],
             )
 
         assert response.status_code == 200
@@ -287,16 +314,16 @@ class TestFileUploadAPI:
     def test_upload_invalid_filename(self, client):
         """Reject file with invalid filename."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={"name": "Test Session", "template": "multi_condition_comparison"},
+        )
         session_id = create_response.json()["id"]
 
         # Upload file with invalid name
         response = client.post(
             f"/api/sessions/{session_id}/upload/proteomics",
-            files={"files": ("invalid_file.csv", b"col1,col2\n1,2", "text/csv")}
+            files={"files": ("invalid_file.csv", b"col1,col2\n1,2", "text/csv")},
         )
 
         assert response.status_code == 400
@@ -306,12 +333,12 @@ class TestFileUploadAPI:
     @pytest.mark.needs_sample_data
     def test_upload_file_session_not_found(self, client, sample_data_dir):
         """Return 404 when uploading to non-existent session."""
-        file_path = sample_data_dir / "PSM_SampleData_DMSO_1.csv"
+        file_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
 
         with open(file_path, "rb") as f:
             response = client.post(
                 "/api/sessions/non-existent-id/upload/proteomics",
-                files={"files": ("PSM_SampleData_DMSO_1.csv", f, "text/csv")}
+                files={"files": ("PSM_DOCK5Jurkat_DMSO_24h_1.csv", f, "text/csv")},
             )
 
         assert response.status_code == 404
@@ -323,10 +350,13 @@ class TestProcessingStatusAPI:
     def test_get_processing_status(self, client):
         """Get processing status."""
         # Create session
-        create_response = client.post("/api/sessions", json={
-            "name": "Test Session Status",
-            "template": "protein_pairwise_comparison"
-        })
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Test Session Status",
+                "template": "multi_condition_comparison",
+            },
+        )
         session_id = create_response.json()["id"]
 
         response = client.get(f"/api/sessions/{session_id}/status")
@@ -349,10 +379,13 @@ class TestErrorHandling:
 
     def test_validation_error_format(self, client):
         """Verify validation error response format."""
-        response = client.post("/api/sessions", json={
-            "template": "protein_pairwise_comparison"
-            # Missing required 'name'
-        })
+        response = client.post(
+            "/api/sessions",
+            json={
+                "template": "multi_condition_comparison"
+                # Missing required 'name'
+            },
+        )
 
         assert response.status_code == 422
         error_data = response.json()

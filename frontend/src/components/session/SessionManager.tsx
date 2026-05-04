@@ -20,14 +20,19 @@ import {
   Trash2,
   Search,
   ListChecks,
+  FileText,
+  Clock,
+  AlertCircle,
+  Edit3,
+  X,
+  Check,
 } from 'lucide-react';
 import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessionStore';
-import { useUIStore } from '@/stores/uiStore';
+import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/Button';
-import { MiniSessionCard } from './SessionCard';
-import { SessionCreateDialog } from './SessionCreateDialog';
-import type { Session, AnalysisTemplate } from '@/types/session';
+import { useAnalysisStore } from '@/stores/analysis-store';
+import type { Session } from '@/types/session';
 
 // Session manager props
 export interface SessionManagerProps {
@@ -46,7 +51,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const { setCurrentSession, addSession, loadSessions, deleteSession, deleteSessions, updateSession } = useSessionStore();
   const { sidebar, setSidebarCollapsed } = useUIStore();
 
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
+  const [isCreating, setIsCreating] = React.useState(false);
+  const resetAnalysis = useAnalysisStore((s) => s.reset);
   const [activeTab, setActiveTab] = React.useState<'active' | 'completed'>('active');
   const [isScanning, setIsScanning] = React.useState(false);
   const [isSelectMode, setIsSelectMode] = React.useState(false);
@@ -66,7 +72,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   // Load sessions on mount + poll every 30 seconds
   React.useEffect(() => {
     loadSessions();
-    const interval = setInterval(loadSessions, 30_000);
+    const interval = setInterval(loadSessions, 15_000);
     return () => clearInterval(interval);
   }, [loadSessions]);
 
@@ -110,7 +116,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
 
     // Navigate based on session status
     if (session.status === 'created' || session.status === 'uploading' || session.status === 'uploaded') {
-      router.push(`/analysis?session=${session.id}`);
+      // Resume in the new wizard flow
+      router.push(`/new/upload?session=${session.id}`);
     } else if (session.status === 'completed') {
       router.push(`/analysis/visualization?session_id=${session.id}`);
     } else {
@@ -119,23 +126,21 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     }
   };
 
-  // Handle create session
-  const handleCreateSession = async (
-    name: string,
-    template: AnalysisTemplate
-  ) => {
+  // Handle create session - navigate to new wizard flow
+  const handleNewAnalysis = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
     try {
-      // Create session via backend API
-      const newSession = await sessionsApi.create(name, template);
-
-      // Add to local store
+      const now = new Date();
+      const name = `Analysis ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const newSession = await sessionsApi.create(name, 'multi_condition_comparison');
+      resetAnalysis();
       addSession(newSession);
-
-      // Navigate to analysis page with session ID
-      router.push(`/analysis?session=${newSession.id}`);
-    } catch (error) {
-      console.error('Failed to create session:', error);
-      throw error;
+      router.push(`/new/upload?session=${newSession.id}`);
+    } catch {
+      // Error silently handled — button resets, user can try again
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -254,12 +259,17 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsCreateDialogOpen(true)}
+            onClick={handleNewAnalysis}
+            disabled={isCreating}
             className="mb-4"
             title="New Analysis"
             data-testid="new-analysis-btn"
           >
-            <Plus className="w-5 h-5" />
+            {isCreating ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Plus className="w-5 h-5" />
+            )}
           </Button>
 
           {/* Recent sessions */}
@@ -293,11 +303,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           </Button>
         </div>
 
-        <SessionCreateDialog
-          isOpen={isCreateDialogOpen}
-          onClose={() => setIsCreateDialogOpen(false)}
-          onCreate={handleCreateSession}
-        />
       </>
     );
   }
@@ -318,8 +323,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           <Button
             variant="primary"
             fullWidth
-            leftIcon={<Plus className="w-4 h-4" />}
-            onClick={() => setIsCreateDialogOpen(true)}
+            leftIcon={isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            onClick={handleNewAnalysis}
+            disabled={isCreating}
             data-testid="new-analysis-btn"
           >
             New Analysis
@@ -380,6 +386,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 isScanning && 'opacity-60 cursor-not-allowed'
               )}
               title="Refresh sessions"
+              aria-label="Refresh sessions"
               data-testid="refresh-sessions-btn"
             >
               <RefreshCw className={cn('w-4 h-4', isScanning && 'animate-spin')} />
@@ -393,6 +400,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                   : 'text-text-secondary hover:text-text hover:bg-surface'
               )}
               title={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
+              aria-label={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
               data-testid="select-mode-btn"
             >
               <ListChecks className="w-4 h-4" />
@@ -499,15 +507,296 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       {/* Spacer to push main content to the right of the fixed sidebar */}
       <div className="w-80 flex-shrink-0" aria-hidden="true" />
 
-      {/* Create dialog */}
-      <SessionCreateDialog
-        isOpen={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
-        onCreate={handleCreateSession}
-      />
     </>
   );
 };
 
 // Convenience exports
 export default SessionManager;
+
+// ===================== Status Configuration =====================
+
+const statusConfig: Record<Session['status'], {
+  icon: typeof FlaskConical;
+  color: string;
+  bgColor: string;
+  label: string;
+}> = {
+  created: {
+    icon: FileText,
+    color: 'text-text-secondary',
+    bgColor: 'bg-border/10',
+    label: 'Created',
+  },
+  uploading: {
+    icon: Clock,
+    color: 'text-secondary',
+    bgColor: 'bg-secondary/10',
+    label: 'Uploading',
+  },
+  uploaded: {
+    icon: CheckCircle2,
+    color: 'text-success',
+    bgColor: 'bg-success/5',
+    label: 'Ready',
+  },
+  processing: {
+    icon: Clock,
+    color: 'text-primary',
+    bgColor: 'bg-primary/10',
+    label: 'Processing',
+  },
+  queued: {
+    icon: Clock,
+    color: 'text-warning',
+    bgColor: 'bg-warning/5',
+    label: 'Queued',
+  },
+  completed: {
+    icon: CheckCircle2,
+    color: 'text-success',
+    bgColor: 'bg-success/5',
+    label: 'Completed',
+  },
+  error: {
+    icon: AlertCircle,
+    color: 'text-error',
+    bgColor: 'bg-error/5',
+    label: 'Error',
+  },
+  cancelled: {
+    icon: X,
+    color: 'text-text-secondary',
+    bgColor: 'bg-border/10',
+    label: 'Cancelled',
+  },
+};
+
+// ===================== Mini Session Card =====================
+
+export interface MiniSessionCardProps {
+  session: Session;
+  isActive?: boolean;
+  onClick?: () => void;
+  onDelete?: () => void;
+  onRename?: (newName: string) => void;
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+  onSelectChange?: (checked: boolean) => void;
+  className?: string;
+}
+
+export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
+  session,
+  isActive = false,
+  onClick,
+  onDelete,
+  onRename,
+  isSelectMode = false,
+  isSelected = false,
+  onSelectChange,
+  className,
+}) => {
+  const status = statusConfig[session.status];
+  const StatusIcon = status.icon;
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const [editName, setEditName] = React.useState(session.name);
+
+  const formatRelativeTime = (dateString: string): string => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(true);
+    setEditName(session.name);
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(false);
+    setEditName(session.name);
+  };
+
+  const handleSaveEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (editName.trim() && editName.trim() !== session.name) {
+      onRename?.(editName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (editName.trim() && editName.trim() !== session.name) {
+        onRename?.(editName.trim());
+      }
+      setIsEditing(false);
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setEditName(session.name);
+    }
+  };
+
+  return (
+    <div
+      data-testid="session-item"
+      data-session-id={session.id}
+      className={cn(
+        'group relative flex items-center gap-3 p-3 rounded-lg',
+        'transition-all duration-200',
+        isSelectMode
+          ? 'cursor-pointer hover:bg-surface'
+          : 'cursor-pointer hover:bg-surface',
+        isActive && !isSelectMode && 'bg-primary/5 ring-1 ring-primary',
+        className
+      )}
+    >
+      {/* Checkbox or status icon */}
+      {isSelectMode ? (
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectChange?.(!isSelected);
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onSelectChange?.(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+            className="accent-primary w-4 h-4"
+            data-testid="session-checkbox"
+          />
+        </div>
+      ) : (
+        <div
+          onClick={onClick}
+          className={cn(
+            'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+            status.bgColor
+          )}
+        >
+          <StatusIcon className={cn('w-4 h-4', status.color)} />
+        </div>
+      )}
+
+      <div
+        className="flex-1 min-w-0"
+        onClick={isSelectMode
+          ? () => onSelectChange?.(!isSelected)
+          : onClick
+        }
+      >
+        {isEditing ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 min-w-0 px-2 py-1 text-sm border border-secondary rounded focus:outline-none focus:ring-2 focus:ring-secondary/20"
+              autoFocus
+            />
+            <button
+              onClick={handleSaveEdit}
+              className="p-1 text-success hover:bg-success/10 rounded transition-colors"
+              title="Save"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              className="p-1 text-muted hover:text-text-secondary hover:bg-surface rounded transition-colors"
+              title="Cancel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <p data-testid="session-name" className="text-sm font-medium text-text line-clamp-2 break-words">
+              {session.name}
+            </p>
+            <div className="flex items-center gap-2">
+              <span data-testid="session-status" className={cn('text-xs', status.color)}>
+                {status.label}
+              </span>
+              <span className="text-xs text-muted">
+                {formatRelativeTime(session.createdAt)}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Action buttons - overlay on hover, no reserved space */}
+      {!isEditing && !isSelectMode && (
+        <div className={cn(
+          'absolute right-2 bottom-1.5 flex items-center gap-1',
+          'opacity-0 group-hover:opacity-100 transition-opacity duration-150',
+          'bg-background/80 backdrop-blur-sm rounded-md px-1 py-0.5',
+        )}>
+          {onRename && (
+            <button
+              onClick={handleStartEdit}
+              className="p-1.5 text-muted hover:text-secondary hover:bg-secondary/10 rounded transition-colors"
+              title="Rename session"
+              data-testid="session-rename-btn"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDeleteConfirm(true);
+              }}
+              className="p-1.5 text-muted hover:text-error hover:bg-error/5 rounded transition-colors"
+              title="Delete session"
+              data-testid="session-delete-btn"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-background rounded-xl border border-border p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-semibold text-text mb-2">Delete Session</h3>
+            <p className="text-sm text-text-secondary mb-4">Are you sure you want to delete this session? This action cannot be undone.</p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-text-secondary bg-background border border-border rounded-lg hover:bg-surface"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowDeleteConfirm(false); onDelete?.(); }}
+                className="px-4 py-2 text-sm font-medium text-white bg-error rounded-lg hover:bg-error/90"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

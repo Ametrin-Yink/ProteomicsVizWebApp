@@ -8,8 +8,8 @@ Proteomics Visualization Web App - A full-stack scientific data analysis platfor
 
 **Tech Stack:**
 - Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js
-- Backend: FastAPI, Python 3.11+, Pydantic, asyncio
-- Analysis: R 4.3+, msqrob2, QFeatures, limma, gseapy
+- Backend: FastAPI, Python 3.12+, Pydantic, asyncio
+- Analysis: R 4.5+, msqrob2, QFeatures, limma, MSstats, gseapy
 
 ## Quick Start (Dev)
 
@@ -60,7 +60,12 @@ cd backend && ruff check . && ruff format .
 
 ### R Package Verification
 ```bash
-"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "library(msqrob2); library(QFeatures); library(limma); cat('OK\n')"
+# Quick check
+"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "library(msqrob2); library(QFeatures); library(limma); library(MSstats); cat('OK\n')"
+
+# Full verification scripts
+"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" backend/scripts/verify_r_packages.R
+"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" backend/scripts/verify_msstats.R
 ```
 
 ## High-Level Architecture
@@ -75,11 +80,14 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 ```
 
 **Key Modules:**
-- `app/api/routes/` - 8 route modules (sessions, upload, analysis, processing, visualization, reports, compounds)
-- `app/services/` - Business logic including msqrob2_wrapper, data_processor, gsea_service
+- `app/api/routes/` - 7 route modules (sessions, upload, analysis, processing, visualization, reports, compounds)
+- `app/services/pipeline_engine.py` - Plugin-based step execution engine
+- `app/services/pipeline_registry.py` - Pipeline template definitions (maps AnalysisTemplate to steps)
+- `app/services/steps/` - Individual step handlers (one file per pipeline step)
+- `app/services/` - Business logic including msqrob2_wrapper, msstats_wrapper, data_processor, gsea_service
 - `app/db/session_store.py` - JSON-based session persistence
-- `app/models/` - Pydantic models for session, data, analysis
-- `scripts/` - R scripts (msqrob2_protein.R, msqrob2_de.R) called via subprocess
+- `app/models/` - Pydantic models (AnalysisTemplate enum, AnalysisConfig, Session)
+- `scripts/` - R scripts called via subprocess (see Pipeline section below)
 
 **Critical Pattern - R Integration via Subprocess:**
 ```python
@@ -111,13 +119,36 @@ const sessions = useSessionStore((state) => state.sessions);  // GOOD
 const state = useSessionStore();  // BAD - causes re-renders
 ```
 
-### Processing Pipeline (9 Steps)
+### Processing Pipeline
 
-```
-Input: PSM CSV Files -> Steps 1-5 (Python) -> Step 6: Protein Abundance (R/msqrob2)
-    -> Step 7: Differential Expression (R/msqrob2) -> Step 8: QC Metrics (Python)
-    -> Step 9: GSEA Analysis (Python/gseapy) -> Output: Results, QC Plots, GSEA
-```
+The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step handlers registered via `pipeline_registry.py`. The active template is `MULTI_CONDITION` (`"multi_condition_comparison"`); `TIME_SERIES` is reserved for future use.
+
+**9 Steps (msqrob2-based):**
+
+| Step | Name | Tool |
+|------|------|------|
+| 1 | Combine Replicates | Python (DataProcessor) |
+| 2 | Generate Unique PSM | Python (DataProcessor) |
+| 3 | Remove Razor Peptides | Python (DataProcessor, conditional) |
+| 4 | Remove Low Quality | Python (DataProcessor) |
+| 5 | Filter by Criteria | Python (DataProcessor) |
+| 6 | Protein Abundance | R/msqrob2 (`msqrob2_protein.R`) |
+| 7 | Differential Expression (multi-condition) | R/msqrob2 (`msqrob2_de_multi.R`) |
+| 8 | QC Metrics | Python (QCCalculator) |
+| 9 | GSEA Analysis | Python/gseapy (GO, KEGG, Reactome) |
+
+**R Scripts Reference:**
+
+| Script | Step | Purpose |
+|--------|------|---------|
+| `msqrob2_protein.R` | 6 | Peptide-to-protein aggregation via msqrob2 |
+| `msqrob2_de.R` | 7 (legacy) | Single-comparison DE via limma |
+| `msqrob2_de_multi.R` | 7 | Multi-condition DE with N conditions, M contrasts |
+| `msstats_data_process.R` | (alt 6) | MSstats protein abundance (not wired into pipeline) |
+| `msstats_group_comparison_multi.R` | (alt 7) | MSstats group comparison (not wired into pipeline) |
+| `install_r_packages.R` | setup | Installs Bioconductor packages |
+| `verify_r_packages.R` | setup | Verifies msqrob2/QFeatures/limma are installed |
+| `verify_msstats.R` | setup | Verifies MSstats/MSstatsConvert are installed |
 
 **WebSocket for Real-Time Updates:**
 - Frontend connects to `ws://localhost:8000/ws/sessions/{session_id}`
@@ -145,7 +176,7 @@ Input: PSM CSV Files -> Steps 1-5 (Python) -> Step 6: Protein Abundance (R/msqro
 
 ### R Integration
 - **NEVER use rpy2** - Always use subprocess
-- **Required packages:** msqrob2, QFeatures, limma
+- **Required packages:** msqrob2, QFeatures, limma, MSstats
 - **Handle encoding:** UTF-8 with latin-1 fallback for R output
 - **R script receives args positionally:** Check argument count in R with `length(args)`
 
@@ -175,12 +206,13 @@ Input: PSM CSV Files -> Steps 1-5 (Python) -> Step 6: Protein Abundance (R/msqro
 - Sessions: `POST /`, `GET /`, `GET /{id}`, `PUT /{id}`, `PUT /{id}/config`, `DELETE /{id}`
 - Upload: `POST /{id}/upload/proteomics`, `POST /{id}/upload/compound`, `DELETE /{id}/files/{type}/{filename}`
 - Processing: `POST /{id}/process`, `GET /{id}/processing/status`, `GET /{id}/processing/logs`, `POST /{id}/processing/retry`
-- Analysis: `POST /{id}/analysis/start`, `POST /{id}/analysis/cancel`
+- Analysis: `POST /{id}/analysis/start` (deprecated, redirects to `/process`), `POST /{id}/analysis/cancel`
 - Results: `GET /{id}/results`, `GET /{id}/qc/plots`, `GET /{id}/gsea/{db}`, `GET /{id}/gsea/{db}/plot`, `GET /{id}/gsea/{db}/heatmap`
 - Protein: `GET /{id}/protein/{protein_id}/abundance`, `GET /{id}/protein/{protein_id}/peptide`
 - Reports: `POST /{id}/reports/generate`, `GET /{id}/reports`, `GET /{id}/reports/{rid}/download`, `DELETE /{id}/reports/{rid}`
 - Compounds: `GET /{id}/compounds`, `GET /{id}/compounds/{condition}`, `GET /{id}/compounds/{condition}/image`, `GET /{id}/compounds/{condition}/properties`, `POST /{id}/compounds/validate`
 - WebSocket: `WS /ws/sessions/{id}`
+- Organisms: `GET /api/organisms`
 
 ## Session Storage
 
@@ -194,12 +226,16 @@ Sessions persisted to `backend/sessions/{session_id}/`:
 
 ## Key Files Reference
 
-- `backend/app/main.py` - FastAPI application
-- `backend/app/core/config.py` - Backend settings (pydantic-settings)
+- `backend/app/main.py` - FastAPI application, route mounting, lifespan handlers
+- `backend/app/core/config.py` - Settings (pydantic-settings: R paths, timeouts, caching)
+- `backend/app/services/pipeline_engine.py` - Pipeline step execution engine
+- `backend/app/services/pipeline_registry.py` - Template-to-step mapping
+- `backend/app/services/processing_orchestrator.py` - Pipeline orchestration (adapts engine to session lifecycle)
+- `backend/app/models/analysis.py` - AnalysisTemplate enum, AnalysisConfig, pipeline models
+- `backend/scripts/msqrob2_protein.R` - Step 6 (protein abundance)
+- `backend/scripts/msqrob2_de_multi.R` - Step 7 (multi-condition DE)
 - `frontend/next.config.ts` - Frontend config, API proxy to `http://127.0.0.1:8000`
-- `backend/scripts/msqrob2_protein.R` / `msqrob2_de.R` - Steps 6 & 7
-- `backend/app/services/processing_orchestrator.py` - Pipeline orchestration
-- `AGENTS/` - 9 developer guides (01-overview through 09-lessons-learned)
+- `AGENTS/` - 9 developer guides covering overview, red lines, coding standards, API contract, state management, error handling, testing, pipeline, and lessons learned
 - `docs/api/openapi.yaml` - API specification
 - `docs/CONTRIBUTING.md` - Contributor guidelines
 

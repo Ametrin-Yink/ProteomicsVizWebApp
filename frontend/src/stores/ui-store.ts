@@ -1,12 +1,20 @@
 /**
- * UI store for managing UI state (modals, toasts, etc.)
+ * UI store for managing UI state (modals, toasts, sidebar, etc.)
  */
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { useShallow } from 'zustand/react/shallow';
 import type { Toast } from '@/types';
+import { generateId } from '@/lib/utils';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+interface SidebarState {
+  isOpen: boolean;
+  width: number;
+  isCollapsed: boolean;
+}
 
 interface UIState {
   // Modals
@@ -17,7 +25,14 @@ interface UIState {
   // Toasts
   toasts: Toast[];
 
+  // Theme
+  theme: 'light' | 'dark';
+
+  // Sidebar
+  sidebar: SidebarState;
+
   // Actions
+  toggleTheme: () => void;
   openUploadModal: () => void;
   closeUploadModal: () => void;
   openConfigModal: () => void;
@@ -27,6 +42,12 @@ interface UIState {
   addToast: (type: ToastType, message: string, duration?: number) => void;
   removeToast: (id: string) => void;
   clearAllToasts: () => void;
+
+  // Sidebar actions
+  toggleSidebar: () => void;
+  setSidebarOpen: (isOpen: boolean) => void;
+  setSidebarCollapsed: (isCollapsed: boolean) => void;
+  setSidebarWidth: (width: number) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -36,6 +57,16 @@ export const useUIStore = create<UIState>()(
     isConfigModalOpen: false,
     isHelpModalOpen: false,
     toasts: [],
+
+    // Sidebar
+    sidebar: {
+      isOpen: true,
+      width: 280,
+      isCollapsed: false,
+    },
+
+    // Theme
+    theme: 'light' as const,
 
     // Modal actions
     openUploadModal: () => {
@@ -74,9 +105,9 @@ export const useUIStore = create<UIState>()(
       });
     },
 
-    // Toast actions - uses (type, message) signature for consistency with uiStore.ts
+    // Toast actions
     addToast: (type: ToastType, message: string, duration?: number) => {
-      const id = crypto.randomUUID();
+      const id = generateId();
       const toastDuration = duration ?? 5000;
       set((state) => {
         state.toasts.push({ id, type, message, duration: toastDuration });
@@ -99,6 +130,43 @@ export const useUIStore = create<UIState>()(
         state.toasts = [];
       });
     },
+
+    // Sidebar actions
+    toggleSidebar: () => {
+      set((state) => {
+        state.sidebar.isOpen = !state.sidebar.isOpen;
+      });
+    },
+
+    // Theme actions
+    toggleTheme: () => {
+      set((state) => {
+        state.theme = state.theme === 'light' ? 'dark' : 'light';
+      });
+      // Apply theme changes to DOM
+      if (typeof document !== 'undefined') {
+        const isDark = document.documentElement.classList.toggle('dark');
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+      }
+    },
+
+    setSidebarOpen: (isOpen: boolean) => {
+      set((state) => {
+        state.sidebar.isOpen = isOpen;
+      });
+    },
+
+    setSidebarCollapsed: (isCollapsed: boolean) => {
+      set((state) => {
+        state.sidebar.isCollapsed = isCollapsed;
+      });
+    },
+
+    setSidebarWidth: (width: number) => {
+      set((state) => {
+        state.sidebar.width = Math.max(200, Math.min(400, width));
+      });
+    },
   }))
 );
 
@@ -113,3 +181,20 @@ export const showToast = (
   const { addToast } = useUIStore.getState();
   addToast(type, message, duration);
 };
+
+/**
+ * Selector hooks with shallow equality to prevent unnecessary re-renders
+ */
+export const useSidebar = () => useUIStore(useShallow((state) => state.sidebar));
+
+export const useLoading = () => useUIStore(
+  useShallow((state) => state.isUploadModalOpen || state.isConfigModalOpen)
+);
+
+export const useActiveModal = () => useUIStore(
+  useShallow((state) => ({
+    isUploadModalOpen: state.isUploadModalOpen,
+    isConfigModalOpen: state.isConfigModalOpen,
+    isHelpModalOpen: state.isHelpModalOpen,
+  }))
+);

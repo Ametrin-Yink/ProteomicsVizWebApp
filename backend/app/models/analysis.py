@@ -15,10 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 class AnalysisTemplate(str, Enum):
     """Available analysis templates."""
 
-    PROTEIN_PAIRWISE = "protein_pairwise_comparison"
-    MSSTATS_PAIRWISE = "msstats_pairwise_comparison"
-    DEQMS_PAIRWISE = "deqms_pairwise_comparison"
-    MULTI_CONDITION = "multi_condition_comparison"  # reserved for Plan 3
+    MULTI_CONDITION = "multi_condition_comparison"
     TIME_SERIES = "time_series_analysis"  # reserved for future
 
 
@@ -73,9 +70,9 @@ STEP_DISPLAY_NAMES: dict[int, str] = {
 class AnalysisConfig(BaseModel):
     """Complete analysis configuration."""
 
-    template: AnalysisTemplate = Field(default=AnalysisTemplate.PROTEIN_PAIRWISE)
-    treatment: str = Field(default="")
-    control: str = Field(default="")
+    template: AnalysisTemplate = Field(default=AnalysisTemplate.MULTI_CONDITION)
+    treatment: Optional[str] = Field(default="")
+    control: Optional[str] = Field(default="")
     organism: Organism = Field(default=Organism.HUMAN)
     remove_razor: bool = Field(default=False)
     strict_filtering: bool = Field(default=False)
@@ -99,9 +96,6 @@ class AnalysisConfig(BaseModel):
     msstats_censored_int: str = Field(default="NA")
     msstats_max_quantile: float = Field(default=0.999)
     msstats_remove50missing: bool = Field(default=False)
-
-    # DEqMS-specific parameters
-    deqms_fit_method: str = Field(default="loess")
 
     @field_validator("control")
     @classmethod

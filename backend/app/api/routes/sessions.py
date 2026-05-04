@@ -10,8 +10,13 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.models.session import (
-    Session, SessionCreate, SessionUpdate, SessionSummary,
-    SessionState, SessionConfig, SessionFiles,
+    Session,
+    SessionCreate,
+    SessionUpdate,
+    SessionSummary,
+    SessionState,
+    SessionConfig,
+    SessionFiles,
     VisualizationStateUpdate,
 )
 from app.api.deps import get_session_store
@@ -22,8 +27,7 @@ router = APIRouter()
 
 @router.post("", response_model=Session, status_code=status.HTTP_201_CREATED)
 async def create_session(
-    data: SessionCreate,
-    store: SessionStore = Depends(get_session_store)
+    data: SessionCreate, store: SessionStore = Depends(get_session_store)
 ):
     """Create a new analysis session."""
     session = Session(
@@ -34,9 +38,9 @@ async def create_session(
         config=None,
         files=SessionFiles(),
         created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
+        updated_at=datetime.now(timezone.utc),
     )
-    
+
     await store.create(session)
     return session
 
@@ -52,7 +56,7 @@ async def list_sessions(store: SessionStore = Depends(get_session_store)):
             state=s.state,
             created_at=s.created_at,
             updated_at=s.updated_at,
-            has_results=s.state == SessionState.COMPLETED
+            has_results=s.state == SessionState.COMPLETED,
         )
         for s in sessions
     ]
@@ -60,15 +64,14 @@ async def list_sessions(store: SessionStore = Depends(get_session_store)):
 
 @router.get("/{session_id}", response_model=Session)
 async def get_session(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store)
+    session_id: str, store: SessionStore = Depends(get_session_store)
 ):
     """Get a specific session."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
     return session
 
@@ -77,30 +80,29 @@ async def get_session(
 async def update_session(
     session_id: str,
     data: SessionUpdate,
-    store: SessionStore = Depends(get_session_store)
+    store: SessionStore = Depends(get_session_store),
 ):
     """Update a session."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
-    
+
     # Update fields
     if data.name is not None:
         session.name = data.name
     if data.config is not None:
         session.config = data.config
-    
+
     await store.update(session)
     return session
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_session(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store)
+    session_id: str, store: SessionStore = Depends(get_session_store)
 ):
     """Delete a session and all its data."""
     try:
@@ -108,7 +110,7 @@ async def delete_session(
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
     return None
 
@@ -118,21 +120,21 @@ async def delete_session(
 async def update_session_config(
     session_id: str,
     config: SessionConfig,
-    store: SessionStore = Depends(get_session_store)
+    store: SessionStore = Depends(get_session_store),
 ):
     """Update session configuration."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
-    
+
     # Update session
     session.config = config
     session.state = SessionState.CONFIGURING
     await store.update(session)
-    
+
     return session
 
 
@@ -140,14 +142,14 @@ async def update_session_config(
 async def update_visualization_state(
     session_id: str,
     data: VisualizationStateUpdate,
-    store: SessionStore = Depends(get_session_store)
+    store: SessionStore = Depends(get_session_store),
 ):
     """Update visualization state (markers and/or volcano filters) for a session."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
 
     if data.markers is not None:
@@ -157,5 +159,3 @@ async def update_visualization_state(
 
     await store.update(session)
     return session
-
-

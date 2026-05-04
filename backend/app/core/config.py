@@ -12,6 +12,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # Pipeline constants
+# MIN_PROTEOMICS_FILES enforces a stricter check (3 replicates × 2 conditions = 6 minimum)
+# than session_manager.py's per-condition validation. This provides defense-in-depth
+# for the most common experimental design while still allowing the per-condition
+# validator to handle edge cases with more conditions.
 MIN_PROTEOMICS_FILES = 6  # At least 3 per condition, 2 conditions
 
 
@@ -26,8 +30,10 @@ class Settings(BaseSettings):
     )
 
     # Application settings
-    app_name: str = Field(default="Proteomics Visualization API", description="Application name")
-    app_version: str = Field(default="1.0.0", description="Application version")
+    app_name: str = Field(
+        default="Proteomics Visualization API", description="Application name"
+    )
+    app_version: str = Field(default="1.0.0", description="Application version (sync with git tags on release)")
     debug: bool = Field(default=False, description="Debug mode")
 
     # Server settings

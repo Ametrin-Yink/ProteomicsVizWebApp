@@ -3,8 +3,8 @@
 ## R Integration
 
 - **NEVER use rpy2** — Always use `subprocess.run(['Rscript', ...])`
-- **REQUIRED packages:** msqrob2, QFeatures, limma
-- **Verify:** `Rscript -e "library(msqrob2); library(QFeatures); library(limma); cat('OK\n')"`
+- **REQUIRED packages:** msqrob2, QFeatures, limma, MSstats
+- **Verify:** `Rscript -e "library(msqrob2); library(QFeatures); library(limma); library(MSstats); cat('OK\n')"`
 - **Encoding:** UTF-8 with latin-1 fallback for R subprocess output
 
 ## File Patterns (IMMUTABLE)

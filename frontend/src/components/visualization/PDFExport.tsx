@@ -116,7 +116,8 @@ async function capturePlotWithFonts(
       format: 'png', width: w, height: h, scale: 1,
     });
     return img;
-  } catch {
+  } catch (err) {
+    console.error('Failed to capture plot with fonts:', err);
     return null;
   } finally {
     Plotly?.purge(container);
@@ -144,7 +145,8 @@ async function capturePlotFromIframe(
     if (!gd || !gd.data || !gd.layout) return null;
 
     return await capturePlotWithFonts(Plotly, gd.data, gd.layout);
-  } catch {
+  } catch (err) {
+    console.error('Failed to capture plot from iframe:', err);
     return null;
   }
 }
@@ -174,7 +176,9 @@ async function _captureAllFromIframe(
 
       const img = await capturePlotWithFonts(Plotly, gd.data, gd.layout);
       if (img) images.push(img);
-    } catch { /* skip */ }
+    } catch (err) {
+      console.error('Failed to capture plot in _captureAllFromIframe:', err);
+    }
   }
   return images;
 }
@@ -220,7 +224,9 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
               const img = await capturePlotWithFonts(window.Plotly, gd.data, gd.layout, 'full');
               if (img) images['volcano_plot'] = [img];
             }
-          } catch { /* skip */ }
+          } catch (err) {
+            console.error('Failed to capture volcano plot:', err);
+          }
         }
       }
       setProgress(15);
@@ -231,29 +237,32 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       qcIframe.src = `${baseUrl}/analysis/visualization/qc?session_id=${sessionId}`;
       document.body.appendChild(qcIframe);
 
-      await new Promise<void>((resolve) => {
-        qcIframe.onload = () => resolve();
-        setTimeout(() => resolve(), 30000);
-      });
-      setProgress(35);
+      try {
+        await new Promise<void>((resolve) => {
+          qcIframe.onload = () => resolve();
+          setTimeout(() => resolve(), 30000);
+        });
+        setProgress(35);
 
-      const qcSelectors: Record<string, string> = {
-        'qc_pca': '[data-testid="pca-plot"]',
-        'qc_pvalue': '[data-testid="pvalue-plot"]',
-        'qc_psm_cv': '[data-testid="psm-cv-plot"]',
-        'qc_protein_cv': '[data-testid="protein-cv-plot"]',
-        'qc_psm_intensity': '[data-testid="psm-intensity-plot"]',
-        'qc_protein_intensity': '[data-testid="protein-intensity-plot"]',
-        'qc_completeness': '[data-testid="completeness-plot"]',
-        'qc_psm_completeness': '[data-testid="psm-completeness-plot"]',
-      };
+        const qcSelectors: Record<string, string> = {
+          'qc_pca': '[data-testid="pca-plot"]',
+          'qc_pvalue': '[data-testid="pvalue-plot"]',
+          'qc_psm_cv': '[data-testid="psm-cv-plot"]',
+          'qc_protein_cv': '[data-testid="protein-cv-plot"]',
+          'qc_psm_intensity': '[data-testid="psm-intensity-plot"]',
+          'qc_protein_intensity': '[data-testid="protein-intensity-plot"]',
+          'qc_completeness': '[data-testid="completeness-plot"]',
+          'qc_psm_completeness': '[data-testid="psm-completeness-plot"]',
+        };
 
-      for (const [key, selector] of Object.entries(qcSelectors)) {
-        const img = await capturePlotFromIframe(qcIframe, selector);
-        if (img) images[key] = [img];
+        for (const [key, selector] of Object.entries(qcSelectors)) {
+          const img = await capturePlotFromIframe(qcIframe, selector);
+          if (img) images[key] = [img];
+        }
+        setProgress(55);
+      } finally {
+        removeIframe(qcIframe);
       }
-      setProgress(55);
-      removeIframe(qcIframe);
 
       // 3. Capture GSEA dashboard from hidden iframe
       const gseaIframe = document.createElement('iframe');
@@ -261,16 +270,19 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       gseaIframe.src = `${baseUrl}/analysis/visualization/gsea?session_id=${sessionId}`;
       document.body.appendChild(gseaIframe);
 
-      await new Promise<void>((resolve) => {
-        gseaIframe.onload = () => resolve();
-        setTimeout(() => resolve(), 30000);
-      });
-      setProgress(75);
+      try {
+        await new Promise<void>((resolve) => {
+          gseaIframe.onload = () => resolve();
+          setTimeout(() => resolve(), 30000);
+        });
+        setProgress(75);
 
-      const gseaImg = await capturePlotFromIframe(gseaIframe, '[data-testid="gsea-overview"]');
-      if (gseaImg) images['gsea_dashboard'] = [gseaImg];
-      setProgress(85);
-      removeIframe(gseaIframe);
+        const gseaImg = await capturePlotFromIframe(gseaIframe, '[data-testid="gsea-overview"]');
+        if (gseaImg) images['gsea_dashboard'] = [gseaImg];
+        setProgress(85);
+      } finally {
+        removeIframe(gseaIframe);
+      }
 
       // 4. Read current filter settings
       let filters = { foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 };

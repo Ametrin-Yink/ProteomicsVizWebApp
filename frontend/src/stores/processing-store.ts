@@ -6,8 +6,9 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { generateId } from '@/lib/utils';
 import {
-  ProcessingStep,
+  ProcessingStepDef,
   LogEntry,
   ProcessingError,
   PROCESSING_STEPS,
@@ -19,7 +20,7 @@ import {
 
 interface ProcessingStore {
   // State
-  steps: ProcessingStep[];
+  steps: ProcessingStepDef[];
   logs: LogEntry[];
   overallProgress: number;
   isConnected: boolean;
@@ -51,11 +52,8 @@ interface ProcessingStore {
   retry: () => void;
 }
 
-const generateLogId = (): string => {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-};
 
-const createInitialSteps = (removeRazor: boolean = true): ProcessingStep[] => {
+const createInitialSteps = (removeRazor: boolean = true): ProcessingStepDef[] => {
   return PROCESSING_STEPS
     .filter((step) => step.id !== 3 || removeRazor)
     .map((step) => ({
@@ -106,7 +104,7 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Update step progress from WebSocket message
     updateStepProgress: (message: ProgressMessage['payload']) => {
       set((state) => {
-        const stepIndex = state.steps.findIndex((step: ProcessingStep) => step.id === message.step);
+        const stepIndex = state.steps.findIndex((step: ProcessingStepDef) => step.id === message.step);
         if (stepIndex === -1) return;
 
         const step = state.steps[stepIndex];
@@ -142,7 +140,7 @@ export const useProcessingStore = create<ProcessingStore>()(
     addLog: (message: LogMessage['payload']) => {
       set((state) => {
         const logEntry: LogEntry = {
-          id: generateLogId(),
+          id: generateId(),
           level: message.level,
           message: message.message,
           timestamp: message.timestamp,
@@ -155,8 +153,8 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Set multiple logs (for loading historical logs)
     setLogs: (logs: LogEntry[]) => {
       set((state) => {
-        const existingKeys = new Set(state.logs.map(l => `${l.step}-${l.message}`));
-        const newLogs = logs.filter(l => !existingKeys.has(`${l.step}-${l.message}`));
+        const existingKeys = new Set(state.logs.map(l => `${l.step}-${l.level}-${l.message}`));
+        const newLogs = logs.filter(l => !existingKeys.has(`${l.step}-${l.level}-${l.message}`));
         state.logs.push(...newLogs);
       });
     },
@@ -173,7 +171,7 @@ export const useProcessingStore = create<ProcessingStore>()(
         };
 
         // Update step status to error
-        const stepIndex = state.steps.findIndex((step: ProcessingStep) => step.id === message.step);
+        const stepIndex = state.steps.findIndex((step: ProcessingStepDef) => step.id === message.step);
         if (stepIndex !== -1) {
           state.steps[stepIndex].status = 'error';
         }
@@ -188,7 +186,7 @@ export const useProcessingStore = create<ProcessingStore>()(
         state.processingDuration = message.duration;
 
         // Mark all steps as completed
-        state.steps.forEach((step: ProcessingStep) => {
+        state.steps.forEach((step: ProcessingStepDef) => {
           if (step.status !== 'error') {
             step.status = 'completed';
             step.progress = 100;
@@ -220,7 +218,7 @@ export const useProcessingStore = create<ProcessingStore>()(
         // actual processing activity is detected (via WebSocket or logs)
         // Mark completed steps
         for (const stepNum of completedSteps) {
-          const step = state.steps.find((s: ProcessingStep) => s.id === stepNum);
+          const step = state.steps.find((s: ProcessingStepDef) => s.id === stepNum);
           if (step && step.status !== 'completed') {
             step.status = 'completed';
             step.progress = 100;
@@ -228,14 +226,14 @@ export const useProcessingStore = create<ProcessingStore>()(
         }
         // Mark current step as in_progress
         if (currentStep > 0) {
-          const current = state.steps.find((s: ProcessingStep) => s.id === currentStep);
+          const current = state.steps.find((s: ProcessingStepDef) => s.id === currentStep);
           if (current && current.status === 'not_started') {
             current.status = 'in_progress';
             current.progress = 50;
           }
         }
         // Update overall progress based on completed steps
-        const completedCount = state.steps.filter((s: ProcessingStep) => s.status === 'completed').length;
+        const completedCount = state.steps.filter((s: ProcessingStepDef) => s.status === 'completed').length;
         state.overallProgress = state.steps.length > 0
           ? Math.round((completedCount / state.steps.length) * 100)
           : 0;
@@ -283,7 +281,10 @@ export const useProcessingStore = create<ProcessingStore>()(
         state.error = null;
         state.isComplete = false;
         state.isCancelled = false;
-        state.steps.forEach((step: ProcessingStep) => {
+        state.isQueued = false;
+        state.queuePosition = 0;
+        state.queueLength = 0;
+        state.steps.forEach((step: ProcessingStepDef) => {
           step.status = 'not_started';
           step.progress = 0;
           step.message = undefined;

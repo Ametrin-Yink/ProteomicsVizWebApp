@@ -18,15 +18,15 @@ from app.services.qc_calculator import QCCalculator
 from app.services.session_manager import session_manager, SessionManager
 
 __all__ = [
-    'report_generator',
-    'ReportGenerator',
-    'compound_service',
-    'CompoundService',
-    'plot_generator',
-    'PlotGenerator',
-    'DataProcessor',
-    'process_psm_files',
-    'QCCalculator',
-    'session_manager',
-    'SessionManager',
+    "report_generator",
+    "ReportGenerator",
+    "compound_service",
+    "CompoundService",
+    "plot_generator",
+    "PlotGenerator",
+    "DataProcessor",
+    "process_psm_files",
+    "QCCalculator",
+    "session_manager",
+    "SessionManager",
 ]

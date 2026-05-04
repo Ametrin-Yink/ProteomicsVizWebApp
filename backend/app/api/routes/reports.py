@@ -32,7 +32,7 @@ async def generate_report(
     session_id: str,
     report_request: Optional[ReportRequest] = None,
     background_tasks: BackgroundTasks = None,
-    session_manager: SessionManager = Depends(get_session_manager)
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     Generate PDF report for a session.
@@ -54,7 +54,7 @@ async def generate_report(
         if session.state.value != "completed":
             raise HTTPException(
                 status_code=400,
-                detail="Analysis must be completed before generating report"
+                detail="Analysis must be completed before generating report",
             )
 
         # Use default report request if not provided
@@ -63,6 +63,7 @@ async def generate_report(
 
         # Generate report ID
         import uuid
+
         report_id = str(uuid.uuid4())
 
         # Determine output path
@@ -71,11 +72,7 @@ async def generate_report(
         output_path = results_dir / f"report_{report_id}.pdf"
 
         # Create initial status
-        status = ReportStatus(
-            report_id=report_id,
-            status="generating",
-            progress=0
-        )
+        status = ReportStatus(report_id=report_id, status="generating", progress=0)
 
         # Generate report (can be async in background)
         try:
@@ -90,18 +87,24 @@ async def generate_report(
             generated_path = await report_generator.generate_report_from_files(
                 session=session,
                 diff_expression_path=diff_expression_path,
-                protein_abundances_path=protein_abundances_path if protein_abundances_path.exists() else None,
+                protein_abundances_path=protein_abundances_path
+                if protein_abundances_path.exists()
+                else None,
                 qc_data_path=qc_data_path if qc_data_path.exists() else None,
-                gsea_results_path=gsea_results_path if gsea_results_path.exists() else None,
+                gsea_results_path=gsea_results_path
+                if gsea_results_path.exists()
+                else None,
                 output_path=output_path,
-                report_request=report_request
+                report_request=report_request,
             )
 
             # Update status
             status.status = "completed"
             status.progress = 100
             status.completed_at = datetime.now(timezone.utc)
-            status.download_url = f"/api/sessions/{session_id}/reports/{report_id}/download"
+            status.download_url = (
+                f"/api/sessions/{session_id}/reports/{report_id}/download"
+            )
 
             logger.info(f"Report generated: {generated_path}")
 
@@ -124,7 +127,7 @@ async def generate_report(
 async def download_report(
     session_id: str,
     report_id: str,
-    session_manager: SessionManager = Depends(get_session_manager)
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     Download generated PDF report.
@@ -160,9 +163,7 @@ async def download_report(
             report_filename = f"proteomics_report_{session_id}.pdf"
 
         return FileResponse(
-            path=report_path,
-            media_type="application/pdf",
-            filename=report_filename
+            path=report_path, media_type="application/pdf", filename=report_filename
         )
 
     except SessionNotFoundError:
@@ -176,8 +177,7 @@ async def download_report(
 
 @router.get("/{session_id}/reports")
 async def list_reports(
-    session_id: str,
-    session_manager: SessionManager = Depends(get_session_manager)
+    session_id: str, session_manager: SessionManager = Depends(get_session_manager)
 ):
     """
     List all reports for a session.
@@ -205,13 +205,15 @@ async def list_reports(
             # Get file stats
             stat = report_file.stat()
 
-            reports.append({
-                "report_id": report_id,
-                "filename": report_file.name,
-                "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                "download_url": f"/api/sessions/{session_id}/reports/{report_id}/download"
-            })
+            reports.append(
+                {
+                    "report_id": report_id,
+                    "filename": report_file.name,
+                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                    "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "download_url": f"/api/sessions/{session_id}/reports/{report_id}/download",
+                }
+            )
 
         # Sort by creation time (newest first)
         reports.sort(key=lambda x: x["created_at"], reverse=True)
@@ -225,12 +227,11 @@ async def list_reports(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @router.delete("/{session_id}/reports/{report_id}")
 async def delete_report(
     session_id: str,
     report_id: str,
-    session_manager: SessionManager = Depends(get_session_manager)
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     Delete a report.

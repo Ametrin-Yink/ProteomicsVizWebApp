@@ -12,6 +12,7 @@ import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { TopNavigation } from '@/components/layout/TopNavigation';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
 // Load Plus Jakarta Sans font
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -51,11 +52,14 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <SidebarProvider>
           {/* Top Navigation Bar */}
           <TopNavigation />
-          
+
           {/* Main Layout Container */}
           <div className="flex h-screen pt-14">
             {children}
           </div>
+
+          {/* Toast notifications */}
+          <ToastProvider />
         </SidebarProvider>
       </body>
     </html>

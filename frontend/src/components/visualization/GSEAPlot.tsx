@@ -225,7 +225,7 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
       },
       yaxis2: { domain: [0, 0.2], showgrid: false, zeroline: false, showticklabels: false },
       ...(hasHeatmap ? {
-        xaxis2: { domain: heatmapDomain, showgrid: false, tickangle: -45, tickfont: { size: 8 }, matches: 'x' },
+        xaxis2: { domain: heatmapDomain, showgrid: false, tickangle: -45, tickfont: { size: 8 } },
         yaxis3: { domain: [0.3, 1], anchor: 'x2', showgrid: false, tickfont: { size: 8 }, autorange: 'reversed' },
       } : {}),
       plot_bgcolor: '#FFFFFF',

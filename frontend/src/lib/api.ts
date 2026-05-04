@@ -61,18 +61,19 @@ export async function getSession(
     adjPValue: number;
     s0: number;
   };
-} | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) return null;
-    const wrapper = await response.json();
-    // Backend wraps session responses in { data, meta }
-    return wrapper.data || wrapper;
-  } catch {
-    return null;
+}> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: { message: 'Failed to fetch session', code: 'UNKNOWN_ERROR' },
+    }));
+    throw new Error(error.error?.message || `HTTP ${response.status}`);
   }
+  const wrapper = await response.json();
+  // Backend wraps session responses in { data, meta }
+  return wrapper.data || wrapper;
 }
 
 // Results API

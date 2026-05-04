@@ -20,7 +20,7 @@ class AppException(Exception):
         self,
         message: str,
         details: Optional[dict] = None,
-        request_id: Optional[str] = None
+        request_id: Optional[str] = None,
     ):
         self.message = message
         self.details = details or {}
@@ -68,7 +68,7 @@ class ProcessingError(AppException):
         step: int,
         recoverable: bool = True,
         details: Optional[dict] = None,
-        request_id: Optional[str] = None
+        request_id: Optional[str] = None,
     ):
         super().__init__(message, details, request_id)
         self.step = step

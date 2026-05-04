@@ -1,10 +1,15 @@
 """Step 6: Protein abundance calculation (msqrob2)."""
+
 import asyncio
 import logging
 import pandas as pd
 from app.services.msqrob2_wrapper import msqrob2_wrapper
 from app.services.pipeline_engine import StepContext
-from app.services.steps._helpers import create_log_callback, get_gene_mapping, get_psm_input
+from app.services.steps._helpers import (
+    create_log_callback,
+    get_gene_mapping,
+    get_psm_input,
+)
 
 logger = logging.getLogger("proteomics")
 

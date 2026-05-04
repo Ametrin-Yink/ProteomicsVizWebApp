@@ -36,6 +36,7 @@ def create_log_callback(ctx, step: int) -> Callable:
     Returns a SYNC function safe for background thread calls.
     Uses call_soon_threadsafe to schedule WebSocket sends on the event loop.
     """
+
     def _log_callback(level: str, message: str) -> None:
         # Sync: write to pipeline state file
         if ctx.state:
@@ -43,6 +44,7 @@ def create_log_callback(ctx, step: int) -> Callable:
 
         # Async: schedule WebSocket send on the running event loop
         from app.services.session_manager import session_manager
+
         try:
             loop = asyncio.get_running_loop()
             loop.call_soon_threadsafe(

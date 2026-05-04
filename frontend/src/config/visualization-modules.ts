@@ -18,7 +18,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization',
     icon: ChartScatter,
     description: 'Differential expression volcano plot and protein table',
-    supportedTemplates: ['protein_pairwise_comparison'],
+    supportedTemplates: ['multi_condition_comparison'],
   },
   {
     id: 'qc',
@@ -26,7 +26,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization/qc',
     icon: Activity,
     description: 'Quality control plots for proteomics analysis',
-    supportedTemplates: ['protein_pairwise_comparison'],
+    supportedTemplates: ['multi_condition_comparison'],
   },
   {
     id: 'gsea',
@@ -34,7 +34,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization/gsea',
     icon: Spline,
     description: 'Gene Set Enrichment Analysis results',
-    supportedTemplates: ['protein_pairwise_comparison'],
+    supportedTemplates: ['multi_condition_comparison'],
   },
 ];
 

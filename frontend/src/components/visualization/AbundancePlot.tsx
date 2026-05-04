@@ -190,6 +190,7 @@ export function PeptideAbundancePlot({ data, title = 'Peptide Abundance' }: Pept
 
   const peptideCount = data?.peptides?.length ?? 0;
   const plotHeight = 450 + peptideCount * 12;
+  const maxPlotHeight = Math.min(plotHeight, 750);
 
   const layout = useMemo(
     () => ({
@@ -235,7 +236,8 @@ export function PeptideAbundancePlot({ data, title = 'Peptide Abundance' }: Pept
   );
 
   return (
-    <div className="w-full bg-background rounded-lg border border-border p-2" style={{ height: `${plotHeight}px` }}>
+    <div className="w-full bg-background rounded-lg border border-border p-2"
+      style={{ height: `${plotHeight}px`, maxHeight: `${maxPlotHeight}px`, overflowY: 'auto' }}>
       <Plot
         data={plotData}
         layout={layout}

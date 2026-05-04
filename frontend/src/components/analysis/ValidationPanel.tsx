@@ -65,8 +65,8 @@ export const ValidationPanel: React.FC = () => {
   const infoWarnings = warnings.filter((w) => w.type === 'warning');
 
   // Determine status for each check
-  const experimentStatus = experiments.length === 1 ? 'valid' : experiments.length > 1 ? 'invalid' : 'neutral';
-  const conditionStatus = conditions.length === 2 ? 'valid' : conditions.length > 2 ? 'invalid' : 'neutral';
+  const experimentStatus = experiments.length === 1 ? 'valid' : experiments.length > 1 ? 'neutral' : 'neutral';
+  const conditionStatus = conditions.length >= 2 ? 'valid' : conditions.length > 0 ? 'neutral' : 'neutral';
   const replicateStatus = Object.values(replicatesByCondition).every((count) => count >= 3) 
     ? 'valid' 
     : Object.values(replicatesByCondition).some((count) => count < 3) 

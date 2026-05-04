@@ -6,15 +6,10 @@ from .remove_razor import step_remove_razor
 from .remove_low_quality import step_remove_low_quality_default
 from .filter_criteria import step_filter_criteria_default
 from .protein_abundance import step_protein_abundance_msqrob2
-from .protein_abundance_msstats import step_protein_abundance_msstats
-from .diff_expression import step_diff_expression_msqrob2
-from .diff_expression_msstats import step_diff_expression_msstats
-from .protein_abundance_deqms import step_protein_abundance_deqms
-from .diff_expression_deqms import step_diff_expression_deqms
-from .generate_unique_psm_deqms import step_generate_unique_psm_deqms
 from .qc_metrics import step_qc_metrics
 from .gsea_analysis import step_gsea_analysis
 from .group_comparison_multi import step_group_comparison_multi
+from .multi_condition_de import step_multi_condition_de
 
 __all__ = [
     "step_combine_replicates",
@@ -23,13 +18,8 @@ __all__ = [
     "step_remove_low_quality_default",
     "step_filter_criteria_default",
     "step_protein_abundance_msqrob2",
-    "step_protein_abundance_msstats",
-    "step_diff_expression_msqrob2",
-    "step_diff_expression_msstats",
-    "step_protein_abundance_deqms",
-    "step_diff_expression_deqms",
-    "step_generate_unique_psm_deqms",
     "step_qc_metrics",
     "step_gsea_analysis",
     "step_group_comparison_multi",
+    "step_multi_condition_de",
 ]

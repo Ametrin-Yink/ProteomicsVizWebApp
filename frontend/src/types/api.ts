@@ -56,7 +56,6 @@ export interface SessionConfig {
   msstats_censored_int?: string;
   msstats_max_quantile?: number;
   msstats_remove50missing?: boolean;
-  deqms_fit_method?: string;
 }
 
 export interface SessionFiles {

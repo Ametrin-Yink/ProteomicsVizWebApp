@@ -93,14 +93,14 @@ class TestValidatePsmColumns:
     def valid_columns(self):
         """Return valid column set for PSM CSV."""
         return [
-            'Sequence',
-            'Modifications',
-            'Charge',
-            'Contaminant',
-            'Master Protein Accessions',
-            'Quan Info',
-            'Abundance F1 Sample',
-            'Abundance F2 Sample',
+            "Sequence",
+            "Modifications",
+            "Charge",
+            "Contaminant",
+            "Master Protein Accessions",
+            "Quan Info",
+            "Abundance F1 Sample",
+            "Abundance F2 Sample",
         ]
 
     def test_validate_all_required_columns_present(self, valid_columns):
@@ -122,7 +122,7 @@ class TestValidatePsmColumns:
 
     def test_validate_missing_abundance_column(self, valid_columns):
         """Reject CSV missing abundance columns."""
-        columns = [c for c in valid_columns if not c.startswith('Abundance')]
+        columns = [c for c in valid_columns if not c.startswith("Abundance")]
         df = pd.DataFrame(columns=columns)
 
         with pytest.raises(InvalidFileFormatError) as exc_info:
@@ -136,21 +136,21 @@ class TestFindAbundanceColumn:
 
     def test_find_single_abundance_column(self):
         """Extract single abundance column."""
-        columns = ['Sequence', 'Abundance F1 Sample', 'Charge']
+        columns = ["Sequence", "Abundance F1 Sample", "Charge"]
         result = find_abundance_column(columns)
 
-        assert result == 'Abundance F1 Sample'
+        assert result == "Abundance F1 Sample"
 
     def test_find_multiple_abundance_columns_returns_first(self):
         """Extract first abundance column when multiple exist."""
-        columns = ['Sequence', 'Abundance F1 Sample', 'Abundance F2 Sample', 'Charge']
+        columns = ["Sequence", "Abundance F1 Sample", "Abundance F2 Sample", "Charge"]
         result = find_abundance_column(columns)
 
-        assert result == 'Abundance F1 Sample'
+        assert result == "Abundance F1 Sample"
 
     def test_find_no_abundance_columns_raises_error(self):
         """Raise error when no abundance columns."""
-        columns = ['Sequence', 'Charge', 'Modifications']
+        columns = ["Sequence", "Charge", "Modifications"]
 
         with pytest.raises(InvalidFileFormatError):
             find_abundance_column(columns)
@@ -158,13 +158,13 @@ class TestFindAbundanceColumn:
     def test_find_abundance_with_various_codes(self):
         """Extract abundance column with various F codes."""
         columns = [
-            'Sequence',
-            'Abundance F100 Sample',
-            'Charge',
+            "Sequence",
+            "Abundance F100 Sample",
+            "Charge",
         ]
         result = find_abundance_column(columns)
 
-        assert result == 'Abundance F100 Sample'
+        assert result == "Abundance F100 Sample"
 
 
 class TestSanitizeFilename:

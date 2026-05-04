@@ -289,7 +289,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
 
       {/* Multi-Condition: Metadata Grid */}
       {template === "multi_condition_comparison" && (
-        <div className="space-y-4 mt-4 p-4 bg-surface rounded-lg">
+        <div data-testid="metadata-grid" className="space-y-4 mt-4 p-4 bg-surface rounded-lg">
           <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
             <span className="w-2 h-2 bg-primary rounded-full"></span>
             Sample Metadata
@@ -393,7 +393,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
 
       {/* Multi-Condition: Comparison Matrix */}
       {template === "multi_condition_comparison" && (
-        <div className="space-y-4 mt-4 p-4 bg-surface rounded-lg">
+        <div data-testid="comparison-matrix" className="space-y-4 mt-4 p-4 bg-surface rounded-lg">
           <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
             <span className="w-2 h-2 bg-primary rounded-full"></span>
             Comparisons
@@ -558,89 +558,6 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
               <option value={10}>10</option>
               <option value={0}>Natural log (e)</option>
             </select>
-          </div>
-        </div>
-      )}
-
-      {/* MSstats Options (pairwise) */}
-      {template === "msstats_pairwise_comparison" && (
-        <div className="space-y-4 mt-4">
-          <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
-            <span className="w-2 h-2 bg-primary rounded-full"></span>
-            MSstats Options
-          </h4>
-
-          {/* Normalization Method */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Normalization</label>
-            <select
-              value={config.msstats_normalization || "equalizeMedians"}
-              onChange={(e) => setConfig({ msstats_normalization: e.target.value })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value="equalizeMedians">Equalize Medians (default)</option>
-              <option value="quantile">Quantile</option>
-            </select>
-          </div>
-
-          {/* Feature Selection */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Feature Selection</label>
-            <select
-              value={config.msstats_feature_selection || "all"}
-              onChange={(e) => setConfig({ msstats_feature_selection: e.target.value })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value="all">All Features (default)</option>
-              <option value="top3">Top 3 Features</option>
-            </select>
-          </div>
-
-          {/* Summary Method */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Summary Method</label>
-            <select
-              value={config.msstats_summary_method || "TMP"}
-              onChange={(e) => setConfig({ msstats_summary_method: e.target.value })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value="TMP">Tukey Median Polish (default)</option>
-              <option value="linear">Linear Mixed Model</option>
-            </select>
-          </div>
-
-          {/* Imputation Toggle */}
-          <div>
-            <Toggle
-              checked={config.msstats_impute ?? true}
-              onChange={(checked) => setConfig({ msstats_impute: checked })}
-              label="Missing Value Imputation"
-              description="Use accelerated failure model to impute missing values. Recommended for most analyses."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* DEqMS Options */}
-      {template === "deqms_pairwise_comparison" && (
-        <div className="space-y-4 mt-4">
-          <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
-            <span className="w-2 h-2 bg-primary rounded-full"></span>
-            DEqMS Options
-          </h4>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Variance Fit Method</label>
-            <select
-              value={config.deqms_fit_method || "loess"}
-              onChange={(e) => setConfig({ deqms_fit_method: e.target.value })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value="loess">LOESS (default, recommended)</option>
-              <option value="nls">Non-linear Least Squares</option>
-              <option value="spline">Spline</option>
-            </select>
-            <p className="text-xs text-text-muted">Method for modeling the relationship between variance and spectral count. LOESS is robust and recommended for most datasets.</p>
           </div>
         </div>
       )}

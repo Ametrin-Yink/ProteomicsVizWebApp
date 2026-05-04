@@ -20,9 +20,9 @@ cat("R packages loaded successfully\n")
 # Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 6) {
+if (length(args) < 7) {
     stop(paste("Usage: Rscript msstats_group_comparison_multi.R <rds_file> <output_dir>",
-               "<comparisons_json> <covariates_json> <gene_mapping_file> <num_cores>"))
+               "<comparisons_json> <covariates_json> <gene_mapping_file> <num_cores> <log_base>"))
 }
 
 rds_file        <- args[1]
@@ -31,6 +31,7 @@ comparisons_json <- args[3]
 covariates_json <- if (nzchar(args[4])) args[4] else "{}"
 gene_mapping_file <- if (nzchar(args[5])) args[5] else NULL
 num_cores       <- as.integer(args[6])
+log_base        <- if (length(args) >= 7 && nzchar(args[7])) as.numeric(args[7]) else 2
 
 cat("Step 7: Running multi-condition differential expression with MSstats\n")
 cat("Arguments received:", length(args), "\n")
@@ -117,7 +118,7 @@ group_comp <- tryCatch({
     MSstats::groupComparison(
         contrast.matrix = contrast_matrix,
         data = processed,
-        log_base = 2,
+        log_base = log_base,
         numberOfCores = num_cores,
         use_log_file = FALSE,
         verbose = FALSE

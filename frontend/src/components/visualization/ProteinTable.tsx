@@ -205,7 +205,7 @@ export default function ProteinTable({
             data-testid="export-csv-btn"
           >
             <Download className="w-4 h-4" />
-            Export Current Page
+            Export All
           </button>
         </div>
       </div>
@@ -264,9 +264,9 @@ export default function ProteinTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {paginatedData.map((item) => (
+            {paginatedData.map((item, index) => (
               <tr
-                key={item.master_protein_accessions}
+                key={`${item.master_protein_accessions}-${index}`}
                 onClick={() => onSelectProtein(item)}
                 className={`cursor-pointer hover:bg-primary/5 transition-colors ${
                   selectedProteins.has(item.master_protein_accessions)

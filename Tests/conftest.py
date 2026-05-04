@@ -24,6 +24,7 @@ def client():
     """Create FastAPI test client."""
     from app.main import app
     from fastapi.testclient import TestClient
+
     return TestClient(app)
 
 
@@ -45,52 +46,65 @@ def temp_session_dir(tmp_path: Path) -> Generator[Path, None, None]:
 @pytest.fixture
 def sample_psm_data() -> pd.DataFrame:
     """Create sample PSM data for testing."""
-    return pd.DataFrame({
-        'Sequence': ['PEPTIDE1', 'PEPTIDE2', 'PEPTIDE3'],
-        'Modifications': ['', 'Oxidation', ''],
-        'Charge': [2, 3, 2],
-        'Contaminant': [False, False, False],
-        'Master Protein Accessions': ['P12345', 'P67890', 'P11111'],
-        'Quan Info': ['Valid', 'Valid', 'Valid'],
-        'Abundance F1 Sample': [1000.0, 2000.0, 1500.0],
-        'Abundance F2 Sample': [1100.0, 2100.0, 1600.0],
-    })
+    return pd.DataFrame(
+        {
+            "Sequence": ["PEPTIDE1", "PEPTIDE2", "PEPTIDE3"],
+            "Modifications": ["", "Oxidation", ""],
+            "Charge": [2, 3, 2],
+            "Contaminant": [False, False, False],
+            "Master Protein Accessions": ["P12345", "P67890", "P11111"],
+            "Quan Info": ["Valid", "Valid", "Valid"],
+            "Abundance F1 Sample": [1000.0, 2000.0, 1500.0],
+            "Abundance F2 Sample": [1100.0, 2100.0, 1600.0],
+        }
+    )
 
 
 @pytest.fixture
 def sample_protein_abundance() -> pd.DataFrame:
     """Create sample protein abundance data."""
-    return pd.DataFrame({
-        'Protein': ['P12345', 'P67890', 'P11111', 'P22222', 'P33333'],
-        'DMSO_1': [1000.0, 2000.0, 1500.0, 1200.0, 1800.0],
-        'DMSO_2': [1100.0, 2100.0, 1600.0, 1300.0, 1900.0],
-        'DMSO_3': [1050.0, 2050.0, 1550.0, 1250.0, 1850.0],
-        'INCZ_1': [2000.0, 2000.0, 1500.0, 1200.0, 1800.0],
-        'INCZ_2': [2100.0, 2100.0, 1600.0, 1300.0, 1900.0],
-        'INCZ_3': [2050.0, 2050.0, 1550.0, 1250.0, 1850.0],
-    }).set_index('Protein')
+    return pd.DataFrame(
+        {
+            "Protein": ["P12345", "P67890", "P11111", "P22222", "P33333"],
+            "DMSO_1": [1000.0, 2000.0, 1500.0, 1200.0, 1800.0],
+            "DMSO_2": [1100.0, 2100.0, 1600.0, 1300.0, 1900.0],
+            "DMSO_3": [1050.0, 2050.0, 1550.0, 1250.0, 1850.0],
+            "INCZ_1": [2000.0, 2000.0, 1500.0, 1200.0, 1800.0],
+            "INCZ_2": [2100.0, 2100.0, 1600.0, 1300.0, 1900.0],
+            "INCZ_3": [2050.0, 2050.0, 1550.0, 1250.0, 1850.0],
+        }
+    ).set_index("Protein")
 
 
 @pytest.fixture
 def sample_diff_expression() -> pd.DataFrame:
     """Create sample differential expression data."""
-    return pd.DataFrame({
-        'Master_Protein_Accessions': ['P12345', 'P67890', 'P11111', 'P22222', 'P33333'],
-        'Gene_Name': ['GENE1', 'GENE2', 'GENE3', 'GENE4', 'GENE5'],
-        'logFC': [2.0, -1.5, 0.5, 0.0, -2.0],
-        'pval': [0.001, 0.01, 0.5, 0.8, 0.0001],
-        'adjPval': [0.005, 0.05, 0.6, 0.9, 0.001],
-    })
+    return pd.DataFrame(
+        {
+            "Master_Protein_Accessions": [
+                "P12345",
+                "P67890",
+                "P11111",
+                "P22222",
+                "P33333",
+            ],
+            "Gene_Name": ["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"],
+            "logFC": [2.0, -1.5, 0.5, 0.0, -2.0],
+            "pval": [0.001, 0.01, 0.5, 0.8, 0.0001],
+            "adjPval": [0.005, 0.05, 0.6, 0.9, 0.001],
+        }
+    )
 
 
 @pytest.fixture
 def mock_session():
     """Create mock session for testing."""
     from unittest.mock import MagicMock
+
     session = MagicMock()
     session.id = "test-session-id"
     session.name = "Test Session"
-    session.template = "protein_pairwise_comparison"
+    session.template = "multi_condition_comparison"
     session.state = "created"
     session.config = None
     session.files = None
@@ -101,13 +115,12 @@ def mock_session():
 def mock_processing_state():
     """Create mock processing state."""
     return {
-        'current_step': 0,
-        'completed_steps': [],
-        'failed_step': None,
-        'error': None,
-        'outputs': {},
+        "current_step": 0,
+        "completed_steps": [],
+        "failed_step": None,
+        "error": None,
+        "outputs": {},
     }
-
 
 
 @pytest.fixture(scope="session")
@@ -121,21 +134,27 @@ def test_data_dir() -> Path:
 @pytest.fixture
 def create_test_csv(tmp_path: Path):
     """Factory fixture to create test CSV files."""
+
     def _create(filename: str, data: pd.DataFrame) -> Path:
         filepath = tmp_path / filename
         data.to_csv(filepath, index=False)
         return filepath
+
     return _create
 
 
 # Pytest hooks for custom reporting
+
 
 def pytest_configure(config):
     """Configure pytest."""
     config.addinivalue_line("markers", "slow: marks tests as slow")
     config.addinivalue_line("markers", "integration: marks tests as integration tests")
     config.addinivalue_line("markers", "unit: marks tests as unit tests")
-    config.addinivalue_line("markers", "needs_sample_data: requires real-world SampleData/ files not shipped in git")
+    config.addinivalue_line(
+        "markers",
+        "needs_sample_data: requires real-world SampleData/ files not shipped in git",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -152,7 +171,11 @@ def pytest_collection_modifyitems(config, items):
 
         # Skip tests that need SampleData when the directory is missing
         if item.get_closest_marker("needs_sample_data") and not sample_data_exists:
-            item.add_marker(pytest.mark.skip(reason="SampleData/ not found — add real PSM files to run this test"))
+            item.add_marker(
+                pytest.mark.skip(
+                    reason="SampleData/ not found — add real PSM files to run this test"
+                )
+            )
 
 
 def pytest_runtest_makereport(item, call):

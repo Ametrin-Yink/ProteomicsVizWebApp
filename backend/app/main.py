@@ -14,7 +14,15 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import sessions, upload, analysis, processing, visualization, reports, compounds
+from app.api.routes import (
+    sessions,
+    upload,
+    analysis,
+    processing,
+    visualization,
+    reports,
+    compounds,
+)
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.session_store import SessionStore
@@ -34,9 +42,10 @@ async def lifespan(app: FastAPI):
     if sys.platform == "win32":
         try:
             import socket
+
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(0.5)
-                result = s.connect_ex(('127.0.0.1', settings.port))
+                result = s.connect_ex(("127.0.0.1", settings.port))
                 if result == 0:
                     logger.warning(
                         f"Port {settings.port} is already in use — "
@@ -63,12 +72,16 @@ async def lifespan(app: FastAPI):
     try:
         await asyncio.wait_for(
             app.state.session_manager.scan_existing_sessions(),
-            timeout=30.0  # 30 second timeout for session scanning
+            timeout=30.0,  # 30 second timeout for session scanning
         )
     except asyncio.TimeoutError:
-        logger.warning("Session scanning timed out after 30 seconds - continuing with empty session list")
+        logger.warning(
+            "Session scanning timed out after 30 seconds - continuing with empty session list"
+        )
     except Exception as e:
-        logger.warning(f"Session scanning failed: {e} - continuing with empty session list")
+        logger.warning(
+            f"Session scanning failed: {e} - continuing with empty session list"
+        )
 
     # Recover orphaned sessions stuck in QUEUED or stale PROCESSING state
     try:
@@ -114,15 +127,11 @@ async def app_exception_handler(request, exc: AppException):
     response = JSONResponse(
         status_code=exc.status_code,
         content={
-            "error": {
-                "code": exc.code,
-                "message": exc.message,
-                "details": exc.details
-            }
+            "error": {"code": exc.code, "message": exc.message, "details": exc.details}
         },
     )
     # Add CORS headers to exception responses
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -138,7 +147,7 @@ async def http_exception_handler(request, exc: HTTPException):
         content={"detail": exc.detail},
     )
     # Add CORS headers to exception responses
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -152,7 +161,7 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.app_version,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -161,9 +170,12 @@ async def health_check():
 async def handle_cors_preflight(path: str):
     """Handle CORS preflight requests explicitly."""
     from fastapi.responses import Response
+
     response = Response()
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    response.headers["Access-Control-Allow-Methods"] = (
+        "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    )
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Max-Age"] = "3600"
@@ -181,11 +193,13 @@ app.include_router(reports.router, prefix="/api/sessions", tags=["reports"])
 app.include_router(compounds.router, prefix="/api/sessions", tags=["compounds"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 
+
 # Organisms endpoint
 @app.get("/api/organisms")
 async def list_organisms():
     """List available organisms from protein database."""
     from app.services.organism_scanner import OrganismScanner
+
     scanner = OrganismScanner(settings.protein_database_dir)
     organisms = scanner.scan()
     return {"organisms": organisms}
@@ -200,7 +214,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     try:
         await websocket.accept()
     except Exception as e:
-        logger.error(f"WebSocket accept failed for session {session_id}: {e}", exc_info=True)
+        logger.error(
+            f"WebSocket accept failed for session {session_id}: {e}", exc_info=True
+        )
         return
 
     try:
@@ -219,38 +235,44 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 # Receive message (ping/keepalive from client)
                 # Use a longer timeout (60s) to allow for processing time
                 # Frontend sends ping every 30s, so 60s gives enough buffer
-                data = await asyncio.wait_for(
-                    websocket.receive_text(),
-                    timeout=60
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=60)
+                logger.debug(
+                    f"Received message from session {session_id}: {data[:100]}..."
                 )
-                logger.debug(f"Received message from session {session_id}: {data[:100]}...")
 
                 # Handle ping
-                if data == "ping" or (data.startswith('{') and '"type":"ping"' in data.replace(' ', '')):
+                if data == "ping" or (
+                    data.startswith("{") and '"type":"ping"' in data.replace(" ", "")
+                ):
                     await websocket.send_text('{"type": "pong"}')
                     continue
 
                 # Handle subscribe message from frontend
-                if data.startswith('{') and '"type":"subscribe"' in data.replace(' ', ''):
+                if data.startswith("{") and '"type":"subscribe"' in data.replace(
+                    " ", ""
+                ):
                     # Subscribe message received, connection is ready
 
                     # Send current processing state if available
                     try:
                         session_store = app.state.session_store
-                        pipeline_state = await session_store.load_pipeline_state(session_id)
+                        pipeline_state = await session_store.load_pipeline_state(
+                            session_id
+                        )
                         if pipeline_state:
                             # Send historical logs first
                             logs = pipeline_state.get("logs", [])
-                            logger.info(f"Sending {len(logs)} historical logs to session {session_id}")
+                            logger.info(
+                                f"Sending {len(logs)} historical logs to session {session_id}"
+                            )
                             for log in logs:
                                 try:
-                                    log_msg = {
-                                        "type": "log",
-                                        "payload": log
-                                    }
+                                    log_msg = {"type": "log", "payload": log}
                                     await websocket.send_json(log_msg)
                                 except Exception as e:
-                                    logger.warning(f"Error sending log to session {session_id}: {e}")
+                                    logger.warning(
+                                        f"Error sending log to session {session_id}: {e}"
+                                    )
                                     break
 
                             # Send current step progress
@@ -259,7 +281,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             # Send progress for completed steps
                             for step_num in completed_steps:
                                 try:
-                                    step_display_name = STEP_DISPLAY_NAMES.get(step_num, f"Step {step_num}")
+                                    step_display_name = STEP_DISPLAY_NAMES.get(
+                                        step_num, f"Step {step_num}"
+                                    )
                                     progress_msg = {
                                         "type": "progress",
                                         "payload": {
@@ -268,12 +292,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                             "status": "completed",
                                             "progress": 100,
                                             "message": f"{step_display_name} completed",
-                                            "overall_progress": int((len(completed_steps) / 9) * 100)
-                                        }
+                                            "overall_progress": int(
+                                                (len(completed_steps) / 9) * 100
+                                            ),
+                                        },
                                     }
                                     await websocket.send_json(progress_msg)
                                 except Exception as e:
-                                    logger.warning(f"Error sending step {step_num} to session {session_id}: {e}")
+                                    logger.warning(
+                                        f"Error sending step {step_num} to session {session_id}: {e}"
+                                    )
                                     break
 
                             # Send completion message if pipeline is done
@@ -283,18 +311,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     "payload": {
                                         "session_id": session_id,
                                         "outputs": pipeline_state.get("outputs", {}),
-                                        "duration": 0
-                                    }
+                                        "duration": 0,
+                                    },
                                 }
                                 await websocket.send_json(complete_msg)
-                                logger.info(f"Sent completion message to session {session_id}")
+                                logger.info(
+                                    f"Sent completion message to session {session_id}"
+                                )
                     except Exception as e:
-                        logger.warning(f"Error sending current state for session {session_id}: {e}")
+                        logger.warning(
+                            f"Error sending current state for session {session_id}: {e}"
+                        )
 
                     continue
 
                 # Handle pong from frontend
-                if data.startswith('{') and '"type":"pong"' in data.replace(' ', ''):
+                if data.startswith("{") and '"type":"pong"' in data.replace(" ", ""):
                     continue
 
             except asyncio.TimeoutError:
@@ -308,7 +340,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 logger.info(f"WebSocket disconnected for session {session_id}")
                 break
             except Exception as e:
-                logger.warning(f"WebSocket receive error for session {session_id}: {type(e).__name__}: {e}")
+                logger.warning(
+                    f"WebSocket receive error for session {session_id}: {type(e).__name__}: {e}"
+                )
                 break
 
     except Exception as e:
@@ -319,7 +353,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         try:
             await session_manager.unregister_websocket(session_id, websocket)
         except Exception as e:
-            logger.warning(f"Error unregistering WebSocket for session {session_id}: {e}")
+            logger.warning(
+                f"Error unregistering WebSocket for session {session_id}: {e}"
+            )
         try:
             await websocket.close()
         except Exception as e:
@@ -328,6 +364,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,

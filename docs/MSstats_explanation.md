@@ -383,8 +383,8 @@ The reshape is done by parsing column names: `ExperimentName_Condition_Replicate
 | **Normalization** | Median centering (custom R code) | Built-in (equalizeMedians, quantile, globalStandards) |
 | **Missing value handling** | Filtering only | Accelerated failure model imputation (survreg) |
 | **Protein summarization** | MsCoreUtils::robustSummary (aggregateFeatures) | Tukey median polish or linear mixed model |
-| **Statistical testing** | limma (single comparison) | limma/lme4 (multiple comparisons via contrast matrix) |
-| **Experimental design** | Pairwise only (treatment vs control) | Multi-condition, time-course, repeated measures |
+| **Statistical testing** | limma (multi-condition via contrast matrix) | limma/lme4 (multiple comparisons via contrast matrix) |
+| **Experimental design** | Multi-condition (all pairwise contrasts) | Multi-condition, time-course, repeated measures |
 | **Diagnostic plots** | Separate QC pipeline | Built-in (dataProcessPlots, groupComparisonPlots, modelBasedQCPlots) |
 | **Power analysis** | Not available | Built-in (designSampleSize) |
 

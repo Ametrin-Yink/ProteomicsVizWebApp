@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import type { DEResult, ProteinAbundance, PeptideAbundanceData, VolcanoFilters } from '@/types/api';
 import { formatNumber, formatPValue, getSignificanceLabel, getVolcanoPointColor, parseDelimited } from '@/lib/utils';
 import { getProteinAbundance, getPeptideAbundance } from '@/lib/api';
-import { fetchGeneNames } from '@/lib/uniprot';
 import { ProteinAbundancePlot, PeptideAbundancePlot } from './AbundancePlot';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProteinInfoSkeleton } from '@/components/ui/Skeleton';
@@ -82,20 +81,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
     fetchAbundanceData();
   }, [protein, sessionId]);
 
-  // Fetch gene names from UniProt API for additional UniProt IDs
-  useEffect(() => {
-    if (!protein) return;
-
-    const { accessions, geneNames } = parseProteinInfo(protein);
-
-    // If we have more accessions than gene names, fetch the missing ones
-    if (accessions.length > geneNames.length) {
-      const missingIds = accessions.slice(geneNames.length);
-      fetchGeneNames(missingIds).then((fetched) => {
-        setFetchedGeneNames(new Map(Object.entries(fetched)));
-      });
-    }
-  }, [protein]);
+  // Gene names are padded to match accessions by parseProteinInfo,
+  // so no UniProt API fetch is needed here.
 
   if (isLoading) {
     return <ProteinInfoSkeleton />;

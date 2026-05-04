@@ -96,7 +96,7 @@ function defaultAnalysisConfig(override?: Partial<AnalysisConfig>): AnalysisConf
   return {
     name: '',
     description: '',
-    template: 'protein_pairwise_comparison',
+    template: 'multi_condition_comparison',
     conditions: [],
     replicates: {},
     parameters: {
@@ -149,7 +149,12 @@ export class APIError extends Error {
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type');
-  
+
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return null as T;
+  }
+
   if (!contentType?.includes('application/json')) {
     throw new APIError(
       'Invalid response format',
@@ -293,7 +298,6 @@ export const sessionsApi = {
         'Cache-Control': 'no-cache',
       },
       body: JSON.stringify(config),
-      credentials: 'omit',
     });
     return handleResponse<Session>(response);
   },
@@ -340,8 +344,19 @@ export const sessionsApi = {
   /**
    * Delete multiple sessions
    */
-  deleteMultiple: async (sessionIds: string[]): Promise<void> => {
-    await Promise.all(sessionIds.map((id) => sessionsApi.delete(id)));
+  deleteMultiple: async (sessionIds: string[]): Promise<{ succeeded: string[]; failed: { id: string; error: unknown }[] }> => {
+    const results = await Promise.allSettled(sessionIds.map((id) => sessionsApi.delete(id)));
+    const succeeded: string[] = [];
+    const failed: { id: string; error: unknown }[] = [];
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        succeeded.push(sessionIds[i]);
+      } else {
+        console.error(`Failed to delete session ${sessionIds[i]}:`, result.reason);
+        failed.push({ id: sessionIds[i], error: result.reason });
+      }
+    });
+    return { succeeded, failed };
   },
 };
 
@@ -381,7 +396,11 @@ export const uploadApi = {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Upload failed: ${response.status} ${errorText}`);
+        throw new APIError(
+          `Upload failed: ${response.status} ${errorText}`,
+          'UPLOAD_FAILED',
+          response.status
+        );
       }
 
       // Mark batch files as complete

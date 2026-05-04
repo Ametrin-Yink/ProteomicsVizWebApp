@@ -1,4 +1,5 @@
 """Step 9: GSEA analysis."""
+
 from app.services.gsea_service import GSEAService
 from app.services.pipeline_engine import StepContext
 
@@ -15,7 +16,7 @@ async def step_gsea_analysis(ctx: StepContext) -> None:
         protein_abundance_path=protein_output if protein_output.exists() else None,
     )
     # Save results — check if GSEAService has save_results method
-    if hasattr(gsea, 'save_results'):
+    if hasattr(gsea, "save_results"):
         gsea.save_results(gsea_results, gsea_output)
     ctx.result.gsea_results_path = str(gsea_output)
     ctx.step_outputs[9] = gsea_output

@@ -8,6 +8,7 @@
 # Usage: Rscript msstats_data_process.R <input_file> <output_file> <rds_output>
 #        <gene_mapping_file> <normalization> <feature_selection>
 #        <summary_method> <impute> <log_base>
+#        <censored_int> <max_quantile> <remove50missing>
 
 cat("Loading R packages...\n")
 suppressPackageStartupMessages({
@@ -20,10 +21,11 @@ cat("R packages loaded successfully\n")
 # Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 9) {
+if (length(args) < 12) {
     stop(paste("Usage: Rscript msstats_data_process.R <input_file> <output_file> <rds_output>",
                "<gene_mapping_file> <normalization> <feature_selection>",
-               "<summary_method> <impute> <log_base>"))
+               "<summary_method> <impute> <log_base>",
+               "<censored_int> <max_quantile> <remove50missing>"))
 }
 
 input_file      <- args[1]
@@ -35,6 +37,9 @@ feature_selection <- args[6]
 summary_method  <- args[7]
 impute          <- tolower(args[8]) == "true"
 log_base        <- as.integer(args[9])
+censored_int    <- if (length(args) >= 10 && nzchar(args[10])) args[10] else "NA"
+max_quantile    <- if (length(args) >= 11 && nzchar(args[11])) as.numeric(args[11]) else 0.999
+remove50missing <- if (length(args) >= 12 && nzchar(args[12])) tolower(args[12]) == "true" else FALSE
 
 cat("Step 6: Calculating protein abundance with MSstats\n")
 cat("Arguments received:", length(args), "\n")
@@ -175,6 +180,9 @@ processed <- tryCatch({
             MBimpute = impute,
             featureSubset = feature_subset,
             n_top_feature = n_top_features,
+            censoredInt = censored_int,
+            maxQuantileForCensored = max_quantile,
+            remove50missing = remove50missing,
             use_log_file = FALSE,
             verbose = FALSE
         )
@@ -186,6 +194,9 @@ processed <- tryCatch({
             summaryMethod = summary_method,
             MBimpute = impute,
             featureSubset = feature_subset,
+            censoredInt = censored_int,
+            maxQuantileForCensored = max_quantile,
+            remove50missing = remove50missing,
             use_log_file = FALSE,
             verbose = FALSE
         )

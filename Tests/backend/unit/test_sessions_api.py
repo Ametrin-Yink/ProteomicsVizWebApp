@@ -39,6 +39,7 @@ def client_with_mock_store(mock_store):
         return mock_store
 
     from app.api.routes.sessions import get_session_store
+
     app.dependency_overrides[get_session_store] = override_get_store
 
     with TestClient(app) as c:
@@ -66,7 +67,14 @@ class TestPatchVisualizationState:
         """Can update volcano_filters without changing markers."""
         response = client_with_mock_store.patch(
             "/api/sessions/test-session-id/visualization-state",
-            json={"volcano_filters": {"foldChange": 2.0, "pValue": 0.01, "adjPValue": 0.05, "s0": 0.2}},
+            json={
+                "volcano_filters": {
+                    "foldChange": 2.0,
+                    "pValue": 0.01,
+                    "adjPValue": 0.05,
+                    "s0": 0.2,
+                }
+            },
         )
         assert response.status_code == 200
         mock_store.update.assert_awaited_once()
@@ -80,7 +88,12 @@ class TestPatchVisualizationState:
             "/api/sessions/test-session-id/visualization-state",
             json={
                 "markers": ["P00367"],
-                "volcano_filters": {"foldChange": 1.5, "pValue": 0.05, "adjPValue": 1, "s0": 0.1},
+                "volcano_filters": {
+                    "foldChange": 1.5,
+                    "pValue": 0.05,
+                    "adjPValue": 1,
+                    "s0": 0.1,
+                },
             },
         )
         assert response.status_code == 200

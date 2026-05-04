@@ -1,7 +1,6 @@
 /**
  * Top Navigation Bar
  * Dark background navigation with logo and links
- * Following amica design pattern
  */
 
 'use client';
@@ -14,7 +13,6 @@ import { cn } from '@/lib/utils';
 
 const navLinks = [
   { href: '/', label: 'Home', id: 'home' },
-  // Analysis removed - all operations in right panel
   { href: '/about', label: 'About', id: 'about' },
 ];
 
@@ -36,7 +34,7 @@ export const TopNavigation: React.FC = () => {
         <div className="flex items-center gap-1">
           {navLinks.map((link) => {
             const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
-            
+
             return (
               <Link
                 key={link.id}

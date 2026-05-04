@@ -27,8 +27,10 @@ class SessionState(str, Enum):
 class SessionConfig(BaseModel):
     """Session configuration model."""
 
-    treatment: str = Field(..., min_length=1, description="Treatment condition name")
-    control: str = Field(..., min_length=1, description="Control condition name")
+    treatment: Optional[str] = Field(
+        default=None, description="Treatment condition name"
+    )
+    control: Optional[str] = Field(default=None, description="Control condition name")
     organism: str = Field(
         ...,
         pattern=r"^[a-z]+$",
@@ -58,14 +60,13 @@ class SessionConfig(BaseModel):
     msstats_censored_int: Optional[str] = Field(default=None)
     msstats_max_quantile: Optional[float] = Field(default=None)
     msstats_remove50missing: Optional[bool] = Field(default=None)
-    deqms_fit_method: Optional[str] = Field(default=None)
 
     @field_validator("control")
     @classmethod
-    def control_differs_from_treatment(cls, v: str, info) -> str:
-        """Ensure control differs from treatment."""
+    def control_differs_from_treatment(cls, v, info):
+        """Ensure control differs from treatment (when both are set)."""
         values = info.data
-        if "treatment" in values and v == values["treatment"]:
+        if v is not None and "treatment" in values and v == values.get("treatment"):
             raise ValueError("Control must differ from treatment")
         return v
 
@@ -99,7 +100,7 @@ class Session(BaseModel):
 
     id: str = Field(..., description="Unique session ID (UUID)")
     name: str = Field(..., min_length=1, description="Session name")
-    template: str = Field(default="protein_pairwise_comparison")
+    template: str = Field(default="multi_condition_comparison")
     state: SessionState = Field(default=SessionState.CREATED)
     config: Optional[SessionConfig] = None
     files: SessionFiles = Field(default_factory=SessionFiles)
@@ -121,7 +122,7 @@ class Session(BaseModel):
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "DMSO vs Treatment Analysis",
-                "template": "protein_pairwise_comparison",
+                "template": "multi_condition_comparison",
                 "state": "created",
                 "config": None,
                 "files": {"proteomics": [], "compound": None},
@@ -136,7 +137,7 @@ class SessionCreate(BaseModel):
     """Session creation request."""
 
     name: str = Field(..., min_length=1, max_length=200)
-    template: str = Field(default="protein_pairwise_comparison")
+    template: str = Field(default="multi_condition_comparison")
 
 
 class SessionUpdate(BaseModel):

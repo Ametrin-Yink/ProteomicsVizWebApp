@@ -15,8 +15,7 @@ router = APIRouter()
 
 @router.post("/{session_id}/start")
 async def start_analysis(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store)
+    session_id: str, store: SessionStore = Depends(get_session_store)
 ):
     """Start the analysis pipeline.
 
@@ -29,25 +28,24 @@ async def start_analysis(
     # Redirect to the actual processing endpoint
     return RedirectResponse(
         url=f"/api/sessions/{session_id}/process",
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
     )
 
 
 @router.post("/{session_id}/cancel")
 async def cancel_analysis(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store)
+    session_id: str, store: SessionStore = Depends(get_session_store)
 ):
     """Cancel the running analysis."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Session {session_id} not found",
         )
-    
+
     # Update session state to cancelled
     session.state = SessionState.CANCELLED
     await store.save(session)
-    
+
     return {"message": "Analysis cancelled", "session_id": session_id}

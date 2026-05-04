@@ -39,7 +39,7 @@ class ReportGenerator:
         self.template_dir = settings.base_dir / "templates"
         self.env = Environment(
             loader=FileSystemLoader(self.template_dir),
-            autoescape=select_autoescape(['html', 'xml'])
+            autoescape=select_autoescape(["html", "xml"]),
         )
 
     async def generate_report(
@@ -49,7 +49,7 @@ class ReportGenerator:
         report_request: Optional[ReportRequest] = None,
         qc_data: Optional[QCData] = None,
         gsea_results: Optional[dict[str, GSEAResults]] = None,
-        output_path: Optional[Path] = None
+        output_path: Optional[Path] = None,
     ) -> Path:
         """
         Generate complete PDF report.
@@ -83,7 +83,7 @@ class ReportGenerator:
                 analysis_result=analysis_result,
                 report_request=report_request,
                 qc_data=qc_data,
-                gsea_results=gsea_results
+                gsea_results=gsea_results,
             )
 
             # Generate HTML
@@ -98,9 +98,7 @@ class ReportGenerator:
         except Exception as e:
             logger.error(f"Report generation failed: {e}")
             raise ProcessingError(
-                message=f"Failed to generate report: {str(e)}",
-                step=0,
-                recoverable=True
+                message=f"Failed to generate report: {str(e)}", step=0, recoverable=True
             )
 
     def _get_default_output_path(self, session_id: str) -> Path:
@@ -116,7 +114,7 @@ class ReportGenerator:
         analysis_result: AnalysisResult,
         report_request: ReportRequest,
         qc_data: Optional[QCData] = None,
-        gsea_results: Optional[dict[str, GSEAResults]] = None
+        gsea_results: Optional[dict[str, GSEAResults]] = None,
     ) -> dict[str, Any]:
         """
         Prepare all data needed for the report, including plot images.
@@ -171,7 +169,7 @@ class ReportGenerator:
                     "filename": f.filename,
                     "condition": f.condition,
                     "replicate": f.replicate,
-                    "size_mb": round(f.size / (1024 * 1024), 2)
+                    "size_mb": round(f.size / (1024 * 1024), 2),
                 }
                 for f in (files.proteomics if files else [])
             ],
@@ -203,9 +201,7 @@ class ReportGenerator:
         }
 
     async def _prepare_results_section(
-        self,
-        analysis_result: AnalysisResult,
-        report_request: ReportRequest
+        self, analysis_result: AnalysisResult, report_request: ReportRequest
     ) -> dict[str, Any]:
         """Prepare results section using frontend-captured volcano plot image."""
         images = report_request.images or {}
@@ -218,7 +214,7 @@ class ReportGenerator:
         if analysis_result.diff_expression_path:
             diff_path = Path(analysis_result.diff_expression_path)
             if diff_path.exists():
-                df = await asyncio.to_thread(pd.read_csv, diff_path, sep='\t')
+                df = await asyncio.to_thread(pd.read_csv, diff_path, sep="\t")
 
                 # Total proteins = rows in diff expression table (matches Protein_Abundances)
                 results["total_proteins"] = len(df)
@@ -228,8 +224,8 @@ class ReportGenerator:
                 pval_thresh = report_request.p_value
                 s0 = report_request.s0 * fc
 
-                pcol = self._find_col(df, ['pval', 'adj.P.Val', 'p_value', 'P.Value'])
-                fcol = self._find_col(df, ['logFC', 'log_fc', 'Log2FC', 'log2fc'])
+                pcol = self._find_col(df, ["pval", "adj.P.Val", "p_value", "P.Value"])
+                fcol = self._find_col(df, ["logFC", "log_fc", "Log2FC", "log2fc"])
 
                 if pcol and fcol:
                     if s0 == 0:
@@ -247,7 +243,10 @@ class ReportGenerator:
                 # Prepare top significant proteins table (top 50 by p-value)
                 if report_request.include_protein_table:
                     results["top_proteins"] = self._prepare_top_proteins_table(
-                        df, n=50, fc=fc, pval_thresh=pval_thresh,
+                        df,
+                        n=50,
+                        fc=fc,
+                        pval_thresh=pval_thresh,
                         adj_pval_thresh=report_request.adj_p_value,
                         s0=s0,
                     )
@@ -263,11 +262,22 @@ class ReportGenerator:
         return None
 
     @staticmethod
-    def _is_significant(log_fc: float, pval: float, adj_pval: float,
-                        fc: float, pval_thresh: float, adj_pval_thresh: float, s0: float) -> bool:
+    def _is_significant(
+        log_fc: float,
+        pval: float,
+        adj_pval: float,
+        fc: float,
+        pval_thresh: float,
+        adj_pval_thresh: float,
+        s0: float,
+    ) -> bool:
         """Check significance using hyperbolic S0-factor cutoff, matching frontend isSignificantVolcano."""
         if s0 == 0:
-            return abs(log_fc) >= fc and pval <= pval_thresh and adj_pval <= adj_pval_thresh
+            return (
+                abs(log_fc) >= fc
+                and pval <= pval_thresh
+                and adj_pval <= adj_pval_thresh
+            )
         plog10_thresh = -np.log10(pval_thresh)
         c = plog10_thresh * (fc - s0)
         y = -np.log10(max(pval, 1e-300))
@@ -286,49 +296,74 @@ class ReportGenerator:
         s0: float = 0.0,
     ) -> list[dict[str, Any]]:
         """Prepare top significant proteins table, ranked by significance score."""
-        logfc_col = self._find_col(df, ['logFC', 'log_fc', 'Log2FC', 'log2fc'])
-        pval_col = self._find_col(df, ['pval', 'adj.P.Val', 'adjPval', 'p_value', 'P.Value'])
-        protein_col = self._find_col(df, ['Master_Protein_Accessions', 'Protein', 'master_protein_accessions', 'protein'])
-        gene_col = self._find_col(df, ['Gene_Name', 'Gene', 'gene_name', 'gene'])
-        adjpval_col = self._find_col(df, ['adjPval', 'adj.P.Val', 'P.Value', 'adj_pval'])
+        logfc_col = self._find_col(df, ["logFC", "log_fc", "Log2FC", "log2fc"])
+        pval_col = self._find_col(
+            df, ["pval", "adj.P.Val", "adjPval", "p_value", "P.Value"]
+        )
+        protein_col = self._find_col(
+            df,
+            [
+                "Master_Protein_Accessions",
+                "Protein",
+                "master_protein_accessions",
+                "protein",
+            ],
+        )
+        gene_col = self._find_col(df, ["Gene_Name", "Gene", "gene_name", "gene"])
+        adjpval_col = self._find_col(
+            df, ["adjPval", "adj.P.Val", "P.Value", "adj_pval"]
+        )
         if logfc_col is None:
-            logfc_col = 'logFC'
+            logfc_col = "logFC"
         if pval_col is None:
-            pval_col = 'pval'
+            pval_col = "pval"
 
         # Rank by significance: significant proteins first, then by p-value within each group
         df = df.copy()
-        df['_is_sig'] = df.apply(
+        df["_is_sig"] = df.apply(
             lambda r: self._is_significant(
-                r.get(logfc_col, 0), r.get(pval_col, 1),
-                r.get(adjpval_col, r.get(pval_col, 1)) if adjpval_col else r.get(pval_col, 1),
-                fc, pval_thresh, adj_pval_thresh, s0
+                r.get(logfc_col, 0),
+                r.get(pval_col, 1),
+                r.get(adjpval_col, r.get(pval_col, 1))
+                if adjpval_col
+                else r.get(pval_col, 1),
+                fc,
+                pval_thresh,
+                adj_pval_thresh,
+                s0,
             ),
             axis=1,
         )
-        df['_pval_sort'] = df[pval_col].clip(lower=1e-300)
-        df_sorted = df.sort_values(['_is_sig', '_pval_sort'], ascending=[False, True]).head(n)
+        df["_pval_sort"] = df[pval_col].clip(lower=1e-300)
+        df_sorted = df.sort_values(
+            ["_is_sig", "_pval_sort"], ascending=[False, True]
+        ).head(n)
 
         table_data = []
         for _, row in df_sorted.iterrows():
             row_log_fc = row.get(logfc_col, 0)
             row_pval = row.get(pval_col, 1)
             row_adj_pval = row.get(adjpval_col, row_pval) if adjpval_col else row_pval
-            is_sig = self._is_significant(row_log_fc, row_pval, row_adj_pval,
-                                          fc, pval_thresh, adj_pval_thresh, s0)
+            is_sig = self._is_significant(
+                row_log_fc, row_pval, row_adj_pval, fc, pval_thresh, adj_pval_thresh, s0
+            )
             entry = {
                 "protein": row.get(protein_col, "N/A") if protein_col else "N/A",
                 "gene": row.get(gene_col, "N/A") if gene_col else "N/A",
                 "log_fc": round(row_log_fc, 3),
                 "pval": f"{row_pval:.2e}" if pval_col in row else "N/A",
-                "adj_pval": f"{row_adj_pval:.2e}" if adjpval_col and adjpval_col in row else "N/A",
+                "adj_pval": f"{row_adj_pval:.2e}"
+                if adjpval_col and adjpval_col in row
+                else "N/A",
                 "significant": is_sig,
             }
             table_data.append(entry)
 
         return table_data
 
-    async def _prepare_qc_section(self, qc_data: QCData, images: Optional[dict[str, list[str]]] = None) -> dict[str, Any]:
+    async def _prepare_qc_section(
+        self, qc_data: QCData, images: Optional[dict[str, list[str]]] = None
+    ) -> dict[str, Any]:
         """Prepare QC plots section using frontend-captured plot images."""
         images = images or {}
         qc_section = {}
@@ -365,8 +400,12 @@ class ReportGenerator:
         # Intensity distributions (PSM + Protein)
         if qc_data.intensity_distributions:
             qc_section["intensity_distributions"] = qc_data.intensity_distributions
-            qc_section["psm_intensity_plot_image"] = images.get("qc_psm_intensity", [None])[0]
-            qc_section["protein_intensity_plot_image"] = images.get("qc_protein_intensity", [None])[0]
+            qc_section["psm_intensity_plot_image"] = images.get(
+                "qc_psm_intensity", [None]
+            )[0]
+            qc_section["protein_intensity_plot_image"] = images.get(
+                "qc_protein_intensity", [None]
+            )[0]
 
         # Data completeness (Protein + PSM)
         if qc_data.data_completeness:
@@ -375,11 +414,13 @@ class ReportGenerator:
                     "sample": dc.sample,
                     "missing": dc.missing,
                     "present": dc.present,
-                    "completeness_pct": round(dc.completeness_pct, 2)
+                    "completeness_pct": round(dc.completeness_pct, 2),
                 }
                 for dc in qc_data.data_completeness
             ]
-            qc_section["completeness_plot_image"] = images.get("qc_completeness", [None])[0]
+            qc_section["completeness_plot_image"] = images.get(
+                "qc_completeness", [None]
+            )[0]
 
         if qc_data.psm_completeness:
             qc_section["psm_completeness"] = [
@@ -387,11 +428,13 @@ class ReportGenerator:
                     "sample": dc.sample,
                     "missing": dc.missing,
                     "present": dc.present,
-                    "completeness_pct": round(dc.completeness_pct, 2)
+                    "completeness_pct": round(dc.completeness_pct, 2),
                 }
                 for dc in qc_data.psm_completeness
             ]
-            qc_section["psm_completeness_plot_image"] = images.get("qc_psm_completeness", [None])[0]
+            qc_section["psm_completeness_plot_image"] = images.get(
+                "qc_psm_completeness", [None]
+            )[0]
 
         return qc_section
 
@@ -409,9 +452,7 @@ class ReportGenerator:
     ) -> dict[str, Any]:
         """Prepare GSEA results section."""
         images = images or {}
-        gsea_section = {
-            "databases": []
-        }
+        gsea_section = {"databases": []}
 
         for db_name, results in gsea_results.items():
             db_data = {
@@ -420,7 +461,7 @@ class ReportGenerator:
                 "significant_pathways": results.significant_pathways,
                 "overrepresented": results.overrepresented,
                 "underrepresented": results.underrepresented,
-                "top_pathways": []
+                "top_pathways": [],
             }
 
             # Get top 10 significant pathways
@@ -428,15 +469,17 @@ class ReportGenerator:
             significant.sort(key=lambda x: x.fdr)
 
             for result in significant[:10]:
-                db_data["top_pathways"].append({
-                    "term": result.term,
-                    "name": result.name,
-                    "nes": round(result.nes, 3),
-                    "pval": self._format_pval(result.pval),
-                    "fdr": self._format_pval(result.fdr),
-                    "direction": result.enrichment_direction,
-                    "matched_genes": result.matched_genes,
-                })
+                db_data["top_pathways"].append(
+                    {
+                        "term": result.term,
+                        "name": result.name,
+                        "nes": round(result.nes, 3),
+                        "pval": self._format_pval(result.pval),
+                        "fdr": self._format_pval(result.fdr),
+                        "direction": result.enrichment_direction,
+                        "matched_genes": result.matched_genes,
+                    }
+                )
 
             gsea_section["databases"].append(db_data)
 
@@ -478,7 +521,9 @@ class ReportGenerator:
             import tempfile
 
             # Write HTML to temp file
-            tmp_html = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8')
+            tmp_html = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".html", delete=False, encoding="utf-8"
+            )
             tmp_html.write(html_content)
             tmp_html.close()
 
@@ -487,10 +532,14 @@ class ReportGenerator:
             python_exe = settings.base_dir / ".venv" / "Scripts" / "python.exe"
             result = subprocess.run(
                 [str(python_exe), helper_script, tmp_html.name, str(output_path)],
-                capture_output=True, text=True, timeout=120, cwd=settings.base_dir
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=settings.base_dir,
             )
 
             import os
+
             os.unlink(tmp_html.name)
 
             if result.returncode != 0:
@@ -498,9 +547,7 @@ class ReportGenerator:
 
         except Exception as e:
             raise ProcessingError(
-                message=f"PDF conversion failed: {str(e)}",
-                step=0,
-                recoverable=True
+                message=f"PDF conversion failed: {str(e)}", step=0, recoverable=True
             )
 
     async def generate_report_from_files(
@@ -511,7 +558,7 @@ class ReportGenerator:
         qc_data_path: Optional[Path] = None,
         gsea_results_path: Optional[Path] = None,
         output_path: Optional[Path] = None,
-        report_request: Optional[ReportRequest] = None
+        report_request: Optional[ReportRequest] = None,
     ) -> Path:
         """
         Generate report directly from result files.
@@ -523,19 +570,21 @@ class ReportGenerator:
         analysis_result = AnalysisResult(
             session_id=session.id,
             diff_expression_path=str(diff_expression_path),
-            protein_abundances_path=str(protein_abundances_path) if protein_abundances_path else None,
+            protein_abundances_path=str(protein_abundances_path)
+            if protein_abundances_path
+            else None,
         )
 
         # Load QC data if available
         qc_data = None
         if qc_data_path and qc_data_path.exists():
-            with open(qc_data_path, encoding='utf-8') as f:
+            with open(qc_data_path, encoding="utf-8") as f:
                 qc_data = QCData.model_validate_json(f.read())
 
         # Load GSEA results if available
         gsea_results = None
         if gsea_results_path and gsea_results_path.exists():
-            with open(gsea_results_path, encoding='utf-8') as f:
+            with open(gsea_results_path, encoding="utf-8") as f:
                 gsea_data = json.load(f)
                 gsea_results = {
                     db: GSEAResults.model_validate(data)
@@ -548,7 +597,7 @@ class ReportGenerator:
             report_request=report_request,
             qc_data=qc_data,
             gsea_results=gsea_results,
-            output_path=output_path
+            output_path=output_path,
         )
 
 

@@ -10,6 +10,7 @@ interface SkeletonProps {
 export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
+      aria-hidden="true"
       data-testid="skeleton"
       className={cn('animate-pulse bg-border rounded', className)}
     />

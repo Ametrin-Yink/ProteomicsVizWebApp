@@ -7,7 +7,7 @@ export type StepStatus = 'not_started' | 'in_progress' | 'completed' | 'error' |
 export type LogLevel = 'info' | 'warning' | 'error';
 export type WSMessageType = 'subscribe' | 'progress' | 'complete' | 'error' | 'log' | 'ping' | 'pong';
 
-export interface ProcessingStep {
+export interface ProcessingStepDef {
   id: number;
   name: string;
   description: string;
@@ -27,7 +27,7 @@ export interface LogEntry {
 }
 
 export interface ProcessingState {
-  steps: ProcessingStep[];
+  steps: ProcessingStepDef[];
   logs: LogEntry[];
   overallProgress: number;
   isConnected: boolean;
@@ -112,7 +112,7 @@ export interface ProcessingStatusResponse {
   state: 'created' | 'configuring' | 'queued' | 'processing' | 'completed' | 'error' | 'cancelled';
   current_step?: number;
   overall_progress?: number;
-  steps?: ProcessingStep[];
+  steps?: ProcessingStepDef[];
   queue_position?: number;
   queue_length?: number;
 }
@@ -127,7 +127,7 @@ export interface StartProcessingResponse {
 }
 
 // Step definitions for the 9-step pipeline
-export const PROCESSING_STEPS: Omit<ProcessingStep, 'status' | 'progress' | 'message'>[] = [
+export const PROCESSING_STEPS: Omit<ProcessingStepDef, 'status' | 'progress' | 'message'>[] = [
   {
     id: 1,
     name: 'Combine Replicates',

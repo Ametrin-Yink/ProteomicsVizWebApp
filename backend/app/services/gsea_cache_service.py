@@ -18,6 +18,7 @@ logger = logging.getLogger("proteomics")
 @dataclass(frozen=True)
 class GSEACacheKey:
     """Immutable cache key for GSEA results."""
+
     key_hash: str
 
     @classmethod
@@ -26,7 +27,7 @@ class GSEACacheKey:
         protein_ids: list[str],
         gene_names: list[str],
         conditions: tuple[str, str],
-        database: str
+        database: str,
     ) -> "GSEACacheKey":
         """Create a cache key from input parameters.
 
@@ -42,7 +43,7 @@ class GSEACacheKey:
             "proteins": sorted_proteins,
             "genes": sorted_genes,
             "conditions": conditions,
-            "database": database
+            "database": database,
         }
         key_string = json.dumps(key_data, sort_keys=True)
 
@@ -90,10 +91,7 @@ class GSEACacheService:
 
     def get_stats(self) -> dict:
         """Get cache statistics."""
-        return {
-            "size": len(self._cache),
-            "max_size": self._max_size
-        }
+        return {"size": len(self._cache), "max_size": self._max_size}
 
 
 # Global instance

@@ -4,14 +4,14 @@
  */
 
 import React from 'react';
-import { ProcessingStep } from '@/types/processing';
+import { ProcessingStepDef } from '@/types/processing';
 import { StatusIndicator } from './StatusIndicator';
 import { ProgressBar } from './ProgressBar';
 import { cn } from '@/lib/utils';
 import { ChevronRight, Terminal, Database, Filter, Calculator, BarChart3, Dna } from 'lucide-react';
 
 interface StepTrackerProps {
-  steps: ProcessingStep[];
+  steps: ProcessingStepDef[];
   className?: string;
 }
 
@@ -38,7 +38,7 @@ const getStepIcon = (stepId: number): React.ReactNode => {
   }
 };
 
-const StepCard: React.FC<{ step: ProcessingStep; isLast: boolean }> = ({
+const StepCard: React.FC<{ step: ProcessingStepDef; isLast: boolean }> = ({
   step,
   isLast,
 }) => {

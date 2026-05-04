@@ -99,7 +99,7 @@ export default function PathwayTable({
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-semibold text-text-primary">Enriched Pathways</h3>
           <span data-testid="total-pathways" className="text-sm text-text-muted">
-            {totalResults} pathways
+            {filteredData.length} pathways
           </span>
         </div>
 
@@ -262,9 +262,7 @@ export default function PathwayTable({
       {totalPages > 1 && (
         <div className="px-4 py-3 border-t border-border flex items-center justify-between">
           <div className="text-sm text-text-muted">
-            Showing {(currentPage - 1) * pageSize + 1} to{' '}
-            {Math.min(currentPage * pageSize, totalResults)} of{' '}
-            {totalResults} pathways
+            Showing {filteredData.length} pathway{filteredData.length !== 1 ? 's' : ''} on this page
           </div>
 
           <div className="flex items-center gap-2">

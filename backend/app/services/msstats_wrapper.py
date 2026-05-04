@@ -1,7 +1,7 @@
 """
 R/MSstats integration via subprocess.
 
-Handles protein abundance calculation and differential expression analysis
+Handles multi-condition differential expression analysis
 using R's MSstats package through subprocess calls (NEVER rpy2).
 """
 
@@ -24,9 +24,8 @@ class MsstatsWrapper:
     """
     Wrapper for R/MSstats functionality via subprocess.
 
-    Implements steps 6 and 7 of the MSstats pipeline:
-    - Step 6: Protein Abundance (dataProcess)
-    - Step 7: Differential Expression (groupComparison)
+    Implements step 7 of the MSstats multi-condition pipeline:
+    - Step 7: Differential Expression (groupComparison for multiple contrasts)
     """
 
     def __init__(self):
@@ -151,6 +150,7 @@ class MsstatsWrapper:
         Step 6: Calculate protein abundance using MSstats dataProcess.
 
         Transforms PSM-level data to protein-level abundance using MSstats.
+        Used by the multi-condition pipeline.
 
         Args:
             input_file: Path to PSM_Abundances.tsv/parquet
@@ -193,6 +193,9 @@ class MsstatsWrapper:
         )
         impute = getattr(config, "msstats_impute", False) if config else False
         log_base = getattr(config, "msstats_log_base", 2) if config else 2
+        censored_int = getattr(config, "msstats_censored_int", "NA") if config else "NA"
+        max_quantile = getattr(config, "msstats_max_quantile", 0.999) if config else 0.999
+        remove50missing = getattr(config, "msstats_remove50missing", False) if config else False
 
         # Build command
         cmd = [
@@ -207,6 +210,9 @@ class MsstatsWrapper:
             str(summary_method),
             str(impute).lower(),
             str(log_base),
+            str(censored_int),
+            str(max_quantile),
+            str(remove50missing).lower(),
         ]
 
         logger.info(f"R command: {' '.join(cmd)}")
@@ -233,87 +239,6 @@ class MsstatsWrapper:
 
             raise RScriptError(
                 message=f"Protein abundance calculation failed: {str(e)}",
-                details={"error": str(e), "traceback": traceback.format_exc()},
-            )
-
-    async def group_comparison(
-        self,
-        rds_file: Path,
-        output_file: Path,
-        treatment: str,
-        control: str,
-        gene_mapping_file: Optional[Path] = None,
-        log_callback: Optional[callable] = None,
-    ) -> Path:
-        """
-        Step 7: Differential expression analysis using MSstats groupComparison.
-
-        Fits statistical models and calculates differential expression statistics.
-
-        Args:
-            rds_file: Path to MSstats_Processed.rds from dataProcess step
-            output_file: Path for Diff_Expression.tsv output
-            treatment: Treatment condition name
-            control: Control condition name
-            gene_mapping_file: Optional protein to gene mapping file
-            log_callback: Optional callback function for real-time log messages
-
-        Returns:
-            Path to output file
-
-        Raises:
-            RScriptError: If R script fails
-        """
-        logger.info(
-            "Step 7: Running differential expression analysis with MSstats",
-            extra={"input": str(rds_file), "treatment": treatment, "control": control},
-        )
-
-        script_path = self.scripts_dir / "msstats_group_comparison.R"
-
-        if not script_path.exists():
-            raise RScriptError(
-                message=f"R script not found: {script_path}",
-                details={"script": str(script_path)},
-            )
-
-        # Build command - use parallel processing for groupComparison
-        n_cores = settings.r_n_cores
-        cmd = [
-            self.r_executable,
-            str(script_path),
-            str(rds_file),
-            str(output_file),
-            treatment,
-            control,
-            str(gene_mapping_file) if gene_mapping_file else "",
-            str(n_cores),
-        ]
-
-        logger.info(f"R command: {' '.join(cmd)}")
-
-        try:
-            await self._run_r_script(cmd, script_path, log_callback)
-
-            logger.info(
-                "Step 7 complete: Differential expression calculated",
-                extra={"output": str(output_file)},
-            )
-
-            return output_file
-
-        except subprocess.TimeoutExpired:
-            raise RScriptError(
-                message=f"Differential expression analysis timed out after {self.timeout}s",
-                details={"timeout": self.timeout},
-            )
-        except RScriptError:
-            raise
-        except Exception as e:
-            import traceback
-
-            raise RScriptError(
-                message=f"Differential expression analysis failed: {str(e)}",
                 details={"error": str(e), "traceback": traceback.format_exc()},
             )
 

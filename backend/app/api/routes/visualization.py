@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import re
+import threading
 import math
 import uuid
 from datetime import datetime, timezone
@@ -35,6 +36,7 @@ _GMT_FILES = {
     "reactome": "Enrichr.Reactome_2022.gmt",
 }
 _cache_gmt: dict[str, dict[str, set[str]]] = {}  # db -> {pathway_name -> set of genes}
+_cache_lock = threading.Lock()  # protects _cache_gmt and _gsea_file_cache
 
 
 def _get_pathway_genes(database: str, term: str) -> set[str]:
@@ -355,23 +357,24 @@ def load_gsea_results(
 
     # Load entire file once per session, cache all databases in memory
     cache_key = str(gsea_file)
-    if cache_key not in _gsea_file_cache:
-        try:
-            logger.info(
-                f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)"
-            )
-            all_results = _load_gsea_json(gsea_file)
-            # Pre-process all databases at once
-            processed = {}
-            for db_name, db_data in all_results.items():
-                results = db_data.get("results", [])
-                # Add significant field
-                for r in results:
-                    r["significant"] = (
-                        abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.25
-                    )
-                processed[db_name] = results
-            _gsea_file_cache[cache_key] = processed
+    with _cache_lock:
+        if cache_key not in _gsea_file_cache:
+            try:
+                logger.info(
+                    f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)"
+                )
+                all_results = _load_gsea_json(gsea_file)
+                # Pre-process all databases at once
+                processed = {}
+                for db_name, db_data in all_results.items():
+                    results = db_data.get("results", [])
+                    # Add significant field
+                    for r in results:
+                        r["significant"] = (
+                            abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.25
+                        )
+                    processed[db_name] = results
+                _gsea_file_cache[cache_key] = processed
             logger.info(f"GSEA results cached: {len(processed)} databases")
         except Exception as e:
             logger.error(f"Error loading GSEA results: {e}")

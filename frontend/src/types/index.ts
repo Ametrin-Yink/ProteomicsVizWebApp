@@ -51,9 +51,15 @@ export interface SessionConfig {
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
+  // Pipeline selection
+  pipeline?: 'msqrob2' | 'msstats';
   // Multi-condition
   comparisons?: Array<{ treatment: string; control: string }>;
   metadata_columns?: Record<string, Record<string, string>>;
+  // Shared advanced params
+  pvalue_threshold?: number;
+  logfc_threshold?: number;
+  min_peptides_per_protein?: number;
   // MSstats
   msstats_normalization?: string;
   msstats_feature_selection?: string;
@@ -63,7 +69,6 @@ export interface SessionConfig {
   msstats_censored_int?: string;
   msstats_max_quantile?: number;
   msstats_remove50missing?: boolean;
-  deqms_fit_method?: string;
 }
 
 export interface SessionFiles {

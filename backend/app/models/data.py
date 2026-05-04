@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 class PSMData(BaseModel):
     """Peptide-Spectrum Match data row."""
-    
+
     sequence: str = Field(..., alias="Sequence")
     modifications: str = Field(..., alias="Modifications")
     charge: int = Field(..., alias="Charge")
@@ -22,18 +22,17 @@ class PSMData(BaseModel):
     abundance: float = Field(..., alias="Abundance")
     sample_origination: str = Field(..., alias="Sample_Origination")
     unique_psm: Optional[str] = Field(None, alias="Unique_PSM")
-    
+
     model_config = {"populate_by_name": True}
 
 
 class ProteinAbundance(BaseModel):
     """Protein abundance data."""
-    
+
     master_protein_accessions: str = Field(..., description="Protein accession ID")
     gene_name: Optional[str] = Field(None, description="Gene symbol")
     abundances: dict[str, float] = Field(
-        default_factory=dict,
-        description="Abundance values per sample"
+        default_factory=dict, description="Abundance values per sample"
     )
 
 
@@ -48,8 +47,10 @@ class DifferentialExpressionResult(BaseModel):
     se: Optional[float] = Field(None, description="Standard error")
     df: Optional[float] = Field(None, description="Degrees of freedom")
     significant: bool = Field(False, description="Whether protein is significant")
-    psm_count: Optional[int] = Field(None, description="Number of PSMs for this protein")
-    
+    psm_count: Optional[int] = Field(
+        None, description="Number of PSMs for this protein"
+    )
+
     @property
     def regulation(self) -> str:
         """Return regulation direction."""
@@ -60,7 +61,7 @@ class DifferentialExpressionResult(BaseModel):
 
 class DEResultsSummary(BaseModel):
     """Summary of differential expression results."""
-    
+
     total_proteins: int = Field(..., ge=0)
     significant_proteins: int = Field(..., ge=0)
     upregulated: int = Field(..., ge=0)
@@ -70,7 +71,7 @@ class DEResultsSummary(BaseModel):
 
 class PCAResult(BaseModel):
     """PCA analysis results."""
-    
+
     samples: list[str] = Field(..., description="Sample names")
     pc1: list[float] = Field(..., description="First principal component")
     pc2: list[float] = Field(..., description="Second principal component")
@@ -81,38 +82,36 @@ class PCAResult(BaseModel):
 
 class PValueDistribution(BaseModel):
     """P-value distribution histogram data."""
-    
+
     bins: list[float] = Field(..., description="Bin edges")
     counts: list[int] = Field(..., description="Counts per bin")
 
 
 class CVData(BaseModel):
     """Coefficient of variation data per condition."""
-    
+
     condition: str
     cv_values: list[float]
 
 
 class IntensityDistribution(BaseModel):
     """Intensity distribution data."""
-    
+
     psm: dict[str, dict[str, list[float]]] = Field(
-        default_factory=dict,
-        description="PSM intensities by condition and replicate"
+        default_factory=dict, description="PSM intensities by condition and replicate"
     )
     protein: dict[str, list[float]] = Field(
-        default_factory=dict,
-        description="Protein intensities by condition"
+        default_factory=dict, description="Protein intensities by condition"
     )
 
 
 class DataCompleteness(BaseModel):
     """Data completeness per sample."""
-    
+
     sample: str
     missing: int
     present: int
-    
+
     @property
     def completeness_pct(self) -> float:
         """Calculate completeness percentage."""
@@ -152,21 +151,22 @@ class GSEAResult(BaseModel):
     nes: float = Field(..., description="Normalized enrichment score")
     pval: float = Field(..., ge=0, le=1, description="P-value")
     fdr: float = Field(..., ge=0, le=1, description="False discovery rate")
-    lead_genes: list[str] = Field(default_factory=list, description="Leading edge genes")
+    lead_genes: list[str] = Field(
+        default_factory=list, description="Leading edge genes"
+    )
     matched_genes: int = Field(..., ge=0, description="Number of matched genes")
     # Running enrichment score curve data for plotting
     running_es_curve: Optional[list[tuple[int, float]]] = Field(
-        default=None,
-        description="Running ES curve as list of (rank, es) tuples"
+        default=None, description="Running ES curve as list of (rank, es) tuples"
     )
     rank_metric_positions: Optional[list[tuple[str, int, float]]] = Field(
         default=None,
-        description="Gene positions in ranked list: (gene_name, rank, metric_value)"
+        description="Gene positions in ranked list: (gene_name, rank, metric_value)",
     )
     # Heatmap data for z-score transformed protein intensities
     heatmap_data: Optional[dict] = Field(
         default=None,
-        description="Heatmap data for leading edge genes: {genes: [], samples: [], z_scores: [[],...]}"
+        description="Heatmap data for leading edge genes: {genes: [], samples: [], z_scores: [[],...]}",
     )
 
     @property
@@ -186,7 +186,7 @@ class GSEAResult(BaseModel):
 
 class GSEAResults(BaseModel):
     """GSEA results for a database."""
-    
+
     database: str = Field(..., description="Database name")
     total_pathways: int = Field(..., ge=0)
     significant_pathways: int = Field(..., ge=0)
@@ -197,7 +197,7 @@ class GSEAResults(BaseModel):
 
 class CompoundInfo(BaseModel):
     """Compound information from compound ID file."""
-    
+
     corp_id: str = Field(..., description="Corporate compound ID")
     smiles: Optional[str] = Field(None, description="SMILES string")
     molecular_weight: Optional[float] = None
@@ -206,7 +206,7 @@ class CompoundInfo(BaseModel):
 
 class UploadedFileMetadata(BaseModel):
     """Metadata for uploaded files."""
-    
+
     filename: str
     original_filename: str
     size: int

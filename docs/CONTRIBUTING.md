@@ -18,7 +18,7 @@ cd backend
 
 **Required R packages:**
 ```bash
-Rscript -e "BiocManager::install(c('msqrob2', 'QFeatures', 'limma'))"
+Rscript -e "BiocManager::install(c('msqrob2', 'QFeatures', 'limma', 'MSstats'))"
 ```
 
 ### Frontend
