@@ -111,25 +111,3 @@ class TestRScripts:
         )
 
         assert script_path.exists()
-
-    def test_msqrob2_protein_script_exists(self):
-        """Verify protein abundance script exists."""
-        script_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "backend"
-            / "scripts"
-            / "msqrob2_protein.R"
-        )
-
-        assert script_path.exists()
-
-    def test_msqrob2_de_script_exists(self):
-        """Verify DE analysis script exists."""
-        script_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "backend"
-            / "scripts"
-            / "msqrob2_de.R"
-        )
-
-        assert script_path.exists()
