@@ -337,8 +337,8 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
 
 export const canStartAnalysis = (state: AnalysisState): boolean => {
   const validation = getValidation(state);
-  // For multi-condition: skip treatment/control requirement
   const hasRequiredConfig = state.config.organism !== '' &&
     state.selectedFiles.size > 0;
-  return validation.isValid && hasRequiredConfig;
+  const hasComparisons = (state.config.comparisons?.length ?? 0) > 0;
+  return validation.isValid && hasRequiredConfig && hasComparisons;
 };

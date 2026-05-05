@@ -44,7 +44,7 @@ function ConfigContent() {
   }, [sessionId, selectedPipeline, router]);
 
   const handleBack = () => {
-    router.push(`/new/pipeline?session=${sessionId}`);
+    router.push(`/new/comparisons?session=${sessionId}`);
   };
 
   const handleStartAnalysis = async () => {
@@ -204,12 +204,12 @@ function ConfigContent() {
         <div className="p-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Treatment</span>
-              <span className="text-text font-medium">{config.treatment || '—'}</span>
-            </div>
-            <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Control</span>
-              <span className="text-text font-medium">{config.control || '—'}</span>
+              <span className="text-text-muted block text-xs">Comparisons</span>
+              <span className="text-text font-medium">
+                {state.selectedPipeline && (config.comparisons?.length ?? 0) > 0
+                  ? `${config.comparisons!.length} selected`
+                  : '—'}
+              </span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Organism</span>
@@ -245,7 +245,7 @@ function ConfigContent() {
             hover:text-text hover:bg-surface rounded-lg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Pipeline
+          Back to Comparisons
         </button>
 
         <button

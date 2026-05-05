@@ -1,6 +1,6 @@
 /**
  * Wizard layout for the new analysis flow.
- * 3-step indicator: Upload & Setup → Pipeline → Configure
+ * 4-step indicator: Upload & Setup → Pipeline → Comparisons → Configure
  */
 
 'use client';

@@ -44,6 +44,8 @@ export interface SessionConfig {
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
+  // Pipeline selection
+  pipeline?: 'msqrob2' | 'msstats';
   // Shared advanced params
   pvalue_threshold?: number;
   logfc_threshold?: number;

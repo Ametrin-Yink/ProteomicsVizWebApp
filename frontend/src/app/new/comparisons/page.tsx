@@ -2,9 +2,10 @@
 
 import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, GitCompare, CheckSquare, Square, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, GitCompare, CheckSquare, Square, AlertCircle, Loader2 } from 'lucide-react';
 import { useAnalysisStore, getConditions, getAllPairwiseComparisons } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
+import { sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 function ComparisonsContent() {
@@ -20,6 +21,8 @@ function ComparisonsContent() {
 
   const selectedComparisons: Array<{ treatment: string; control: string }> =
     config.comparisons || [];
+
+  const [isSaving, setIsSaving] = React.useState(false);
 
   const [newColumnName, setNewColumnName] = React.useState('');
   const [covariateSelections, setCovariateSelections] = React.useState<Set<string>>(
@@ -122,9 +125,17 @@ function ComparisonsContent() {
     router.push(`/new/pipeline?session=${sessionId}`);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!canContinue) {
       addToast('warning', 'Select at least one comparison to continue');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await sessionsApi.updateConfig(sessionId, config);
+    } catch (error) {
+      addToast('warning', `Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsSaving(false);
       return;
     }
     router.push(`/new/config?session=${sessionId}`);
@@ -308,12 +319,21 @@ function ComparisonsContent() {
           <ArrowLeft className="w-4 h-4" />
           Back to Pipeline
         </button>
-        <button onClick={handleContinue} disabled={!canContinue} className={cn(
+        <button onClick={handleContinue} disabled={!canContinue || isSaving} className={cn(
           'flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-lg transition-colors',
-          canContinue ? 'bg-primary text-white hover:bg-primary/90' : 'bg-surface text-text-muted cursor-not-allowed'
+          canContinue && !isSaving ? 'bg-primary text-white hover:bg-primary/90' : 'bg-surface text-text-muted cursor-not-allowed'
         )}>
-          Continue to Configuration
-          <ArrowRight className="w-4 h-4" />
+          {isSaving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              Continue to Configuration
+              <ArrowRight className="w-4 h-4" />
+            </>
+          )}
         </button>
       </div>
     </div>
