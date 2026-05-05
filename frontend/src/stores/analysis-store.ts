@@ -87,7 +87,7 @@ const defaultConfig: SessionConfig = {
   msstats_equal_feature_var: true,
   msstats_name_standards: undefined,
   msstats_save_fitted_models: true,
-  msstats_n_cores: 32,
+  msstats_n_cores: undefined,
   covariate_columns: [],
 };
 

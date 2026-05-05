@@ -168,7 +168,7 @@ effective_min_feature_count <- if (!is.null(config$min_feature_count) && !is.na(
 
 # Build dataProcess arguments dynamically
 dp_args <- list(
-    data = converted,
+    raw = converted,
     normalization = config$normalization,
     logTrans = config$logTrans,
     summaryMethod = config$summaryMethod,

@@ -307,18 +307,39 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
             <label className="block text-sm font-medium text-text mb-2">
               Number of CPU Cores
             </label>
-            <input
-              type="number"
-              min={1}
-              max={64}
-              data-testid="msstats-cores-input"
-              value={config.msstats_n_cores ?? 32}
-              onChange={(e) => setConfig({ msstats_n_cores: parseInt(e.target.value, 10) || 32 })}
-              className="w-24 px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
+            <label className="flex items-center gap-3 mb-2 cursor-pointer">
+              <input
+                type="checkbox"
+                data-testid="msstats-cores-auto-checkbox"
+                checked={config.msstats_n_cores == null}
+                onChange={(e) => setConfig({ msstats_n_cores: e.target.checked ? undefined : 32 })}
+                className="sr-only peer"
+              />
+              <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
+                after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
+                after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
+                peer-checked:after:translate-x-5"
+              />
+              <span className="text-sm text-text-muted">
+                Auto-detect (recommended)
+              </span>
+            </label>
+            {config.msstats_n_cores != null && (
+              <input
+                type="number"
+                min={1}
+                max={64}
+                data-testid="msstats-cores-input"
+                value={config.msstats_n_cores}
+                onChange={(e) => setConfig({ msstats_n_cores: parseInt(e.target.value, 10) || 1 })}
+                className="w-24 px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            )}
             <p className="text-xs text-text-muted mt-1">
-              CPU cores for parallel R processing (Steps 6-7). Higher values speed up large datasets.
+              {config.msstats_n_cores == null
+                ? 'The system will benchmark and select the optimal core count for your machine.'
+                : 'CPU cores for parallel R processing (Steps 6-7). Higher values speed up large datasets.'}
             </p>
           </div>
 

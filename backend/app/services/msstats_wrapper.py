@@ -36,24 +36,24 @@ class MsstatsWrapper:
         self.timeout = settings.r_script_timeout
         self.scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 
-    async def _calibrate_ncores(self, input_file: Path) -> int:
+    async def _calibrate_ncores(self, input_file: Path, config) -> int:
         """Benchmark SnowParam worker counts on a data slice, return optimal ncores.
 
         Runs dataProcess on first 100K rows with worker counts [1, 4, 8, 16, 32],
-        picks the fastest. Result cached for backend process lifetime.
-        Falls back to user-configured msstats_n_cores if calibration fails.
+        using the user's MSstats parameters for a representative benchmark.
+        Result cached for backend process lifetime.
         """
         if self._optimal_ncores is not None:
             return self._optimal_ncores
 
         logger.info("Calibrating optimal SnowParam worker count...")
         candidate_counts = [1, 4, 8, 16, 32]
-        best_n = 4  # conservative default
+        best_n = 8  # sensible default for Windows
         best_time = float("inf")
 
         for n in candidate_counts:
             try:
-                elapsed = await self._benchmark_ncores(input_file, n)
+                elapsed = await self._benchmark_ncores(input_file, n, config)
                 logger.info(f"  n_cores={n}: {elapsed:.1f}s")
                 if elapsed < best_time:
                     best_time = elapsed
@@ -65,8 +65,8 @@ class MsstatsWrapper:
         logger.info(f"Calibration complete: optimal n_cores={best_n} ({best_time:.1f}s)")
         return best_n
 
-    async def _benchmark_ncores(self, input_file: Path, n_cores: int) -> float:
-        """Run a quick dataProcess benchmark with n_cores on a data slice."""
+    async def _benchmark_ncores(self, input_file: Path, n_cores: int, config) -> float:
+        """Run a dataProcess benchmark with n_cores on a data slice, using user's config."""
         import time
 
         slice_file = input_file.parent / f"_calibration_slice_{n_cores}.parquet"
@@ -79,21 +79,22 @@ class MsstatsWrapper:
             slice_df = df.head(100000)
             slice_df.to_parquet(slice_file)
 
+            cfg = config
             bench_config = {
-                "normalization": "equalizeMedians",
-                "logTrans": 2,
-                "summaryMethod": "TMP",
-                "MBimpute": False,
-                "featureSubset": "highQuality",
-                "n_top_feature": 3,
-                "censoredInt": "NA",
-                "maxQuantileforCensored": 0.999,
-                "remove50missing": False,
-                "min_feature_count": 2,
-                "remove_uninformative_feature_outlier": False,
-                "equalFeatureVar": True,
-                "nameStandards": None,
-                "min_peptides": 1,
+                "normalization": cfg.msstats_normalization,
+                "logTrans": cfg.msstats_log_base,
+                "summaryMethod": cfg.msstats_summary_method,
+                "MBimpute": cfg.msstats_impute,
+                "featureSubset": cfg.msstats_feature_selection,
+                "n_top_feature": cfg.msstats_n_top_feature,
+                "censoredInt": cfg.msstats_censored_int,
+                "maxQuantileforCensored": cfg.msstats_max_quantile,
+                "remove50missing": cfg.msstats_remove50missing,
+                "min_feature_count": cfg.msstats_min_feature_count,
+                "remove_uninformative_feature_outlier": cfg.msstats_remove_uninformative_feature_outlier,
+                "equalFeatureVar": cfg.msstats_equal_feature_var,
+                "nameStandards": cfg.msstats_name_standards,
+                "min_peptides": cfg.min_peptides_per_protein if cfg.min_peptides_per_protein else 1,
                 "numberOfCores": n_cores,
             }
 
@@ -307,8 +308,8 @@ class MsstatsWrapper:
             "nameStandards": cfg.msstats_name_standards,
             "min_peptides": cfg.min_peptides_per_protein if cfg.min_peptides_per_protein else 1,
             "numberOfCores": (
-                await self._calibrate_ncores(input_file)
-                if cfg.msstats_n_cores is None or cfg.msstats_n_cores == 32
+                await self._calibrate_ncores(input_file, cfg)
+                if cfg.msstats_n_cores is None
                 else cfg.msstats_n_cores
             ),
         }

@@ -99,9 +99,9 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
 
     gene_mapping = get_gene_mapping(ctx.config.organism)
 
-    # Use calibrated n_cores if available and user hasn't overridden
-    n_cores = ctx.config.msstats_n_cores if ctx.config.msstats_n_cores else settings.r_n_cores
-    if n_cores == 32 and msstats_wrapper._optimal_ncores is not None:
+    # Use calibrated n_cores if user left it on auto (None), otherwise use user's explicit value
+    n_cores = ctx.config.msstats_n_cores if ctx.config.msstats_n_cores is not None else settings.r_n_cores
+    if ctx.config.msstats_n_cores is None and msstats_wrapper._optimal_ncores is not None:
         n_cores = msstats_wrapper._optimal_ncores
 
     await msstats_wrapper.group_comparison_multi(
