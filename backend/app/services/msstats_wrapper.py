@@ -16,6 +16,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.core.exceptions import RScriptError
+from app.models.analysis import AnalysisConfig
 
 logger = logging.getLogger("proteomics")
 
@@ -97,10 +98,12 @@ class MsstatsWrapper:
         stdout_thread = threading.Thread(
             target=stream_output,
             args=(process.stdout, stdout_lines, "R", "info", log_callback, loop),
+            daemon=True,
         )
         stderr_thread = threading.Thread(
             target=stream_output,
             args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop),
+            daemon=True,
         )
         stdout_thread.start()
         stderr_thread.start()
@@ -111,13 +114,13 @@ class MsstatsWrapper:
         except subprocess.TimeoutExpired:
             process.kill()
             await asyncio.to_thread(process.wait)  # Reap zombie on Windows
-            await asyncio.to_thread(stdout_thread.join, timeout=5)
-            await asyncio.to_thread(stderr_thread.join, timeout=5)
+            stdout_thread.join(timeout=5)
+            stderr_thread.join(timeout=5)
             raise
 
-        # Wait for output threads to finish
-        await asyncio.to_thread(stdout_thread.join)
-        await asyncio.to_thread(stderr_thread.join)
+        # Wait for output threads to finish (with timeout to prevent hangs)
+        stdout_thread.join(timeout=30)
+        stderr_thread.join(timeout=30)
 
         stdout_str = "\n".join(stdout_lines)
         stderr_str = "\n".join(stderr_lines)
@@ -179,25 +182,28 @@ class MsstatsWrapper:
                 details={"script": str(script_path)},
             )
 
-        # Extract config values with defaults
-        normalization = (
-            getattr(config, "msstats_normalization", "equalizeMedians")
-            if config
-            else "equalizeMedians"
-        )
-        feature_selection = (
-            getattr(config, "msstats_feature_selection", "all") if config else "all"
-        )
-        summary_method = (
-            getattr(config, "msstats_summary_method", "TMP") if config else "TMP"
-        )
-        impute = getattr(config, "msstats_impute", False) if config else False
-        log_base = getattr(config, "msstats_log_base", 2) if config else 2
-        censored_int = getattr(config, "msstats_censored_int", "NA") if config else "NA"
-        max_quantile = getattr(config, "msstats_max_quantile", 0.999) if config else 0.999
-        remove50missing = getattr(config, "msstats_remove50missing", False) if config else False
+        # Build JSON config dict with MSstats-native parameter names
+        cfg = config if config else AnalysisConfig()
+        r_config = {
+            "normalization": cfg.msstats_normalization,
+            "logTrans": cfg.msstats_log_base,
+            "summaryMethod": cfg.msstats_summary_method,
+            "MBimpute": cfg.msstats_impute,
+            "featureSubset": cfg.msstats_feature_selection,
+            "n_top_feature": cfg.msstats_n_top_feature,
+            "censoredInt": cfg.msstats_censored_int,
+            "maxQuantileforCensored": cfg.msstats_max_quantile,
+            "remove50missing": cfg.msstats_remove50missing,
+            "min_feature_count": cfg.msstats_min_feature_count,
+            "remove_uninformative_feature_outlier": cfg.msstats_remove_uninformative_feature_outlier,
+            "equalFeatureVar": cfg.msstats_equal_feature_var,
+            "nameStandards": cfg.msstats_name_standards,
+            "min_peptides": cfg.min_peptides_per_protein if cfg.min_peptides_per_protein else 1,
+        }
 
-        # Build command
+        config_json = json.dumps(r_config)
+
+        # Build command: Rscript expects <input> <output> <rds> <gene_map> <config_json>
         cmd = [
             self.r_executable,
             str(script_path),
@@ -205,14 +211,7 @@ class MsstatsWrapper:
             str(output_file),
             str(rds_output),
             str(gene_mapping_file) if gene_mapping_file else "",
-            str(normalization),
-            str(feature_selection),
-            str(summary_method),
-            str(impute).lower(),
-            str(log_base),
-            str(censored_int),
-            str(max_quantile),
-            str(remove50missing).lower(),
+            config_json,
         ]
 
         logger.info(f"R command: {' '.join(cmd)}")
@@ -248,6 +247,9 @@ class MsstatsWrapper:
         output_dir: Path,
         comparisons: list[dict[str, str]],
         gene_mapping_file: Optional[Path] = None,
+        covariates: Optional[dict] = None,
+        log_base: int = 2,
+        save_fitted_models: bool = True,
         log_callback: Optional[callable] = None,
     ) -> Path:
         """
@@ -258,6 +260,8 @@ class MsstatsWrapper:
             output_dir: Directory for per-comparison Diff_Expression_*.tsv files
             comparisons: List of {treatment, control} dicts
             gene_mapping_file: Optional protein to gene mapping file
+            covariates: Optional dict of per-sample covariates (filename -> {column -> value})
+            log_base: Log base for fold change calculation (default 2)
             log_callback: Optional callback function for real-time log messages
 
         Returns:
@@ -280,9 +284,18 @@ class MsstatsWrapper:
             )
 
         comparisons_json = json.dumps(comparisons)
-        covariates_json = "{}"  # Placeholder for future covariate support
+        covariates_json = json.dumps(covariates or {})
 
-        n_cores = settings.r_n_cores
+        # Build JSON config for group comparison
+        gc_config = {
+            "log_base": log_base,
+            "save_fitted_models": save_fitted_models,
+            "numberOfCores": settings.r_n_cores,
+        }
+        config_json = json.dumps(gc_config)
+
+        # Build command: Rscript expects <rds_file> <output_dir> <comparisons_json>
+        #                <covariates_json> <gene_mapping_file> <config_json>
         cmd = [
             self.r_executable,
             str(script_path),
@@ -291,7 +304,7 @@ class MsstatsWrapper:
             comparisons_json,
             covariates_json,
             str(gene_mapping_file) if gene_mapping_file else "",
-            str(n_cores),
+            config_json,
         ]
 
         logger.info(f"R command: {' '.join(cmd[:5])}...")
