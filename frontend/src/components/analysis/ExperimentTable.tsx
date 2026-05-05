@@ -229,6 +229,9 @@ export const ExperimentTable: React.FC = () => {
 
   const totalPages = Math.ceil(filteredAndSortedFiles.length / pageSize);
 
+  // Reset page when filters change
+  React.useEffect(() => { setPage(1); }, [filterText, filterExperiment, filterCondition]);
+
   // --- Custom column management ---
   const addColumn = () => {
     const name = newColName.trim();
@@ -290,7 +293,8 @@ export const ExperimentTable: React.FC = () => {
       const values = [file.filename];
       allCols.forEach((col) => {
         const val = meta[col] ?? '';
-        const escaped = val.includes(',') || val.includes('"') ? `"${val.replace(/"/g, '""')}"` : val;
+        const needsEscape = val.includes(',') || val.includes('"') || val.includes('\n') || val.includes('\r');
+        const escaped = needsEscape ? `"${val.replace(/"/g, '""')}"` : val;
         values.push(escaped);
       });
       return values.join(',');
@@ -513,7 +517,7 @@ export const ExperimentTable: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-background divide-y divide-border">
-            {filteredAndSortedFiles.map((file, index) => {
+            {filteredAndSortedFiles.slice((page - 1) * pageSize, page * pageSize).map((file, index) => {
               const isSelected = selectedFiles.has(file.filename);
               
               return (
