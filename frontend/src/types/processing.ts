@@ -166,16 +166,16 @@ export const PROCESSING_STEPS: Omit<ProcessingStepDef, 'status' | 'progress' | '
   {
     id: 6,
     name: 'Calculate Protein Abundance',
-    description: 'Aggregate peptide abundances to protein level using msqrob2',
-    package: 'R/msqrob2',
-    function: 'aggregateFeatures()',
+    description: 'Aggregate peptide abundances to protein level',
+    package: '',
+    function: '',
   },
   {
     id: 7,
     name: 'Differential Expression Analysis',
-    description: 'Perform differential expression analysis using msqrob2',
-    package: 'R/msqrob2',
-    function: 'msqrob()',
+    description: 'Perform differential expression analysis',
+    package: '',
+    function: '',
   },
   {
     id: 8,

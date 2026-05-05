@@ -176,7 +176,7 @@ function AnalysisContent() {
       }
 
       // Navigate to processing page - WebSocket will connect and receive updates
-      router.push(`/analysis/processing?session_id=${sessionId}`);
+      router.push(`/analysis/processing?session_id=${sessionId}&pipeline=${state.selectedPipeline || 'msqrob2'}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';
       addToast('error', `Failed to start analysis: ${message}`);

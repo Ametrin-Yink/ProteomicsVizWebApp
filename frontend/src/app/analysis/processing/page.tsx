@@ -200,6 +200,7 @@ function ProcessingContent() {
   const sessionId = searchParams.get('session_id');
   const removeRazor = searchParams.get('remove_razor') !== 'false'; // Default true
 
+  const pipeline = (searchParams.get('pipeline') as 'msqrob2' | 'msstats') || 'msqrob2';
   const [startError, setStartError] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -245,13 +246,25 @@ function ProcessingContent() {
   useWebSocket(storeSessionId);
 
   // Always poll as safety net for completion detection (works alongside WebSocket)
-  // Polling provides reliable fallback when WebSocket drops during long R processing
+  // Polling provides reliable fallback when WebSocket drops during long R processing.
+  // Uses recursive setTimeout to prevent overlapping requests from racing on state.
   useEffect(() => {
     if (!sessionId || isComplete || error) return;
 
-    const pollInterval = setInterval(async () => {
+    let active = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const poll = async () => {
+      if (!active) return;
+
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         const logData = await processingAPI.getLogs(sessionId);
+        clearTimeout(timeoutId);
+
+        if (!active) return;
+
         if (logData) {
           // Sync step progress from completed_steps and current_step
           if (logData.completed_steps && logData.current_step) {
@@ -304,18 +317,31 @@ function ProcessingContent() {
               } | undefined) ?? undefined,
               duration: 0,
             });
-            clearInterval(pollInterval);
+            return; // Stop polling
           }
         }
       } catch (err) {
         if (err instanceof TypeError && err.message.includes('fetch')) {
           return;
         }
-        console.error('Polling error:', err);
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Request timed out, will retry
+        } else {
+          console.error('Polling error:', err);
+        }
       }
-    }, 3000); // Poll every 3 seconds
 
-    return () => clearInterval(pollInterval);
+      if (active) {
+        timeoutId = setTimeout(poll, 3000);
+      }
+    };
+
+    timeoutId = setTimeout(poll, 3000);
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+    };
   }, [sessionId, isConnected, isComplete, error, setComplete, setLogs, syncStepProgress, setQueued, clearQueued]);
 
   // Note: Processing is started by the analysis page before navigation.
@@ -333,7 +359,7 @@ function ProcessingContent() {
         const logData = await processingAPI.getLogs(sessionId);
 
         // Initialize steps based on server state
-        initializeSteps(removeRazor);
+        initializeSteps(removeRazor, pipeline);
 
         // Sync step progress from API (recovers missed WebSocket messages)
         if (logData.completed_steps && logData.current_step) {
@@ -385,7 +411,7 @@ function ProcessingContent() {
       } catch (err) {
         console.error('Failed to fetch initial state:', err);
         // Fallback: initialize fresh steps
-        initializeSteps(removeRazor);
+        initializeSteps(removeRazor, pipeline);
         setFirstStepProcessing();
       }
 
@@ -395,7 +421,7 @@ function ProcessingContent() {
     };
 
     initFromServer();
-  }, [sessionId, removeRazor, initializeSteps, syncStepProgress, setLogs, setSessionId, setComplete, setFirstStepProcessing, setQueued, clearQueued]);
+  }, [sessionId, removeRazor, pipeline, initializeSteps, syncStepProgress, setLogs, setSessionId, setComplete, setFirstStepProcessing, setQueued, clearQueued]);
 
   // Note: Processing is started by the analysis page before navigation
   // This page only connects to WebSocket and displays progress

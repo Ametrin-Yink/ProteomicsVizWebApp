@@ -65,7 +65,7 @@ function ConfigContent() {
       return;
     }
 
-    router.push(`/analysis/processing?session_id=${sessionId}`);
+    router.push(`/analysis/processing?session_id=${sessionId}&pipeline=${selectedPipeline}`);
   };
 
   const pipelineLabel = selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2';

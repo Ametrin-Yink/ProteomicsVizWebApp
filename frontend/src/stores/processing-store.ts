@@ -35,7 +35,7 @@ interface ProcessingStore {
   queueLength: number;
 
   // Actions
-  initializeSteps: (removeRazor: boolean) => void;
+  initializeSteps: (removeRazor: boolean, pipeline?: 'msqrob2' | 'msstats') => void;
   setSessionId: (sessionId: string) => void;
   setFirstStepProcessing: () => void;
   updateStepProgress: (message: ProgressMessage['payload']) => void;
@@ -53,14 +53,24 @@ interface ProcessingStore {
 }
 
 
-const createInitialSteps = (removeRazor: boolean = true): ProcessingStepDef[] => {
+const createInitialSteps = (
+  removeRazor: boolean = true,
+  pipeline: 'msqrob2' | 'msstats' = 'msqrob2'
+): ProcessingStepDef[] => {
   return PROCESSING_STEPS
-    .filter((step) => step.id !== 3 || removeRazor)
-    .map((step) => ({
-      ...step,
-      status: 'not_started' as const,
-      progress: 0,
-    }));
+    .filter((step) => removeRazor || step.id !== 3)
+    .map((step) => {
+      const patched = { ...step };
+      if (step.id === 6) {
+        patched.package = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2';
+        patched.function = pipeline === 'msstats' ? 'dataProcess()' : 'aggregateFeatures()';
+      }
+      if (step.id === 7) {
+        patched.package = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2';
+        patched.function = pipeline === 'msstats' ? 'groupComparison()' : 'msqrob()';
+      }
+      return { ...patched, status: 'not_started' as const, progress: 0 };
+    });
 };
 
 export const useProcessingStore = create<ProcessingStore>()(
@@ -81,9 +91,9 @@ export const useProcessingStore = create<ProcessingStore>()(
     queueLength: 0,
 
     // Initialize steps based on configuration
-    initializeSteps: (removeRazor: boolean) => {
+    initializeSteps: (removeRazor: boolean, pipeline?: 'msqrob2' | 'msstats') => {
       set((state) => {
-        state.steps = createInitialSteps(removeRazor);
+        state.steps = createInitialSteps(removeRazor, pipeline);
         state.logs = [];
         state.overallProgress = 0;
         state.isComplete = false;
@@ -153,8 +163,8 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Set multiple logs (for loading historical logs)
     setLogs: (logs: LogEntry[]) => {
       set((state) => {
-        const existingKeys = new Set(state.logs.map(l => `${l.step}-${l.level}-${l.message}`));
-        const newLogs = logs.filter(l => !existingKeys.has(`${l.step}-${l.level}-${l.message}`));
+        const existingKeys = new Set(state.logs.map(l => `${l.step}-${l.level}-${l.message}-${l.timestamp}`));
+        const newLogs = logs.filter(l => !existingKeys.has(`${l.step}-${l.level}-${l.message}-${l.timestamp}`));
         state.logs.push(...newLogs);
       });
     },
