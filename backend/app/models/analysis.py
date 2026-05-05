@@ -105,7 +105,45 @@ class AnalysisConfig(BaseModel):
     msstats_equal_feature_var: bool = Field(default=True, description="Assume equal feature variances (linear summary method only)")
     msstats_name_standards: Optional[str] = Field(default=None, description="Comma-separated standard protein names for GLOBALSTANDARDS normalization")
     msstats_save_fitted_models: bool = Field(default=True, description="Save fitted linear models in groupComparison output")
-    msstats_n_cores: int = Field(default=32, ge=1, description="Number of CPU cores for parallel R processing")
+    msstats_n_cores: Optional[int] = Field(default=None, description="Number of CPU cores for parallel R processing. None = auto-calibrate.")
+
+    # msqrob2-specific parameters
+    msqrob2_normalization: str = Field(
+        default="center.median",
+        description="Normalization method: center.median, center.mean, quantiles, quantiles.robust, vsn, div.median, none",
+    )
+    msqrob2_imputation: str = Field(
+        default="none",
+        description="Imputation method: none, knn, bpca, MinDet, MinProb, QRILC, MLE",
+    )
+    msqrob2_aggregation: str = Field(
+        default="robustSummary",
+        description="Protein aggregation method: robustSummary, medianPolish, sum, mean",
+    )
+    msqrob2_model: str = Field(
+        default="msqrobLm",
+        description="DE model type: msqrobLm (robust linear), msqrobGlm (generalized linear)",
+    )
+    msqrob2_robust: bool = Field(
+        default=True,
+        description="Use robust M-estimation (Huber weights) for DE model fitting",
+    )
+    msqrob2_ridge: bool = Field(
+        default=False,
+        description="Apply ridge penalty for high-dimensional/collinear designs",
+    )
+    msqrob2_adjust_method: str = Field(
+        default="BH",
+        description="Multiple testing correction: BH, bonferroni, holm, BY, fdr",
+    )
+    msqrob2_min_peptides: int = Field(
+        default=1, ge=1, le=10,
+        description="Minimum peptides per protein for aggregation",
+    )
+    msqrob2_n_cores: int = Field(
+        default=32, ge=1,
+        description="Number of CPU cores for parallel msqrob2 processing",
+    )
 
     # Covariate columns (selected metadata columns used as model covariates)
     covariate_columns: Optional[list[str]] = Field(default=None, description="Metadata column names to use as covariates")
