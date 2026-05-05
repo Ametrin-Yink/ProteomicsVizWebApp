@@ -155,12 +155,12 @@ export const useAnalysisStore = create<AnalysisState>()(
         if (file) {
           if (updates.experiment !== undefined) file.experiment = updates.experiment;
           if (updates.condition !== undefined) file.condition = updates.condition;
+          // Sync to metadata_columns so the unified panel and downstream consumers stay consistent
+          if (!state.config.metadata_columns) state.config.metadata_columns = {};
+          if (!state.config.metadata_columns[filename]) state.config.metadata_columns[filename] = {};
+          if (updates.experiment !== undefined) state.config.metadata_columns[filename].experiment = updates.experiment;
+          if (updates.condition !== undefined) state.config.metadata_columns[filename].condition = updates.condition;
         }
-        // Sync to metadata_columns so the unified panel and downstream consumers stay consistent
-        if (!state.config.metadata_columns) state.config.metadata_columns = {};
-        if (!state.config.metadata_columns[filename]) state.config.metadata_columns[filename] = {};
-        if (updates.experiment !== undefined) state.config.metadata_columns[filename].experiment = updates.experiment;
-        if (updates.condition !== undefined) state.config.metadata_columns[filename].condition = updates.condition;
       });
     },
 
