@@ -36,7 +36,7 @@ config_json     <- if (length(args) >= 6 && nzchar(args[6])) args[6] else "{}"
 config <- fromJSON(config_json)
 log_base        <- if (!is.null(config$log_base)) as.numeric(config$log_base) else 2
 num_cores       <- if (!is.null(config$numberOfCores)) as.integer(config$numberOfCores) else 1
-save_fitted_models <- if (!is.null(config$save_fitted_models)) as.logical(config$save_fitted_models) else FALSE
+save_fitted_models <- if (!is.null(config$save_fitted_models)) as.logical(config$save_fitted_models) else TRUE
 
 cat("Step 7: Running multi-condition differential expression with MSstats\n")
 cat("Arguments received:", length(args), "\n")
