@@ -6,55 +6,53 @@
 # converter for proper preprocessing, then calls dataProcess().
 #
 # Usage: Rscript msstats_data_process.R <input_file> <output_file> <rds_output>
-#        <gene_mapping_file> <normalization> <feature_selection>
-#        <summary_method> <impute> <log_base>
-#        <censored_int> <max_quantile> <remove50missing>
+#        <gene_mapping_file> <config_json>
+#        Where config_json is a JSON string with named analysis parameters
 
 cat("Loading R packages...\n")
 suppressPackageStartupMessages({
     library(data.table)
     library(MSstats)
     library(MSstatsConvert)
+    library(jsonlite)
 })
 cat("R packages loaded successfully\n")
 
-# Parse command line arguments
+# Parse command line arguments (5 args: 4 file paths + 1 JSON config)
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 12) {
+if (length(args) < 5) {
     stop(paste("Usage: Rscript msstats_data_process.R <input_file> <output_file> <rds_output>",
-               "<gene_mapping_file> <normalization> <feature_selection>",
-               "<summary_method> <impute> <log_base>",
-               "<censored_int> <max_quantile> <remove50missing>"))
+               "<gene_mapping_file> <config_json>"))
 }
 
-input_file      <- args[1]
-output_file     <- args[2]
-rds_output      <- args[3]
+input_file       <- args[1]
+output_file      <- args[2]
+rds_output       <- args[3]
 gene_mapping_file <- if (nzchar(args[4])) args[4] else NULL
-normalization   <- args[5]
-feature_selection <- args[6]
-summary_method  <- args[7]
-impute          <- tolower(args[8]) == "true"
-log_base        <- as.integer(args[9])
-censored_int    <- if (length(args) >= 10 && nzchar(args[10])) args[10] else "NA"
-max_quantile    <- if (length(args) >= 11 && nzchar(args[11])) as.numeric(args[11]) else 0.999
-remove50missing <- if (length(args) >= 12 && nzchar(args[12])) tolower(args[12]) == "true" else FALSE
+config_json      <- args[5]
+
+# Parse JSON config
+cat("Parsing configuration...\n")
+config <- fromJSON(config_json)
+
+# Set defaults for missing config parameters
+if (is.null(config$normalization)) config$normalization <- "equalizeMedians"
+if (is.null(config$logTrans)) config$logTrans <- 2
+if (is.null(config$summaryMethod)) config$summaryMethod <- "TMP"
+if (is.null(config$MBimpute)) config$MBimpute <- TRUE
+if (is.null(config$featureSubset)) config$featureSubset <- "all"
+if (is.null(config$censoredInt)) config$censoredInt <- "NA"
+if (is.null(config$maxQuantileforCensored)) config$maxQuantileforCensored <- 0.999
+if (is.null(config$remove50missing)) config$remove50missing <- FALSE
+if (is.null(config$min_peptides)) config$min_peptides <- 1
 
 cat("Step 6: Calculating protein abundance with MSstats\n")
-cat("Arguments received:", length(args), "\n")
-for (i in 1:length(args)) {
-    cat("  arg[", i, "]:", args[i], "\n")
-}
 cat("Input file:", input_file, "\n")
 cat("Output file:", output_file, "\n")
 cat("RDS output:", rds_output, "\n")
 cat("Gene mapping file:", gene_mapping_file, "\n")
-cat("Normalization:", normalization, "\n")
-cat("Feature selection:", feature_selection, "\n")
-cat("Summary method:", summary_method, "\n")
-cat("Impute:", impute, "\n")
-cat("Log base:", log_base, "\n")
+cat("Config parameters:", paste(names(config), collapse = ", "), "\n")
 flush.console()
 
 # Check if input file exists
@@ -133,14 +131,14 @@ flush.console()
 cat("\nConverting to MSstats format using OpenMStoMSstatsFormat...\n")
 flush.console()
 
-remove_few <- tolower(feature_selection) == "top3"
+remove_few <- identical(tolower(config$featureSubset), "topn")
 
 converted <- tryCatch({
     MSstatsConvert::OpenMStoMSstatsFormat(
         msstats_df,
         useUniquePeptide = TRUE,
         removeFewMeasurements = !remove_few,
-        removeProteins_with1Feature = FALSE,
+        removeProteins_with1Feature = (config$min_peptides > 1),
         summaryforMultipleRows = max,
         use_log_file = FALSE,
         verbose = FALSE
@@ -154,53 +152,57 @@ cat("Data conversion complete\n")
 flush.console()
 
 # Step 2: Call MSstats::dataProcess on the converted data
-# Map feature_selection to MSstats featureSubset parameter
-if (tolower(feature_selection) == "top3") {
-    feature_subset <- "topN"
-    n_top_features <- 3
-} else {
-    feature_subset <- "all"
-    n_top_features <- NULL
-}
-
 cat("Calling MSstats::dataProcess...\n")
-cat("  normalization:", normalization, "\n")
-cat("  impute:", impute, "\n")
-cat("  log base:", log_base, "\n")
-cat("  feature subset:", feature_subset, "\n")
+cat("  normalization:", config$normalization, "\n")
+cat("  impute:", config$MBimpute, "\n")
+cat("  log base:", config$logTrans, "\n")
+cat("  feature subset:", config$featureSubset, "\n")
 flush.console()
 
+# Derive effective min_feature_count from min_peptides and min_feature_count
+if (is.null(config$min_feature_count) || is.na(config$min_feature_count)) {
+    effective_min_feature_count <- max(2, config$min_peptides)
+} else {
+    effective_min_feature_count <- config$min_feature_count
+}
+
+# Build dataProcess arguments dynamically
+dp_args <- list(
+    data = converted,
+    normalization = config$normalization,
+    logTrans = config$logTrans,
+    summaryMethod = config$summaryMethod,
+    MBimpute = config$MBimpute,
+    featureSubset = config$featureSubset,
+    censoredInt = config$censoredInt,
+    maxQuantileforCensored = config$maxQuantileforCensored,
+    remove50missing = config$remove50missing,
+    min_feature_count = effective_min_feature_count,
+    use_log_file = FALSE,
+    verbose = FALSE
+)
+
+# Add n_top_feature only when using topN feature subset
+if (tolower(config$featureSubset) == "topn" && !is.null(config$n_top_feature)) {
+    dp_args$n_top_feature <- config$n_top_feature
+}
+
+# Add optional parameters when non-NULL
+if (!is.null(config$remove_uninformative_feature_outlier)) {
+    dp_args$remove_uninformative_feature_outlier <- config$remove_uninformative_feature_outlier
+}
+if (!is.null(config$equalFeatureVar)) {
+    dp_args$equalFeatureVar <- config$equalFeatureVar
+}
+if (!is.null(config$nameStandards)) {
+    dp_args$nameStandards <- config$nameStandards
+}
+if (!is.null(config$numberOfCores)) {
+    dp_args$numberOfCores <- config$numberOfCores
+}
+
 processed <- tryCatch({
-    if (feature_subset == "topN") {
-        MSstats::dataProcess(
-            converted,
-            normalization = normalization,
-            logTrans = log_base,
-            summaryMethod = summary_method,
-            MBimpute = impute,
-            featureSubset = feature_subset,
-            n_top_feature = n_top_features,
-            censoredInt = censored_int,
-            maxQuantileForCensored = max_quantile,
-            remove50missing = remove50missing,
-            use_log_file = FALSE,
-            verbose = FALSE
-        )
-    } else {
-        MSstats::dataProcess(
-            converted,
-            normalization = normalization,
-            logTrans = log_base,
-            summaryMethod = summary_method,
-            MBimpute = impute,
-            featureSubset = feature_subset,
-            censoredInt = censored_int,
-            maxQuantileForCensored = max_quantile,
-            remove50missing = remove50missing,
-            use_log_file = FALSE,
-            verbose = FALSE
-        )
-    }
+    do.call(MSstats::dataProcess, dp_args)
 }, error = function(e) {
     cat("MSstats::dataProcess failed:", conditionMessage(e), "\n")
     stop(e)
