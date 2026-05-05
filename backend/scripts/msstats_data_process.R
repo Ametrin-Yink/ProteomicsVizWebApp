@@ -197,9 +197,6 @@ if (!is.null(config$equalFeatureVar)) {
 if (!is.null(config$nameStandards)) {
     dp_args$nameStandards <- config$nameStandards
 }
-if (!is.null(config$numberOfCores)) {
-    dp_args$numberOfCores <- config$numberOfCores
-}
 
 processed <- tryCatch({
     do.call(MSstats::dataProcess, dp_args)
