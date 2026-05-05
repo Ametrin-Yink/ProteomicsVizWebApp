@@ -92,7 +92,7 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 **Critical Pattern - R Integration via Subprocess:**
 ```python
 result = subprocess.run(
-    ['Rscript', 'scripts/msqrob2_protein.R', input_file, output_file],
+    ['Rscript', 'scripts/msqrob2_data_process.R', input_file, output_file],
     capture_output=True, text=True, encoding='utf-8'
 )
 ```
@@ -108,8 +108,8 @@ content = await asyncio.to_thread(read_file, file_path)
 ```
 stores/
 ├── sessionStore.ts     # Session data (persisted)
-├── uiStore.ts / ui-store.ts      # UI state (two separate files, both used)
-├── analysisStore.ts / analysis-store.ts  # Analysis state (two separate files)
+├── ui-store.ts                # UI state
+├── analysis-store.ts          # Analysis state
 ├── processing-store.ts # Real-time processing status
 ```
 
@@ -132,8 +132,8 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 | 3 | Remove Razor Peptides | Python (DataProcessor, conditional) |
 | 4 | Remove Low Quality | Python (DataProcessor) |
 | 5 | Filter by Criteria | Python (DataProcessor) |
-| 6 | Protein Abundance | R/msqrob2 (`msqrob2_protein.R`) |
-| 7 | Differential Expression (multi-condition) | R/msqrob2 (`msqrob2_de_multi.R`) |
+| 6 | Protein Abundance | R/msqrob2 (`msqrob2_data_process.R`) |
+| 7 | Differential Expression (multi-condition) | R/msqrob2 (`msqrob2_group_comparison_multi.R`) |
 | 8 | QC Metrics | Python (QCCalculator) |
 | 9 | GSEA Analysis | Python/gseapy (GO, KEGG, Reactome) |
 
@@ -141,9 +141,8 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 
 | Script | Step | Purpose |
 |--------|------|---------|
-| `msqrob2_protein.R` | 6 | Peptide-to-protein aggregation via msqrob2 |
-| `msqrob2_de.R` | 7 (legacy) | Single-comparison DE via limma |
-| `msqrob2_de_multi.R` | 7 | Multi-condition DE with N conditions, M contrasts |
+| `msqrob2_data_process.R` | 6 | Peptide-to-protein aggregation via msqrob2 |
+| `msqrob2_group_comparison_multi.R` | 7 | Multi-condition DE with N conditions, M contrasts |
 | `msstats_data_process.R` | (alt 6) | MSstats protein abundance (not wired into pipeline) |
 | `msstats_group_comparison_multi.R` | (alt 7) | MSstats group comparison (not wired into pipeline) |
 | `install_r_packages.R` | setup | Installs Bioconductor packages |
@@ -232,8 +231,8 @@ Sessions persisted to `backend/sessions/{session_id}/`:
 - `backend/app/services/pipeline_registry.py` - Template-to-step mapping
 - `backend/app/services/processing_orchestrator.py` - Pipeline orchestration (adapts engine to session lifecycle)
 - `backend/app/models/analysis.py` - AnalysisTemplate enum, AnalysisConfig, pipeline models
-- `backend/scripts/msqrob2_protein.R` - Step 6 (protein abundance)
-- `backend/scripts/msqrob2_de_multi.R` - Step 7 (multi-condition DE)
+- `backend/scripts/msqrob2_data_process.R` - Step 6 (protein abundance)
+- `backend/scripts/msqrob2_group_comparison_multi.R` - Step 7 (multi-condition DE)
 - `frontend/next.config.ts` - Frontend config, API proxy to `http://127.0.0.1:8000`
 - `AGENTS/` - 9 developer guides covering overview, red lines, coding standards, API contract, state management, error handling, testing, pipeline, and lessons learned
 - `docs/api/openapi.yaml` - API specification

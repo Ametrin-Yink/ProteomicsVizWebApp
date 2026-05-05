@@ -13,8 +13,8 @@ Input: PSM CSV Files → Steps 1-9 → Output: Results, QC Plots, GSEA
 | 3 | Remove Razor (optional) | Python | (in place) |
 | 4 | Remove Low Quality | Python/Pandas | (in place) |
 | 5 | Filter by Criteria | Python/Pandas | saves PSM to Parquet/TSV |
-| 6 | Protein Abundance | R/msqrob2 (`msqrob2_protein.R`) | `Protein_Abundances.tsv` |
-| 7 | Differential Expression (multi-condition) | R/msqrob2 (`msqrob2_de_multi.R`) | `Diff_Expression.tsv` |
+| 6 | Protein Abundance | R/msqrob2 (`msqrob2_data_process.R`) | `Protein_Abundances.tsv` |
+| 7 | Differential Expression (multi-condition) | R/msqrob2 (`msqrob2_group_comparison_multi.R`) | `Diff_Expression.tsv` |
 | 8 | QC Metrics | Python/sklearn PCA | `QC_Results.json` |
 | 9 | GSEA Analysis | Python/gseapy `gp.prerank()` | GSEA results (5 databases) |
 
@@ -46,8 +46,7 @@ An MSstats-based pipeline exists but is **not wired into any template**:
 ### Steps 6-7 (R/msqrob2)
 - R integration via subprocess, never rpy2
 - Step 6 aggregates peptide-level data to protein-level using robust M-estimation (msqrob2)
-- Step 7 handles N conditions with M arbitrary contrasts via limma (`msqrob2_de_multi.R`)
-- Legacy single-comparison script `msqrob2_de.R` still exists but is not used by the active pipeline
+- Step 7 handles N conditions with M arbitrary contrasts via limma (`msqrob2_group_comparison_multi.R`)
 
 ### Step 8 (QC)
 - PCA on protein abundances (sklearn)

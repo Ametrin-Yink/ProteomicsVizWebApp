@@ -26,14 +26,14 @@ ProteomicsVizWebApp/
 │   │   ├── services/          # Business logic (pipeline engine, wrappers, services)
 │   │   │   └── steps/          # Individual pipeline step handlers
 │   │   └── utils/             # validators, file_parser, helpers
-│   └── scripts/               # R scripts (msqrob2_protein.R, msqrob2_de_multi.R, MSstats, install/verify)
+│   └── scripts/               # R scripts (msqrob2_data_process.R, msqrob2_group_comparison_multi.R, MSstats, install/verify)
 ├── frontend/
 │   └── src/
 │       ├── app/               # Next.js pages
 │       ├── components/        # React components (35+)
 │       ├── hooks/             # Custom hooks (use-websocket)
 │       ├── lib/               # API client, utils
-│       ├── stores/            # 5 Zustand stores (with Immer)
+│       ├── stores/            # 4 Zustand stores (with Immer)
 │       └── types/             # TypeScript types
 ├── Tests/                     # ALL tests go here
 │   ├── backend/               # pytest unit + integration
