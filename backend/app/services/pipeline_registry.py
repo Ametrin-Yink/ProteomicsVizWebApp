@@ -13,7 +13,6 @@ from app.services.steps import (
     step_msstats_protein_abundance,
     step_msstats_group_comparison,
     step_qc_metrics,
-    step_gsea_analysis,
 )
 
 PIPELINES: dict[str, PipelineDefinition] = {}
@@ -54,7 +53,6 @@ register(
             step_multi_condition_de,
         ),
         PipelineStep(8, "qc_metrics", "QC Metrics", step_qc_metrics),
-        PipelineStep(9, "gsea", "GSEA Analysis", step_gsea_analysis),
     ],
 )
 
@@ -93,6 +91,5 @@ register(
             step_msstats_group_comparison,
         ),
         PipelineStep(8, "qc_metrics", "QC Metrics", step_qc_metrics),
-        PipelineStep(9, "gsea", "GSEA Analysis", step_gsea_analysis),
     ],
 )

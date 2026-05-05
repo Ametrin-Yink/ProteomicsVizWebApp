@@ -32,18 +32,18 @@ from app.services.steps import (
 class TestMsqrob2PipelineStructure:
     """Verify msqrob2 pipeline definition is correctly structured."""
 
-    def test_nine_steps(self):
-        """Pipeline has exactly 9 steps."""
+    def test_eight_steps(self):
+        """Pipeline has exactly 8 steps."""
         from app.services.pipeline_registry import PIPELINES
         pipeline = PIPELINES[AnalysisTemplate.MULTI_CONDITION]
-        assert len(pipeline.steps) == 9
+        assert len(pipeline.steps) == 8
 
     def test_step_numbers_sequential(self):
-        """Steps are numbered 1 through 9."""
+        """Steps are numbered 1 through 8."""
         from app.services.pipeline_registry import PIPELINES
         pipeline = PIPELINES[AnalysisTemplate.MULTI_CONDITION]
         numbers = [s.number for s in pipeline.steps]
-        assert numbers == list(range(1, 10))
+        assert numbers == list(range(1, 9))
 
     def test_step_6_is_msqrob2(self):
         """Step 6 uses msqrob2 handler."""

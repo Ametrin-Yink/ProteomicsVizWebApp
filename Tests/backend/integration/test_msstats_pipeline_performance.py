@@ -13,11 +13,11 @@ from app.services.pipeline_registry import PIPELINES
 
 
 class TestMsstatsPipelineSplit:
-    """Verify the MSstats pipeline has 9 steps with correct handlers."""
+    """Verify the MSstats pipeline has 8 steps with correct handlers."""
 
-    def test_pipeline_has_nine_steps(self):
+    def test_pipeline_has_eight_steps(self):
         pipeline = PIPELINES[AnalysisTemplate.MSSTATS]
-        assert len(pipeline.steps) == 9, f"Expected 9 steps, got {len(pipeline.steps)}"
+        assert len(pipeline.steps) == 8, f"Expected 8 steps, got {len(pipeline.steps)}"
 
     def test_step_6_is_protein_abundance(self):
         pipeline = PIPELINES[AnalysisTemplate.MSSTATS]
