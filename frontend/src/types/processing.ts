@@ -166,14 +166,14 @@ export const PROCESSING_STEPS: Omit<ProcessingStepDef, 'status' | 'progress' | '
   {
     id: 6,
     name: 'Calculate Protein Abundance',
-    description: 'Aggregate peptide abundances to protein level',
+    description: 'Normalize, impute, and aggregate peptides to proteins via QFeatures',
     package: '',
     function: '',
   },
   {
     id: 7,
     name: 'Differential Expression Analysis',
-    description: 'Perform differential expression analysis',
+    description: 'Robust statistical testing via msqrob2 (M-estimation with empirical Bayes)',
     package: '',
     function: '',
   },
