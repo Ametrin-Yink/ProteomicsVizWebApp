@@ -131,6 +131,7 @@ class QCData(BaseModel):
     intensity_distributions: Optional[IntensityDistribution] = None
     data_completeness: Optional[list[DataCompleteness]] = None
     psm_completeness: Optional[list[DataCompleteness]] = None
+    pvalue_distributions: Optional[dict[str, PValueDistribution]] = None
     # Summary statistics
     total_psms: Optional[int] = None
     avg_psms_per_sample: Optional[float] = None
