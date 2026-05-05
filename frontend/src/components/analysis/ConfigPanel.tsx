@@ -6,8 +6,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, Info, Loader2 } from 'lucide-react';
+import { AlertCircle, BarChart3, Info, Loader2 } from 'lucide-react';
 import { useAnalysisStore, getConditions, getAllPairwiseComparisons } from '@/stores/analysis-store';
+import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 import { useUIStore } from '@/stores/ui-store';
 import { organismsApi } from '@/lib/api-client';
 import type { Organism } from '@/types';
@@ -458,108 +459,22 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
         </div>
       )}
 
-      {/* Multi-Condition: MSstats Options (expanded) */}
-      {template === "multi_condition_comparison" && (
-        <div className="space-y-4 mt-4">
-          <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
-            <span className="w-2 h-2 bg-primary rounded-full"></span>
-            MSstats Options
-          </h4>
-
-          {/* Normalization Method */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Normalization</label>
-            <select
-              value={config.msstats_normalization || "equalizeMedians"}
-              onChange={(e) => setConfig({ msstats_normalization: e.target.value })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value="equalizeMedians">Equalize Medians (default)</option>
-              <option value="quantile">Quantile</option>
-            </select>
-          </div>
-
-          {/* Feature Selection */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Feature Selection</label>
-            <select
-              value={config.msstats_feature_selection || "all"}
-              onChange={(e) => setConfig({ msstats_feature_selection: e.target.value })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value="all">All Features (default)</option>
-              <option value="top3">Top 3 Features</option>
-            </select>
-          </div>
-
-          {/* Summary Method */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Summary Method</label>
-            <select
-              value={config.msstats_summary_method || "TMP"}
-              onChange={(e) => setConfig({ msstats_summary_method: e.target.value })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value="TMP">Tukey Median Polish (default)</option>
-              <option value="linear">Linear Mixed Model</option>
-            </select>
-          </div>
-
-          {/* Imputation Controls */}
-          <div className="space-y-3">
-            <Toggle
-              checked={config.msstats_impute ?? true}
-              onChange={(checked) => setConfig({ msstats_impute: checked })}
-              label="Model-based Imputation (MBimpute)"
-              description="Use survival analysis to impute censored missing values. Recommended for most analyses."
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-text">Censored Missing Values Encoded As</label>
-                <select
-                  value={config.msstats_censored_int || "NA"}
-                  onChange={(e) => setConfig({ msstats_censored_int: e.target.value })}
-                  className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-                >
-                  <option value="NA">NA</option>
-                  <option value="0">0 (zero)</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-text">Max Quantile for Censored Cutoff</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  min="0.9"
-                  max="1"
-                  value={config.msstats_max_quantile ?? 0.999}
-                  onChange={(e) => setConfig({ msstats_max_quantile: parseFloat(e.target.value) })}
-                  className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-                />
-              </div>
+      {/* MSstats Options */}
+      {template === "msstats" && (
+        <section className="bg-background border border-border rounded-lg">
+          <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+            <BarChart3 className="w-5 h-5 text-secondary" />
+            <div>
+              <h2 className="text-lg font-semibold text-text">MSstats Parameters</h2>
+              <p className="text-sm text-text-muted">
+                Configure MSstats-specific normalization and processing options
+              </p>
             </div>
-            <Toggle
-              checked={config.msstats_remove50missing ?? false}
-              onChange={(checked) => setConfig({ msstats_remove50missing: checked })}
-              label="Remove Proteins with &gt;50% Missing Values"
-              description="Remove proteins where more than half the values are missing before summarization."
-            />
           </div>
-
-          {/* Log Base */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-text">Log Base</label>
-            <select
-              value={config.msstats_log_base ?? 2}
-              onChange={(e) => setConfig({ msstats_log_base: parseInt(e.target.value) })}
-              className="block w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            >
-              <option value={2}>2 (default)</option>
-              <option value={10}>10</option>
-              <option value={0}>Natural log (e)</option>
-            </select>
+          <div className="p-5">
+            <MsstatsConfigForm config={config} setConfig={setConfig} />
           </div>
-        </div>
+        </section>
       )}
 
       {/* Configuration Summary */}
