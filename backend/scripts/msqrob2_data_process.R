@@ -223,9 +223,9 @@ flush.console()
 # ==========================================================================
 # Log2 transform
 # ==========================================================================
-cat("Log2 transforming peptide abundances...\n")
+cat("Log2 transforming peptide abundances (", format(Sys.time(), "%H:%M:%S"), ")...\n", sep = "")
 pe <- logTransform(pe, base = 2, i = "peptide", name = "peptide_log2")
-cat("Log2 transformation complete\n")
+cat("Log2 transformation complete at", format(Sys.time(), "%H:%M:%S"), "\n")
 flush.console()
 
 # ==========================================================================
@@ -234,7 +234,7 @@ flush.console()
 agg_input <- "peptide_log2"
 
 if (tolower(config$normalization) != "none") {
-    cat("Applying normalization:", config$normalization, "\n")
+    cat("Applying normalization:", config$normalization, "(", format(Sys.time(), "%H:%M:%S"), ")...\n", sep = "")
     flush.console()
 
     # Record pre-normalization sample medians (log2 scale)
@@ -332,8 +332,9 @@ if (n_cores > 1) {
     param <- tryCatch({
         SnowParam(workers = n_cores, progressbar = TRUE)
     }, error = function(e) {
-        cat("SnowParam creation failed:", conditionMessage(e), "\n")
-        cat("Falling back to SerialParam\n")
+        msg <- paste("WARNING: SnowParam creation failed:", conditionMessage(e),
+                     "- falling back to serial processing. Analysis will be slower.")
+        message(msg)
         SerialParam()
     })
 } else {
@@ -356,8 +357,10 @@ pe <- tryCatch({
     )
 }, error = function(e) {
     if (inherits(param, "SnowParam")) {
-        cat("Parallel aggregation failed:", conditionMessage(e), "\n")
-        cat("Retrying with SerialParam...\n")
+        msg <- paste("WARNING: Parallel aggregation failed:",
+                     conditionMessage(e),
+                     "- retrying with serial processing. Analysis will be slower.")
+        message(msg)
         flush.console()
         aggregateFeatures(
             object  = pe,

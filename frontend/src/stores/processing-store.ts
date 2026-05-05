@@ -22,7 +22,6 @@ interface ProcessingStore {
   // State
   steps: ProcessingStepDef[];
   logs: LogEntry[];
-  overallProgress: number;
   isConnected: boolean;
   isComplete: boolean;
   isCancelled: boolean;
@@ -69,7 +68,7 @@ const createInitialSteps = (
         patched.package = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2';
         patched.function = pipeline === 'msstats' ? 'groupComparison()' : 'msqrobLm()';
       }
-      return { ...patched, status: 'not_started' as const, progress: 0 };
+      return { ...patched, status: 'not_started' as const };
     });
 };
 
@@ -78,7 +77,6 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Initial state
     steps: [],
     logs: [],
-    overallProgress: 0,
     isConnected: false,
     isComplete: false,
     isCancelled: false,
@@ -95,7 +93,6 @@ export const useProcessingStore = create<ProcessingStore>()(
       set((state) => {
         state.steps = createInitialSteps(removeRazor, pipeline);
         state.logs = [];
-        state.overallProgress = 0;
         state.isComplete = false;
         state.isCancelled = false;
         state.error = null;
@@ -121,7 +118,6 @@ export const useProcessingStore = create<ProcessingStore>()(
         step.status = message.status === 'completed' ? 'completed' :
                       message.status === 'started' ? 'in_progress' :
                       message.status as 'in_progress' | 'completed' | 'not_started' | 'error';
-        step.progress = message.progress;
         if (message.message) {
           step.message = message.message;
         }
@@ -130,9 +126,6 @@ export const useProcessingStore = create<ProcessingStore>()(
         if (message.status === 'started' || message.status === 'in_progress') {
           state.isQueued = false;
         }
-
-        // Update overall progress
-        state.overallProgress = message.overall_progress;
       });
     },
 
@@ -199,11 +192,8 @@ export const useProcessingStore = create<ProcessingStore>()(
         state.steps.forEach((step: ProcessingStepDef) => {
           if (step.status !== 'error') {
             step.status = 'completed';
-            step.progress = 100;
           }
         });
-
-        state.overallProgress = 100;
       });
     },
 
@@ -231,7 +221,6 @@ export const useProcessingStore = create<ProcessingStore>()(
           const step = state.steps.find((s: ProcessingStepDef) => s.id === stepNum);
           if (step && step.status !== 'completed') {
             step.status = 'completed';
-            step.progress = 100;
           }
         }
         // Mark current step as in_progress
@@ -239,14 +228,8 @@ export const useProcessingStore = create<ProcessingStore>()(
           const current = state.steps.find((s: ProcessingStepDef) => s.id === currentStep);
           if (current && current.status === 'not_started') {
             current.status = 'in_progress';
-            current.progress = 50;
           }
         }
-        // Update overall progress based on completed steps
-        const completedCount = state.steps.filter((s: ProcessingStepDef) => s.status === 'completed').length;
-        state.overallProgress = state.steps.length > 0
-          ? Math.round((completedCount / state.steps.length) * 100)
-          : 0;
       });
     },
 
@@ -271,7 +254,6 @@ export const useProcessingStore = create<ProcessingStore>()(
       set((state) => {
         state.steps = [];
         state.logs = [];
-        state.overallProgress = 0;
         state.isConnected = false;
         state.isComplete = false;
         state.isCancelled = false;
@@ -296,10 +278,8 @@ export const useProcessingStore = create<ProcessingStore>()(
         state.queueLength = 0;
         state.steps.forEach((step: ProcessingStepDef) => {
           step.status = 'not_started';
-          step.progress = 0;
           step.message = undefined;
         });
-        state.overallProgress = 0;
         state.logs = [];
       });
     },

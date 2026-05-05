@@ -140,9 +140,9 @@ class AnalysisConfig(BaseModel):
         default=1, ge=1, le=10,
         description="Minimum peptides per protein for aggregation",
     )
-    msqrob2_n_cores: int = Field(
-        default=32, ge=1,
-        description="Number of CPU cores for parallel msqrob2 processing",
+    msqrob2_n_cores: Optional[int] = Field(
+        default=None, ge=1,
+        description="Number of CPU cores for parallel msqrob2 processing. None = auto-calibrate.",
     )
 
     # Covariate columns (selected metadata columns used as model covariates)

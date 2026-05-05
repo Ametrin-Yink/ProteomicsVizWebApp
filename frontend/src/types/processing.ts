@@ -12,7 +12,7 @@ export interface ProcessingStepDef {
   name: string;
   description: string;
   status: StepStatus;
-  progress: number; // 0-100
+  progress?: number; // 0-100 (legacy — no longer rendered by UI)
   message?: string;
   package: string;
   function: string;
@@ -29,7 +29,6 @@ export interface LogEntry {
 export interface ProcessingState {
   steps: ProcessingStepDef[];
   logs: LogEntry[];
-  overallProgress: number;
   isConnected: boolean;
   isComplete: boolean;
   error: ProcessingError | null;

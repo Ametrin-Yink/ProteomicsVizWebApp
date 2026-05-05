@@ -12,6 +12,23 @@ from app.core.exceptions import ProcessingError
 logger = logging.getLogger("proteomics")
 
 
+async def safe_log(
+    callback: Callable | None,
+    level: str,
+    message: str,
+) -> None:
+    """Call a log callback safely, supporting both sync and async callbacks."""
+    if callback is None:
+        return
+    try:
+        if asyncio.iscoroutinefunction(callback):
+            await callback(level, message)
+        else:
+            callback(level, message)
+    except Exception:
+        pass
+
+
 def get_gene_mapping(organism: Organism | None) -> Path | None:
     """Get gene mapping file for organism."""
     if not organism or not settings.protein_database_dir:

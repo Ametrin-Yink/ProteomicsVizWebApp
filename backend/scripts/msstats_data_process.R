@@ -128,7 +128,7 @@ flush.console()
 # Step 1: Convert raw data to MSstats internal format using OpenMStoMSstatsFormat
 # This handles all preprocessing: feature definition, shared peptide removal,
 # balanced design, etc. This is the recommended approach for DDA label-free data.
-cat("\nConverting to MSstats format using OpenMStoMSstatsFormat...\n")
+cat("\nConverting to MSstats format using OpenMStoMSstatsFormat (", format(Sys.time(), "%H:%M:%S"), ")...\n", sep = "")
 flush.console()
 
 remove_few <- identical(tolower(config$featureSubset), "topn")
@@ -152,7 +152,7 @@ cat("Data conversion complete\n")
 flush.console()
 
 # Step 2: Call MSstats::dataProcess on the converted data
-cat("Calling MSstats::dataProcess...\n")
+cat("Calling MSstats::dataProcess (", format(Sys.time(), "%H:%M:%S"), ") - this may take a while...\n", sep = "")
 cat("  normalization:", config$normalization, "\n")
 cat("  impute:", config$MBimpute, "\n")
 cat("  log base:", config$logTrans, "\n")
@@ -208,7 +208,7 @@ processed <- tryCatch({
     stop(e)
 })
 
-cat("dataProcess complete\n")
+cat("dataProcess complete at", format(Sys.time(), "%H:%M:%S"), "\n")
 flush.console()
 
 # Save BOTH objects as RDS for groupComparison step:

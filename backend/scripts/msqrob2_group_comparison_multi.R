@@ -33,6 +33,7 @@ suppressPackageStartupMessages({
     library(limma)
     library(matrixStats)
     library(jsonlite)
+    library(BiocParallel)
 })
 
 # ============================================================================
@@ -88,6 +89,10 @@ cat("  ridge:", ridge, "\n")
 cat("  adjust_method:", adjust_method, "\n")
 flush.console()
 
+# numberOfCores for BiocParallel
+n_cores <- if (!is.null(config$numberOfCores)) as.integer(config$numberOfCores) else 1L
+if (is.na(n_cores) || n_cores < 1L) n_cores <- 1L
+
 # Validate config
 VALID_MODELS <- c("msqrobLm", "msqrobGlm")
 VALID_ADJUST <- c("BH", "bonferroni", "holm", "BY", "fdr")
@@ -100,6 +105,22 @@ if (!adjust_method %in% VALID_ADJUST) {
     stop(paste("Invalid adjust_method:", adjust_method, "- must be one of",
                paste(VALID_ADJUST, collapse = ", ")))
 }
+
+# Set up BiocParallel for per-comparison parallelization
+if (n_cores > 1L) {
+    cat("Setting up SnowParam with", n_cores, "workers\n")
+    BPPARAM <- tryCatch({
+        SnowParam(workers = n_cores, progressbar = TRUE)
+    }, error = function(e) {
+        cat("WARNING: SnowParam creation failed:", conditionMessage(e), "\n")
+        cat("WARNING: Falling back to serial processing. Analysis will be slower.\n")
+        SerialParam()
+    })
+} else {
+    cat("Using SerialParam (single-core)\n")
+    BPPARAM <- SerialParam()
+}
+cat("  numberOfCores:", n_cores, "\n")
 
 # ============================================================================
 # Validate inputs
@@ -363,7 +384,7 @@ cat("\n=== Step 7: Fitting model with", model_type, "===\n")
 flush.console()
 
 if (model_type == "msqrobLm") {
-    cat("  Fitting msqrobLm (robust =", robust, ", maxitRob = 5)\n")
+    cat("  Fitting msqrobLm (robust =", robust, ", maxitRob = 10)\n")
     flush.console()
 
     fit <- msqrobLm(
@@ -371,7 +392,7 @@ if (model_type == "msqrobLm") {
         formula = ~ 0 + condition,
         data    = col_data,
         robust  = robust,
-        maxitRob = 5
+        maxitRob = 10
     )
 } else {
     # msqrobGlm requires PSM counts per protein
@@ -398,232 +419,199 @@ cat("  Coefficients:", paste(colnames(coef(fit)), collapse = ", "), "\n")
 flush.console()
 
 # ============================================================================
-# STEP 8: Process each comparison
+# STEP 8: Build contrast vectors for all comparisons
 # ============================================================================
 cat("\n=== Step 8: Processing comparisons ===\n")
 flush.console()
 
 coef_names <- colnames(coef(fit))
+cat("Processing", length(comparisons), "comparisons with",
+    if (inherits(BPPARAM, "SnowParam")) paste0(n_cores, " parallel workers") else "serial processing", "\n")
+flush.console()
+
+# Build contrast vectors for all comparisons (serial — lightweight)
+contrast_list <- vector("list", length(comparisons))
+valid_comparisons <- logical(length(comparisons))
 
 for (i in seq_along(comparisons)) {
-    comp  <- comparisons[[i]]
-    label <- comparison_labels[i]
-
-    cat("\n--- Comparison", i, ":", label, "---\n")
-
-    # Extract group values as flat character vectors
+    comp <- comparisons[[i]]
     g1_values <- as.character(unlist(comp$group1))
     g2_values <- as.character(unlist(comp$group2))
 
-    # Build contrast vector: +1 for group1 (treatment), -1 for group2 (control)
     contrast_vec <- setNames(rep(0, length(coef_names)), coef_names)
-
     for (val in g1_values) {
-        if (val %in% coef_names) {
-            contrast_vec[val] <- contrast_vec[val] + 1
-        } else {
-            cat("    Warning: group1 value '", val, "' not in model coefficients\n", sep = "")
-        }
+        if (val %in% coef_names) contrast_vec[val] <- contrast_vec[val] + 1
     }
     for (val in g2_values) {
-        if (val %in% coef_names) {
-            contrast_vec[val] <- contrast_vec[val] - 1
-        } else {
-            cat("    Warning: group2 value '", val, "' not in model coefficients\n", sep = "")
-        }
+        if (val %in% coef_names) contrast_vec[val] <- contrast_vec[val] - 1
     }
-
-    cat("    Contrast vector:\n")
-    print(contrast_vec)
-    flush.console()
 
     if (all(contrast_vec == 0)) {
-        cat("    ERROR: Contrast is all zeros, skipping this comparison\n")
+        cat("  Comparison", i, ": contrast is all zeros, skipping\n")
         next
     }
 
-    # Apply hypothesis test
-    cat("    Running hypothesis test...\n")
-    flush.console()
+    contrast_list[[i]] <- contrast_vec
+    valid_comparisons[i] <- TRUE
+    cat("  Comparison", i, "(", comparison_labels[i], "): contrast =",
+        paste(names(contrast_vec)[contrast_vec != 0], contrast_vec[contrast_vec != 0],
+              sep = ":", collapse = ", "), "\n")
+}
+flush.console()
 
-    test_result <- tryCatch(
-        hypothesisTest(fit, contrast = contrast_vec),
-        error = function(e) {
-            cat("    ERROR: hypothesisTest failed:", conditionMessage(e), "\n")
-            return(NULL)
-        }
+# ============================================================================
+# STEP 9: Run hypothesis tests in parallel
+# ============================================================================
+cat("\n=== Step 9: Running hypothesis tests ===\n")
+flush.console()
+
+# Pre-build zero-variance data frame (same for all comparisons)
+zero_var_df_template <- NULL
+if (length(zero_var_ids) > 0) {
+    zero_var_df_template <- data.frame(
+        Master_Protein_Accessions = zero_var_ids,
+        stringsAsFactors = FALSE
     )
-
-    if (is.null(test_result)) {
-        cat("    Skipping comparison due to test failure\n")
-        next
-    }
-
-    # Extract results
-    cat("    Extracting top features...\n")
-    flush.console()
-
-    results <- topFeatures(
-        test_result,
-        contrast       = 1,
-        adjust.method  = adjust_method,
-        sort           = TRUE
+    zero_var_df_template$Gene_Name <- gene_names[zero_var_ids]
+    zero_var_df_template$Gene_Name[is.na(zero_var_df_template$Gene_Name)] <- sub(
+        "-\\d+$", "", zero_var_ids[is.na(zero_var_df_template$Gene_Name)]
     )
+    zero_var_df_template$PSM_Count <- psm_counts[zero_var_ids]
+    zero_var_df_template$PSM_Count[is.na(zero_var_df_template$PSM_Count)] <- 0L
+    zero_var_df_template$logFC   <- 0
+    zero_var_df_template$pval    <- NA_real_
+    zero_var_df_template$adjPval <- NA_real_
+    zero_var_df_template$se      <- NA_real_
+    zero_var_df_template$df      <- NA_integer_
+}
 
-    if (!is.data.frame(results)) {
-        results <- as.data.frame(results)
-    }
-
-    cat("    Results:", nrow(results), "proteins,", length(names(results)), "columns\n")
-    cat("    Columns:", paste(names(results), collapse = ", "), "\n")
-    flush.console()
-
-    # ========================================================================
-    # STEP 9: Map column names to frontend contract
-    # ========================================================================
-    cat("    Mapping to frontend column contract...\n")
-
-    # Master_Protein_Accessions from rownames
-    results$Master_Protein_Accessions <- rownames(results)
-
-    # Gene_Name from checkpoint (named vector lookup)
-    results$Gene_Name <- gene_names[results$Master_Protein_Accessions]
-    results$Gene_Name[is.na(results$Gene_Name)] <- sub(
-        "-\\d+$", "",
-        results$Master_Protein_Accessions[is.na(results$Gene_Name)]
-    )
-
-    # PSM_Count from checkpoint
-    results$PSM_Count <- psm_counts[results$Master_Protein_Accessions]
-    results$PSM_Count[is.na(results$PSM_Count)] <- 0L
-
-    # logFC - try common column names from msqrob2 output
-    logFC_sources <- c("logFC", "log2FC", "coef", "Estimate", "log2FoldChange")
-    found_logFC <- FALSE
-    for (src in logFC_sources) {
-        if (src %in% names(results)) {
-            if (!"logFC" %in% names(results)) {
-                results$logFC <- results[[src]]
-            }
-            found_logFC <- TRUE
-            break
-        }
-    }
-    if (!found_logFC) {
-        results$logFC <- NA_real_
-    }
-
-    # pval - try common column names
-    pval_sources <- c("pval", "P.Value", "pvalue", "p.value", "pValue", "PValue")
-    found_pval <- FALSE
-    for (src in pval_sources) {
-        if (src %in% names(results)) {
-            if (!"pval" %in% names(results)) {
-                results$pval <- results[[src]]
-            }
-            found_pval <- TRUE
-            break
-        }
-    }
-    if (!found_pval) {
-        results$pval <- NA_real_
-    }
-
-    # adjPval
-    adjPval_sources <- c("adjPval", "adj.P.Val", "padj", "adj.p.value",
+# Closure captures invariant context; signature reduced to (idx)
+process_one_comparison <- local({
+    # Capture invariant state from enclosing scope
+    .contrasts      <- contrast_list
+    .labels         <- comparison_labels
+    .fit            <- fit
+    .coef_names     <- coef_names
+    .gene_names     <- gene_names
+    .psm_counts     <- psm_counts
+    .adjust_method  <- adjust_method
+    .zero_var_df_tmpl <- zero_var_df_template
+    .logFC_sources  <- c("logFC", "log2FC", "coef", "Estimate", "log2FoldChange")
+    .pval_sources   <- c("pval", "P.Value", "pvalue", "p.value", "pValue", "PValue")
+    .adjPval_srcs   <- c("adjPval", "adj.P.Val", "padj", "adj.p.value",
                          "adjPValue", "adj_pvalue", "qvalue")
-    found_adjPval <- FALSE
-    for (src in adjPval_sources) {
-        if (src %in% names(results)) {
-            if (!"adjPval" %in% names(results)) {
-                results$adjPval <- results[[src]]
+    .se_sources     <- c("se", "SE", "StdError", "std_error", "standard_error")
+    .df_sources     <- c("df", "dfPosterior", "DF", "degrees_freedom",
+                         "df.residual", "df_total")
+
+    function(idx) {
+        contrast_vec <- .contrasts[[idx]]
+        label <- .labels[idx]
+
+        test_result <- tryCatch(
+            hypothesisTest(.fit, contrast = contrast_vec),
+            error = function(e) {
+                cat("    ERROR in comparison", idx, "(", label, "):", conditionMessage(e), "\n")
+                return(NULL)
             }
-            found_adjPval <- TRUE
-            break
-        }
-    }
-    if (!found_adjPval) {
-        results$adjPval <- NA_real_
-    }
-
-    # se (standard error)
-    se_sources <- c("se", "SE", "StdError", "std_error", "standard_error")
-    found_se <- FALSE
-    for (src in se_sources) {
-        if (src %in% names(results)) {
-            if (!"se" %in% names(results)) {
-                results$se <- results[[src]]
-            }
-            found_se <- TRUE
-            break
-        }
-    }
-    if (!found_se) {
-        results$se <- NA_real_
-    }
-
-    # df (degrees of freedom)
-    df_sources <- c("df", "dfPosterior", "DF", "degrees_freedom",
-                    "df.residual", "df_total")
-    found_df <- FALSE
-    for (src in df_sources) {
-        if (src %in% names(results)) {
-            if (!"df" %in% names(results)) {
-                results$df <- results[[src]]
-            }
-            found_df <- TRUE
-            break
-        }
-    }
-    if (!found_df) {
-        results$df <- NA_integer_
-    }
-
-    # ========================================================================
-    # STEP 10: Re-add zero-variance proteins
-    # ========================================================================
-    if (length(zero_var_ids) > 0) {
-        cat("    Re-adding", length(zero_var_ids), "zero-variance proteins\n")
-
-        zero_var_df <- data.frame(
-            Master_Protein_Accessions = zero_var_ids,
-            stringsAsFactors = FALSE
         )
 
-        # Gene names for zero-var proteins
-        zero_var_df$Gene_Name <- gene_names[zero_var_ids]
-        zero_var_df$Gene_Name[is.na(zero_var_df$Gene_Name)] <- sub(
+        if (is.null(test_result)) return(NULL)
+
+        results <- topFeatures(
+            test_result,
+            contrast       = 1,
+            adjust.method  = .adjust_method,
+            sort           = TRUE
+        )
+
+        if (!is.data.frame(results)) {
+            results <- as.data.frame(results)
+        }
+
+        # Map to frontend column contract
+        results$Master_Protein_Accessions <- rownames(results)
+
+        results$Gene_Name <- .gene_names[results$Master_Protein_Accessions]
+        results$Gene_Name[is.na(results$Gene_Name)] <- sub(
             "-\\d+$", "",
-            zero_var_ids[is.na(zero_var_df$Gene_Name)]
+            results$Master_Protein_Accessions[is.na(results$Gene_Name)]
         )
 
-        # PSM counts for zero-var proteins
-        zero_var_df$PSM_Count <- psm_counts[zero_var_ids]
-        zero_var_df$PSM_Count[is.na(zero_var_df$PSM_Count)] <- 0L
+        results$PSM_Count <- .psm_counts[results$Master_Protein_Accessions]
+        results$PSM_Count[is.na(results$PSM_Count)] <- 0L
 
-        # Default values for zero-variance proteins
-        zero_var_df$logFC   <- 0
-        zero_var_df$pval    <- NA_real_
-        zero_var_df$adjPval <- NA_real_
-        zero_var_df$se      <- NA_real_
-        zero_var_df$df      <- NA_integer_
-
-        # Fill any extra columns with NA
-        for (col in setdiff(names(results), names(zero_var_df))) {
-            zero_var_df[[col]] <- NA
+        # Map column names via lookup tables
+        map_column <- function(results_df, sources, target_name, default_val) {
+            for (src in sources) {
+                if (src %in% names(results_df)) {
+                    if (!(target_name %in% names(results_df)))
+                        results_df[[target_name]] <- results_df[[src]]
+                    return(results_df)
+                }
+            }
+            results_df[[target_name]] <- default_val
+            results_df
         }
 
-        # Align column order
-        zero_var_df <- zero_var_df[, names(results), drop = FALSE]
+        results <- map_column(results, .logFC_sources, "logFC", NA_real_)
+        results <- map_column(results, .pval_sources,  "pval",  NA_real_)
+        results <- map_column(results, .adjPval_srcs,  "adjPval", NA_real_)
+        results <- map_column(results, .se_sources,    "se",    NA_real_)
+        results <- map_column(results, .df_sources,    "df",    NA_integer_)
 
-        results <- rbind(results, zero_var_df)
+        # Re-add zero-variance proteins from pre-built template
+        if (!is.null(.zero_var_df_tmpl)) {
+            zero_var_df <- .zero_var_df_tmpl
+            # Fill any extra columns with NA (handles varying msqrob2 output columns)
+            for (col in setdiff(names(results), names(zero_var_df))) {
+                zero_var_df[[col]] <- NA
+            }
+            zero_var_df <- zero_var_df[, names(results), drop = FALSE]
+            results <- rbind(results, zero_var_df)
+        }
+
+        return(results)
+    }
+})
+
+# Run comparisons in parallel; fall back to serial if SnowParam fails
+valid_idx <- which(valid_comparisons)
+cat("Running", length(valid_idx), "comparisons...\n")
+flush.console()
+
+parallel_args <- list(
+    X = valid_idx,
+    FUN = process_one_comparison
+)
+
+all_results <- tryCatch({
+    do.call(bplapply, c(parallel_args, list(BPPARAM = BPPARAM)))
+}, error = function(e) {
+    cat("WARNING: Parallel processing failed:", conditionMessage(e), "\n")
+    cat("WARNING: Falling back to serial processing. Analysis will be slower.\n")
+    flush.console()
+    do.call(lapply, parallel_args)
+})
+
+# ============================================================================
+# STEP 10: Write TSV files and print summaries
+# ============================================================================
+cat("\n=== Step 10: Writing results ===\n")
+flush.console()
+
+for (i in seq_along(valid_idx)) {
+    results <- all_results[[i]]
+    actual_idx <- valid_idx[i]
+    label <- comparison_labels[actual_idx]
+
+    if (is.null(results)) {
+        cat("  Skipping comparison", actual_idx, "(", label, "): processing failed\n")
+        next
     }
 
-    # ========================================================================
-    # STEP 11: Write per-comparison TSV
-    # ========================================================================
     output_file <- file.path(output_dir, paste0("Diff_Expression_", label, ".tsv"))
-    cat("    Writing:", output_file, "\n")
+    cat("  Writing:", output_file, "(", nrow(results), "proteins)\n")
 
     write.table(
         results,
@@ -634,18 +622,15 @@ for (i in seq_along(comparisons)) {
         na        = "NA"
     )
 
-    # ========================================================================
-    # STEP 12: Print summary
-    # ========================================================================
+    # Print summary
     sig_count   <- sum(results$adjPval < 0.05, na.rm = TRUE)
     up_count    <- sum(results$logFC > 0 & results$adjPval < 0.05, na.rm = TRUE)
     down_count  <- sum(results$logFC < 0 & results$adjPval < 0.05, na.rm = TRUE)
 
-    cat("    Summary:\n")
-    cat("      Total proteins:", nrow(results), "\n")
-    cat("      Significant (adjPval < 0.05):", sig_count, "\n")
-    cat("      Upregulated:", up_count, "\n")
-    cat("      Downregulated:", down_count, "\n")
+    cat("    Total proteins:", nrow(results), "\n")
+    cat("    Significant (adjPval < 0.05):", sig_count, "\n")
+    cat("    Upregulated:", up_count, "\n")
+    cat("    Downregulated:", down_count, "\n")
     flush.console()
 }
 

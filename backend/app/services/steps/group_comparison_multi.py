@@ -5,7 +5,6 @@ import logging
 
 import pandas as pd
 
-from app.core.config import settings
 from app.services.msstats_wrapper import msstats_wrapper
 from app.services.pipeline_engine import StepContext
 from app.services.steps._helpers import (
@@ -99,20 +98,15 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
 
     gene_mapping = get_gene_mapping(ctx.config.organism)
 
-    # Use calibrated n_cores if user left it on auto (None), otherwise use user's explicit value
-    n_cores = ctx.config.msstats_n_cores if ctx.config.msstats_n_cores is not None else settings.r_n_cores
-    if ctx.config.msstats_n_cores is None and msstats_wrapper._optimal_ncores is not None:
-        n_cores = msstats_wrapper._optimal_ncores
-
     await msstats_wrapper.group_comparison_multi(
         rds_file=rds_input,
         output_dir=ctx.results_dir,
         comparisons=comparisons,
         gene_mapping_file=gene_mapping,
+        config=ctx.config,
         covariates=covariate_data,
         log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
         save_fitted_models=ctx.config.msstats_save_fitted_models,
-        n_cores=n_cores,
         log_callback=create_log_callback(ctx, step=7),
         timeout_multiplier=ctx.timeout_multiplier,
     )
