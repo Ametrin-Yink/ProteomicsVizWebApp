@@ -109,40 +109,166 @@ if (length(covariates) > 0 && !is.null(processed$ProteinLevelData)) {
     flush.console()
 }
 
-# Parse comparisons JSON
-cat("Parsing comparisons JSON...\n")
-comparisons <- fromJSON(comparisons_json)
-cat("Number of comparisons:", nrow(comparisons), "\n")
-for (i in 1:nrow(comparisons)) {
-    cat("  Comparison", i, ":", comparisons$treatment[i], "vs", comparisons$control[i], "\n")
+# Build combined GROUP column from all metadata condition columns
+# Exclude core MSstats columns and known non-condition columns
+core_cols <- c("RUN", "Protein", "LogIntensities", "originalRUN", "GROUP",
+               "SUBJECT", "Label", "NumMeasuredFeature", "MissingPercentage",
+               "more50missing", "NumImputedFeature")
+all_pdata_cols <- names(processed$ProteinLevelData)
+
+# Also exclude covariate columns that were injected
+covariate_cols <- if (exists("cov_names") && length(cov_names) > 0) cov_names else character(0)
+condition_cols <- setdiff(all_pdata_cols, c(core_cols, covariate_cols))
+
+if (length(condition_cols) > 0) {
+    cat("Building combined GROUP from columns:", paste(condition_cols, collapse=", "), "\n")
+    condition_cols <- sort(condition_cols)  # consistent ordering
+    processed$ProteinLevelData$GROUP <- apply(
+        processed$ProteinLevelData[, condition_cols, drop=FALSE], 1,
+        function(row) paste(row, collapse="_")
+    )
+    cat("Unique GROUP levels:", paste(unique(processed$ProteinLevelData$GROUP), collapse=", "), "\n")
+} else {
+    # Fallback: use existing GROUP if already present
+    if (!("GROUP" %in% names(processed$ProteinLevelData))) {
+        stop("No condition columns found and no GROUP column present")
+    }
+    cat("Using existing GROUP column\n")
 }
 flush.console()
 
-# Verify all comparison conditions exist
-for (i in 1:nrow(comparisons)) {
-    if (!(comparisons$treatment[i] %in% condition_levels)) {
-        stop(paste("Treatment condition '", comparisons$treatment[i],
-                   "' not found in data. Available:", paste(condition_levels, collapse = ", ")))
-    }
-    if (!(comparisons$control[i] %in% condition_levels)) {
-        stop(paste("Control condition '", comparisons$control[i],
-                   "' not found in data. Available:", paste(condition_levels, collapse = ", ")))
-    }
+# Parse comparisons (new format: [{group1: {col:val}, group2: {col:val}}])
+cat("Parsing comparisons JSON...\n")
+comparisons_raw <- fromJSON(comparisons_json)
+
+# Handle both old and new format
+if (!is.null(comparisons_raw$group1) && !is.null(comparisons_raw$group2)) {
+    # Single comparison object (wrapped)
+    comparisons_raw <- list(comparisons_raw)
 }
 
-# Build contrast matrix: one row per comparison
-n_conditions <- length(condition_levels)
-n_comparisons <- nrow(comparisons)
-contrast_matrix <- matrix(0, nrow = n_comparisons, ncol = n_conditions)
-colnames(contrast_matrix) <- condition_levels
-rownames(contrast_matrix) <- paste(comparisons$treatment, "vs", comparisons$control, sep = "_")
+cat("Number of comparisons:", length(comparisons_raw), "\n")
+flush.console()
 
-for (i in 1:n_comparisons) {
-    contrast_matrix[i, comparisons$treatment[i]] <- 1
-    contrast_matrix[i, comparisons$control[i]] <- -1
+# Resolve each comparison to GROUP-level matches
+resolved <- list()
+for (i in seq_along(comparisons_raw)) {
+    comp <- comparisons_raw[[i]]
+
+    # Handle new format: {group1: {col:val}, group2: {col:val}}
+    if (!is.null(comp$group1) && is.list(comp$group1)) {
+        g1_criteria <- comp$group1
+        g2_criteria <- comp$group2
+        cat("Comparison", i, ": group1 =", toJSON(g1_criteria), ", group2 =", toJSON(g2_criteria), "\n")
+
+        pdata <- processed$ProteinLevelData
+
+        # Group 1: samples matching ALL criteria in group1
+        g1_mask <- rep(TRUE, nrow(pdata))
+        for (col_name in names(g1_criteria)) {
+            if (col_name %in% names(pdata)) {
+                g1_mask <- g1_mask & (as.character(pdata[[col_name]]) == as.character(g1_criteria[[col_name]]))
+            } else {
+                cat("  WARNING: column", col_name, "not found in ProteinLevelData\n")
+            }
+        }
+        g1_groups <- unique(pdata$GROUP[g1_mask])
+        g1_groups <- g1_groups[!is.na(g1_groups)]
+
+        # Group 2: samples matching ALL criteria in group2
+        g2_mask <- rep(TRUE, nrow(pdata))
+        for (col_name in names(g2_criteria)) {
+            if (col_name %in% names(pdata)) {
+                g2_mask <- g2_mask & (as.character(pdata[[col_name]]) == as.character(g2_criteria[[col_name]]))
+            } else {
+                cat("  WARNING: column", col_name, "not found in ProteinLevelData\n")
+            }
+        }
+        g2_groups <- unique(pdata$GROUP[g2_mask])
+        g2_groups <- g2_groups[!is.na(g2_groups)]
+
+        cat("  Group 1 GROUPs:", paste(g1_groups, collapse=", "), "\n")
+        cat("  Group 2 GROUPs:", paste(g2_groups, collapse=", "), "\n")
+
+        if (length(g1_groups) == 0 || length(g2_groups) == 0) {
+            cat("  WARNING: Comparison", i, "has empty group(s), skipping\n")
+            next
+        }
+
+        # Build label: values from group1 vs values from group2
+        g1_label <- paste(sapply(names(g1_criteria), function(n) g1_criteria[[n]]), collapse="+")
+        g2_label <- paste(sapply(names(g2_criteria), function(n) g2_criteria[[n]]), collapse="+")
+        label <- paste0(g1_label, "_vs_", g2_label)
+
+        resolved[[length(resolved) + 1]] <- list(
+            group1 = g1_groups,
+            group2 = g2_groups,
+            label = label
+        )
+
+    # Handle old format: {treatment: "A", control: "B"} -- backward compat
+    } else if (!is.null(comp$treatment) && !is.null(comp$control)) {
+        cat("Comparison", i, ": treatment =", comp$treatment, ", control =", comp$control, "\n")
+        g1_groups <- comp$treatment
+        g2_groups <- comp$control
+        resolved[[length(resolved) + 1]] <- list(
+            group1 = g1_groups,
+            group2 = g2_groups,
+            label = paste0(comp$treatment, "_vs_", comp$control)
+        )
+    } else {
+        cat("WARNING: Comparison", i, "has unknown format, skipping\n")
+    }
+}
+flush.console()
+
+if (length(resolved) == 0) {
+    stop("No valid comparisons to run after resolving group criteria")
 }
 
-cat("Contrast matrix:\n")
+cat("\nResolved", length(resolved), "comparisons to GROUP-level contrasts\n")
+for (i in seq_along(resolved)) {
+    cat("  ", resolved[[i]]$label, "\n")
+}
+flush.console()
+
+# Build contrast matrix with pooled comparison support
+all_groups <- sort(unique(processed$ProteinLevelData$GROUP))
+all_groups <- all_groups[!is.na(all_groups) & all_groups != ""]
+n_groups <- length(all_groups)
+n_comps <- length(resolved)
+
+cat("\nAll unique GROUPs (", n_groups, "):", paste(all_groups, collapse=", "), "\n")
+
+contrast_matrix <- matrix(0, nrow = n_comps, ncol = n_groups)
+colnames(contrast_matrix) <- all_groups
+row_names <- character(n_comps)
+
+for (i in seq_len(n_comps)) {
+    rc <- resolved[[i]]
+    g1_grps <- rc$group1
+    g2_grps <- rc$group2
+    row_names[i] <- rc$label
+
+    # Verify groups exist in data
+    missing_g1 <- setdiff(g1_grps, all_groups)
+    missing_g2 <- setdiff(g2_grps, all_groups)
+    if (length(missing_g1) > 0) {
+        cat("WARNING:", rc$label, "- Group 1 GROUPs not in data:", paste(missing_g1, collapse=", "), "\n")
+    }
+    if (length(missing_g2) > 0) {
+        cat("WARNING:", rc$label, "- Group 2 GROUPs not in data:", paste(missing_g2, collapse=", "), "\n")
+    }
+
+    # Set +1 for Group 1 GROUPs, -1 for Group 2 GROUPs
+    valid_g1 <- intersect(g1_grps, all_groups)
+    valid_g2 <- intersect(g2_grps, all_groups)
+    if (length(valid_g1) > 0) contrast_matrix[i, valid_g1] <- 1
+    if (length(valid_g2) > 0) contrast_matrix[i, valid_g2] <- -1
+}
+rownames(contrast_matrix) <- row_names
+
+cat("\nContrast matrix:\n")
 print(contrast_matrix)
 cat("Using", num_cores, "cores for parallel processing\n")
 flush.console()
