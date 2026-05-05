@@ -80,6 +80,16 @@ export interface SessionConfig {
   msstats_name_standards?: string;
   msstats_save_fitted_models?: boolean;
   msstats_n_cores?: number;
+  // msqrob2
+  msqrob2_normalization?: string;
+  msqrob2_imputation?: string;
+  msqrob2_aggregation?: string;
+  msqrob2_model?: string;
+  msqrob2_robust?: boolean;
+  msqrob2_ridge?: boolean;
+  msqrob2_adjust_method?: string;
+  msqrob2_min_peptides?: number;
+  msqrob2_n_cores?: number;
   // Covariates
   covariate_columns?: string[];
 }
