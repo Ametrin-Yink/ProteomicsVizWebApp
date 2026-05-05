@@ -9,7 +9,7 @@ import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
 import { getDEResults, getSession, updateSessionVisualizationState } from '@/lib/api';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
-import { isSignificantVolcano, parseDelimited } from '@/lib/utils';
+import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 
 
 function ResultsContent() {
@@ -86,7 +86,7 @@ function ResultsContent() {
         if (!comparisonInitialized.current) {
           if (comparisons && comparisons.length > 0) {
             const first = comparisons[0];
-            setSelectedComparison(`${Object.values(first.group1).join('+')}_vs_${Object.values(first.group2).join('+')}`);
+            setSelectedComparison(`${formatGroup(first.group1)}_vs_${formatGroup(first.group2)}`);
           } else if (cfg.treatment && cfg.control) {
             setSelectedComparison('');
           }
@@ -284,8 +284,8 @@ function ResultsContent() {
           {sessionConfig?.comparisons && sessionConfig.comparisons.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {sessionConfig.comparisons.map((c, i) => {
-                const g1 = Object.values(c.group1).join('+');
-                const g2 = Object.values(c.group2).join('+');
+                const g1 = formatGroup(c.group1);
+                const g2 = formatGroup(c.group2);
                 const val = `${g1}_vs_${g2}`;
                 return (
                   <button
