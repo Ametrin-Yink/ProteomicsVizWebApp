@@ -32,11 +32,90 @@ class MsstatsWrapper:
     def __init__(self):
         """Initialize wrapper with R executable path."""
         self.r_executable = settings.r_executable
+        self._optimal_ncores: int | None = None
         self.timeout = settings.r_script_timeout
         self.scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 
+    async def _calibrate_ncores(self, input_file: Path) -> int:
+        """Benchmark SnowParam worker counts on a data slice, return optimal ncores.
+
+        Runs dataProcess on first 100K rows with worker counts [1, 4, 8, 16, 32],
+        picks the fastest. Result cached for backend process lifetime.
+        Falls back to user-configured msstats_n_cores if calibration fails.
+        """
+        if self._optimal_ncores is not None:
+            return self._optimal_ncores
+
+        logger.info("Calibrating optimal SnowParam worker count...")
+        candidate_counts = [1, 4, 8, 16, 32]
+        best_n = 4  # conservative default
+        best_time = float("inf")
+
+        for n in candidate_counts:
+            try:
+                elapsed = await self._benchmark_ncores(input_file, n)
+                logger.info(f"  n_cores={n}: {elapsed:.1f}s")
+                if elapsed < best_time:
+                    best_time = elapsed
+                    best_n = n
+            except Exception as e:
+                logger.warning(f"  n_cores={n}: calibration failed ({e})")
+
+        self._optimal_ncores = best_n
+        logger.info(f"Calibration complete: optimal n_cores={best_n} ({best_time:.1f}s)")
+        return best_n
+
+    async def _benchmark_ncores(self, input_file: Path, n_cores: int) -> float:
+        """Run a quick dataProcess benchmark with n_cores on a data slice."""
+        import time
+
+        slice_file = input_file.parent / f"_calibration_slice_{n_cores}.parquet"
+        rds_file = input_file.parent / f"_calibration_{n_cores}.rds"
+        out_file = input_file.parent / f"_calibration_output_{n_cores}.tsv"
+
+        try:
+            import pandas as pd
+            df = pd.read_parquet(input_file)
+            slice_df = df.head(100000)
+            slice_df.to_parquet(slice_file)
+
+            bench_config = {
+                "normalization": "equalizeMedians",
+                "logTrans": 2,
+                "summaryMethod": "TMP",
+                "MBimpute": False,
+                "featureSubset": "highQuality",
+                "n_top_feature": 3,
+                "censoredInt": "NA",
+                "maxQuantileforCensored": 0.999,
+                "remove50missing": False,
+                "min_feature_count": 2,
+                "remove_uninformative_feature_outlier": False,
+                "equalFeatureVar": True,
+                "nameStandards": None,
+                "min_peptides": 1,
+                "numberOfCores": n_cores,
+            }
+
+            script_path = self.scripts_dir / "msstats_data_process.R"
+            config_json = json.dumps(bench_config)
+            cmd = [
+                self.r_executable, str(script_path),
+                str(slice_file), str(out_file), str(rds_file), "", config_json,
+            ]
+
+            start = time.time()
+            await self._run_r_script(cmd, script_path, timeout=120)
+            return time.time() - start
+        finally:
+            for f in [slice_file, rds_file, out_file]:
+                if f.exists():
+                    f.unlink(missing_ok=True)
+
     async def _run_r_script(
-        self, cmd: list[str], script_path: Path, log_callback: Optional[callable] = None
+        self, cmd: list[str], script_path: Path,
+        log_callback: Optional[callable] = None,
+        timeout: int | None = None,
     ) -> None:
         """
         Run an R script via subprocess with real-time output streaming.
@@ -49,7 +128,8 @@ class MsstatsWrapper:
         Raises:
             RScriptError: If script fails or times out
         """
-        logger.info(f"Starting R script with timeout {self.timeout}s")
+        effective_timeout = timeout if timeout is not None else self.timeout
+        logger.info(f"Starting R script with timeout {effective_timeout}s")
 
         # Get the running event loop for callback scheduling
         try:
@@ -108,15 +188,40 @@ class MsstatsWrapper:
         stdout_thread.start()
         stderr_thread.start()
 
+        # Start heartbeat thread — logs every 60s while process runs
+        heartbeat_stop = threading.Event()
+
+        def heartbeat():
+            count = 0
+            while not heartbeat_stop.is_set():
+                if heartbeat_stop.wait(60):
+                    break
+                count += 1
+                msg = f"Still working... ({count * 60}s elapsed)"
+                logger.info(f"Heartbeat: {msg}")
+                if log_callback and loop:
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            log_callback("info", msg), loop
+                        )
+                    except Exception:
+                        pass
+
+        heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+        heartbeat_thread.start()
+
         # Wait for process to complete with timeout (non-blocking)
         try:
-            await asyncio.to_thread(process.wait, timeout=self.timeout)
+            await asyncio.to_thread(process.wait, timeout=effective_timeout)
         except subprocess.TimeoutExpired:
             process.kill()
             await asyncio.to_thread(process.wait)  # Reap zombie on Windows
             stdout_thread.join(timeout=5)
             stderr_thread.join(timeout=5)
             raise
+        finally:
+            heartbeat_stop.set()
+            heartbeat_thread.join(timeout=1)
 
         # Wait for output threads to finish (with timeout to prevent hangs)
         stdout_thread.join(timeout=30)
@@ -148,6 +253,8 @@ class MsstatsWrapper:
         gene_mapping_file: Optional[Path] = None,
         config: Optional[object] = None,
         log_callback: Optional[callable] = None,
+        timeout: int | None = None,
+        timeout_multiplier: int = 1,
     ) -> Path:
         """
         Step 6: Calculate protein abundance using MSstats dataProcess.
@@ -199,7 +306,11 @@ class MsstatsWrapper:
             "equalFeatureVar": cfg.msstats_equal_feature_var,
             "nameStandards": cfg.msstats_name_standards,
             "min_peptides": cfg.min_peptides_per_protein if cfg.min_peptides_per_protein else 1,
-            "numberOfCores": cfg.msstats_n_cores if cfg.msstats_n_cores else settings.r_n_cores,
+            "numberOfCores": (
+                await self._calibrate_ncores(input_file)
+                if cfg.msstats_n_cores is None or cfg.msstats_n_cores == 32
+                else cfg.msstats_n_cores
+            ),
         }
 
         config_json = json.dumps(r_config)
@@ -218,7 +329,8 @@ class MsstatsWrapper:
         logger.info(f"R command: {' '.join(cmd)}")
 
         try:
-            await self._run_r_script(cmd, script_path, log_callback)
+            effective_timeout = (timeout if timeout is not None else settings.r_data_process_timeout) * timeout_multiplier
+            await self._run_r_script(cmd, script_path, log_callback, timeout=effective_timeout)
 
             logger.info(
                 "Step 6 complete: Protein abundance calculated",
@@ -253,6 +365,8 @@ class MsstatsWrapper:
         save_fitted_models: bool = True,
         n_cores: int = 32,
         log_callback: Optional[callable] = None,
+        timeout: int | None = None,
+        timeout_multiplier: int = 1,
     ) -> Path:
         """
         Step 7 (multi-condition): Run MSstats groupComparison for all contrasts.
@@ -312,7 +426,8 @@ class MsstatsWrapper:
         logger.info(f"R command: {' '.join(cmd[:5])}...")
 
         try:
-            await self._run_r_script(cmd, script_path, log_callback)
+            effective_timeout = (timeout if timeout is not None else settings.r_group_comparison_timeout) * timeout_multiplier
+            await self._run_r_script(cmd, script_path, log_callback, timeout=effective_timeout)
 
             logger.info(
                 "Step 7 (multi) complete: Multi-condition differential expression calculated",
