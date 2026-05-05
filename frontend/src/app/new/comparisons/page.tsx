@@ -9,7 +9,7 @@ import {
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
-import { cn } from '@/lib/utils';
+import { cn, formatGroup } from '@/lib/utils';
 
 function ComparisonsContent() {
   const router = useRouter();
@@ -429,11 +429,6 @@ function ComparisonsContent() {
       </div>
     </div>
   );
-}
-
-// Helper for formatting group display
-function formatGroup(g: Record<string, string>): string {
-  return Object.entries(g).map(([, v]) => v).join('+') || '(any)';
 }
 
 export default function ComparisonsPage() {

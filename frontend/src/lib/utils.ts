@@ -98,6 +98,11 @@ export function exportToCSV<T extends Record<string, unknown>>(
   document.body.removeChild(link);
 }
 
+// Format a group condition to a display string
+export function formatGroup(g: Record<string, string>): string {
+  return Object.entries(g).map(([, v]) => v).join('+') || '(any)';
+}
+
 // Format numbers for display
 export function formatNumber(
   value: number | undefined | null,

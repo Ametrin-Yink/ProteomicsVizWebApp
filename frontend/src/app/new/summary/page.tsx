@@ -9,19 +9,17 @@ import {
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, processingApi } from '@/lib/api-client';
-import { cn } from '@/lib/utils';
-
-function formatGroup(g: Record<string, string>): string {
-  return Object.entries(g).map(([, v]) => v).join('+') || '(any)';
-}
+import { cn, formatGroup } from '@/lib/utils';
 
 function SummaryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || '';
 
-  const state = useAnalysisStore();
-  const { config, selectedPipeline, uploadedFiles } = state;
+  const config = useAnalysisStore((s) => s.config);
+  const selectedPipeline = useAnalysisStore((s) => s.selectedPipeline);
+  const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
+  const availableOrganisms = useAnalysisStore((s) => s.availableOrganisms);
   const { addToast } = useUIStore();
 
   const [isStarting, setIsStarting] = React.useState(false);
@@ -48,9 +46,9 @@ function SummaryContent() {
   );
 
   const organismLabel = React.useMemo(() => {
-    const org = state.availableOrganisms.find((o) => o.id === config.organism);
+    const org = availableOrganisms.find((o) => o.id === config.organism);
     return org?.display_name || config.organism || 'Not selected';
-  }, [config.organism, state.availableOrganisms]);
+  }, [config.organism, availableOrganisms]);
 
   const handleBack = () => {
     router.push(`/new/config?session=${sessionId}`);
@@ -64,12 +62,14 @@ function SummaryContent() {
       await sessionsApi.updateConfig(sessionId, config);
     } catch (error) {
       addToast('warning', `Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsStarting(false);
+      return;
     }
 
     try {
       await processingApi.start(sessionId);
-    } catch {
-      addToast('error', 'Failed to start processing. Please try again.');
+    } catch (error) {
+      addToast('error', `Failed to start processing: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsStarting(false);
       return;
     }
