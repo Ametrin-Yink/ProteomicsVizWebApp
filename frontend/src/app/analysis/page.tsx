@@ -111,7 +111,23 @@ function AnalysisContent() {
                 });
               }
             }
-            
+
+            // Restore comparisons from backend session config
+            const backendConfig = session.config as Record<string, unknown>;
+            if (backendConfig?.comparisons && Array.isArray(backendConfig.comparisons)) {
+              setConfig({ comparisons: backendConfig.comparisons as Array<{ treatment: string; control: string }> });
+            }
+
+            // Restore metadata columns
+            if (backendConfig?.metadata_columns) {
+              setConfig({ metadata_columns: backendConfig.metadata_columns as Record<string, Record<string, string>> });
+            }
+
+            // Restore covariate columns
+            if (backendConfig?.covariate_columns && Array.isArray(backendConfig.covariate_columns)) {
+              setConfig({ covariate_columns: backendConfig.covariate_columns as string[] });
+            }
+
             addToast('info', 'Session loaded');
             setIsCreatingSession(false);
             return;
