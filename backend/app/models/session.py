@@ -31,9 +31,9 @@ class SessionConfig(BaseModel):
         default=None, description="Treatment condition name"
     )
     control: Optional[str] = Field(default=None, description="Control condition name")
-    organism: str = Field(
-        ...,
-        pattern=r"^[a-z]+$",
+    organism: Optional[str] = Field(
+        default=None,
+        pattern=r"^(|[a-z]+)$",
         description="Organism identifier (e.g., 'human', 'mouse')",
     )
     remove_razor: bool = Field(
@@ -61,12 +61,30 @@ class SessionConfig(BaseModel):
     msstats_max_quantile: Optional[float] = Field(default=None)
     msstats_remove50missing: Optional[bool] = Field(default=None)
 
+    # Shared advanced parameters (previously dropped by backend)
+    pvalue_threshold: Optional[float] = Field(default=None, ge=0.001, le=0.5)
+    logfc_threshold: Optional[float] = Field(default=None, ge=0.1, le=5.0)
+    min_peptides_per_protein: Optional[int] = Field(default=None, ge=1, le=10)
+
+    # MSstats advanced parameters (new)
+    msstats_n_top_feature: Optional[int] = Field(default=None)
+    msstats_min_feature_count: Optional[int] = Field(default=None)
+    msstats_remove_uninformative_feature_outlier: Optional[bool] = Field(default=None)
+    msstats_equal_feature_var: Optional[bool] = Field(default=None)
+    msstats_name_standards: Optional[str] = Field(default=None)
+    msstats_save_fitted_models: Optional[bool] = Field(default=None)
+
+    # Covariate columns (selected metadata columns to use as model covariates)
+    covariate_columns: Optional[list[str]] = Field(default=None)
+
     @field_validator("control")
     @classmethod
     def control_differs_from_treatment(cls, v, info):
-        """Ensure control differs from treatment (when both are set)."""
-        values = info.data
-        if v is not None and "treatment" in values and v == values.get("treatment"):
+        """Ensure control differs from treatment (when both are actually set)."""
+        if not v:
+            return v
+        treatment = info.data.get("treatment") if info.data else None
+        if treatment and v == treatment:
             raise ValueError("Control must differ from treatment")
         return v
 
