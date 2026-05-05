@@ -7,6 +7,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
+import subprocess
 import logging
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
@@ -222,14 +223,37 @@ class PipelineEngine:
                 ctx, step.number, "started", 0, step.display_name, len(pipeline.steps)
             )
 
+            # Reset timeout multiplier for each step
+            ctx.timeout_multiplier = 1
+
             try:
                 await step.handler(ctx)
             except Exception as e:
-                ctx.state.mark_failed(step.number, str(e))
-                await self._send_progress(
-                    ctx, step.number, "failed", 0, str(e), len(pipeline.steps)
-                )
-                raise
+                # Retry once on timeout with 2x timeout
+                if self._is_timeout_error(e) and ctx.timeout_multiplier == 1:
+                    logger.warning(
+                        f"Step {step.number} timed out, retrying with 2x timeout"
+                    )
+                    ctx.state.add_log(
+                        "warning",
+                        f"Step {step.number} timed out — retrying with doubled timeout",
+                        step.number,
+                    )
+                    ctx.timeout_multiplier = 2
+                    try:
+                        await step.handler(ctx)
+                    except Exception as retry_e:
+                        ctx.state.mark_failed(step.number, str(retry_e))
+                        await self._send_progress(
+                            ctx, step.number, "failed", 0, str(retry_e), len(pipeline.steps)
+                        )
+                        raise
+                else:
+                    ctx.state.mark_failed(step.number, str(e))
+                    await self._send_progress(
+                        ctx, step.number, "failed", 0, str(e), len(pipeline.steps)
+                    )
+                    raise
 
             if step.number in ctx.step_outputs:
                 ctx.state.mark_step_completed(
@@ -269,6 +293,17 @@ class PipelineEngine:
                 step=ctx.state.data["current_step"] if ctx.state else 0,
                 recoverable=False,
             )
+
+    @staticmethod
+    def _is_timeout_error(error: Exception) -> bool:
+        """Check if an error is a timeout (should trigger retry)."""
+        if isinstance(error, subprocess.TimeoutExpired):
+            return True
+        from app.core.exceptions import RScriptError
+        if isinstance(error, RScriptError):
+            msg = str(error).lower()
+            return "timed out" in msg or "timeout" in msg
+        return False
 
     async def _send_progress(
         self,
