@@ -44,13 +44,13 @@ register(
         PipelineStep(
             6,
             "protein_abundance",
-            "Protein Abundance (msqrob2)",
+            "Protein Abundance (msqrob2/QFeatures)",
             step_protein_abundance_msqrob2,
         ),
         PipelineStep(
             7,
             "multi_condition_de",
-            "Differential Expression (multi-condition)",
+            "Differential Expression (msqrob2)",
             step_multi_condition_de,
         ),
         PipelineStep(8, "qc_metrics", "QC Metrics", step_qc_metrics),
