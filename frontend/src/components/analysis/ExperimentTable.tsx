@@ -7,6 +7,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Search, X, Plus, Download, Upload } from 'lucide-react';
+import { EditableBadge } from '@/components/analysis/EditableBadge';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -131,7 +132,9 @@ export const ExperimentTable: React.FC = () => {
   const [filterText, setFilterText] = useState('');
   const [filterExperiment, setFilterExperiment] = useState<string>('all');
   const [filterCondition, setFilterCondition] = useState<string>('all');
-  
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const selectedFiles = useAnalysisStore((s) => s.selectedFiles);
   const toggleFileSelection = useAnalysisStore((s) => s.toggleFileSelection);
@@ -223,6 +226,8 @@ export const ExperimentTable: React.FC = () => {
     
     return filtered;
   }, [uploadedFiles, filterText, filterExperiment, filterCondition, sort]);
+
+  const totalPages = Math.ceil(filteredAndSortedFiles.length / pageSize);
 
   // --- Custom column management ---
   const addColumn = () => {
@@ -536,14 +541,26 @@ export const ExperimentTable: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span data-testid="experiment-name" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary/10 text-secondary">
-                      {file.experiment}
-                    </span>
+                    <EditableBadge
+                      value={file.experiment}
+                      isEditing={editingCell === `${file.filename}-exp`}
+                      onEdit={() => setEditingCell(`${file.filename}-exp`)}
+                      onSave={(val) => { updateFileMetadata(file.filename, { experiment: val }); setEditingCell(null); }}
+                      onCancel={() => setEditingCell(null)}
+                      colorClass="bg-secondary/10 text-secondary"
+                      data-testid="experiment-name"
+                    />
                   </td>
                   <td className="px-4 py-3">
-                    <span data-testid={`condition-${file.condition}`} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
-                      {file.condition}
-                    </span>
+                    <EditableBadge
+                      value={file.condition}
+                      isEditing={editingCell === `${file.filename}-cond`}
+                      onEdit={() => setEditingCell(`${file.filename}-cond`)}
+                      onSave={(val) => { updateFileMetadata(file.filename, { condition: val }); setEditingCell(null); }}
+                      onCancel={() => setEditingCell(null)}
+                      colorClass="bg-success/10 text-success"
+                      data-testid={`condition-${file.condition}`}
+                    />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <span className="text-sm text-text font-mono">
@@ -582,7 +599,45 @@ export const ExperimentTable: React.FC = () => {
           No files match the current filters
         </div>
       )}
-      
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-sm text-text-muted">
+            Page {page} of {totalPages} ({filteredAndSortedFiles.length} total)
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-1.5 rounded text-text-muted hover:bg-surface hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={`w-7 h-7 text-xs rounded transition-colors ${
+                  p === page
+                    ? 'bg-primary text-white font-medium'
+                    : 'text-text-muted hover:bg-surface hover:text-text'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="p-1.5 rounded text-text-muted hover:bg-surface hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary pt-2">
         <div className="flex items-center gap-2">
