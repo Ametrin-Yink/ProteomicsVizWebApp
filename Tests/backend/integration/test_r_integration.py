@@ -112,24 +112,24 @@ class TestRScripts:
 
         assert script_path.exists()
 
-    def test_msqrob2_protein_script_exists(self):
-        """Verify protein abundance script exists."""
+    def test_msqrob2_data_process_script_exists(self):
+        """Verify msqrob2 data process script exists (used by multi-condition pipeline)."""
         script_path = (
             Path(__file__).parent.parent.parent.parent
             / "backend"
             / "scripts"
-            / "msqrob2_protein.R"
+            / "msqrob2_data_process.R"
         )
 
         assert script_path.exists()
 
-    def test_msqrob2_de_script_exists(self):
-        """Verify DE analysis script exists."""
+    def test_msqrob2_group_comparison_multi_script_exists(self):
+        """Verify msqrob2 multi-condition group comparison script exists."""
         script_path = (
             Path(__file__).parent.parent.parent.parent
             / "backend"
             / "scripts"
-            / "msqrob2_de.R"
+            / "msqrob2_group_comparison_multi.R"
         )
 
         assert script_path.exists()
