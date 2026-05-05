@@ -28,12 +28,12 @@ export default function AboutPage() {
       <div className="max-w-4xl mx-auto px-8 py-12">
 
         {/* Hero */}
-        <div className="text-center mb-12">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-            <FlaskConical className="w-10 h-10 text-white" />
+        <div className="text-center mb-10">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-primary flex items-center justify-center shadow-lg">
+            <FlaskConical className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-text mb-4">Proteomics Visualization Web App</h1>
-          <p className="text-xl text-text-secondary max-w-2xl mx-auto">
+          <h1 className="font-bold text-text mb-3">Proteomics Visualization Web App</h1>
+          <p className="text-base text-text-secondary max-w-2xl mx-auto">
             Full-stack scientific web application for proteomics data analysis and visualization.
           </p>
         </div>
@@ -57,7 +57,7 @@ export default function AboutPage() {
 
         {/* How to Use */}
         <div className="bg-background border border-border rounded-lg p-5 mb-12">
-          <h2 className="text-2xl font-semibold text-text mb-6">How to Use</h2>
+          <h2 className="font-semibold text-text mb-4">How to Use</h2>
           <div className="space-y-6">
             {steps.map((step) => (
               <div key={step.title} className="flex items-start gap-4">
@@ -96,7 +96,7 @@ export default function AboutPage() {
 
         {/* Processing Pipeline */}
         <div className="bg-background border border-border rounded-lg p-5 mb-12">
-          <h2 className="text-2xl font-semibold text-text mb-6">Processing Pipeline</h2>
+          <h2 className="font-semibold text-text mb-4">Processing Pipeline</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -152,7 +152,7 @@ export default function AboutPage() {
 
         {/* Quick Setup */}
         <div className="bg-background border border-border rounded-lg p-5 mb-12">
-          <h2 className="text-2xl font-semibold text-text mb-6">Quick Setup</h2>
+          <h2 className="font-semibold text-text mb-4">Quick Setup</h2>
           <div className="space-y-4">
             <div>
               <h3 className="font-medium text-text mb-2">1. Install R Packages</h3>

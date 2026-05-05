@@ -1,128 +1,119 @@
 /**
- * Home Page / Welcome Page
+ * Home Page / Dashboard
  *
- * Dashboard view with session manager and getting-started guide.
- * New analyses are started via the "+ New Analysis" button in the top navigation.
+ * Functional starting point with quick actions and workflow overview.
  */
 
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { SessionManager } from '@/components/session/SessionManager';
 import {
   FlaskConical,
   Upload,
-  GitBranch,
   Sliders,
-  Play,
-  ArrowRight,
+  TrendingUp,
   BookOpen,
+  Plus,
+  ArrowRight,
 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
-const steps = [
+const workflowSteps = [
   {
     icon: Upload,
-    title: 'Upload Files',
-    description: 'Upload your PSM CSV files and configure experimental conditions',
-  },
-  {
-    icon: GitBranch,
-    title: 'Choose Pipeline',
-    description: 'Select msqrob2 or MSstats for protein abundance and differential expression',
+    label: 'Upload PSM files',
   },
   {
     icon: Sliders,
-    title: 'Configure',
-    description: 'Set pipeline-specific parameters and validation thresholds',
+    label: 'Configure pipeline',
   },
   {
-    icon: Play,
-    title: 'Run Analysis',
-    description: 'Start processing and monitor progress in real time',
+    icon: TrendingUp,
+    label: 'Explore results',
   },
 ];
 
 export default function HomePage() {
+  const router = useRouter();
+
   return (
     <div className="flex w-full h-full">
-      {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-full" />
 
-      {/* Right Panel - Dashboard */}
       <main className="flex-1 h-full overflow-y-auto bg-surface">
-        <div className="max-w-4xl mx-auto px-8 py-12">
-          {/* Header */}
-          <div className="text-center mb-12" data-testid="welcome-title">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-              <FlaskConical className="w-10 h-10 text-white" />
+        <div className="max-w-2xl mx-auto px-6 py-10">
+          {/* Brand */}
+          <div className="flex items-center gap-3 mb-8" data-testid="welcome-title">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0">
+              <FlaskConical className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-text mb-4">
-              Welcome to <span className="text-primary">ProteomicsViz</span>
-            </h1>
-            <p className="text-xl text-text-secondary max-w-2xl mx-auto">
-              A full-stack platform for proteomics data analysis and visualization
+            <div>
+              <h1 className="text-text">
+                ProteomicsViz
+              </h1>
+              <p className="text-sm text-text-secondary">
+                Proteomics data analysis platform
+              </p>
+            </div>
+          </div>
+
+          {/* Primary CTA */}
+          <div className="mb-8">
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              leftIcon={<Plus className="w-5 h-5" />}
+              onClick={() => router.push('/new/upload')}
+            >
+              New Analysis
+            </Button>
+            <p className="text-xs text-text-muted mt-2 text-center">
+              Upload PSM data and start a new analysis session
             </p>
           </div>
 
-          {/* Getting Started */}
-          <div data-testid="getting-started" className="mb-12">
-            <h2 className="text-lg font-semibold text-text mb-6 text-center">
-              How It Works
+          {/* Workflow overview */}
+          <div data-testid="getting-started" className="mb-8">
+            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-3">
+              Analysis workflow
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {steps.map((step, idx) => {
+            <div className="flex items-stretch gap-0 bg-background border border-border rounded-lg overflow-hidden">
+              {workflowSteps.map((step, idx) => {
                 const Icon = step.icon;
                 return (
-                  <div
-                    key={step.title}
-                    className="bg-background border border-border rounded-xl p-5 text-center relative"
-                  >
-                    <div className="w-10 h-10 mx-auto mb-3 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-primary" />
+                  <React.Fragment key={step.label}>
+                    <div className="flex-1 flex flex-col items-center gap-2 px-4 py-4 text-center">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Icon className="w-4 h-4 text-primary" />
+                      </div>
+                      <span className="text-xs text-text-secondary leading-tight">
+                        {step.label}
+                      </span>
                     </div>
-                    <div className="absolute -top-3 -left-3 w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">
-                      {idx + 1}
-                    </div>
-                    <h3 className="text-sm font-semibold text-text mb-1">{step.title}</h3>
-                    <p className="text-xs text-text-muted leading-relaxed">
-                      {step.description}
-                    </p>
-                    {/* Connector arrow between steps */}
-                    {idx < steps.length - 1 && (
-                      <div className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 text-text-muted">
-                        <ArrowRight className="w-4 h-4" />
+                    {idx < workflowSteps.length - 1 && (
+                      <div className="flex items-center self-center text-text-muted flex-shrink-0">
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </div>
                     )}
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>
           </div>
 
-          {/* Call to action */}
-          <div className="text-center p-8 bg-background border border-border rounded-xl">
-            <p className="text-text-secondary mb-1">
-              Click{' '}
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary text-white text-sm rounded-md font-medium">
-                + New Analysis
-              </span>{' '}
-              in the left sidebar to start a new analysis.
-            </p>
-            <p className="text-sm text-text-muted">
-              Your existing sessions are shown in the left sidebar.
-            </p>
-          </div>
-
-          {/* Help Section */}
-          <div className="mt-8 text-center">
+          {/* Documentation link */}
+          <div className="text-center">
             <Link
               href="/about"
               data-testid="help-link"
-              className="inline-flex items-center gap-2 text-sm text-secondary hover:text-secondary-dark font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-secondary hover:text-secondary-dark font-medium transition-colors"
             >
               <BookOpen className="w-4 h-4" />
-              View documentation
+              Documentation
             </Link>
           </div>
         </div>
