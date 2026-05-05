@@ -16,6 +16,7 @@ class AnalysisTemplate(str, Enum):
     """Available analysis templates."""
 
     MULTI_CONDITION = "multi_condition_comparison"
+    MSSTATS = "msstats"
     TIME_SERIES = "time_series_analysis"  # reserved for future
 
 
@@ -96,6 +97,14 @@ class AnalysisConfig(BaseModel):
     msstats_censored_int: str = Field(default="NA")
     msstats_max_quantile: float = Field(default=0.999)
     msstats_remove50missing: bool = Field(default=False)
+
+    # MSstats advanced parameters (new in 4.16.1)
+    msstats_n_top_feature: int = Field(default=3, description="Number of top features when featureSubset='topN'")
+    msstats_min_feature_count: int = Field(default=2, description="Minimum features per protein for summarization")
+    msstats_remove_uninformative_feature_outlier: bool = Field(default=False, description="Remove outlier features during feature selection")
+    msstats_equal_feature_var: bool = Field(default=True, description="Assume equal feature variances (linear summary method only)")
+    msstats_name_standards: Optional[str] = Field(default=None, description="Comma-separated standard protein names for GLOBALSTANDARDS normalization")
+    msstats_save_fitted_models: bool = Field(default=True, description="Save fitted linear models in groupComparison output")
 
     @field_validator("control")
     @classmethod
