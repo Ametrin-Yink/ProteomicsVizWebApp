@@ -506,7 +506,9 @@ async def get_results(
 
 @router.get("/{session_id}/qc/plots")
 async def get_qc_plots(
-    session_id: str, store: SessionStore = Depends(get_session_store)
+    session_id: str,
+    comparison: str = Query("", description="Comparison label for per-comparison p-value distribution"),
+    store: SessionStore = Depends(get_session_store),
 ):
     """Get QC plot data."""
     session = await store.get(session_id)
@@ -521,6 +523,12 @@ async def get_qc_plots(
 
     # Load QC results from file
     qc_data = load_qc_results(results_dir)
+
+    # Filter p-value distribution to requested comparison
+    if comparison and qc_data.get("pvalue_distributions"):
+        dist = qc_data["pvalue_distributions"].get(comparison)
+        if dist:
+            qc_data["pvalue_distribution"] = dist
 
     # MAJ-005: Recalculate total_psms from PSM file if cached value looks wrong
     # The bug showed total rows (~49k) instead of unique PSMs (~4k)
@@ -943,6 +951,7 @@ async def run_gsea_on_demand(
 async def get_gsea_results(
     session_id: str,
     database: str,
+    comparison: str = Query("", description="Comparison label for multi-condition"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=1000),
     sort_by: str = Query("nes"),
@@ -961,6 +970,10 @@ async def get_gsea_results(
 
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
+
+    # Route to per-comparison directory when comparison is specified
+    if comparison:
+        results_dir = results_dir / "gsea" / comparison
 
     # Validate database name to prevent path traversal
     if database not in VALID_GSEA_DATABASES:
