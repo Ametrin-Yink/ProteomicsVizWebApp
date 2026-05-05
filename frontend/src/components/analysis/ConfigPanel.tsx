@@ -28,12 +28,12 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
   useEffect(() => {
     if (template === 'multi_condition_comparison' && allComparisons.length > 0) {
       const existing = config.comparisons || [];
-      const existingKeys = new Set(existing.map((c) => `${c.treatment}|${c.control}`));
-      const allKeys = new Set(allComparisons.map((c) => `${c.treatment}|${c.control}`));
+      const existingKeys = new Set(existing.map((c) => `${c.group1.Condition}|${c.group2.Condition}`));
+      const allKeys = new Set(allComparisons.map((c) => `${c.group1.Condition}|${c.group2.Condition}`));
       // Auto-add new comparisons that aren't already in config
-      const toAdd = allComparisons.filter((c) => !existingKeys.has(`${c.treatment}|${c.control}`));
+      const toAdd = allComparisons.filter((c) => !existingKeys.has(`${c.group1.Condition}|${c.group2.Condition}`));
       // Auto-remove comparisons whose conditions no longer exist
-      const toKeep = existing.filter((c) => allKeys.has(`${c.treatment}|${c.control}`));
+      const toKeep = existing.filter((c) => allKeys.has(`${c.group1.Condition}|${c.group2.Condition}`));
       if (toAdd.length > 0 || toKeep.length !== existing.length) {
         setConfig({ comparisons: [...toKeep, ...toAdd] });
       }
@@ -325,10 +325,10 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
             <div className="space-y-1">
               {allComparisons.map((comp) => {
                 const enabled = (config.comparisons || []).some(
-                  (c) => c.treatment === comp.treatment && c.control === comp.control
+                  (c) => c.group1.Condition === comp.group1.Condition && c.group2.Condition === comp.group2.Condition
                 );
                 return (
-                  <label key={`${comp.treatment}|${comp.control}`} className="flex items-center gap-2 py-1 cursor-pointer">
+                  <label key={`${comp.group1.Condition}|${comp.group2.Condition}`} className="flex items-center gap-2 py-1 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={enabled}
@@ -339,14 +339,14 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
                         } else {
                           setConfig({
                             comparisons: current.filter(
-                              (c) => !(c.treatment === comp.treatment && c.control === comp.control)
+                              (c) => !(c.group1.Condition === comp.group1.Condition && c.group2.Condition === comp.group2.Condition)
                             ),
                           });
                         }
                       }}
                       className="rounded border-border text-primary focus:ring-primary"
                     />
-                    <span className="text-sm text-text">{comp.treatment} vs {comp.control}</span>
+                    <span className="text-sm text-text">{comp.group1.Condition} vs {comp.group2.Condition}</span>
                   </label>
                 );
               })}

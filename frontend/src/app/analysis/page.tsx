@@ -113,9 +113,9 @@ function AnalysisContent() {
             }
 
             // Restore comparisons from backend session config
-            const backendConfig = session.config as Record<string, unknown>;
+            const backendConfig = session.config as unknown as Record<string, unknown>;
             if (backendConfig?.comparisons && Array.isArray(backendConfig.comparisons)) {
-              setConfig({ comparisons: backendConfig.comparisons as Array<{ treatment: string; control: string }> });
+              setConfig({ comparisons: backendConfig.comparisons as Array<{ group1: Record<string, string>; group2: Record<string, string> }> });
             }
 
             // Restore metadata columns

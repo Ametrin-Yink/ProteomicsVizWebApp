@@ -252,14 +252,17 @@ export const getConditions = (state: AnalysisState): string[] => {
 
 /**
  * Generate all pairwise comparisons from conditions.
- * Returns array of { treatment, control } pairs.
+ * Returns array of { group1: {Condition: ...}, group2: {Condition: ...} } pairs.
  */
-export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ treatment: string; control: string }> => {
+export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ group1: Record<string, string>; group2: Record<string, string> }> => {
   const conditions = getConditions(state);
-  const comparisons: Array<{ treatment: string; control: string }> = [];
+  const comparisons: Array<{ group1: Record<string, string>; group2: Record<string, string> }> = [];
   for (let i = 0; i < conditions.length; i++) {
     for (let j = i + 1; j < conditions.length; j++) {
-      comparisons.push({ treatment: conditions[i], control: conditions[j] });
+      comparisons.push({
+        group1: { Condition: conditions[i] },
+        group2: { Condition: conditions[j] },
+      });
     }
   }
   return comparisons;
