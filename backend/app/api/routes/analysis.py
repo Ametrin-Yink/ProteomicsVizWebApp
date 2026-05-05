@@ -4,11 +4,10 @@ Analysis API routes.
 Analysis orchestration and control.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from app.api.deps import get_session_store
 from app.db.session_store import SessionStore
-from app.models.session import SessionState
 
 router = APIRouter()
 
