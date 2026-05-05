@@ -11,10 +11,11 @@ interface GSEAPlotProps {
   pathway: GSEAResult | null;
   sessionId: string;
   database: GSEADatabase;
+  comparison?: string;
   onPathwayUpdated?: (pathway: GSEAResult) => void;
 }
 
-export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdated }: GSEAPlotProps) {
+export default function GSEAPlot({ pathway, sessionId, database, comparison, onPathwayUpdated }: GSEAPlotProps) {
   const [plotData, setPlotData] = useState<GSEAPlotData | null>(null);
   const [heatmapData, setHeatmapData] = useState<GSEAHeatmapData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,8 +39,8 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
       setError(null);
       try {
         const [plot, heatmap] = await Promise.all([
-          getGSEAPlotData(sessionId, database, currentPathway.term),
-          getGSEAHeatmapData(sessionId, database, currentPathway.term),
+          getGSEAPlotData(sessionId, database, currentPathway.term, comparison),
+          getGSEAHeatmapData(sessionId, database, currentPathway.term, comparison),
         ]);
         if (!cancelled) {
           setPlotData(plot);
@@ -65,7 +66,7 @@ export default function GSEAPlot({ pathway, sessionId, database, onPathwayUpdate
 
     fetchData();
     return () => { cancelled = true; };
-  }, [pathway, sessionId, database, onPathwayUpdated]);
+  }, [pathway, sessionId, database, comparison, onPathwayUpdated]);
 
   // Generate Plotly traces from fetched data
   const renderData = useMemo(() => {
