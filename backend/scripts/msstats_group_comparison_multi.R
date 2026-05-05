@@ -7,7 +7,7 @@
 # per comparison.
 #
 # Usage: Rscript msstats_group_comparison_multi.R <rds_file> <output_dir>
-#        <comparisons_json> <covariates_json> <gene_mapping_file> <num_cores>
+#        <comparisons_json> <covariates_json> <gene_mapping_file> <config_json>
 
 cat("Loading R packages...\n")
 suppressPackageStartupMessages({
@@ -20,9 +20,9 @@ cat("R packages loaded successfully\n")
 # Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 7) {
+if (length(args) < 6) {
     stop(paste("Usage: Rscript msstats_group_comparison_multi.R <rds_file> <output_dir>",
-               "<comparisons_json> <covariates_json> <gene_mapping_file> <num_cores> <log_base>"))
+               "<comparisons_json> <covariates_json> <gene_mapping_file> <config_json>"))
 }
 
 rds_file        <- args[1]
@@ -30,8 +30,13 @@ output_dir      <- args[2]
 comparisons_json <- args[3]
 covariates_json <- if (nzchar(args[4])) args[4] else "{}"
 gene_mapping_file <- if (nzchar(args[5])) args[5] else NULL
-num_cores       <- as.integer(args[6])
-log_base        <- if (length(args) >= 7 && nzchar(args[7])) as.numeric(args[7]) else 2
+config_json     <- if (length(args) >= 6 && nzchar(args[6])) args[6] else "{}"
+
+# Parse config JSON
+config <- fromJSON(config_json)
+log_base        <- if (!is.null(config$log_base)) as.numeric(config$log_base) else 2
+num_cores       <- if (!is.null(config$numberOfCores)) as.integer(config$numberOfCores) else 1
+save_fitted_models <- if (!is.null(config$save_fitted_models)) as.logical(config$save_fitted_models) else FALSE
 
 cat("Step 7: Running multi-condition differential expression with MSstats\n")
 cat("Arguments received:", length(args), "\n")
@@ -41,6 +46,7 @@ for (i in 1:length(args)) {
 cat("RDS file:", rds_file, "\n")
 cat("Output dir:", output_dir, "\n")
 cat("Comparisons:", comparisons_json, "\n")
+cat("Config - log_base:", log_base, ", numberOfCores:", num_cores, ", save_fitted_models:", save_fitted_models, "\n")
 flush.console()
 
 # Check if RDS file exists
@@ -71,6 +77,37 @@ if (!is.null(processed$ProteinLevelData) && "GROUP" %in% names(processed$Protein
 
 cat("Condition levels:", paste(condition_levels, collapse = ", "), "\n")
 flush.console()
+
+# Parse covariates and add to ProteinLevelData
+covariates <- fromJSON(covariates_json)
+if (length(covariates) > 0 && !is.null(processed$ProteinLevelData)) {
+    cat("Adding covariates to ProteinLevelData...\n")
+    run_col <- if ("originalRUN" %in% names(processed$ProteinLevelData)) "originalRUN" else "RUN"
+
+    # Get all covariate names from the first sample's metadata
+    cov_names <- unique(unlist(lapply(covariates, names)))
+    cat("  Covariate columns:", paste(cov_names, collapse = ", "), "\n")
+
+    for (cov_name in cov_names) {
+        # Build filename -> covariate_value mapping
+        cov_map <- list()
+        for (fn in names(covariates)) {
+            if (cov_name %in% names(covariates[[fn]])) {
+                cov_map[[fn]] <- covariates[[fn]][[cov_name]]
+            }
+        }
+        # Apply to ProteinLevelData by matching filenames to RUN values
+        cov_values <- rep(NA, nrow(processed$ProteinLevelData))
+        for (fn in names(cov_map)) {
+            matches <- grepl(fn, processed$ProteinLevelData[[run_col]], fixed = TRUE)
+            cov_values[matches] <- cov_map[[fn]]
+        }
+        processed$ProteinLevelData[[cov_name]] <- cov_values
+        cat("  Added covariate column:", cov_name,
+            "(", sum(!is.na(cov_values)), "non-NA values )\n")
+    }
+    flush.console()
+}
 
 # Parse comparisons JSON
 cat("Parsing comparisons JSON...\n")
@@ -120,6 +157,7 @@ group_comp <- tryCatch({
         data = processed,
         log_base = log_base,
         numberOfCores = num_cores,
+        save_fitted_models = save_fitted_models,
         use_log_file = FALSE,
         verbose = FALSE
     )
