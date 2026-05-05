@@ -58,11 +58,23 @@ async def step_group_comparison_multi(ctx: StepContext) -> None:
 
     logger.info(f"Step 7 (MSstats multi): Running {len(comparisons)} comparisons")
 
+    # Filter metadata to only include columns selected as covariates
+    covariate_data = ctx.config.metadata or {}
+    if getattr(ctx.config, "covariate_columns", None):
+        selected_cols = set(ctx.config.covariate_columns)
+        covariate_data = {
+            fn: {k: v for k, v in cols.items() if k in selected_cols}
+            for fn, cols in covariate_data.items()
+        }
+
     await msstats_wrapper.group_comparison_multi(
         rds_file=rds_input,
         output_dir=de_output_dir,
         comparisons=comparisons,
         gene_mapping_file=gene_mapping,
+        covariates=covariate_data,
+        log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
+        save_fitted_models=ctx.config.msstats_save_fitted_models,
         log_callback=create_log_callback(ctx, step=7),
     )
 
