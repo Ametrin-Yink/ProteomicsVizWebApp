@@ -107,6 +107,20 @@ class Settings(BaseSettings):
         le=14400,
     )
 
+    r_msqrob2_data_process_timeout: int = Field(
+        default=7200,  # 2 hours — QFeatures aggregateFeatures is the heaviest step
+        description="Timeout for msqrob2 dataProcess (protein abundance) in seconds",
+        ge=30,
+        le=28800,
+    )
+
+    r_msqrob2_group_comparison_timeout: int = Field(
+        default=3600,  # 1 hour — per-contrast msqrobLm modeling
+        description="Timeout for msqrob2 groupComparison (differential expression) in seconds",
+        ge=30,
+        le=14400,
+    )
+
     r_n_cores: int = Field(
         default=32,
         description="Number of CPU cores for parallel R processing (Steps 6-7). Set > 1 for parallel BiocParallel.",
