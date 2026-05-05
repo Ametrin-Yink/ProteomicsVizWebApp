@@ -99,8 +99,12 @@ if (length(covariates) > 0 && !is.null(processed$ProteinLevelData)) {
         # Apply to ProteinLevelData by matching filenames to RUN values
         cov_values <- rep(NA, nrow(processed$ProteinLevelData))
         for (fn in names(cov_map)) {
-            matches <- grepl(fn, processed$ProteinLevelData[[run_col]], fixed = TRUE)
-            cov_values[matches] <- cov_map[[fn]]
+            for (row_i in seq_len(nrow(processed$ProteinLevelData))) {
+                run_val <- as.character(processed$ProteinLevelData[[run_col]][row_i])
+                if (!is.na(run_val) && nchar(run_val) > 0 && endsWith(fn, paste0(run_val, ".csv"))) {
+                    cov_values[row_i] <- cov_map[[fn]]
+                }
+            }
         }
         processed$ProteinLevelData[[cov_name]] <- cov_values
         cat("  Added covariate column:", cov_name,
@@ -116,9 +120,17 @@ core_cols <- c("RUN", "Protein", "LogIntensities", "originalRUN", "GROUP",
                "more50missing", "NumImputedFeature")
 all_pdata_cols <- names(processed$ProteinLevelData)
 
-# Also exclude covariate columns that were injected
+# Also track covariate columns that were injected (used for GROUP building)
 covariate_cols <- if (exists("cov_names") && length(cov_names) > 0) cov_names else character(0)
-condition_cols <- setdiff(all_pdata_cols, c(core_cols, covariate_cols))
+
+# Use covariate columns for GROUP when available; otherwise fall back to
+# non-core columns (excluding technical measures like TotalGroupMeasurements)
+core_cols <- c(core_cols, "TotalGroupMeasurements")
+if (length(covariate_cols) > 0) {
+    condition_cols <- covariate_cols
+} else {
+    condition_cols <- setdiff(all_pdata_cols, core_cols)
+}
 
 if (length(condition_cols) > 0) {
     cat("Building combined GROUP from columns:", paste(condition_cols, collapse=", "), "\n")
@@ -127,7 +139,13 @@ if (length(condition_cols) > 0) {
         processed$ProteinLevelData[, condition_cols, drop=FALSE], 1,
         function(row) paste(row, collapse="_")
     )
-    cat("Unique GROUP levels:", paste(unique(processed$ProteinLevelData$GROUP), collapse=", "), "\n")
+    ug <- unique(processed$ProteinLevelData$GROUP)
+    n_ug <- length(ug)
+    if (n_ug <= 20) {
+        cat("Unique GROUP levels (", n_ug, "):", paste(ug, collapse=", "), "\n")
+    } else {
+        cat("Unique GROUP levels:", n_ug, "(showing first 20):", paste(ug[1:20], collapse=", "), "...\n")
+    }
 } else {
     # Fallback: use existing GROUP if already present
     if (!("GROUP" %in% names(processed$ProteinLevelData))) {
@@ -139,7 +157,7 @@ flush.console()
 
 # Parse comparisons (new format: [{group1: {col:val}, group2: {col:val}}])
 cat("Parsing comparisons JSON...\n")
-comparisons_raw <- fromJSON(comparisons_json)
+comparisons_raw <- fromJSON(comparisons_json, simplifyVector = FALSE)
 
 # Handle both old and new format
 if (!is.null(comparisons_raw$group1) && !is.null(comparisons_raw$group2)) {
@@ -238,7 +256,8 @@ all_groups <- all_groups[!is.na(all_groups) & all_groups != ""]
 n_groups <- length(all_groups)
 n_comps <- length(resolved)
 
-cat("\nAll unique GROUPs (", n_groups, "):", paste(all_groups, collapse=", "), "\n")
+cat("\nAll unique GROUPs (", n_groups, "):",
+    if (n_groups <= 20) paste(all_groups, collapse=", ") else paste(all_groups[1:20], collapse=", "), if (n_groups > 20) "..." else "", "\n")
 
 contrast_matrix <- matrix(0, nrow = n_comps, ncol = n_groups)
 colnames(contrast_matrix) <- all_groups
