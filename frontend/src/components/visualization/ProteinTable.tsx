@@ -13,6 +13,7 @@ interface ProteinTableProps {
   onToggleShowSelected: () => void;
   filters: VolcanoFilters;
   sessionConfig: { treatment?: string; control?: string; experiment: string } | null;
+  comparisonLabel?: string;
   markedProteins: Set<string>;
   onToggleMark: (protein: DEResult) => void;
   onClearAllMarks: () => void;
@@ -45,6 +46,7 @@ export default function ProteinTable({
   onToggleShowSelected,
   filters,
   sessionConfig,
+  comparisonLabel,
   markedProteins,
   onToggleMark,
   onClearAllMarks,
@@ -145,7 +147,7 @@ export default function ProteinTable({
     });
 
     const filename = sessionConfig
-      ? `${sessionConfig.experiment}_${sessionConfig.treatment}_vs_${sessionConfig.control}`
+      ? `${sessionConfig.experiment}_${comparisonLabel || 'results'}`
       : 'protein_results';
     exportToCSV(exportData, `${filename}.csv`);
   };
