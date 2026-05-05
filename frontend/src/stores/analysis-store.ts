@@ -51,6 +51,7 @@ interface AnalysisState {
   toggleFileSelection: (filename: string) => void;
   selectAllFiles: () => void;
   deselectAllFiles: () => void;
+  updateFileMetadata: (filename: string, updates: Partial<Pick<ParsedFilename, 'experiment' | 'condition'>>) => void;
   setPipeline: (pipeline: 'msqrob2' | 'msstats') => void;
   setConfig: (config: Partial<SessionConfig>) => void;
   setAvailableOrganisms: (organisms: Organism[]) => void;
@@ -70,6 +71,23 @@ const defaultConfig: SessionConfig = {
   pvalue_threshold: 0.05,
   logfc_threshold: 1.0,
   min_peptides_per_protein: 1,
+  comparisons: [],
+  metadata_columns: {},
+  msstats_normalization: 'equalizeMedians',
+  msstats_feature_selection: 'all',
+  msstats_summary_method: 'TMP',
+  msstats_impute: true,
+  msstats_log_base: 2,
+  msstats_censored_int: 'NA',
+  msstats_max_quantile: 0.999,
+  msstats_remove50missing: false,
+  msstats_n_top_feature: 3,
+  msstats_min_feature_count: 2,
+  msstats_remove_uninformative_feature_outlier: false,
+  msstats_equal_feature_var: true,
+  msstats_name_standards: undefined,
+  msstats_save_fitted_models: true,
+  covariate_columns: [],
 };
 
 export const useAnalysisStore = create<AnalysisState>()(
@@ -130,6 +148,16 @@ export const useAnalysisStore = create<AnalysisState>()(
       });
     },
     
+    updateFileMetadata: (filename, updates) => {
+      set((state) => {
+        const file = state.uploadedFiles.find((f: ParsedFilename) => f.filename === filename);
+        if (file) {
+          if (updates.experiment !== undefined) file.experiment = updates.experiment;
+          if (updates.condition !== undefined) file.condition = updates.condition;
+        }
+      });
+    },
+
     toggleFileSelection: (filename) => {
       set((state) => {
         if (state.selectedFiles.has(filename)) {
@@ -269,17 +297,6 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
     });
   }
   
-  // Check minimum replicates
-  Object.entries(replicatesByCondition).forEach(([condition, count]) => {
-    if (count < 3) {
-      warnings.push({
-        type: 'error',
-        message: `At least 3 replicates per condition required! Condition '${condition}' has only ${count}.`,
-        code: 'INSUFFICIENT_REPLICATES',
-      });
-    }
-  });
-  
   // Check config validation
   if (state.config.treatment && state.config.control && state.config.treatment === state.config.control) {
     warnings.push({
@@ -306,8 +323,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   }
   
   const isValid = warnings.filter((w) => w.type === 'error').length === 0 &&
-    selected.length > 0 &&
-    state.config.organism !== '';
+    selected.length > 0;
   
   return {
     isValid,
