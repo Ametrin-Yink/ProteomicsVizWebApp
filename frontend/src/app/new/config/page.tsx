@@ -21,6 +21,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
+import Msqrob2ConfigForm from '@/components/analysis/Msqrob2ConfigForm';
 
 function ConfigContent() {
   const router = useRouter();
@@ -192,6 +193,24 @@ function ConfigContent() {
         </section>
       )}
 
+
+      {/* msqrob2-specific parameters */}
+      {selectedPipeline === 'msqrob2' && (
+        <section className="bg-background border border-border rounded-lg">
+          <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+            <Dna className="w-5 h-5 text-accent" />
+            <div>
+              <h2 className="text-lg font-semibold text-text">msqrob2 Parameters</h2>
+              <p className="text-sm text-text-muted">
+                Configure msqrob2/QFeatures preprocessing and statistical modeling options
+              </p>
+            </div>
+          </div>
+          <div className="p-5">
+            <Msqrob2ConfigForm config={config} setConfig={setConfig} />
+          </div>
+        </section>
+      )}
 
       {/* Validation warning */}
       {!canStart && state.selectedFiles.size > 0 && (
