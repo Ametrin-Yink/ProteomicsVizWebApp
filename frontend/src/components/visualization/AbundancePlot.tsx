@@ -41,21 +41,17 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       conditionData[condition].abundances.push(validAbundance);
     });
 
-    const namedColors: Record<string, string> = {
-      Control: '#00ADEF',
-      Treatment: '#E73564',
-      DMSO: '#00ADEF',
-    };
+    const TABLEAU_10 = [
+      '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F',
+      '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC',
+    ];
 
-    // Fallback colors in order for unlabeled conditions
-    const fallbackColors = ['#00ADEF', '#E73564'];
+    function getColorForCondition(condition: string, index: number): string {
+      return TABLEAU_10[index % TABLEAU_10.length];
+    }
 
     return Object.entries(conditionData).map(([condition, values], idx) => {
-      let color = namedColors[condition];
-      if (!color) {
-        // For unlabeled conditions, alternate between blue and pink
-        color = fallbackColors[idx % fallbackColors.length];
-      }
+      const color = getColorForCondition(condition, idx);
       return {
         x: values.samples,
         y: values.abundances,
