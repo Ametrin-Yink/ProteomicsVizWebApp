@@ -19,7 +19,7 @@ function ResultsContent() {
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string; experiment: string; comparisons?: Array<{ treatment: string; control: string }> } | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<{ treatment?: string; control?: string; experiment: string; comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }> } | null>(null);
   const [selectedComparison, setSelectedComparison] = useState<string>('');
   const comparisonInitialized = React.useRef(false);
 
@@ -86,7 +86,7 @@ function ResultsContent() {
         if (!comparisonInitialized.current) {
           if (comparisons && comparisons.length > 0) {
             const first = comparisons[0];
-            setSelectedComparison(`${first.treatment}_vs_${first.control}`);
+            setSelectedComparison(`${Object.values(first.group1).join('+')}_vs_${Object.values(first.group2).join('+')}`);
           } else if (cfg.treatment && cfg.control) {
             setSelectedComparison('');
           }
@@ -284,7 +284,9 @@ function ResultsContent() {
           {sessionConfig?.comparisons && sessionConfig.comparisons.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {sessionConfig.comparisons.map((c, i) => {
-                const val = `${c.treatment}_vs_${c.control}`;
+                const g1 = Object.values(c.group1).join('+');
+                const g2 = Object.values(c.group2).join('+');
+                const val = `${g1}_vs_${g2}`;
                 return (
                   <button
                     key={i}
@@ -295,7 +297,7 @@ function ResultsContent() {
                         : 'bg-surface text-text-secondary hover:bg-border'
                     }`}
                   >
-                    {c.treatment} vs {c.control}
+                    {g1} vs {g2}
                   </button>
                 );
               })}

@@ -12,7 +12,7 @@ interface ProteinTableProps {
   showSelectedOnly: boolean;
   onToggleShowSelected: () => void;
   filters: VolcanoFilters;
-  sessionConfig: { treatment: string; control: string; experiment: string } | null;
+  sessionConfig: { treatment?: string; control?: string; experiment: string } | null;
   markedProteins: Set<string>;
   onToggleMark: (protein: DEResult) => void;
   onClearAllMarks: () => void;

@@ -53,9 +53,9 @@ export async function getSession(
   id: string;
   name: string;
   config?: {
-    treatment: string;
-    control: string;
-    comparisons?: Array<{ treatment: string; control: string }>;
+    treatment?: string;
+    control?: string;
+    comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
   };
   files?: { proteomics: Array<{ experiment: string }> };
   markers?: string[];
