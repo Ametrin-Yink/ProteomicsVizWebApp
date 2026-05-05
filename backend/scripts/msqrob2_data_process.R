@@ -338,6 +338,7 @@ if (n_cores > 1) {
     })
 } else {
     cat("Using SerialParam\n")
+    param <- SerialParam()
 }
 
 cat("Starting aggregation at", format(Sys.time(), "%H:%M:%S"), "\n")
@@ -458,6 +459,18 @@ first_accessions <- vapply(strsplit(protein_ids, ";", fixed = TRUE),
                            function(x) x[1], character(1))
 psm_counts <- as.integer(protein_psm_counts[first_accessions])
 psm_counts[is.na(psm_counts)] <- 0L
+
+# Filter by minimum peptides if configured
+min_peptides <- config$min_peptides
+if (min_peptides > 1) {
+    keep_mask <- psm_counts >= min_peptides
+    keep_mask[is.na(keep_mask)] <- FALSE
+    protein_matrix <- protein_matrix[keep_mask, , drop = FALSE]
+    protein_ids <- protein_ids[keep_mask]
+    gene_names <- gene_names[keep_mask]
+    psm_counts <- psm_counts[keep_mask]
+    cat("Filtered to", sum(keep_mask), "proteins with >=", min_peptides, "peptides\n")
+}
 
 # ==========================================================================
 # Build output data frame with standard column order
