@@ -39,8 +39,8 @@ export interface Session {
 }
 
 export interface SessionConfig {
-  treatment: string;
-  control: string;
+  treatment?: string;
+  control?: string;
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
@@ -157,6 +157,7 @@ export interface QCData {
   protein_cv?: PSMCV; // Protein CV variance
   intensity_distributions?: IntensityDistributions;
   data_completeness?: DataCompleteness;
+  pvalue_distributions?: Record<string, PValueDistribution>;
   psm_completeness?: DataCompleteness; // PSM level completeness
   // Summary statistics
   total_psms?: number;

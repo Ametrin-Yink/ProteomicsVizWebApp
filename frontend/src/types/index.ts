@@ -46,8 +46,8 @@ export interface Session {
 }
 
 export interface SessionConfig {
-  treatment: string;
-  control: string;
+  treatment?: string;
+  control?: string;
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
