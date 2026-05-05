@@ -106,6 +106,9 @@ class AnalysisConfig(BaseModel):
     msstats_name_standards: Optional[str] = Field(default=None, description="Comma-separated standard protein names for GLOBALSTANDARDS normalization")
     msstats_save_fitted_models: bool = Field(default=True, description="Save fitted linear models in groupComparison output")
 
+    # Covariate columns (selected metadata columns used as model covariates)
+    covariate_columns: Optional[list[str]] = Field(default=None, description="Metadata column names to use as covariates")
+
     @field_validator("control")
     @classmethod
     def control_differs_from_treatment(cls, v: str, info) -> str:
