@@ -16,6 +16,7 @@ interface VolcanoPlotProps {
   markedProteins: Set<string>;
   onSelectProteins: (proteins: string[]) => void;
   onClearSelection?: () => void;
+  comparisonLabel?: string;
 }
 
 export default function VolcanoPlot({
@@ -25,7 +26,11 @@ export default function VolcanoPlot({
   markedProteins,
   onSelectProteins,
   onClearSelection,
+  comparisonLabel,
 }: VolcanoPlotProps) {
+  const parts = comparisonLabel ? comparisonLabel.split(' vs ') : [];
+  const group1Label = parts[0] || 'Treatment';
+  const group2Label = parts[1] || 'Control';
   const plotRef = useRef<HTMLDivElement>(null);
 
   // Prepare plot data
@@ -189,7 +194,7 @@ export default function VolcanoPlot({
         font: { size: 18, color: '#111827' },
       },
       xaxis: {
-        title: { text: 'log₂(Treatment/Control)', font: { size: 14 } },
+        title: { text: `log₂(${group1Label}/${group2Label})`, font: { size: 14 } },
         zeroline: true,
         zerolinecolor: '#D1D5DB',
         zerolinewidth: 1,
@@ -260,11 +265,11 @@ export default function VolcanoPlot({
         <div className="flex items-center gap-4 text-xs text-text-secondary">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#E73564' }}></span>
-            <span>Upregulated (Treatment &gt; Control)</span>
+            <span>Upregulated ({group1Label} &gt; {group2Label})</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#00ADEF' }}></span>
-            <span>Downregulated (Control &gt; Treatment)</span>
+            <span>Downregulated ({group2Label} &gt; {group1Label})</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#6B7280' }}></span>
