@@ -5,9 +5,10 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Filter, Search, X } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Search, X, Plus, Download, Upload } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
+import { useUIStore } from '@/stores/ui-store';
 
 
 type SortField = 'filename' | 'experiment' | 'condition' | 'replicate';
@@ -51,18 +52,125 @@ const TableHeader: React.FC<TableHeaderProps> = ({ field, children, className = 
   </th>
 );
 
+const EditableHeader: React.FC<{
+  colName: string;
+  onRename: (oldName: string, newName: string) => void;
+  onRemove: (colName: string) => void;
+}> = ({ colName, onRename, onRemove }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(colName);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { onRename(colName, editValue.trim()); setIsEditing(false); }
+            if (e.key === 'Escape') { setIsEditing(false); }
+          }}
+          onBlur={() => { onRename(colName, editValue.trim()); setIsEditing(false); }}
+          className="w-24 px-1 py-0.5 bg-surface border border-primary rounded text-xs focus:outline-none"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 group">
+      <button
+        onClick={() => { setEditValue(colName); setIsEditing(true); }}
+        className="hover:text-primary transition-colors"
+      >
+        {colName}
+      </button>
+      <button
+        onClick={() => onRemove(colName)}
+        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-500 transition-all"
+        title={`Remove ${colName}`}
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+};
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') { current += '"'; i++; }
+        else { inQuotes = false; }
+      } else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { result.push(current); current = ''; }
+      else { current += ch; }
+    }
+  }
+  result.push(current);
+  return result;
+}
+
 export const ExperimentTable: React.FC = () => {
   const [sort, setSort] = useState<SortState>({ field: 'filename', direction: 'asc' });
   const [filterText, setFilterText] = useState('');
   const [filterExperiment, setFilterExperiment] = useState<string>('all');
   const [filterCondition, setFilterCondition] = useState<string>('all');
   
-  const {
-    uploadedFiles,
-    selectedFiles,
-    toggleFileSelection,
-    removeUploadedFile,
-  } = useAnalysisStore();
+  const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
+  const selectedFiles = useAnalysisStore((s) => s.selectedFiles);
+  const toggleFileSelection = useAnalysisStore((s) => s.toggleFileSelection);
+  const removeUploadedFile = useAnalysisStore((s) => s.removeUploadedFile);
+  const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
+  const config = useAnalysisStore((s) => s.config);
+  const setConfig = useAnalysisStore((s) => s.setConfig);
+  const { addToast } = useUIStore();
+
+  const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [newColName, setNewColName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-populate metadata_columns from uploaded files on mount
+  React.useEffect(() => {
+    if ((!config.metadata_columns || Object.keys(config.metadata_columns).length === 0) && uploadedFiles.length > 0) {
+      const init: Record<string, Record<string, string>> = {};
+      uploadedFiles.forEach((f) => {
+        init[f.filename] = {
+          experiment: f.experiment,
+          condition: f.condition,
+          replicate: String(f.replicate),
+        };
+      });
+      setConfig({ metadata_columns: init });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derive custom column names (exclude core columns: experiment, condition, replicate)
+  const customColumns = useMemo(() => {
+    if (!config.metadata_columns) return [];
+    const cols = new Set<string>();
+    Object.values(config.metadata_columns).forEach((row) => {
+      Object.keys(row).forEach((k) => {
+        if (k !== 'experiment' && k !== 'condition' && k !== 'replicate') cols.add(k);
+      });
+    });
+    return Array.from(cols);
+  }, [config.metadata_columns]);
 
   // Derived values from raw state (useMemo to avoid infinite re-render loop in React 19)
   const selected = useMemo(
@@ -115,7 +223,123 @@ export const ExperimentTable: React.FC = () => {
     
     return filtered;
   }, [uploadedFiles, filterText, filterExperiment, filterCondition, sort]);
-  
+
+  // --- Custom column management ---
+  const addColumn = () => {
+    const name = newColName.trim();
+    if (!name) return;
+    if (customColumns.includes(name)) {
+      addToast('warning', `Column "${name}" already exists`);
+      return;
+    }
+    const current = { ...(config.metadata_columns || {}) };
+    Object.keys(current).forEach((fn) => {
+      current[fn] = { ...current[fn], [name]: '' };
+    });
+    setConfig({ metadata_columns: current });
+    setNewColName('');
+  };
+
+  const renameColumn = (oldName: string, newName: string) => {
+    if (!newName || newName === oldName) return;
+    if (customColumns.filter(c => c !== oldName).includes(newName)) {
+      addToast('warning', `Column "${newName}" already exists`);
+      return;
+    }
+    const current = { ...(config.metadata_columns || {}) };
+    Object.keys(current).forEach((fn) => {
+      const row = { ...current[fn] };
+      if (oldName in row) {
+        row[newName] = row[oldName];
+        delete row[oldName];
+      }
+      current[fn] = row;
+    });
+    setConfig({ metadata_columns: current });
+  };
+
+  const removeColumn = (colName: string) => {
+    const current = { ...(config.metadata_columns || {}) };
+    Object.keys(current).forEach((fn) => {
+      const row = { ...current[fn] };
+      delete row[colName];
+      current[fn] = row;
+    });
+    setConfig({ metadata_columns: current });
+  };
+
+  const updateCell = (filename: string, col: string, value: string) => {
+    const current = { ...(config.metadata_columns || {}) };
+    if (!current[filename]) current[filename] = {};
+    current[filename] = { ...current[filename], [col]: value };
+    setConfig({ metadata_columns: current });
+  };
+
+  // --- CSV Import/Export ---
+  const handleExportCSV = () => {
+    if (uploadedFiles.length === 0) return;
+    const allCols = ['experiment', 'condition', 'replicate', ...customColumns];
+    const header = ['filename', ...allCols].join(',');
+    const rows = uploadedFiles.map((file) => {
+      const meta = config.metadata_columns?.[file.filename] || {};
+      const values = [file.filename];
+      allCols.forEach((col) => {
+        const val = meta[col] ?? '';
+        const escaped = val.includes(',') || val.includes('"') ? `"${val.replace(/"/g, '""')}"` : val;
+        values.push(escaped);
+      });
+      return values.join(',');
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'experiment_structure.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast('success', 'Experiment structure exported as CSV');
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        const lines = text.split('\n').filter((l) => l.trim());
+        if (lines.length < 2) { addToast('warning', 'CSV must have a header and at least one data row'); return; }
+        const headers = parseCSVLine(lines[0]);
+        const filenameIdx = headers.indexOf('filename');
+        if (filenameIdx === -1) { addToast('warning', 'CSV must have a "filename" column'); return; }
+        const colNames = headers.filter((h) => h !== 'filename');
+
+        const current = { ...(config.metadata_columns || {}) };
+        const uploadedFilenames = new Set(uploadedFiles.map((f) => f.filename));
+        let merged = 0;
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = parseCSVLine(lines[i]);
+          const fn = values[filenameIdx];
+          if (!fn || !uploadedFilenames.has(fn)) continue;
+          if (!current[fn]) current[fn] = {};
+          colNames.forEach((col) => {
+            const colIdx = headers.indexOf(col);
+            if (colIdx >= 0) current[fn][col] = values[colIdx] || '';
+          });
+          merged++;
+        }
+        setConfig({ metadata_columns: current });
+        addToast('success', `Merged metadata for ${merged} file(s)`);
+      } catch {
+        addToast('error', 'Failed to parse CSV file');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const handleSort = (field: SortField) => {
     setSort((current) => ({
       field,
@@ -159,8 +383,52 @@ export const ExperimentTable: React.FC = () => {
   
   return (
     <div data-testid="experiment-structure" className="space-y-4">
-      {/* Filters */}
+      {/* Column Manager Bar */}
       <div className="flex flex-wrap items-center gap-3 p-4 bg-surface rounded-lg">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newColName}
+            onChange={(e) => setNewColName(e.target.value)}
+            placeholder="New column (e.g., Drug, Time)"
+            className="px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-48"
+            onKeyDown={(e) => { if (e.key === 'Enter') addColumn(); }}
+          />
+          <button
+            onClick={addColumn}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImportCSV}
+            className="hidden"
+            data-testid="csv-import-input"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-surface border border-border rounded-md hover:bg-border/20 transition-colors text-text"
+          >
+            <Upload className="w-4 h-4" /> Import CSV
+          </button>
+          <button
+            onClick={handleExportCSV}
+            disabled={uploadedFiles.length === 0}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-surface border border-border rounded-md hover:bg-border/20 transition-colors text-text disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Search and filters */}
         <div className="flex items-center gap-2">
           <Search className="w-4 h-4 text-text-muted" />
           <input
@@ -187,7 +455,7 @@ export const ExperimentTable: React.FC = () => {
             </select>
           </div>
         )}
-        
+
         {conditions.length > 0 && (
           <div className="flex items-center gap-2">
             <select
@@ -202,9 +470,7 @@ export const ExperimentTable: React.FC = () => {
             </select>
           </div>
         )}
-        
-        <div className="flex-1" />
-        
+
         <div className="text-sm text-text-secondary">
           {selected.length} of {uploadedFiles.length} selected
         </div>
@@ -227,6 +493,15 @@ export const ExperimentTable: React.FC = () => {
               <TableHeader field="experiment" onSort={handleSort} sort={sort}>Experiment</TableHeader>
               <TableHeader field="condition" onSort={handleSort} sort={sort}>Condition</TableHeader>
               <TableHeader field="replicate" className="text-right" onSort={handleSort} sort={sort}>Replicate</TableHeader>
+              {customColumns.map((col) => (
+                <th key={col} className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
+                  <EditableHeader
+                    colName={col}
+                    onRename={renameColumn}
+                    onRemove={removeColumn}
+                  />
+                </th>
+              ))}
               <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
                 Actions
               </th>
@@ -275,6 +550,16 @@ export const ExperimentTable: React.FC = () => {
                       #{file.replicate}
                     </span>
                   </td>
+                  {customColumns.map((col) => (
+                    <td key={col} className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={config.metadata_columns?.[file.filename]?.[col] || ''}
+                        onChange={(e) => updateCell(file.filename, col, e.target.value)}
+                        className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
+                      />
+                    </td>
+                  ))}
                   <td className="px-4 py-3">
                     <button
                       data-testid={`remove-file-${index}`}
