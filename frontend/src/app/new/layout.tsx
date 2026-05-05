@@ -8,7 +8,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Upload, GitBranch, GitCompare, Sliders } from 'lucide-react';
+import { ArrowLeft, Upload, GitBranch, GitCompare, Sliders, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SessionManager } from '@/components/session/SessionManager';
 
@@ -17,11 +17,13 @@ const steps = [
   { id: 'pipeline', label: 'Pipeline', icon: GitBranch, route: '/new/pipeline', testId: 'wizard-step-2' },
   { id: 'comparisons', label: 'Comparisons', icon: GitCompare, route: '/new/comparisons', testId: 'wizard-step-3' },
   { id: 'config', label: 'Configure', icon: Sliders, route: '/new/config', testId: 'wizard-step-4' },
+  { id: 'summary', label: 'Summary', icon: CheckCircle, route: '/new/summary', testId: 'wizard-step-5' },
 ];
 
 function getStepIndex(pathname: string): number {
-  if (pathname.includes('/new/comparisons')) return 2;
+  if (pathname.includes('/new/summary')) return 4;
   if (pathname.includes('/new/config')) return 3;
+  if (pathname.includes('/new/comparisons')) return 2;
   if (pathname.includes('/new/pipeline')) return 1;
   return 0;
 }
