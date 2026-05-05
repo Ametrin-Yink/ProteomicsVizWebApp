@@ -20,11 +20,6 @@ function ComparisonsContent() {
   const { config, setConfig, selectedPipeline, uploadedFiles } = state;
   const { addToast } = useUIStore();
 
-  // --- Metadata editor state ---
-  const [newColName, setNewColName] = React.useState('');
-  const [editingColName, setEditingColName] = React.useState<string | null>(null);
-  const [editColValue, setEditColValue] = React.useState('');
-
   // --- Drag-drop state ---
   const [group1Cards, setGroup1Cards] = React.useState<Array<{col: string; val: string; id: string}>>([]);
   const [group2Cards, setGroup2Cards] = React.useState<Array<{col: string; val: string; id: string}>>([]);
@@ -54,33 +49,6 @@ function ComparisonsContent() {
     else if (!selectedPipeline) { router.replace(`/new/pipeline?session=${sessionId}`); }
   }, [sessionId, selectedPipeline, router]);
 
-  // --- Auto-populate metadata on mount ---
-  React.useEffect(() => {
-    if (!config.metadata_columns || Object.keys(config.metadata_columns).length === 0) {
-      const init: Record<string, Record<string, string>> = {};
-      uploadedFiles.forEach((f) => {
-        init[f.filename] = {
-          experiment: f.experiment,
-          condition: f.condition,
-          replicate: String(f.replicate),
-        };
-      });
-      setConfig({ metadata_columns: init });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // --- Derive condition columns from metadata (exclude experiment, replicate) ---
-  const conditionColumns = React.useMemo(() => {
-    if (!config.metadata_columns) return [];
-    const cols = new Set<string>();
-    Object.values(config.metadata_columns).forEach((row) => {
-      Object.keys(row).forEach((k) => {
-        if (k !== 'experiment' && k !== 'replicate') cols.add(k);
-      });
-    });
-    return Array.from(cols);
-  }, [config.metadata_columns]);
-
   // --- Derive condition cards from metadata ---
   const conditionCards = React.useMemo(() => {
     if (!config.metadata_columns) return [];
@@ -100,6 +68,13 @@ function ComparisonsContent() {
     return cards.sort((a, b) => a.col.localeCompare(b.col) || a.val.localeCompare(b.val));
   }, [config.metadata_columns]);
 
+  // --- Derive condition column names from cards ---
+  const conditionColumns = React.useMemo(() => {
+    const cols = new Set<string>();
+    conditionCards.forEach(c => cols.add(c.col));
+    return Array.from(cols);
+  }, [conditionCards]);
+
   // Filter palette cards to exclude those already in drop zones
   const paletteCards = React.useMemo(() => {
     const used = new Set([...group1Cards.map(c => c.id), ...group2Cards.map(c => c.id)]);
@@ -115,84 +90,6 @@ function ComparisonsContent() {
     });
     return groups;
   }, [paletteCards]);
-
-  // --- Metadata editing functions ---
-  const addColumn = () => {
-    const name = newColName.trim();
-    if (!name) return;
-    if (conditionColumns.includes(name)) {
-      addToast('warning', `Column "${name}" already exists`);
-      return;
-    }
-    const current = { ...(config.metadata_columns || {}) };
-    Object.keys(current).forEach((fn) => {
-      current[fn] = { ...current[fn], [name]: '' };
-    });
-    setConfig({ metadata_columns: current });
-    setNewColName('');
-  };
-
-  const startRenameColumn = (col: string) => {
-    setEditingColName(col);
-    setEditColValue(col);
-  };
-
-  const finishRenameColumn = () => {
-    if (!editingColName) return;
-    const newName = editColValue.trim();
-    if (!newName || newName === editingColName) {
-      setEditingColName(null);
-      return;
-    }
-    if (conditionColumns.filter(c => c !== editingColName).includes(newName)) {
-      addToast('warning', `Column "${newName}" already exists`);
-      setEditingColName(null);
-      return;
-    }
-    const current = { ...(config.metadata_columns || {}) };
-    Object.keys(current).forEach((fn) => {
-      const row = { ...current[fn] };
-      if (editingColName in row) {
-        row[newName] = row[editingColName];
-        delete row[editingColName];
-      }
-      current[fn] = row;
-    });
-    // Update covariate selections if the renamed column was selected
-    if (covariateSelections.has(editingColName)) {
-      const next = new Set(covariateSelections);
-      next.delete(editingColName);
-      next.add(newName);
-      setCovariateSelections(next);
-      setConfig({ covariate_columns: Array.from(next) });
-    }
-    setConfig({ metadata_columns: current });
-    setEditingColName(null);
-  };
-
-  const removeColumn = (colName: string) => {
-    const current = { ...(config.metadata_columns || {}) };
-    Object.keys(current).forEach((fn) => {
-      const row = { ...current[fn] };
-      delete row[colName];
-      current[fn] = row;
-    });
-    // Remove from covariate selections
-    const next = new Set(covariateSelections);
-    next.delete(colName);
-    setCovariateSelections(next);
-    setConfig({ metadata_columns: current, covariate_columns: Array.from(next) });
-    // Remove from drop zones if cards from this column are there
-    setGroup1Cards(prev => prev.filter(c => c.col !== colName));
-    setGroup2Cards(prev => prev.filter(c => c.col !== colName));
-  };
-
-  const updateCell = (filename: string, col: string, value: string) => {
-    const current = { ...(config.metadata_columns || {}) };
-    if (!current[filename]) current[filename] = {};
-    current[filename] = { ...current[filename], [col]: value };
-    setConfig({ metadata_columns: current });
-  };
 
   // --- Drag-drop handlers ---
   const handleDragStart = (e: React.DragEvent, card: {col: string; val: string; id: string}, source: string) => {
@@ -309,103 +206,9 @@ function ComparisonsContent() {
         </div>
         <h1 className="text-2xl font-bold text-text">Comparisons &amp; Metadata</h1>
         <p className="text-text-muted mt-1">
-          Define condition columns, then drag cards to build comparisons
+          Drag condition cards into groups to build comparisons
         </p>
       </div>
-
-      {/* ===== SECTION 1: Metadata Editor ===== */}
-      <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-text">Condition Metadata</h2>
-            <p className="text-sm text-text-muted">
-              Define condition columns and assign values per sample
-            </p>
-          </div>
-        </div>
-        <div className="p-5">
-          {/* Add column */}
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={newColName}
-              onChange={(e) => setNewColName(e.target.value)}
-              placeholder="New column (e.g., Drug, Time)"
-              className="flex-1 px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              onKeyDown={(e) => { if (e.key === 'Enter') addColumn(); }}
-            />
-            <button
-              onClick={addColumn}
-              className="flex items-center gap-1 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Column
-            </button>
-          </div>
-
-          {/* Metadata table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 px-3 text-text-muted font-medium text-xs w-[180px]">Filename</th>
-                  {conditionColumns.map((col) => (
-                    <th key={col} className="text-left py-2 px-3 text-text-muted font-medium text-xs">
-                      {editingColName === col ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={editColValue}
-                            onChange={(e) => setEditColValue(e.target.value)}
-                            onBlur={finishRenameColumn}
-                            onKeyDown={(e) => { if (e.key === 'Enter') finishRenameColumn(); if (e.key === 'Escape') setEditingColName(null); }}
-                            className="w-24 px-1 py-0.5 bg-surface border border-primary rounded text-xs focus:outline-none"
-                            autoFocus
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1 group">
-                          <button
-                            onClick={() => startRenameColumn(col)}
-                            className="hover:text-primary transition-colors"
-                          >
-                            {col}
-                          </button>
-                          <button
-                            onClick={() => removeColumn(col)}
-                            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-500 transition-all"
-                            title={`Remove ${col}`}
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {uploadedFiles.map((file) => (
-                  <tr key={file.filename} className="border-b border-border/50 hover:bg-surface/50">
-                    <td className="py-1.5 px-3 text-text text-xs font-mono truncate max-w-[180px]" title={file.filename}>
-                      {file.filename}
-                    </td>
-                    {conditionColumns.map((col) => (
-                      <td key={col} className="py-1.5 px-3">
-                        <input
-                          type="text"
-                          value={config.metadata_columns?.[file.filename]?.[col] || ''}
-                          onChange={(e) => updateCell(file.filename, col, e.target.value)}
-                          className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
 
       {/* ===== SECTION 2: Comparison Builder ===== */}
       <section className="bg-background border border-border rounded-lg">
