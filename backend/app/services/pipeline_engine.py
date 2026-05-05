@@ -156,6 +156,7 @@ class StepContext:
     result: AnalysisResult | None = None
     _progress_callbacks: list[Callable] = field(default_factory=list)
     _cancel_event: asyncio.Event | None = None
+    timeout_multiplier: int = 1  # Set to 2 on retry after TimeoutExpired
 
 
 class PipelineStep:
