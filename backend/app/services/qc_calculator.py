@@ -34,7 +34,7 @@ class QCCalculator:
     async def calculate_all_metrics(
         self,
         protein_abundances_path: Path,
-        diff_expression_path: Path,
+        diff_expression_paths: list[Path],
         psm_abundances_path: Optional[Path] = None,
     ) -> QCData:
         """
@@ -42,7 +42,7 @@ class QCCalculator:
 
         Args:
             protein_abundances_path: Path to Protein_Abundances.tsv
-            diff_expression_path: Path to Diff_Expression.tsv
+            diff_expression_paths: List of paths to Diff_Expression_*.tsv files
             psm_abundances_path: Optional path to PSM_Abundances.tsv
 
         Returns:
@@ -54,7 +54,19 @@ class QCCalculator:
         protein_df = await asyncio.to_thread(
             pd.read_csv, protein_abundances_path, sep="\t"
         )
-        diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_path, sep="\t")
+        # Load first DE file for backward-compatible pvalue_distribution field
+        first_diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_paths[0], sep="\t") if diff_expression_paths else None
+
+        # Compute per-comparison p-value distributions
+        pvalue_distributions: dict[str, PValueDistribution] = {}
+        for diff_path in diff_expression_paths:
+            # Extract comparison label: Diff_Expression_<label>.tsv -> <label>
+            label = diff_path.stem.replace("Diff_Expression_", "")
+            try:
+                comp_df = await asyncio.to_thread(pd.read_csv, diff_path, sep="\t")
+                pvalue_distributions[label] = self._calculate_pvalue_distribution(comp_df)
+            except Exception:
+                logger.warning(f"Could not compute p-value distribution for {diff_path.name}", exc_info=True)
 
         psm_df = None
         if psm_abundances_path and psm_abundances_path.exists():
@@ -110,7 +122,8 @@ class QCCalculator:
 
         qc_data = QCData(
             pca=pca_result,
-            pvalue_distribution=self._calculate_pvalue_distribution(diff_df),
+            pvalue_distribution=self._calculate_pvalue_distribution(first_diff_df) if first_diff_df is not None else PValueDistribution(bins=[], counts=[]),
+            pvalue_distributions=pvalue_distributions if pvalue_distributions else None,
             psm_cv=psm_cv,
             protein_cv=protein_cv,
             intensity_distributions=intensity_dist,
