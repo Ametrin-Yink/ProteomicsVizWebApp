@@ -87,10 +87,24 @@ class Settings(BaseSettings):
     )
 
     r_script_timeout: int = Field(
-        default=7200,  # 2 hours for large datasets (>2M PSMs)
+        default=7200,  # 2 hours — default for most R scripts
         description="R script execution timeout in seconds",
         ge=30,
         le=14400,  # Max 4 hours
+    )
+
+    r_data_process_timeout: int = Field(
+        default=7200,  # 2 hours — MSstats dataProcess is the heaviest step
+        description="Timeout for MSstats dataProcess (protein abundance) in seconds",
+        ge=30,
+        le=28800,
+    )
+
+    r_group_comparison_timeout: int = Field(
+        default=3600,  # 1 hour — per-contrast modeling
+        description="Timeout for MSstats groupComparison (differential expression) in seconds",
+        ge=30,
+        le=14400,
     )
 
     r_n_cores: int = Field(
