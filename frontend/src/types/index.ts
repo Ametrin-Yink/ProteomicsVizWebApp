@@ -54,7 +54,10 @@ export interface SessionConfig {
   // Pipeline selection
   pipeline?: 'msqrob2' | 'msstats';
   // Multi-condition
-  comparisons?: Array<{ treatment: string; control: string }>;
+  comparisons?: Array<{
+    group1: Record<string, string>;
+    group2: Record<string, string>;
+  }>;
   metadata_columns?: Record<string, Record<string, string>>;
   // Shared advanced params
   pvalue_threshold?: number;

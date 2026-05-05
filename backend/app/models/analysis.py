@@ -79,7 +79,7 @@ class AnalysisConfig(BaseModel):
     strict_filtering: bool = Field(default=False)
 
     # Multi-condition: explicit list of comparison pairs
-    comparisons: list[dict[str, str]] = Field(default_factory=list)
+    comparisons: list[dict[str, dict[str, str]]] = Field(default_factory=list)
     # Multi-condition: per-sample metadata (filename -> {column -> value})
     metadata: Optional[dict[str, dict[str, str]]] = Field(default=None)
 

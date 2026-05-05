@@ -43,9 +43,9 @@ class SessionConfig(BaseModel):
         default=False, description="Use strict filtering criteria"
     )
     # Multi-condition: explicit list of comparison pairs
-    comparisons: Optional[list[dict[str, str]]] = Field(
+    comparisons: Optional[list[dict[str, dict[str, str]]]] = Field(
         default=None,
-        description="List of {treatment, control} pairs for multi-condition analysis",
+        description="List of {group1: {col:val}, group2: {col:val}} comparison criteria",
     )
     # Multi-condition: per-sample metadata columns (filename -> {column -> value})
     metadata_columns: Optional[dict[str, dict[str, str]]] = Field(

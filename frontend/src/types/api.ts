@@ -51,7 +51,10 @@ export interface SessionConfig {
   logfc_threshold?: number;
   min_peptides_per_protein?: number;
   // Multi-condition
-  comparisons?: Array<{ treatment: string; control: string }>;
+  comparisons?: Array<{
+    group1: Record<string, string>;
+    group2: Record<string, string>;
+  }>;
   metadata_columns?: Record<string, Record<string, string>>;
   // MSstats
   msstats_normalization?: string;
