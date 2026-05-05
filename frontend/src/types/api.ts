@@ -44,6 +44,10 @@ export interface SessionConfig {
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
+  // Shared advanced params
+  pvalue_threshold?: number;
+  logfc_threshold?: number;
+  min_peptides_per_protein?: number;
   // Multi-condition
   comparisons?: Array<{ treatment: string; control: string }>;
   metadata_columns?: Record<string, Record<string, string>>;
@@ -56,6 +60,15 @@ export interface SessionConfig {
   msstats_censored_int?: string;
   msstats_max_quantile?: number;
   msstats_remove50missing?: boolean;
+  // MSstats advanced
+  msstats_n_top_feature?: number;
+  msstats_min_feature_count?: number;
+  msstats_remove_uninformative_feature_outlier?: boolean;
+  msstats_equal_feature_var?: boolean;
+  msstats_name_standards?: string;
+  msstats_save_fitted_models?: boolean;
+  // Covariates
+  covariate_columns?: string[];
 }
 
 export interface SessionFiles {

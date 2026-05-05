@@ -69,6 +69,15 @@ export interface SessionConfig {
   msstats_censored_int?: string;
   msstats_max_quantile?: number;
   msstats_remove50missing?: boolean;
+  // MSstats advanced
+  msstats_n_top_feature?: number;
+  msstats_min_feature_count?: number;
+  msstats_remove_uninformative_feature_outlier?: boolean;
+  msstats_equal_feature_var?: boolean;
+  msstats_name_standards?: string;
+  msstats_save_fitted_models?: boolean;
+  // Covariates
+  covariate_columns?: string[];
 }
 
 export interface SessionFiles {
