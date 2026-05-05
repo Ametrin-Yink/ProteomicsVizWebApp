@@ -20,6 +20,7 @@ import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, processingApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 
 function ConfigContent() {
   const router = useRouter();
@@ -189,155 +190,8 @@ function ConfigContent() {
               </p>
             </div>
           </div>
-          <div className="p-5 space-y-5">
-            {/* Normalization method */}
-            <div>
-              <label className="block text-sm font-medium text-text mb-2">
-                Normalization Method
-              </label>
-              <select
-                data-testid="msstats-normalization-select"
-                value={config.msstats_normalization ?? 'equalizeMedians'}
-                onChange={(e) => setConfig({ msstats_normalization: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                <option value="equalizeMedians">Equalize Medians</option>
-                <option value="quantile">Quantile</option>
-              </select>
-            </div>
-
-            {/* Summary method */}
-            <div>
-              <label className="block text-sm font-medium text-text mb-2">
-                Summary Method
-              </label>
-              <select
-                data-testid="msstats-summary-select"
-                value={config.msstats_summary_method ?? 'TMP'}
-                onChange={(e) => setConfig({ msstats_summary_method: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                <option value="TMP">Tukey Median Polish (TMP)</option>
-                <option value="linear">Linear Mixed Model</option>
-              </select>
-            </div>
-
-            {/* Feature selection */}
-            <div>
-              <label className="block text-sm font-medium text-text mb-2">
-                Feature Selection
-              </label>
-              <select
-                data-testid="msstats-feature-select"
-                value={config.msstats_feature_selection ?? 'all'}
-                onChange={(e) => setConfig({ msstats_feature_selection: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                <option value="all">All Features</option>
-                <option value="top3">Top 3 Peptides</option>
-              </select>
-            </div>
-
-            {/* Log base */}
-            <div>
-              <label className="block text-sm font-medium text-text mb-2">Log Base</label>
-              <select
-                data-testid="msstats-logbase-select"
-                value={config.msstats_log_base ?? 2}
-                onChange={(e) => setConfig({ msstats_log_base: parseInt(e.target.value, 10) })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                <option value={2}>Log2</option>
-                <option value={10}>Log10</option>
-                <option value={0}>Natural Log</option>
-              </select>
-            </div>
-
-            {/* Censored intensity */}
-            <div>
-              <label className="block text-sm font-medium text-text mb-2">
-                Censored Intensity
-              </label>
-              <select
-                data-testid="msstats-censored-select"
-                value={config.msstats_censored_int ?? 'NA'}
-                onChange={(e) => setConfig({ msstats_censored_int: e.target.value })}
-                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                <option value="NA">NA</option>
-                <option value="0">0</option>
-              </select>
-            </div>
-
-            {/* Max quantile */}
-            <div>
-              <label className="block text-sm font-medium text-text mb-2">
-                Max Quantile for Normalization: {config.msstats_max_quantile ?? 0.999}
-              </label>
-              <input
-                type="range"
-                min="0.9"
-                max="1.0"
-                step="0.001"
-                data-testid="msstats-maxquantile-slider"
-                value={config.msstats_max_quantile ?? 0.999}
-                onChange={(e) => setConfig({ msstats_max_quantile: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-surface rounded-full appearance-none cursor-pointer accent-primary
-                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4
-                  [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-primary
-                  [&::-webkit-slider-thumb]:rounded-full"
-              />
-            </div>
-
-            {/* Toggles */}
-            <div className="space-y-3 pt-2">
-              <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
-                <div>
-                  <span className="text-sm font-medium text-text">MBimpute</span>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    Model-based imputation for missing values
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  data-testid="msstats-impute-checkbox"
-                  checked={config.msstats_impute ?? true}
-                  onChange={(e) => setConfig({ msstats_impute: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-                  after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-                  after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-                  peer-checked:after:translate-x-5"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
-                <div>
-                  <span className="text-sm font-medium text-text">Remove Proteins &gt;50% Missing</span>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    Remove proteins with more than 50% missing values across runs
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  data-testid="msstats-remove50-checkbox"
-                  checked={config.msstats_remove50missing ?? false}
-                  onChange={(e) => setConfig({ msstats_remove50missing: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-                  after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-                  after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-                  peer-checked:after:translate-x-5"
-                />
-              </label>
-            </div>
+          <div className="p-5">
+            <MsstatsConfigForm config={config} setConfig={setConfig} />
           </div>
         </section>
       )}
