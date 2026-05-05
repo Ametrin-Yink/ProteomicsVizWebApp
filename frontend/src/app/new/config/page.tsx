@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Loader2,
-  Play,
   Sliders,
   Dna,
   BarChart3,
@@ -19,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi, processingApi } from '@/lib/api-client';
+import { sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 

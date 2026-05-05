@@ -17,7 +17,7 @@ function ComparisonsContent() {
   const sessionId = searchParams.get('session') || '';
 
   const state = useAnalysisStore();
-  const { config, setConfig, selectedPipeline, uploadedFiles } = state;
+  const { config, setConfig, selectedPipeline } = state;
   const { addToast } = useUIStore();
 
   // --- Drag-drop state ---
@@ -227,7 +227,7 @@ function ComparisonsContent() {
           >
             <p className="text-xs text-text-muted mb-2 font-medium">Condition Palette (drag to groups or drop here to return)</p>
             {Object.keys(paletteGroups).length === 0 && group1Cards.length === 0 && group2Cards.length === 0 ? (
-              <p className="text-xs text-text-muted italic">Define condition columns and values above to see cards</p>
+              <p className="text-xs text-text-muted italic">No condition cards available. Define metadata columns on the Upload page.</p>
             ) : Object.keys(paletteGroups).length === 0 ? (
               <p className="text-xs text-text-muted italic">All cards are in use — remove from groups or drop here</p>
             ) : (
