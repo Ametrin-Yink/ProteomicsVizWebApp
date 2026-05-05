@@ -6,11 +6,78 @@
 'use client';
 
 import React, { useCallback, useState, useRef } from 'react';
-import { Upload, File, X, Database, AlertCircle } from 'lucide-react';
+import { Upload, File, X, Database, AlertCircle, ChevronDown } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { uploadApi } from '@/lib/api-client';
 import type { ParsedFilename, UploadProgress } from '@/types';
+
+/**
+ * Collapsible uploaded files list — folded by default, scrollable when expanded.
+ */
+const CollapsibleFileList: React.FC<{
+  uploadedFiles: ParsedFilename[];
+  uploadProgress: UploadProgress[];
+  removeUploadedFile: (filename: string) => void;
+}> = ({ uploadedFiles, uploadProgress, removeUploadedFile }) => {
+  const [expanded, setExpanded] = React.useState(false);
+
+  const getProgressForFile = (filename: string) =>
+    uploadProgress.find((p) => p.filename === filename);
+
+  return (
+    <div className="mt-4" data-testid="uploaded-files-list">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 text-sm font-medium text-text hover:text-primary transition-colors w-full text-left"
+      >
+        <ChevronDown
+          className={`w-4 h-4 transition-transform duration-200 ${expanded ? '' : '-rotate-90'}`}
+        />
+        Uploaded Files ({uploadedFiles.length})
+      </button>
+      {expanded && (
+        <div className="mt-2 max-h-48 overflow-y-auto space-y-1.5 pr-1">
+          {uploadedFiles.map((file) => {
+            const progress = getProgressForFile(file.filename);
+            const isCompleted = progress?.status === 'completed';
+            const hasError = progress?.status === 'error';
+
+            return (
+              <div
+                key={file.filename}
+                className={`flex items-center justify-between p-2 rounded-md border text-sm ${
+                  hasError ? 'bg-error/5 border-error/20' : 'bg-background border-border'
+                }`}
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <File
+                    className={`w-4 h-4 flex-shrink-0 ${
+                      hasError ? 'text-error' : isCompleted ? 'text-success' : 'text-text-muted'
+                    }`}
+                  />
+                  <span className="text-text truncate flex-1" title={file.filename}>
+                    {file.filename}
+                  </span>
+                  <span className="text-xs text-text-muted flex-shrink-0">
+                    {file.experiment} / {file.condition} / #{file.replicate}
+                  </span>
+                </div>
+                <button
+                  onClick={() => removeUploadedFile(file.filename)}
+                  className="p-1 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors flex-shrink-0 ml-2"
+                  title="Remove file"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface FileUploadZoneProps {
   sessionId: string;
@@ -132,7 +199,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     try {
       if (isCompound) {
         // Handle compound file upload
-        const file = fileArray[0];
+        if (validFilesAfterValidation.length === 0) {
+          setIsUploading(false);
+          return;
+        }
+        const file = validFilesAfterValidation[0];
         setUploadProgress(file.name, 0, 'uploading');
         
         const result = await uploadApi.uploadCompound(sessionId, file);
@@ -239,11 +310,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     handleFiles(files, isCompound);
     e.target.value = ''; // Reset input
   }, [handleFiles]);
-  
-  const getProgressForFile = (filename: string): UploadProgress | undefined => {
-    return uploadProgress.find((p) => p.filename === filename);
-  };
-  
+
   return (
     <div className="space-y-6">
       {/* Proteomics File Upload */}
@@ -251,11 +318,20 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         <h3 className="text-lg font-semibold text-text">Proteomics Data Files</h3>
         
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload proteomics data files"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleProteomicsDrop}
           onClick={() => {
             fileInputRef.current?.click();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
           }}
           className={`
             relative border-2 border-dashed rounded-xl p-8 cursor-pointer
@@ -321,78 +397,13 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           </button>
         </div>
         
-        {/* Uploaded Files List */}
+        {/* Uploaded Files List — collapsible, folded by default */}
         {uploadedFiles.length > 0 && (
-          <div className="mt-6" data-testid="uploaded-files-list">
-            <h4 className="text-sm font-medium text-text mb-3">Uploaded Files ({uploadedFiles.length})</h4>
-            <div className="space-y-2">
-              {uploadedFiles.map((file) => {
-                const progress = getProgressForFile(file.filename);
-                const isCompleted = progress?.status === 'completed';
-                const hasError = progress?.status === 'error';
-                
-                return (
-                  <div
-                    key={file.filename}
-                    className={`
-                      flex items-center justify-between p-3 rounded-lg border
-                      ${hasError ? 'bg-error/5 border-error/20' : 'bg-background border-border'}
-                    `}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <File className={`
-                        w-5 h-5 flex-shrink-0
-                        ${hasError ? 'text-error' : isCompleted ? 'text-success' : 'text-text-muted'}
-                      `} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-text truncate">
-                          {file.filename}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-text-muted">
-                          <span>{formatFileSize(file.size)}</span>
-                          <span>•</span>
-                          <span>Exp: {file.experiment}</span>
-                          <span>•</span>
-                          <span>Cond: {file.condition}</span>
-                          <span>•</span>
-                          <span>Rep: {file.replicate}</span>
-                        </div>
-                        
-                        {/* Progress bar */}
-                        {progress && progress.status === 'uploading' && (
-                          <div className="mt-2" data-testid="upload-progress">
-                            <div className="w-full bg-border rounded-full h-1.5">
-                              <div
-                                className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                                style={{ width: `${progress.progress}%` }}
-                              />
-                            </div>
-                            <p className="text-xs text-text-muted mt-1">{progress.progress}%</p>
-                          </div>
-                        )}
-                        
-                        {isCompleted && (
-                          <p className="text-xs text-success mt-1" data-testid="upload-success">Upload complete</p>
-                        )}
-                        
-                        {hasError && progress?.error && (
-                          <p className="text-xs text-error mt-1" data-testid="upload-error">{progress.error}</p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <button
-                      onClick={() => removeUploadedFile(file.filename)}
-                      className="p-1.5 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors"
-                      title="Remove file"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <CollapsibleFileList
+            uploadedFiles={uploadedFiles}
+            uploadProgress={uploadProgress}
+            removeUploadedFile={removeUploadedFile}
+          />
         )}
       </div>
 

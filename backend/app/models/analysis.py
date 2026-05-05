@@ -110,16 +110,6 @@ class AnalysisConfig(BaseModel):
     # Covariate columns (selected metadata columns used as model covariates)
     covariate_columns: Optional[list[str]] = Field(default=None, description="Metadata column names to use as covariates")
 
-    @field_validator("control")
-    @classmethod
-    def control_differs_from_treatment(cls, v: str, info) -> str:
-        """Ensure control differs from treatment."""
-        values = info.data
-        if "treatment" in values and v == values["treatment"]:
-            raise ValueError("Control must differ from treatment")
-        return v
-
-
 class VolcanoPlotPoint(BaseModel):
     """Single point for volcano plot."""
 

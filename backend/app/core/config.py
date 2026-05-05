@@ -87,10 +87,10 @@ class Settings(BaseSettings):
     )
 
     r_script_timeout: int = Field(
-        default=1800,  # 30 minutes for large datasets
+        default=7200,  # 2 hours for large datasets (>2M PSMs)
         description="R script execution timeout in seconds",
         ge=30,
-        le=7200,  # Max 2 hours
+        le=14400,  # Max 4 hours
     )
 
     r_n_cores: int = Field(

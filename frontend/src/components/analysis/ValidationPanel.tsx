@@ -67,11 +67,7 @@ export const ValidationPanel: React.FC = () => {
   // Determine status for each check
   const experimentStatus = experiments.length === 1 ? 'valid' : experiments.length > 1 ? 'neutral' : 'neutral';
   const conditionStatus = conditions.length >= 2 ? 'valid' : conditions.length > 0 ? 'neutral' : 'neutral';
-  const replicateStatus = Object.values(replicatesByCondition).every((count) => count >= 3) 
-    ? 'valid' 
-    : Object.values(replicatesByCondition).some((count) => count < 3) 
-      ? 'invalid' 
-      : 'neutral';
+  const replicateStatus = Object.keys(replicatesByCondition).length > 0 ? 'valid' : 'neutral';
   
   return (
     <div className="space-y-4">
@@ -124,17 +120,12 @@ export const ValidationPanel: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <div className="w-24 bg-border rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full transition-all ${
-                        count >= 3 ? 'bg-success' : 'bg-error'
-                      }`}
-                      style={{ width: `${Math.min((count / 3) * 100, 100)}%` }}
+                      className="h-2 rounded-full transition-all bg-success"
+                      style={{ width: `${Math.min(count * 10, 100)}%` }}
                     />
                   </div>
-                  <span className={`
-                    text-sm font-medium
-                    ${count >= 3 ? 'text-success' : 'text-error'}
-                  `}>
-                    {count}/3 min
+                  <span className="text-sm font-medium text-text">
+                    {count} sample{count !== 1 ? 's' : ''}
                   </span>
                 </div>
               </div>

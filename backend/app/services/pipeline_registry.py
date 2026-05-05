@@ -10,6 +10,7 @@ from app.services.steps import (
     step_filter_criteria_default,
     step_protein_abundance_msqrob2,
     step_multi_condition_de,
+    step_group_comparison_multi,
     step_qc_metrics,
     step_gsea_analysis,
 )
@@ -53,5 +54,34 @@ register(
         ),
         PipelineStep(8, "qc_metrics", "QC Metrics", step_qc_metrics),
         PipelineStep(9, "gsea", "GSEA Analysis", step_gsea_analysis),
+    ],
+)
+
+# Register MSstats multi-condition pipeline (same pre-processing, MSstats for abundance + DE)
+register(
+    AnalysisTemplate.MSSTATS,
+    [
+        PipelineStep(
+            1, "combine_replicates", "Combining Replicates", step_combine_replicates
+        ),
+        PipelineStep(
+            2, "generate_unique_psm", "Generate Unique PSM", step_generate_unique_psm
+        ),
+        PipelineStep(3, "remove_razor", "Remove Razor Peptides", step_remove_razor),
+        PipelineStep(
+            4,
+            "remove_low_quality",
+            "Remove Low Quality",
+            step_remove_low_quality_default,
+        ),
+        PipelineStep(5, "filter", "Filter by Criteria", step_filter_criteria_default),
+        PipelineStep(
+            6,
+            "msstats_protein_de",
+            "Protein Abundance + DE (MSstats)",
+            step_group_comparison_multi,
+        ),
+        PipelineStep(7, "qc_metrics", "QC Metrics", step_qc_metrics),
+        PipelineStep(8, "gsea", "GSEA Analysis", step_gsea_analysis),
     ],
 )

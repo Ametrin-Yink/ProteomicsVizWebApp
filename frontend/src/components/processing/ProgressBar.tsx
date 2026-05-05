@@ -41,7 +41,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   const sizes = sizeConfig[size];
 
   return (
-    <div data-testid="progress-bar" data-value={clampedProgress} className={cn('w-full', className)}>
+    <div className={cn('w-full', className)}>
       <div className="flex items-center gap-3">
         <div
           data-testid="progress-bar"

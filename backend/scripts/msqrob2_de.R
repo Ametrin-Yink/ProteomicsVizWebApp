@@ -72,21 +72,23 @@ if (length(abundance_cols) == 0) {
 protein_matrix <- as.matrix(protein_data[, ..abundance_cols])
 rownames(protein_matrix) <- protein_data$Master_Protein_Accessions
 
-# Pre-filter: remove proteins with zero variance (no DE signal, wastes compute)
-cat("Checking for zero-variance proteins...\n")
-# Use matrixStats::rowVars for speed (avoids R-level loop over rows)
-valid_mask <- rowSums(!is.na(protein_matrix)) >= 2
+# Pre-filter: remove proteins with zero or near-zero variance (no DE signal)
+cat("Checking for low-variance proteins...\n")
+valid_mask <- rowSums(!is.na(protein_matrix)) >= 3
 var_per_protein <- rep(NA, nrow(protein_matrix))
 if (any(valid_mask)) {
     var_per_protein[valid_mask] <- rowVars(protein_matrix[valid_mask, , drop = FALSE], na.rm = TRUE)
 }
-zero_var <- which(!is.na(var_per_protein) & var_per_protein == 0)
+zero_var <- which(!is.na(var_per_protein) & var_per_protein < 1e-10)
 if (length(zero_var) > 0) {
-    cat("Pre-filtering", length(zero_var), "zero-variance proteins (will be added back to output)\n")
+    cat("Pre-filtering", length(zero_var), "low-variance proteins (will be added back to output)\n")
     zero_var_ids <- rownames(protein_matrix)[zero_var]
     protein_matrix <- protein_matrix[-zero_var, , drop = FALSE]
 } else {
     zero_var_ids <- character(0)
+}
+if (nrow(protein_matrix) == 0) {
+    stop("All proteins were filtered out due to low variance. Cannot perform differential expression.")
 }
 cat("Matrix after filtering:", nrow(protein_matrix), "proteins x", ncol(protein_matrix), "samples\n")
 
@@ -97,14 +99,13 @@ col_data <- data.frame(
 )
 
 # Determine condition for each sample based on column names
+# Use boundary-aware matching to avoid substring false matches
 col_data$condition <- sapply(abundance_cols, function(x) {
-    # Check if treatment or control is in the sample name
-    if (grepl(treatment, x, ignore.case = TRUE, fixed = TRUE)) {
+    if (grepl(paste0("(^|_)", treatment, "($|_)"), x, ignore.case = TRUE)) {
         return("Treatment")
-    } else if (grepl(control, x, ignore.case = TRUE, fixed = TRUE)) {
+    } else if (grepl(paste0("(^|_)", control, "($|_)"), x, ignore.case = TRUE)) {
         return("Control")
     } else {
-        # Try to extract from pattern
         parts <- strsplit(x, "_")[[1]]
         if (length(parts) >= 2) {
             return(parts[1])
@@ -113,27 +114,38 @@ col_data$condition <- sapply(abundance_cols, function(x) {
     }
 })
 
+# Check for unassignable samples before creating factor
+na_conditions <- col_data$condition %in% c("Treatment", "Control") == FALSE &
+                 !is.na(col_data$condition)
+if (any(na_conditions)) {
+    cat("Warning: Could not assign condition for samples:",
+        paste(col_data$sample[na_conditions], collapse = ", "), "\n")
+}
+
 # Convert to factor with Control as reference
 col_data$condition <- factor(col_data$condition, levels = c("Control", "Treatment"))
 
 cat("Sample conditions:\n")
-print(table(col_data$condition))
+print(table(col_data$condition, useNA = "ifany"))
 
 # Check that both conditions are present
-if (length(unique(col_data$condition)) < 2) {
+if (length(levels(col_data$condition)) < 2 ||
+    sum(!is.na(col_data$condition) & col_data$condition == "Control") == 0 ||
+    sum(!is.na(col_data$condition) & col_data$condition == "Treatment") == 0) {
     stop("Both treatment and control conditions must be present in the data")
 }
 
-# Create row data
+# Create row data — use the same filtered set as protein_matrix
+remaining_indices <- setdiff(seq_len(nrow(protein_data)), zero_var)
 row_data <- DataFrame(
-    Master_Protein_Accessions = protein_data$Master_Protein_Accessions
+    Master_Protein_Accessions = protein_data$Master_Protein_Accessions[remaining_indices]
 )
 
 if ("Gene_Name" %in% names(protein_data)) {
-    row_data$Gene_Name <- protein_data$Gene_Name
+    row_data$Gene_Name <- protein_data$Gene_Name[remaining_indices]
 }
 
-rownames(row_data) <- protein_data$Master_Protein_Accessions
+rownames(row_data) <- protein_data$Master_Protein_Accessions[remaining_indices]
 
 # Create SummarizedExperiment
 se <- SummarizedExperiment(

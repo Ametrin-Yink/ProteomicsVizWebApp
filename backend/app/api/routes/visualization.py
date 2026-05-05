@@ -137,6 +137,19 @@ class FileCache:
         self._cache.clear()
 
 
+def _resolve_de_file(results_dir: Path) -> Path | None:
+    """Resolve the differential expression results file.
+
+    Checks for the default name first, then falls back to the first
+    per-comparison file (used by multi-condition pipelines).
+    """
+    default = results_dir / "Diff_Expression.tsv"
+    if default.exists():
+        return default
+    candidates = sorted(results_dir.glob("Diff_Expression_*.tsv"))
+    return candidates[0] if candidates else None
+
+
 # Global cache instance
 viz_cache = FileCache(max_size=50)
 
@@ -166,11 +179,12 @@ async def load_diff_expression_results(
 
     if comparison:
         diff_file = results_dir / f"Diff_Expression_{comparison}.tsv"
+        if not diff_file.exists():
+            return []
     else:
-        diff_file = results_dir / "Diff_Expression.tsv"
-
-    if not diff_file.exists():
-        return []
+        diff_file = _resolve_de_file(results_dir)
+        if diff_file is None:
+            return []
 
     try:
         df = await asyncio.to_thread(pd.read_csv, diff_file, sep="\t")
@@ -185,15 +199,15 @@ async def load_diff_expression_results(
             adj_pval = row.get("adjPval", 1)
             psm_count = row.get("PSM_Count", row.get("psm_count", 0))
 
-            # Convert NaN/Inf to None
+            # Convert NaN/Inf to None and skip rows with invalid values
             if pd.isna(log_fc) or (isinstance(log_fc, float) and math.isinf(log_fc)):
-                log_fc = None
+                continue  # Skip proteins with invalid logFC (inf/-inf/NaN)
             if pd.isna(pval) or (isinstance(pval, float) and math.isinf(pval)):
-                pval = None
+                continue  # Skip proteins with invalid p-value
             if pd.isna(adj_pval) or (
                 isinstance(adj_pval, float) and math.isinf(adj_pval)
             ):
-                adj_pval = None
+                adj_pval = 1  # Conservative default for missing adjusted p-value
             if pd.isna(psm_count):
                 psm_count = 0
 
@@ -317,7 +331,8 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
 
 # Global cache for loaded GSEA results (session_path -> dict of database -> list of results)
 # Loaded once per session, then served from memory
-_gsea_file_cache: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+# Size-limited cache for GSEA results — each entry can be hundreds of MB
+_gsea_file_cache = FileCache(max_size=5)
 
 
 def _load_gsea_json(filepath: Path) -> dict:
@@ -355,27 +370,31 @@ def load_gsea_results(
             "underrepresented": 0,
         }
 
-    # Load entire file once per session, cache all databases in memory
+    # Load entire file once per session, cache all databases in memory.
+    # Double-checked locking: check under lock, load outside lock, store under lock.
     cache_key = str(gsea_file)
+
     with _cache_lock:
-        if cache_key not in _gsea_file_cache:
-            try:
-                logger.info(
-                    f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)"
-                )
-                all_results = _load_gsea_json(gsea_file)
-                # Pre-process all databases at once
-                processed = {}
-                for db_name, db_data in all_results.items():
-                    results = db_data.get("results", [])
-                    # Add significant field
-                    for r in results:
-                        r["significant"] = (
-                            abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.25
-                        )
-                    processed[db_name] = results
-                _gsea_file_cache[cache_key] = processed
-            logger.info(f"GSEA results cached: {len(processed)} databases")
+        cached = _gsea_file_cache.get(cache_key)
+
+    if cached is None:
+        try:
+            logger.info(
+                f"Loading GSEA results into memory: {gsea_file.name} ({gsea_file.stat().st_size / 1024 / 1024:.1f} MB)"
+            )
+            all_results = _load_gsea_json(gsea_file)
+            # Pre-process all databases at once
+            cached = {}
+            for db_name, db_data in all_results.items():
+                res_list = db_data.get("results", [])
+                for r in res_list:
+                    r["significant"] = (
+                        abs(r.get("nes", 0)) >= 1.0 and r.get("fdr", 1) < 0.25
+                    )
+                cached[db_name] = res_list
+            with _cache_lock:
+                _gsea_file_cache.set(cache_key, cached)
+            logger.info(f"GSEA results cached: {len(cached)} databases")
         except Exception as e:
             logger.error(f"Error loading GSEA results: {e}")
             return {
@@ -387,7 +406,7 @@ def load_gsea_results(
                 "underrepresented": 0,
             }
 
-    db_results = _gsea_file_cache[cache_key].get(database, [])
+    db_results = cached.get(database, [])
     results = db_results
 
     # Calculate summary stats
@@ -548,7 +567,7 @@ async def get_gsea_plot_data(
         )
 
     # Load slim GSEA results to get lead_genes and pathway metadata
-    gsea_data = load_gsea_results(results_dir, database, session_id)
+    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
     results = gsea_data.get("results", [])
 
     # Find the specific pathway
@@ -593,10 +612,10 @@ async def get_gsea_plot_data(
             except Exception as e:
                 logger.warning(f"Could not read alternate .rnk file: {e}")
 
-    # Fallback: reconstruct ranked list from Diff_Expression.tsv
+    # Fallback: reconstruct ranked list from Diff_Expression*.tsv
     if not ranked_genes:
-        de_file = results_dir / "Diff_Expression.tsv"
-        if de_file.exists():
+        de_file = _resolve_de_file(results_dir)
+        if de_file and de_file.exists():
             try:
                 de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
                 gene_col = next(
@@ -727,7 +746,7 @@ async def get_gsea_heatmap_data(
         )
 
     # Load slim GSEA results to get lead_genes
-    gsea_data = load_gsea_results(results_dir, database, session_id)
+    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
     results = gsea_data.get("results", [])
 
     # Find the specific pathway
@@ -754,9 +773,9 @@ async def get_gsea_heatmap_data(
         return create_response({"genes": [], "samples": [], "z_scores": []})
 
     # Build ranked gene list to order heatmap genes by rank position
-    de_file = results_dir / "Diff_Expression.tsv"
+    de_file = _resolve_de_file(results_dir)
     gene_rank_map: dict[str, int] = {}
-    if de_file.exists():
+    if de_file and de_file.exists():
         try:
             de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
             gene_col = next(
@@ -951,7 +970,7 @@ async def get_gsea_results(
         )
 
     # Load GSEA results (cached in memory after first load)
-    gsea_data = load_gsea_results(results_dir, database, session_id)
+    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
 
     results = gsea_data.pop("results")
 

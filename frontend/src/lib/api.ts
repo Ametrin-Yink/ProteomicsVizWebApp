@@ -52,7 +52,11 @@ export async function getSession(
 ): Promise<{
   id: string;
   name: string;
-  config?: { treatment: string; control: string };
+  config?: {
+    treatment: string;
+    control: string;
+    comparisons?: Array<{ treatment: string; control: string }>;
+  };
   files?: { proteomics: Array<{ experiment: string }> };
   markers?: string[];
   volcano_filters?: {
@@ -295,10 +299,23 @@ export async function updateSessionVisualizationState(
     };
   }
 ): Promise<void> {
-  await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/visualization-state`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  // Silently ignore errors — localStorage fallback handles offline case
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/visualization-state`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      console.warn(`Failed to save visualization state: ${response.status} ${response.statusText}`);
+      // Fall back to localStorage so markers/filters survive page refresh
+      try {
+        localStorage.setItem(`viz_state_${sessionId}`, JSON.stringify(data));
+      } catch { /* localStorage may be full or unavailable */ }
+    }
+  } catch (err) {
+    console.warn('Failed to save visualization state:', err);
+    try {
+      localStorage.setItem(`viz_state_${sessionId}`, JSON.stringify(data));
+    } catch { /* localStorage unavailable */ }
+  }
 }

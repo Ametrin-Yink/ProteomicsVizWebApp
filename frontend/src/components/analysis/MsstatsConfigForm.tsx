@@ -221,13 +221,17 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
               min={1}
               max={10}
               data-testid="msstats-min-feature-input"
-              value={config.msstats_min_feature_count ?? 2}
+              value={(config.min_peptides_per_protein ?? 1) > 1 ? (config.msstats_min_feature_count ?? 2) : 1}
+              disabled={(config.min_peptides_per_protein ?? 1) <= 1}
               onChange={(e) => setConfig({ msstats_min_feature_count: parseInt(e.target.value, 10) || 2 })}
               className="w-24 px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary
+                disabled:opacity-40 disabled:cursor-not-allowed"
             />
             <p className="text-xs text-text-muted mt-1">
-              Minimum features (peptides) required per protein for summarization
+              {(config.min_peptides_per_protein ?? 1) > 1
+                ? 'Minimum features (peptides) required per protein for summarization'
+                : 'Locked to 1 while "Exclude Single-Peptide Proteins" is off'}
             </p>
           </div>
 

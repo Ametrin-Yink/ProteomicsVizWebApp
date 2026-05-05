@@ -362,28 +362,27 @@ function ComparisonsContent() {
           <div className="p-5">
             <div className="flex flex-wrap gap-2">
               {conditionColumns.map((col) => (
-                <label
+                <div
                   key={col}
+                  role="checkbox"
+                  aria-checked={covariateSelections.has(col)}
+                  tabIndex={0}
+                  onClick={() => toggleCovariate(col)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCovariate(col); } }}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-colors text-sm',
+                    'flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-colors text-sm select-none',
                     covariateSelections.has(col)
                       ? 'bg-primary/10 border border-primary/30 text-primary'
                       : 'bg-surface border border-border text-text-muted hover:border-primary/20'
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    checked={covariateSelections.has(col)}
-                    onChange={() => toggleCovariate(col)}
-                    className="sr-only"
-                  />
                   {covariateSelections.has(col) ? (
                     <CheckSquare className="w-4 h-4 flex-shrink-0" />
                   ) : (
                     <Square className="w-4 h-4 flex-shrink-0" />
                   )}
                   {col}
-                </label>
+                </div>
               ))}
             </div>
           </div>

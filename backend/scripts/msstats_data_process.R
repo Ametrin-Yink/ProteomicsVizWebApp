@@ -159,11 +159,11 @@ cat("  log base:", config$logTrans, "\n")
 cat("  feature subset:", config$featureSubset, "\n")
 flush.console()
 
-# Derive effective min_feature_count from min_peptides and min_feature_count
-if (is.null(config$min_feature_count) || is.na(config$min_feature_count)) {
-    effective_min_feature_count <- max(2, config$min_peptides)
+# min_feature_count: use configured value, fall back to MSstats default (2)
+effective_min_feature_count <- if (!is.null(config$min_feature_count) && !is.na(config$min_feature_count)) {
+    config$min_feature_count
 } else {
-    effective_min_feature_count <- config$min_feature_count
+    2
 }
 
 # Build dataProcess arguments dynamically
@@ -196,6 +196,9 @@ if (!is.null(config$equalFeatureVar)) {
 }
 if (!is.null(config$nameStandards)) {
     dp_args$nameStandards <- config$nameStandards
+}
+if (!is.null(config$numberOfCores)) {
+    dp_args$numberOfCores <- config$numberOfCores
 }
 
 processed <- tryCatch({

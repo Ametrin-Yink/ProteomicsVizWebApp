@@ -150,26 +150,27 @@ function ConfigContent() {
             </p>
           </div>
 
-          {/* Min peptides per protein */}
-          <div>
-            <label className="block text-sm font-medium text-text mb-2">
-              Minimum Peptides per Protein
-            </label>
-            <select
-              data-testid="min-peptides-select"
-              value={config.min_peptides_per_protein ?? 1}
-              onChange={(e) => setConfig({ min_peptides_per_protein: parseInt(e.target.value, 10) })}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            >
-              {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-            <p className="text-xs text-text-muted mt-1">
-              Proteins with fewer peptides are excluded from analysis
-            </p>
-          </div>
+          {/* Exclude single-peptide proteins */}
+          <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
+            <div>
+              <span className="text-sm font-medium text-text">Exclude Single-Peptide Proteins</span>
+              <p className="text-xs text-text-muted mt-0.5">
+                Remove proteins with only one identified peptide from the analysis
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              data-testid="exclude-single-peptide-checkbox"
+              checked={(config.min_peptides_per_protein ?? 1) > 1}
+              onChange={(e) => setConfig({ min_peptides_per_protein: e.target.checked ? 2 : 1 })}
+              className="sr-only peer"
+            />
+            <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
+              after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
+              after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
+              peer-checked:after:translate-x-5"
+            />
+          </label>
         </div>
       </section>
 

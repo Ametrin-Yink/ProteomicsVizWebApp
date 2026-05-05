@@ -154,6 +154,28 @@ async def http_exception_handler(request, exc: HTTPException):
     return response
 
 
+# Catch-all handler for unhandled exceptions
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc: Exception):
+    """Handle unhandled exceptions, returning structured error format."""
+    logger.exception(f"Unhandled exception: {exc}")
+    response = JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+                "details": {"type": exc.__class__.__name__} if settings.debug else None,
+            }
+        },
+    )
+    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
 # Health check endpoint - responds immediately without scanning sessions
 @app.get("/health")
 async def health_check():

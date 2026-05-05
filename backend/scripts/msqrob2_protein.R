@@ -140,7 +140,8 @@ if ("Sample_Origination" %in% names(psm_data)) {
     cat("Data is in wide format, using readQFeatures...\n")
     
     # Use readQFeatures to create QFeatures object from wide format
-    quant_col_indices <- grep("Abundance", names(psm_data))
+    # Match "Abundance F<code> Sample" pattern precisely to avoid metadata columns
+    quant_col_indices <- grep("^Abundance F[0-9A-Za-z]+ Sample$", names(psm_data))
     
     pe <- readQFeatures(
         assayData = psm_data,

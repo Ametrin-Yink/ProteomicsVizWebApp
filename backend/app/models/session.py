@@ -78,18 +78,6 @@ class SessionConfig(BaseModel):
     # Covariate columns (selected metadata columns to use as model covariates)
     covariate_columns: Optional[list[str]] = Field(default=None)
 
-    @field_validator("control")
-    @classmethod
-    def control_differs_from_treatment(cls, v, info):
-        """Ensure control differs from treatment (when both are actually set)."""
-        if not v:
-            return v
-        treatment = info.data.get("treatment") if info.data else None
-        if treatment and v == treatment:
-            raise ValueError("Control must differ from treatment")
-        return v
-
-
 class FileInfo(BaseModel):
     """File metadata model."""
 

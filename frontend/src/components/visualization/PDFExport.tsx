@@ -317,7 +317,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
       const downloadUrl = `/api/sessions/${sessionId}/reports/${reportId}/download`;
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.target = '_blank';
+      link.download = '';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

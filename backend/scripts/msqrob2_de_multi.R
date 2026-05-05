@@ -71,7 +71,7 @@ cat("All non-ID columns:", paste(abundance_cols, collapse = ", "), "\n")
 flush.console()
 
 # Filter to only numeric columns
-abundance_cols <- abundance_cols[vapply(protein_data[, abundance_cols], is.numeric, logical(1))]
+abundance_cols <- abundance_cols[vapply(protein_data[, abundance_cols, drop = FALSE], is.numeric, logical(1))]
 
 cat("Found", length(abundance_cols), "abundance columns\n")
 cat("Abundance columns:", paste(abundance_cols, collapse = ", "), "\n")
@@ -85,20 +85,23 @@ if (length(abundance_cols) == 0) {
 protein_matrix <- as.matrix(protein_data[, abundance_cols])
 rownames(protein_matrix) <- protein_data$Master_Protein_Accessions
 
-# Pre-filter: remove proteins with zero variance (no DE signal, wastes compute)
-cat("Checking for zero-variance proteins...\n")
-valid_mask <- rowSums(!is.na(protein_matrix)) >= 2
+# Pre-filter: remove proteins with zero or near-zero variance (no DE signal)
+cat("Checking for low-variance proteins...\n")
+valid_mask <- rowSums(!is.na(protein_matrix)) >= 3
 var_per_protein <- rep(NA, nrow(protein_matrix))
 if (any(valid_mask)) {
     var_per_protein[valid_mask] <- rowVars(protein_matrix[valid_mask, , drop = FALSE], na.rm = TRUE)
 }
-zero_var <- which(!is.na(var_per_protein) & var_per_protein == 0)
+zero_var <- which(!is.na(var_per_protein) & var_per_protein < 1e-10)
 if (length(zero_var) > 0) {
-    cat("Pre-filtering", length(zero_var), "zero-variance proteins (will be added back to output)\n")
+    cat("Pre-filtering", length(zero_var), "low-variance proteins (will be added back to output)\n")
     zero_var_ids <- rownames(protein_matrix)[zero_var]
     protein_matrix <- protein_matrix[-zero_var, , drop = FALSE]
 } else {
     zero_var_ids <- character(0)
+}
+if (nrow(protein_matrix) == 0) {
+    stop("All proteins were filtered out due to low variance. Cannot perform differential expression.")
 }
 cat("Matrix after filtering:", nrow(protein_matrix), "proteins x", ncol(protein_matrix), "samples\n")
 

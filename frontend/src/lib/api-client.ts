@@ -166,13 +166,21 @@ async function handleResponse<T>(response: Response): Promise<T> {
   const data = await response.json();
 
   if (!response.ok) {
-    const errorData = data as ApiError;
-    throw new APIError(
-      errorData.error.message,
-      errorData.error.code,
-      response.status,
-      errorData.error.details
-    );
+    // Handle both AppException format ({ error: { code, message } })
+    // and FastAPI HTTPException format ({ detail: "..." })
+    const appError = (data as ApiError)?.error;
+    const detail = (data as { detail?: unknown })?.detail;
+    if (appError) {
+      throw new APIError(appError.message, appError.code, response.status, appError.details);
+    }
+    if (detail) {
+      // FastAPI 422 validation errors return detail as an array of { loc, msg, type }
+      const message = Array.isArray(detail)
+        ? detail.map((d: { loc?: string[]; msg?: string }) => d.msg || JSON.stringify(d)).join('; ')
+        : String(detail);
+      throw new APIError(message, 'HTTP_ERROR', response.status);
+    }
+    throw new APIError(`Request failed with status ${response.status}`, 'UNKNOWN_ERROR', response.status);
   }
 
   // Handle both wrapped ({ data: T }) and unwrapped (T) responses

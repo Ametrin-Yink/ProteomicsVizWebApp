@@ -7,7 +7,7 @@ CRUD operations for analysis sessions.
 import uuid
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.models.session import (
     Session,
@@ -119,10 +119,11 @@ async def delete_session(
 @router.post("/{session_id}/config", response_model=Session)
 async def update_session_config(
     session_id: str,
-    config: SessionConfig,
+    request: Request,
     store: SessionStore = Depends(get_session_store),
 ):
-    """Update session configuration."""
+    """Update session configuration. Reads raw body to extract optional
+    'pipeline' field for template selection alongside SessionConfig fields."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
@@ -130,9 +131,14 @@ async def update_session_config(
             detail=f"Session {session_id} not found",
         )
 
-    # Update session
+    body = await request.json()
+    pipeline = body.pop("pipeline", None)
+    config = SessionConfig(**body)
+
     session.config = config
     session.state = SessionState.CONFIGURING
+    if pipeline in ("msqrob2", "msstats"):
+        session.template = pipeline
     await store.update(session)
 
     return session

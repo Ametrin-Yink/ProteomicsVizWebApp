@@ -32,20 +32,6 @@ async def start_analysis(
     )
 
 
-@router.post("/{session_id}/cancel")
-async def cancel_analysis(
-    session_id: str, store: SessionStore = Depends(get_session_store)
-):
-    """Cancel the running analysis."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    # Update session state to cancelled
-    session.state = SessionState.CANCELLED
-    await store.save(session)
-
-    return {"message": "Analysis cancelled", "session_id": session_id}
+# cancel endpoint removed — processing router handles it at the same path
+# (processing router is registered first in main.py, so its cancel_processing
+#  correctly signals the asyncio.Event to stop the background pipeline task)

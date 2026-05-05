@@ -91,8 +91,14 @@ export async function uploadFiles(page: Page, files: string[]): Promise<void> {
 
     await page.locator('[data-testid="proteomics-upload"]').setInputFiles(filePath, { force: true });
     const fileName = path.basename(filePath);
+    // Expand the collapsible file list first (folded by default), then verify filename visible
+    const toggleBtn = page.locator('[data-testid="uploaded-files-list"] > button');
+    if (await toggleBtn.isVisible()) {
+      await toggleBtn.click();
+      await page.waitForTimeout(200);
+    }
     await expect(page.locator('[data-testid="uploaded-files-list"]')).toContainText(fileName, { timeout: 30000 });
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(100);
   }
 }
 
@@ -111,6 +117,13 @@ export async function uploadFilesBulk(page: Page, files: string[]): Promise<void
   }
 
   await page.locator('[data-testid="proteomics-upload"]').setInputFiles(absolutePaths);
+
+  // Expand the collapsible file list first (folded by default)
+  const toggleBtn = page.locator('[data-testid="uploaded-files-list"] > button');
+  if (await toggleBtn.isVisible()) {
+    await toggleBtn.click();
+    await page.waitForTimeout(200);
+  }
 
   for (const filePath of absolutePaths) {
     const fileName = path.basename(filePath);

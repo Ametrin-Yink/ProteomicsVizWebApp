@@ -94,14 +94,16 @@ class Msqrob2Wrapper:
             except Exception as e:
                 logger.error(f"Error reading {log_prefix}: {e}")
 
-        # Start threads to read stdout and stderr
+        # Start threads to read stdout and stderr (daemon to prevent hangs)
         stdout_thread = threading.Thread(
             target=stream_output,
             args=(process.stdout, stdout_lines, "R", "info", log_callback, loop),
+            daemon=True,
         )
         stderr_thread = threading.Thread(
             target=stream_output,
             args=(process.stderr, stderr_lines, "R-err", "warning", log_callback, loop),
+            daemon=True,
         )
         stdout_thread.start()
         stderr_thread.start()
@@ -112,13 +114,13 @@ class Msqrob2Wrapper:
         except subprocess.TimeoutExpired:
             process.kill()
             await asyncio.to_thread(process.wait)  # Reap zombie on Windows
-            await asyncio.to_thread(stdout_thread.join, timeout=5)
-            await asyncio.to_thread(stderr_thread.join, timeout=5)
+            stdout_thread.join(timeout=5)
+            stderr_thread.join(timeout=5)
             raise
 
-        # Wait for output threads to finish
-        await asyncio.to_thread(stdout_thread.join)
-        await asyncio.to_thread(stderr_thread.join)
+        # Wait for output threads to finish (with timeout to prevent hangs)
+        stdout_thread.join(timeout=30)
+        stderr_thread.join(timeout=30)
 
         stdout_str = "\n".join(stdout_lines)
         stderr_str = "\n".join(stderr_lines)

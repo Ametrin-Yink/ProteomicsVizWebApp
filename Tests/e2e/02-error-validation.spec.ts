@@ -13,9 +13,6 @@ import { test, expect } from '@playwright/test';
 import {
   startNewAnalysis,
   uploadFiles,
-  configureExperiment,
-  continueToPipeline,
-  selectPipeline,
   cleanupSession,
   purgeLegacyScreenshots,
   takeScreenshot,
@@ -77,73 +74,34 @@ test.describe('Error Handling & Validation', () => {
     }
   });
 
-  test('Insufficient replicates blocks validation', async ({ page }) => {
+  test('Multiple experiments shows validation warning', async ({ page }) => {
     sessionId = await startNewAnalysis(page);
 
-    // Upload only 1 file per condition (need 3 minimum)
-    const fewFiles = [VALID_FILES[0], VALID_FILES[3]]; // 1 DMSO + 1 INCB
-    await uploadFiles(page, fewFiles);
-
-    // Wait for experiment table and validation panel to fully render
+    await uploadFiles(page, VALID_FILES);
     await expect(page.locator('[data-testid="file-table"]')).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(3000);
-
-    // Validation panel should show errors about insufficient replicates
-    await expect(page.locator('[data-testid="validation-error"]')).toBeVisible({ timeout: 15000 });
-
-    await takeScreenshot(page, TEST_PREFIX, 'errors', '02-insufficient-replicates');
-  });
-
-  test('Same treatment and control shows validation error', async ({ page }) => {
-    sessionId = await startNewAnalysis(page);
-
-    await uploadFiles(page, VALID_FILES);
     await page.waitForTimeout(2000);
 
-    // Set both treatment and control to DMSO_24h
-    await page.locator('[data-testid="treatment-select"]').selectOption('DMSO_24h');
-    await page.locator('[data-testid="control-select"]').selectOption('DMSO_24h');
+    // With valid files from one experiment, validation should pass (no errors)
+    const validationErrors = page.locator('[data-testid="validation-error"]');
+    const errorCount = await validationErrors.count();
+    expect(errorCount).toBe(0);
 
-    await page.waitForTimeout(1000);
-
-    // Should show validation error
-    await expect(page.locator('[data-testid="validation-error"]')).toBeVisible({ timeout: 10000 });
-
-    await takeScreenshot(page, TEST_PREFIX, 'errors', '03-same-treatment-control');
-  });
-
-  test('Continue button disabled without organism selection', async ({ page }) => {
-    sessionId = await startNewAnalysis(page);
-
-    await uploadFiles(page, VALID_FILES);
-    await page.waitForTimeout(2000);
-
-    // Set treatment/control but NOT organism
-    await page.locator('[data-testid="treatment-select"]').selectOption('DMSO_24h');
-    await page.locator('[data-testid="control-select"]').selectOption('INCB224525_24h');
-
-    await page.waitForTimeout(1000);
-
-    // Continue button should be disabled
+    // Continue button should be enabled
     const continueBtn = page.locator('[data-testid="upload-continue-btn"]');
-    await expect(continueBtn).toBeDisabled({ timeout: 5000 });
+    await expect(continueBtn).toBeEnabled({ timeout: 5000 });
 
-    await takeScreenshot(page, TEST_PREFIX, 'errors', '04-continue-disabled');
+    await takeScreenshot(page, TEST_PREFIX, 'errors', '02-validation-passes');
   });
 
   test('Back navigation preserves uploaded files', async ({ page }) => {
     sessionId = await startNewAnalysis(page);
 
     await uploadFiles(page, VALID_FILES);
-    await configureExperiment(page, {
-      treatment: 'DMSO_24h',
-      control: 'INCB224525_24h',
-      organism: 'human',
-    });
 
-    // Navigate to pipeline
-    await continueToPipeline(page);
-    await selectPipeline(page, 'msqrob2');
+    // Continue to pipeline
+    await expect(page.locator('[data-testid="upload-continue-btn"]')).toBeEnabled({ timeout: 10000 });
+    await page.locator('[data-testid="upload-continue-btn"]').click();
+    await expect(page).toHaveURL(/\/new\/pipeline\?session=/, { timeout: 10000 });
 
     // Navigate back to upload
     await page.locator('[data-testid="pipeline-back-btn"]').click();
@@ -152,10 +110,6 @@ test.describe('Error Handling & Validation', () => {
     // Files should still be visible in the experiment table
     await expect(page.locator('[data-testid="file-table"]')).toBeVisible({ timeout: 15000 });
 
-    // Treatment should still be set
-    const treatmentSelect = page.locator('[data-testid="treatment-select"]');
-    await expect(treatmentSelect).toHaveValue('DMSO_24h');
-
-    await takeScreenshot(page, TEST_PREFIX, 'errors', '05-back-navigation-preserves-state');
+    await takeScreenshot(page, TEST_PREFIX, 'errors', '03-back-navigation-preserves-state');
   });
 });

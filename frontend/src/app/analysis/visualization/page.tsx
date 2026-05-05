@@ -19,7 +19,9 @@ function ResultsContent() {
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string; experiment: string } | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<{ treatment: string; control: string; experiment: string; comparisons?: Array<{ treatment: string; control: string }> } | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState<string>('');
+  const comparisonInitialized = React.useRef(false);
 
   const [filters, setFilters] = useState<VolcanoFilters>({
     foldChange: 1,
@@ -41,7 +43,7 @@ function ResultsContent() {
   const [markedProteins, setMarkedProteins] = useState<Set<string>>(new Set());
 
 
-  // Fetch data on mount
+  // Fetch data on mount and when comparison changes
   useEffect(() => {
     async function fetchData() {
       if (!sessionId) return;
@@ -50,8 +52,8 @@ function ResultsContent() {
       try {
         const results = await getDEResults(sessionId, {
           page: 1,
-          per_page: 20000, // Get all for client-side filtering
-          // TODO: Implement server-side filtering to avoid fetching all rows
+          per_page: 20000,
+          comparison: selectedComparison || undefined,
         });
         setData(results);
       } catch (err) {
@@ -62,7 +64,7 @@ function ResultsContent() {
     }
 
     fetchData();
-  }, [sessionId]);
+  }, [sessionId, selectedComparison]);
 
   // Fetch session config and restore visualization state
   useEffect(() => {
@@ -71,11 +73,25 @@ function ResultsContent() {
       const session = await getSession(sessionId!);
       if (session) {
         const experiment = session.files?.proteomics?.[0]?.experiment ?? '';
-        setSessionConfig({
+        const comparisons = session.config?.comparisons;
+        const cfg = {
           treatment: session.config?.treatment ?? '',
           control: session.config?.control ?? '',
           experiment,
-        });
+          comparisons,
+        };
+        setSessionConfig(cfg);
+
+        // Auto-select first comparison on initial load
+        if (!comparisonInitialized.current) {
+          if (comparisons && comparisons.length > 0) {
+            const first = comparisons[0];
+            setSelectedComparison(`${first.treatment}_vs_${first.control}`);
+          } else if (cfg.treatment && cfg.control) {
+            setSelectedComparison('');
+          }
+          comparisonInitialized.current = true;
+        }
 
         // Restore markers from session (always reset, don't carry over from previous session)
         if (session.markers && session.markers.length > 0) {
@@ -262,14 +278,32 @@ function ResultsContent() {
         </div>
 
         {/* General Info Panel */}
-        <div className="flex items-center gap-4 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3" data-testid="general-info-panel">
+        <div className="flex items-center gap-4 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3 flex-wrap" data-testid="general-info-panel">
           <span className="font-semibold text-text">Results</span>
           <span className="text-border">|</span>
-          <span className="text-text-secondary">
-            {sessionConfig
-              ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
-              : 'Treatment vs Control'}
-          </span>
+          {sessionConfig?.comparisons && sessionConfig.comparisons.length > 1 ? (
+            <select
+              value={selectedComparison}
+              onChange={(e) => setSelectedComparison(e.target.value)}
+              className="text-sm bg-surface border border-border rounded-md px-2 py-1 text-text focus:outline-none focus:ring-1 focus:ring-primary"
+              aria-label="Select comparison"
+            >
+              {sessionConfig.comparisons.map((c, i) => {
+                const val = `${c.treatment}_vs_${c.control}`;
+                return (
+                  <option key={i} value={val}>
+                    {c.treatment} vs {c.control}
+                  </option>
+                );
+              })}
+            </select>
+          ) : (
+            <span className="text-text-secondary">
+              {sessionConfig
+                ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
+                : 'Treatment vs Control'}
+            </span>
+          )}
           <span className="text-border">|</span>
           <span className="text-text-secondary">{data.total_proteins.toLocaleString()} proteins</span>
           <span className="text-border">|</span>
