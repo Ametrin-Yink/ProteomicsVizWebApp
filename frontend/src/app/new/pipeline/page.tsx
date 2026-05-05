@@ -124,7 +124,7 @@ function PipelineContent() {
     <div className="space-y-6">
       {/* Step header */}
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-text">Choose Analysis Pipeline</h1>
+        <h1 className="font-bold text-text-primary">Choose Analysis Pipeline</h1>
         <p className="text-text-muted mt-1">
           Select the statistical method for protein abundance and differential expression
         </p>
@@ -136,7 +136,7 @@ function PipelineContent() {
           <div className="px-5 py-3 border-b border-border flex items-center gap-3">
             <Info className="w-5 h-5 text-primary" />
             <div>
-              <h2 className="text-lg font-semibold text-text">Experiment Configuration</h2>
+              <h2 className="font-semibold text-text-primary">Experiment Configuration</h2>
               <p className="text-sm text-text-muted">
                 Set conditions, organism, and filtering options
               </p>
@@ -145,12 +145,12 @@ function PipelineContent() {
           <div className="p-5">
             <div className="grid grid-cols-1 md:grid-cols-1 gap-5">
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Organism</label>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">Organism</label>
                 <select
                   data-testid="organism-select"
                   value={config.organism}
                   onChange={(e) => setConfig({ organism: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+                  className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
                     focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                 >
                   <option value="">Select organism...</option>
@@ -168,7 +168,7 @@ function PipelineContent() {
             <div className="grid grid-cols-2 gap-5 mt-5">
               <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
                 <div>
-                  <span className="text-sm font-medium text-text">Remove Razor Peptides</span>
+                  <span className="text-sm font-medium text-text-primary">Remove Razor Peptides</span>
                   <p className="text-xs text-text-muted mt-0.5">
                     Exclude peptides matching multiple protein groups
                   </p>
@@ -180,7 +180,7 @@ function PipelineContent() {
                   onChange={(e) => setConfig({ remove_razor: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="relative w-9 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
+                <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
                   after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
                   after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
                   peer-checked:after:translate-x-4 flex-shrink-0"
@@ -188,7 +188,7 @@ function PipelineContent() {
               </label>
               <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
                 <div>
-                  <span className="text-sm font-medium text-text">Strict Filtering</span>
+                  <span className="text-sm font-medium text-text-primary">Strict Filtering</span>
                   <p className="text-xs text-text-muted mt-0.5">
                     20% missing value threshold, remove single-peptide proteins
                   </p>
@@ -200,7 +200,7 @@ function PipelineContent() {
                   onChange={(e) => setConfig({ strict_filtering: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="relative w-9 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
+                <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
                   after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
                   after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
                   peer-checked:after:translate-x-4 flex-shrink-0"
@@ -225,13 +225,13 @@ function PipelineContent() {
               className={cn(
                 'relative text-left p-6 rounded-xl border-2 transition-all duration-200 bg-background',
                 isSelected
-                  ? 'border-primary shadow-[0_0_20px_rgba(231,53,100,0.15)]'
+                  ? 'border-primary shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]'
                   : 'border-border hover:border-primary/30 hover:shadow-sm'
               )}
             >
               {/* Selected indicator */}
               {isSelected && (
-                <div className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-primary text-white">
+                <div className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-primary text-white shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]">
                   <Check className="w-4 h-4" />
                 </div>
               )}
@@ -246,7 +246,7 @@ function PipelineContent() {
                 <Icon className="w-6 h-6 text-white" />
               </div>
 
-              <h3 className="text-lg font-semibold text-text mb-1">{pipeline.name}</h3>
+              <h3 className="font-semibold text-text-primary mb-1">{pipeline.name}</h3>
               <p className="text-sm font-medium text-primary mb-3">{pipeline.title}</p>
               <p className="text-sm text-text-muted mb-4 leading-relaxed">
                 {pipeline.description}
@@ -267,12 +267,12 @@ function PipelineContent() {
       </div>
 
       {/* Navigation */}
-      <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           data-testid="pipeline-back-btn"
           onClick={handleBack}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary
-            hover:text-text hover:bg-surface rounded-lg transition-colors"
+            hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Upload

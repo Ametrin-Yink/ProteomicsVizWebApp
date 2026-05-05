@@ -60,6 +60,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         'bg-primary text-white',
         'hover:bg-primary-dark',
         'focus-visible:ring-primary',
+        // Matches --shadow-primary design token: 0 4px 14px 0 rgba(231, 53, 100, 0.39)
         'shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]',
         'hover:shadow-[0_6px_20px_0_rgba(231,53,100,0.45)]'
       ),
@@ -67,6 +68,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         'bg-secondary text-white',
         'hover:bg-secondary-dark',
         'focus-visible:ring-secondary',
+        // Matches --shadow-secondary design token: 0 4px 14px 0 rgba(0, 173, 239, 0.39)
         'shadow-[0_4px_14px_0_rgba(0,173,239,0.39)]',
         'hover:shadow-[0_6px_20px_0_rgba(0,173,239,0.45)]'
       ),
@@ -76,7 +78,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         'focus-visible:ring-primary'
       ),
       ghost: cn(
-        'bg-transparent text-text',
+        'bg-transparent text-text-primary',
         'hover:bg-primary/10 hover:text-primary',
         'focus-visible:ring-primary'
       ),

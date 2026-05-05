@@ -340,7 +340,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
                 activeTab === 'active'
                   ? 'bg-background text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text'
+                  : 'text-text-secondary hover:text-text-primary'
               )}
               onClick={() => setActiveTab('active')}
             >
@@ -352,7 +352,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
                 activeTab === 'completed'
                   ? 'bg-background text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text'
+                  : 'text-text-secondary hover:text-text-primary'
               )}
               onClick={() => setActiveTab('completed')}
             >
@@ -382,7 +382,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               disabled={isScanning}
               className={cn(
                 'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
-                'text-text-secondary hover:text-text hover:bg-surface',
+                'text-text-secondary hover:text-text-primary hover:bg-surface',
                 isScanning && 'opacity-60 cursor-not-allowed'
               )}
               title="Refresh sessions"
@@ -397,7 +397,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                 'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
                 isSelectMode
                   ? 'bg-primary/10 text-primary'
-                  : 'text-text-secondary hover:text-text hover:bg-surface'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface'
               )}
               title={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
               aria-label={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
@@ -429,7 +429,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           {sessionsList.length === 0 ? (
             <div data-testid="no-sessions-message" className="text-center py-8">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-                <FlaskConical className="w-8 h-8 text-muted" />
+                <FlaskConical className="w-8 h-8 text-text-muted" />
               </div>
               <p className="text-sm text-text-secondary">
                 {sessionError ? 'Failed to load sessions' : 'No sessions yet'}
@@ -439,7 +439,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                   {sessionError}
                 </p>
               )}
-              <p className="text-xs text-muted mt-1">
+              <p className="text-xs text-text-muted mt-1">
                 {sessionError ? 'Click Refresh Sessions to retry' : 'Create your first analysis'}
               </p>
             </div>
@@ -497,7 +497,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
             href="https://github.com/Ametrin-Yink"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-muted hover:text-primary transition-colors"
+            className="text-xs text-text-muted hover:text-primary transition-colors"
           >
             ProteomicsViz by Ametrin-Yink
           </a>
@@ -720,7 +720,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
             </button>
             <button
               onClick={handleCancelEdit}
-              className="p-1 text-muted hover:text-text-secondary hover:bg-surface rounded transition-colors"
+              className="p-1 text-text-muted hover:text-text-secondary hover:bg-surface rounded transition-colors"
               title="Cancel"
             >
               <X className="w-3.5 h-3.5" />
@@ -728,14 +728,14 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
           </div>
         ) : (
           <>
-            <p data-testid="session-name" className="text-sm font-medium text-text line-clamp-2 break-words">
+            <p data-testid="session-name" className="text-sm font-medium text-text-primary line-clamp-2 break-words">
               {session.name}
             </p>
             <div className="flex items-center gap-2">
               <span data-testid="session-status" className={cn('text-xs', status.color)}>
                 {status.label}
               </span>
-              <span className="text-xs text-muted">
+              <span className="text-xs text-text-muted">
                 {formatRelativeTime(session.createdAt)}
               </span>
             </div>
@@ -753,7 +753,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
           {onRename && (
             <button
               onClick={handleStartEdit}
-              className="p-1.5 text-muted hover:text-secondary hover:bg-secondary/10 rounded transition-colors"
+              className="p-1.5 text-text-muted hover:text-secondary hover:bg-secondary/10 rounded transition-colors"
               title="Rename session"
               data-testid="session-rename-btn"
             >
@@ -766,7 +766,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
                 e.stopPropagation();
                 setShowDeleteConfirm(true);
               }}
-              className="p-1.5 text-muted hover:text-error hover:bg-error/5 rounded transition-colors"
+              className="p-1.5 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors"
               title="Delete session"
               data-testid="session-delete-btn"
             >
@@ -778,7 +778,7 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-background rounded-xl border border-border p-6 max-w-sm w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-semibold text-text mb-2">Delete Session</h3>
+            <h3 className="text-lg font-semibold text-text-primary mb-2">Delete Session</h3>
             <p className="text-sm text-text-secondary mb-4">Are you sure you want to delete this session? This action cannot be undone.</p>
             <div className="flex items-center justify-end gap-2">
               <button

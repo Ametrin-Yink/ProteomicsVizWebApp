@@ -204,7 +204,7 @@ function ComparisonsContent() {
           <GitCompare className="w-4 h-4" />
           {selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2'} Pipeline
         </div>
-        <h1 className="text-2xl font-bold text-text">Comparisons &amp; Metadata</h1>
+        <h1 className="font-bold text-text-primary">Comparisons &amp; Metadata</h1>
         <p className="text-text-muted mt-1">
           Drag condition cards into groups to build comparisons
         </p>
@@ -213,7 +213,7 @@ function ComparisonsContent() {
       {/* ===== SECTION 2: Comparison Builder ===== */}
       <section className="bg-background border border-border rounded-lg">
         <div className="px-5 py-3 border-b border-border">
-          <h2 className="text-lg font-semibold text-text">Build Comparisons</h2>
+          <h2 className="font-semibold text-text-primary">Build Comparisons</h2>
           <p className="text-sm text-text-muted">
             Drag condition cards into Group A and Group B, then add the comparison
           </p>
@@ -234,14 +234,14 @@ function ComparisonsContent() {
               <div className="space-y-2">
                 {Object.entries(paletteGroups).map(([colName, cards]) => (
                   <div key={colName}>
-                    <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">{colName}</span>
+                    <span className="text-xs uppercase tracking-wider text-text-muted font-semibold">{colName}</span>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {cards.map((card) => (
                         <div
                           key={card.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, card, 'palette')}
-                          className="flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-md text-xs text-text cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all select-none"
+                          className="flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-md text-xs text-text-primarycursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all select-none"
                         >
                           <GripVertical className="w-3 h-3 text-text-muted" />
                           <span className="font-medium text-text-muted">{card.col}:</span>
@@ -272,7 +272,7 @@ function ComparisonsContent() {
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {group1Cards.map((card) => (
-                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-blue-100 border border-blue-300 rounded-md text-xs text-text">
+                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-blue-100 border border-blue-300 rounded-md text-xs text-text-primary">
                       <span className="font-medium text-blue-700">{card.col}:</span>
                       <span>{card.val}</span>
                       <button onClick={() => removeFromZone('group1', card.id)} className="text-text-muted hover:text-red-500">
@@ -299,7 +299,7 @@ function ComparisonsContent() {
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {group2Cards.map((card) => (
-                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-red-100 border border-red-300 rounded-md text-xs text-text">
+                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-red-100 border border-red-300 rounded-md text-xs text-text-primary">
                       <span className="font-medium text-red-700">{card.col}:</span>
                       <span>{card.val}</span>
                       <button onClick={() => removeFromZone('group2', card.id)} className="text-text-muted hover:text-red-500">
@@ -334,7 +334,7 @@ function ComparisonsContent() {
               </p>
               {comparisons.map((comp, idx) => (
                 <div key={idx} className="flex items-center justify-between px-3 py-2 bg-surface rounded-lg border border-border">
-                  <div className="flex items-center gap-2 text-sm text-text">
+                  <div className="flex items-center gap-2 text-sm text-text-primary">
                     <CheckSquare className="w-4 h-4 text-primary flex-shrink-0" />
                     <span className="font-medium text-blue-700">{formatGroup(comp.group1)}</span>
                     <span className="text-text-muted">vs</span>
@@ -354,7 +354,7 @@ function ComparisonsContent() {
       {selectedPipeline === 'msstats' && conditionColumns.length > 0 && (
         <section className="bg-background border border-border rounded-lg">
           <div className="px-5 py-3 border-b border-border">
-            <h2 className="text-lg font-semibold text-text">Covariates</h2>
+            <h2 className="font-semibold text-text-primary">Covariates</h2>
             <p className="text-sm text-text-muted">
               Select metadata columns to include as covariates in the statistical model (optional)
             </p>
@@ -401,7 +401,7 @@ function ComparisonsContent() {
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text bg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primarybg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Pipeline
@@ -432,7 +432,9 @@ function ComparisonsContent() {
 
 export default function ComparisonsPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-text-muted">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>}>
       <ComparisonsContent />
     </Suspense>
   );

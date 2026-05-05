@@ -105,7 +105,7 @@ function UploadContent() {
   return (
     <div className="space-y-6">
       <div className="text-center mb-2">
-        <h1 className="text-2xl font-bold text-text">Upload & Experiment Setup</h1>
+        <h1 className="font-bold text-text-primary">Upload & Experiment Setup</h1>
         <p className="text-text-muted mt-1">
           Upload your PSM CSV files. Files are parsed to extract experiment, condition, and replicate.
         </p>
@@ -115,7 +115,7 @@ function UploadContent() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-3">
           <Upload className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold text-text">Data Input</h2>
+            <h2 className="font-semibold text-text-primary">Data Input</h2>
             <p className="text-sm text-text-muted">
               Format: PSM_ExperimentName_Condition_Replicate.csv
             </p>
@@ -131,7 +131,7 @@ function UploadContent() {
           <div className="px-5 py-3 border-b border-border flex items-center gap-3">
             <Database className="w-5 h-5 text-primary" />
             <div>
-              <h2 className="text-lg font-semibold text-text">Experiment Structure</h2>
+              <h2 className="font-semibold text-text-primary">Experiment Structure</h2>
               <p className="text-sm text-text-muted">
                 Review parsed files and select which to include
               </p>
@@ -148,7 +148,7 @@ function UploadContent() {
           <div className="px-5 py-3 border-b border-border flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-primary" />
             <div>
-              <h2 className="text-lg font-semibold text-text">Validation</h2>
+              <h2 className="font-semibold text-text-primary">Validation</h2>
               <p className="text-sm text-text-muted">Check experiment setup requirements</p>
             </div>
           </div>
@@ -158,7 +158,7 @@ function UploadContent() {
         </section>
       )}
 
-      <div className="flex justify-end pt-2">
+      <div className="flex justify-end pt-4 border-t border-border">
         <button
           data-testid="upload-continue-btn"
           onClick={handleContinue}

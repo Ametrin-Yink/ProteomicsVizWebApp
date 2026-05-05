@@ -119,7 +119,7 @@ export const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
       >
         <div className="flex-1 min-w-0">
           {title && (
-            <h3 className="text-lg font-semibold text-text leading-tight">
+            <h3 className="text-lg font-semibold text-text-primary leading-tight">
               {title}
             </h3>
           )}

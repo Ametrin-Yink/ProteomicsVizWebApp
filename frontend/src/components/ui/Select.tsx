@@ -58,7 +58,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     );
 
     const labelClasses = cn(
-      'text-sm font-medium text-text',
+      'text-sm font-medium text-text-primary',
       disabled && 'opacity-50'
     );
 
@@ -69,7 +69,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
 
     const selectClasses = cn(
       'flex h-11 w-full appearance-none rounded-lg border bg-background px-4 pr-10',
-      'text-sm text-text',
+      'text-sm text-text-primary',
       'transition-all duration-200',
       'focus:outline-none focus:ring-2 focus:ring-offset-0',
       'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -202,13 +202,13 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
   );
 
   const labelClasses = cn(
-    'text-sm font-medium text-text',
+    'text-sm font-medium text-text-primary',
     disabled && 'opacity-50'
   );
 
   const triggerClasses = cn(
     'flex h-11 w-full items-center justify-between rounded-lg border bg-background px-4',
-    'text-sm text-text',
+    'text-sm text-text-primary',
     'transition-all duration-200 cursor-pointer',
     'focus:outline-none focus:ring-2 focus:ring-offset-0',
     'disabled:opacity-50 disabled:cursor-not-allowed',

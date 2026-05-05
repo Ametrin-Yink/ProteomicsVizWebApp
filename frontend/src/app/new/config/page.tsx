@@ -75,7 +75,7 @@ function ConfigContent() {
           <PipelineIcon className="w-4 h-4" />
           {pipelineLabel} Pipeline
         </div>
-        <h1 className="text-2xl font-bold text-text">Configuration</h1>
+        <h1 className="font-bold text-text-primary">Configuration</h1>
         <p className="text-text-muted mt-1">
           Set {pipelineLabel}-specific parameters before starting the analysis
         </p>
@@ -86,7 +86,7 @@ function ConfigContent() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-3">
           <Sliders className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold text-text">Advanced Parameters</h2>
+            <h2 className="font-semibold text-text-primary">Advanced Parameters</h2>
             <p className="text-sm text-text-muted">
               Statistical thresholds applied during differential expression analysis
             </p>
@@ -95,7 +95,7 @@ function ConfigContent() {
         <div className="p-5 space-y-5">
           {/* P-value threshold */}
           <div>
-            <label className="block text-sm font-medium text-text mb-2">
+            <label className="block text-sm font-medium text-text-primary mb-2">
               P-Value Threshold
             </label>
             <div className="flex items-center gap-3">
@@ -113,7 +113,7 @@ function ConfigContent() {
                   [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-sm
                   accent-primary"
               />
-              <span className="w-16 text-sm font-mono text-text font-medium tabular-nums">
+              <span className="w-16 text-sm font-mono text-text-primary font-medium tabular-nums">
                 {config.pvalue_threshold ?? 0.05}
               </span>
             </div>
@@ -124,7 +124,7 @@ function ConfigContent() {
 
           {/* Log2 FC threshold */}
           <div>
-            <label className="block text-sm font-medium text-text mb-2">
+            <label className="block text-sm font-medium text-text-primary mb-2">
               Log2 Fold Change Threshold
             </label>
             <div className="flex items-center gap-3">
@@ -142,7 +142,7 @@ function ConfigContent() {
                   [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-primary
                   [&::-webkit-slider-thumb]:rounded-full"
               />
-              <span className="w-16 text-sm font-mono text-text font-medium tabular-nums">
+              <span className="w-16 text-sm font-mono text-text-primary font-medium tabular-nums">
                 {config.logfc_threshold ?? 1.0}
               </span>
             </div>
@@ -154,7 +154,7 @@ function ConfigContent() {
           {/* Exclude single-peptide proteins */}
           <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
             <div>
-              <span className="text-sm font-medium text-text">Exclude Single-Peptide Proteins</span>
+              <span className="text-sm font-medium text-text-primary">Exclude Single-Peptide Proteins</span>
               <p className="text-xs text-text-muted mt-0.5">
                 Remove proteins with only one identified peptide from the analysis
               </p>
@@ -181,7 +181,7 @@ function ConfigContent() {
           <div className="px-5 py-3 border-b border-border flex items-center gap-3">
             <BarChart3 className="w-5 h-5 text-secondary" />
             <div>
-              <h2 className="text-lg font-semibold text-text">MSstats Parameters</h2>
+              <h2 className="font-semibold text-text-primary">MSstats Parameters</h2>
               <p className="text-sm text-text-muted">
                 Configure MSstats-specific normalization and processing options
               </p>
@@ -198,9 +198,9 @@ function ConfigContent() {
       {selectedPipeline === 'msqrob2' && (
         <section className="bg-background border border-border rounded-lg">
           <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-            <Dna className="w-5 h-5 text-accent" />
+            <Dna className="w-5 h-5 text-secondary" />
             <div>
-              <h2 className="text-lg font-semibold text-text">msqrob2 Parameters</h2>
+              <h2 className="font-semibold text-text-primary">msqrob2 Parameters</h2>
               <p className="text-sm text-text-muted">
                 Configure msqrob2/QFeatures preprocessing and statistical modeling options
               </p>
@@ -226,12 +226,12 @@ function ConfigContent() {
       )}
 
       {/* Navigation */}
-      <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           data-testid="config-back-btn"
           onClick={handleBack}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary
-            hover:text-text hover:bg-surface rounded-lg transition-colors"
+            hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Comparisons

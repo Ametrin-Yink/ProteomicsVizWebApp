@@ -44,7 +44,7 @@ export default function NewAnalysisLayout({
       {/* Right Panel - Wizard Content */}
       <main className="flex-1 h-full overflow-y-auto bg-surface">
         {/* Back link */}
-        <div className="px-8 pt-6">
+        <div className="px-8 pt-4">
           <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-primary transition-colors"
@@ -55,7 +55,7 @@ export default function NewAnalysisLayout({
         </div>
 
         {/* Step indicator */}
-        <div className="px-8 pt-6 pb-8">
+        <div className="px-8 pt-4 pb-5">
           <div className="flex items-center justify-center gap-2">
             {steps.map((step, idx) => {
               const isActive = idx === currentStep;
@@ -65,17 +65,30 @@ export default function NewAnalysisLayout({
               return (
                 <React.Fragment key={step.id}>
                   <div className="flex flex-col items-center">
-                    <div
-                      data-testid={step.testId}
-                      className={cn(
-                        'flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-200',
-                        isActive && 'border-primary bg-primary text-white shadow-[0_0_12px_rgba(231,53,100,0.3)]',
-                        isCompleted && 'border-primary bg-primary/10 text-primary',
-                        !isActive && !isCompleted && 'border-border bg-card text-text-muted'
-                      )}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
+                    {isActive ? (
+                      <div
+                        data-testid={step.testId}
+                        className={cn(
+                          'flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-200',
+                          'border-primary bg-primary text-white shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]'
+                        )}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </div>
+                    ) : (
+                      <Link
+                        href={isCompleted ? step.route : '#'}
+                        data-testid={step.testId}
+                        className={cn(
+                          'flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-200',
+                          isCompleted && 'border-primary bg-primary/10 text-primary',
+                          !isActive && !isCompleted && 'border-border bg-card text-text-muted cursor-default'
+                        )}
+                        onClick={(e) => { if (!isCompleted) e.preventDefault(); }}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </Link>
+                    )}
                     <span
                       className={cn(
                         'mt-2 text-xs font-medium whitespace-nowrap',
@@ -102,7 +115,7 @@ export default function NewAnalysisLayout({
         </div>
 
         {/* Page content */}
-        <div className="px-8 pb-12">
+        <div className="px-8 pb-8">
           {children}
         </div>
       </main>

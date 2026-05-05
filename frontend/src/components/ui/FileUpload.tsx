@@ -188,7 +188,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           </div>
           
           <div className="space-y-1">
-            <p className="text-base font-medium text-text">
+            <p className="text-base font-medium text-text-primary">
               {isDragging ? 'Drop files here' : 'Drag & drop files here'}
             </p>
             <p className="text-sm text-text-secondary">
@@ -207,7 +207,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       {/* File list */}
       {uploadedFiles.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-text">
+          <p className="text-sm font-medium text-text-primary">
             Files ({uploadedFiles.length})
           </p>
           
@@ -231,7 +231,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 
                 {/* File info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text truncate">
+                  <p className="text-sm font-medium text-text-primary truncate">
                     {uploadedFile.file.name}
                   </p>
                   <p className="text-xs text-text-secondary">

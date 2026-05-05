@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import GSEADashboard from '@/components/visualization/GSEADashboard';
 import PathwayTable from '@/components/visualization/PathwayTable';
 import GSEAPlot from '@/components/visualization/GSEAPlot';
@@ -41,6 +42,7 @@ function GSEAAnalysisContent() {
   }, [search]);
 
   useEffect(() => {
+    if (!sessionId) return;
     let cancelled = false;
     async function fetchData() {
       setLoading(true);
@@ -76,6 +78,24 @@ function GSEAAnalysisContent() {
     return () => { cancelled = true; };
   }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch]);
 
+  if (!sessionId) {
+    return (
+      <div data-testid="no-session-selected" className="flex-1 bg-surface flex items-center justify-center">
+        <div className="text-center text-text-secondary">
+          <p className="text-lg text-text-primary font-medium mb-2">No session selected</p>
+          <p className="text-sm text-text-muted mb-4">Create a new analysis to get started.</p>
+          <Link
+            data-testid="start-analysis-link"
+            href="/"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Start New Analysis
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // Full-page loading only on initial load
   if (loading && initialLoad) {
     return (
@@ -105,7 +125,7 @@ function GSEAAnalysisContent() {
       <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-text">GSEA Analysis</h1>
+          <h1 className="font-semibold text-text-primary">GSEA Analysis</h1>
           <p className="text-text-secondary mt-2">
             Gene Set Enrichment Analysis (GSEA) results
           </p>
@@ -124,7 +144,7 @@ function GSEAAnalysisContent() {
 
           {/* Database Selector */}
           <div className="bg-background rounded-lg border border-border p-4 mb-8">
-            <label className="block text-sm font-medium text-text mb-3">
+            <label className="block text-sm font-medium text-text-primary mb-3">
               Select Database
             </label>
             <div data-testid="database-select" className="flex flex-wrap gap-2">

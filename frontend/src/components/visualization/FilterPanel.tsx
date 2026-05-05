@@ -22,14 +22,14 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
   return (
     <div className="bg-background rounded-lg border border-border p-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-text">
+        <div className="flex items-center gap-2 text-text-primary">
           <SlidersHorizontal className="w-4 h-4" />
           <span className="font-medium">Filters</span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={onReset}
-            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text transition-colors"
+            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text-primarytransition-colors"
             title="Reset filters to defaults"
           >
             <RotateCcw className="w-4 h-4" />
@@ -37,7 +37,7 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             aria-label="Toggle filters"
-            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text transition-colors"
+            className="p-1.5 hover:bg-surface rounded text-text-muted hover:text-text-primarytransition-colors"
           >
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
@@ -49,7 +49,7 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
           {/* Row 1: Fold Change + P-value */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-text mb-2">
+              <label className="block text-sm font-medium text-text-primarymb-2">
                 log₂ Fold Change Threshold
               </label>
               <div className="flex items-center gap-2">
@@ -79,7 +79,7 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-text mb-2">
+              <label className="block text-sm font-medium text-text-primarymb-2">
                 P-value Threshold
               </label>
               <div className="flex items-center gap-2">
@@ -112,7 +112,7 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
           {/* Row 2: Adj P-value + S0 Factor */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-text mb-2">
+              <label className="block text-sm font-medium text-text-primarymb-2">
                 Adj P-value Threshold
               </label>
               <div className="flex items-center gap-2">
@@ -142,11 +142,11 @@ export function FilterPanel({ foldChange, pValue, adjPValue, s0, onChange, onRes
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-text mb-2">
+              <label className="block text-sm font-medium text-text-primarymb-2">
                 S0 Factor
                 <span className="group relative inline-block ml-1">
                   <HelpCircle className="w-3.5 h-3.5 text-text-muted cursor-help" />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 text-xs text-text bg-background border border-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 pointer-events-none">
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 text-xs text-text-primarybg-background border border-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 pointer-events-none">
                     S0 factor widens the significance threshold at low fold changes. Higher values are more permissive, allowing proteins with small fold changes but high reproducibility to appear significant.
                   </span>
                 </span>

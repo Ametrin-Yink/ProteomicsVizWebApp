@@ -404,7 +404,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         <button
           data-testid="preview-pdf-btn"
           onClick={handlePreview}
-          className="flex items-center gap-2 px-4 py-2 bg-surface text-text rounded-lg hover:bg-border transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-surface text-text-primaryrounded-lg hover:bg-border transition-colors"
         >
           <Eye className="w-4 h-4" />
           Preview
@@ -412,7 +412,7 @@ export default function PDFExport({ sessionId }: PDFExportProps) {
         <button
           data-testid="retry-pdf-btn"
           onClick={() => { setStatus('idle'); setReportId(null); handleExport(); }}
-          className="flex items-center gap-2 px-4 py-2 bg-surface text-text rounded-lg hover:bg-border transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-surface text-text-primaryrounded-lg hover:bg-border transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
           Regenerate

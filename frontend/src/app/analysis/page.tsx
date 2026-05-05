@@ -209,7 +209,7 @@ function AnalysisContent() {
       <div className="flex-1 flex items-center justify-center bg-surface">
         <div className="text-center">
           <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-          <h2 className="text-xl font-semibold text-text">Creating Session...</h2>
+          <h2 className="text-xl font-semibold text-text-primary">Creating Session...</h2>
           <p className="text-text-muted mt-2">Please wait while we set up your analysis</p>
         </div>
       </div>
@@ -230,12 +230,12 @@ function AnalysisContent() {
             <div className="flex items-center gap-4">
               <button
                 onClick={handleBack}
-                className="p-2 text-text-muted hover:text-text hover:bg-surface rounded-lg transition-colors"
+                className="p-2 text-text-muted hover:text-text-primaryhover:bg-surface rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-xl font-semibold text-text">
+                <h1 className="font-semibold text-text-primary">
                   Data Input & Configuration
                 </h1>
                 <p className="text-sm text-text-muted">
@@ -281,7 +281,7 @@ function AnalysisContent() {
             {/* File Upload Section */}
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border">
-                <h2 className="text-lg font-semibold text-text">1. Data Input</h2>
+                <h2 className="font-semibold text-text-primary">1. Data Input</h2>
                 <p className="text-sm text-text-muted mt-1">
                   Upload proteomics data files and optional compound information
                 </p>
@@ -294,7 +294,7 @@ function AnalysisContent() {
             {/* Experiment Table Section */}
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border">
-                <h2 className="text-lg font-semibold text-text">2. Experiment Structure</h2>
+                <h2 className="font-semibold text-text-primary">2. Experiment Structure</h2>
                 <p className="text-sm text-text-muted mt-1">
                   Review and select files for analysis
                 </p>
@@ -307,7 +307,7 @@ function AnalysisContent() {
             {/* Validation Section */}
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border">
-                <h2 className="text-lg font-semibold text-text">3. Validation</h2>
+                <h2 className="font-semibold text-text-primary">3. Validation</h2>
                 <p className="text-sm text-text-muted mt-1">
                   Check experiment setup requirements
                 </p>
@@ -320,7 +320,7 @@ function AnalysisContent() {
             {/* Compound Display Section */}
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border">
-                <h2 className="text-lg font-semibold text-text">4. Compound Information</h2>
+                <h2 className="font-semibold text-text-primary">4. Compound Information</h2>
                 <p className="text-sm text-text-muted mt-1">
                   View compound structures matched to conditions
                 </p>
@@ -335,7 +335,7 @@ function AnalysisContent() {
           <div className="lg:col-span-1">
             <div className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border">
-                <h2 className="text-lg font-semibold text-text">Configuration</h2>
+                <h2 className="font-semibold text-text-primary">Configuration</h2>
                 <p className="text-sm text-text-muted mt-1">
                   Set analysis parameters
                 </p>
@@ -358,7 +358,7 @@ export default function AnalysisPage() {
       <div className="min-h-screen flex items-center justify-center bg-surface">
         <div className="text-center">
           <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-          <h2 className="text-xl font-semibold text-text">Loading...</h2>
+          <h2 className="text-xl font-semibold text-text-primary">Loading...</h2>
         </div>
       </div>
     }>

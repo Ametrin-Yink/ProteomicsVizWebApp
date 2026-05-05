@@ -6,7 +6,7 @@ import { formatNumber, formatPValue, getSignificanceLabel, getVolcanoPointColor,
 import { getProteinAbundance, getPeptideAbundance } from '@/lib/api';
 import { ProteinAbundancePlot, PeptideAbundancePlot } from './AbundancePlot';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ProteinInfoSkeleton } from '@/components/ui/Skeleton';
+import { ProteinInfoSkeleton } from '@/components/ui/Loading';
 import { Microscope } from 'lucide-react';
 
 interface ProteinInfoProps {
@@ -117,7 +117,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
 
   return (
     <div data-testid="protein-info-panel" className="bg-background rounded-lg border border-border p-6">
-      <h3 className="text-lg font-semibold text-text mb-4">Protein Information</h3>
+      <h3 className="text-lg font-semibold text-text-primarymb-4">Protein Information</h3>
 
       {/* Basic Info */}
       <div className="space-y-3 mb-6">
@@ -147,7 +147,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
         {/*
         <div data-testid="gene-name" className="flex justify-between items-center py-2 border-b border-border">
           <span className="text-sm text-text-muted">Gene Name(s)</span>
-          <span className="text-sm font-medium text-text">{geneNames.join(', ') || '-'}</span>
+          <span className="text-sm font-medium text-text-primary">{geneNames.join(', ') || '-'}</span>
         </div>
         */}
 
@@ -175,17 +175,17 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
 
         <div data-testid="pvalue-value" className="flex justify-between items-center py-2 border-b border-border">
           <span className="text-sm text-text-muted">P-value</span>
-          <span className="text-sm font-medium text-text">{formatPValue(protein.pval)}</span>
+          <span className="text-sm font-medium text-text-primary">{formatPValue(protein.pval)}</span>
         </div>
 
         <div data-testid="adjpvalue-value" className="flex justify-between items-center py-2 border-b border-border">
           <span className="text-sm text-text-muted">Adj P-value</span>
-          <span className="text-sm font-medium text-text">{formatPValue(protein.adj_pval)}</span>
+          <span className="text-sm font-medium text-text-primary">{formatPValue(protein.adj_pval)}</span>
         </div>
 
         <div className="flex justify-between items-center py-2 border-b border-border">
           <span className="text-sm text-text-muted">Number of PSMs</span>
-          <span className="text-sm font-medium text-text">
+          <span className="text-sm font-medium text-text-primary">
             {protein.psm_count && protein.psm_count > 0 ? protein.psm_count : '-'}
           </span>
         </div>
@@ -236,7 +236,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
 
       {!loading && !error && proteinAbundance && (
         <div className="mb-6">
-          <h4 className="text-sm font-medium text-text mb-2">Protein Abundance</h4>
+          <h4 className="text-sm font-medium text-text-primarymb-2">Protein Abundance</h4>
           <ProteinAbundancePlot data={proteinAbundance} />
         </div>
       )}
@@ -244,7 +244,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
       {/* Always show Peptide Abundance section if data exists */}
       {!loading && !error && peptideAbundance && (
         <div>
-          <h4 className="text-sm font-medium text-text mb-2">Peptide Abundance</h4>
+          <h4 className="text-sm font-medium text-text-primarymb-2">Peptide Abundance</h4>
           {peptideAbundance.peptides.length > 0 ? (
             <PeptideAbundancePlot data={peptideAbundance} />
           ) : (

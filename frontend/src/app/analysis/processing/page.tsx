@@ -35,13 +35,13 @@ import {
 const CancelledDisplay: React.FC<{
   onBack: () => void;
 }> = ({ onBack }) => (
-  <div data-testid="processing-cancelled" className="rounded-xl border border-border bg-surface p-6">
+  <div data-testid="processing-cancelled" className="rounded-lg border border-border bg-surface p-6">
     <div className="flex items-start gap-4">
       <div className="p-3 bg-surface rounded-full">
         <X className="w-6 h-6 text-text-secondary" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-text mb-2">
+        <h3 className="text-lg font-semibold text-text-primary mb-2">
           Processing Cancelled
         </h3>
         <p className="text-text-secondary mb-4">
@@ -50,7 +50,7 @@ const CancelledDisplay: React.FC<{
         <button
           data-testid="cancelled-back-btn"
           onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:bg-surface text-text-primary rounded-lg font-medium transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Configuration
@@ -72,7 +72,7 @@ const ErrorDisplay: React.FC<{
   onRetry: () => void;
   onBack: () => void;
 }> = ({ error, onRetry, onBack }) => (
-  <div data-testid="processing-error" className="rounded-xl border border-error/20 bg-error/5 p-6">
+  <div data-testid="processing-error" className="rounded-lg border border-error/20 bg-error/5 p-6">
     <div className="flex items-start gap-4">
       <div className="p-3 bg-error/10 rounded-full">
         <AlertCircle className="w-6 h-6 text-error" />
@@ -85,7 +85,7 @@ const ErrorDisplay: React.FC<{
           An error occurred during step {error.step}: {error.stepName}
         </p>
         <div className="bg-background rounded-lg p-4 mb-4 border border-error/20">
-          <p className="text-sm text-text font-mono">
+          <p className="text-sm text-text-primary font-mono">
             {error.message}
           </p>
         </div>
@@ -108,7 +108,7 @@ const ErrorDisplay: React.FC<{
           <button
             data-testid="error-back-btn"
             onClick={onBack}
-            className="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-background border border-border hover:bg-surface text-text-primary rounded-lg font-medium transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Configuration
@@ -124,7 +124,7 @@ const CompletionDisplay: React.FC<{
   duration: number | null;
   onNavigate: () => void;
 }> = ({ duration, onNavigate }) => (
-  <div data-testid="processing-complete" className="rounded-xl border border-success/20 bg-success/5 p-6">
+  <div data-testid="processing-complete" className="rounded-lg border border-success/20 bg-success/5 p-6">
     <div className="flex items-start gap-4">
       <div className="p-3 bg-success/10 rounded-full">
         <CheckCircle2 className="w-6 h-6 text-success" />
@@ -162,7 +162,7 @@ const CompletionDisplay: React.FC<{
 function QueuedDisplay({ queuePosition, queueLength }: { queuePosition: number; queueLength: number }) {
   return (
     <div data-testid="processing-queued" className="mb-8">
-      <div className="rounded-xl border border-primary/20 bg-primary/5 p-6">
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-6">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -493,7 +493,7 @@ function ProcessingContent() {
       <div className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-text mb-2">
+          <h1 className="font-semibold text-text-primary mb-2">
             No Session ID
           </h1>
           <p className="text-text-secondary mb-4">
@@ -518,13 +518,13 @@ function ProcessingContent() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-auto">
         {/* Header - reduced z-index to prevent overlay */}
-        <header className="sticky top-0 z-30 bg-surface/80 backdrop-blur-md border-b border-border">
+        <header className="sticky top-0 z-30 bg-surface border-b border-border">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-4">
                 <button
                   onClick={handleBack}
-                  className="p-2 text-text-muted hover:text-text hover:bg-surface rounded-lg transition-colors"
+                  className="p-2 text-text-muted hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -533,7 +533,7 @@ function ProcessingContent() {
                     <Activity className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h1 className="text-lg font-semibold text-text">
+                    <h1 className="font-semibold text-text-primary">
                       Processing Data
                     </h1>
                     <p className="text-xs text-text-muted">
@@ -574,7 +574,7 @@ function ProcessingContent() {
             <div className="mb-4">
               <button
                 onClick={() => setStatusCollapsed(!statusCollapsed)}
-                className="flex items-center gap-2 text-sm text-text-muted hover:text-text mb-2"
+                className="flex items-center gap-2 text-sm text-text-muted hover:text-text-primary mb-2"
               >
                 {statusCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                 {statusCollapsed ? 'Show' : 'Hide'} processing status
@@ -607,9 +607,9 @@ function ProcessingContent() {
           <LogPanel logs={logs} maxHeight="600px" />
           {/* Cancel Confirmation Dialog */}
           {showCancelDialog && (
-            <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-background rounded-xl border border-border p-6 max-w-md w-full mx-4 shadow-2xl">
-                <h3 className="text-lg font-semibold text-text mb-2">
+                <h3 className="text-lg font-semibold text-text-primary mb-2">
                   Cancel Processing?
                 </h3>
                 <p className="text-text-secondary mb-6">
@@ -620,7 +620,7 @@ function ProcessingContent() {
                     data-testid="dismiss-cancel-btn"
                     onClick={handleDismissCancelDialog}
                     disabled={isCancelling}
-                    className="px-4 py-2 bg-background border border-border hover:bg-surface text-text rounded-lg font-medium transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-background border border-border hover:bg-surface text-text-primary rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
                     No, Continue
                   </button>

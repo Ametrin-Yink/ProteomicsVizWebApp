@@ -30,11 +30,11 @@ const toastIcons: Record<ToastType, typeof CheckCircle> = {
 };
 
 // Toast color mapping
-const toastColors: Record<ToastType, { bg: string; border: string; icon: string }> = {
-  success: { bg: 'bg-success/5', border: 'border-success/20', icon: 'text-success' },
-  error: { bg: 'bg-error/5', border: 'border-error/20', icon: 'text-error' },
-  warning: { bg: 'bg-warning/5', border: 'border-warning/20', icon: 'text-warning' },
-  info: { bg: 'bg-info/5', border: 'border-info/20', icon: 'text-info' },
+const toastColors: Record<ToastType, { bg: string; border: string; icon: string; bar: string }> = {
+  success: { bg: 'bg-success/5', border: 'border-success/20', icon: 'text-success', bar: 'bg-success' },
+  error: { bg: 'bg-error/5', border: 'border-error/20', icon: 'text-error', bar: 'bg-error' },
+  warning: { bg: 'bg-warning/5', border: 'border-warning/20', icon: 'text-warning', bar: 'bg-warning' },
+  info: { bg: 'bg-info/5', border: 'border-info/20', icon: 'text-info', bar: 'bg-info' },
 };
 
 /**
@@ -107,7 +107,7 @@ export const Toast: React.FC<ToastProps> = ({
 
       {/* Message */}
       <div className="flex-1 pr-2">
-        <p className="text-sm font-medium text-text">
+        <p className="text-sm font-medium text-text-primary">
           {message}
         </p>
       </div>
@@ -125,7 +125,7 @@ export const Toast: React.FC<ToastProps> = ({
       <div
         className={cn(
           'absolute bottom-0 left-0 h-0.5 rounded-b-lg transition-all',
-          colors.icon.replace('text-', 'bg-')
+          colors.bar
         )}
         style={{ width: `${progress}%` }}
       />

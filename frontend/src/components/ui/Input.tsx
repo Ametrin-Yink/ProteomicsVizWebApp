@@ -51,7 +51,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     );
 
     const labelClasses = cn(
-      'text-sm font-medium text-text',
+      'text-sm font-medium text-text-primary',
       disabled && 'opacity-50'
     );
 
@@ -62,7 +62,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
     const inputClasses = cn(
       'flex h-11 w-full rounded-lg border bg-background px-4',
-      'text-sm text-text placeholder:text-text-muted',
+      'text-sm text-text-primary placeholder:text-text-muted',
       'transition-all duration-200',
       'focus:outline-none focus:ring-2 focus:ring-offset-0',
       'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -172,13 +172,13 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     );
 
     const labelClasses = cn(
-      'text-sm font-medium text-text',
+      'text-sm font-medium text-text-primary',
       disabled && 'opacity-50'
     );
 
     const textareaClasses = cn(
       'flex w-full rounded-lg border bg-background px-4 py-3',
-      'text-sm text-text placeholder:text-text-muted',
+      'text-sm text-text-primary placeholder:text-text-muted',
       'transition-all duration-200 resize-y',
       'focus:outline-none focus:ring-2 focus:ring-offset-0',
       'disabled:opacity-50 disabled:cursor-not-allowed',

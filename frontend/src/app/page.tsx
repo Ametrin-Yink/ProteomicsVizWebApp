@@ -51,7 +51,7 @@ export default function HomePage() {
               <FlaskConical className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-text">
+              <h1 className="text-text-primary">
                 ProteomicsViz
               </h1>
               <p className="text-sm text-text-secondary">

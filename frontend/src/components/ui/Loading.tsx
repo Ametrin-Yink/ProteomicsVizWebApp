@@ -212,7 +212,7 @@ export const PageLoading: React.FC<PageLoadingProps> = ({
       </div>
       
       <div className="text-center space-y-2">
-        <p className="text-lg font-semibold text-text">
+        <p className="text-lg font-semibold text-text-primary">
           {message}
         </p>
         <p className="text-sm text-text-secondary">
@@ -272,7 +272,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
       <div className="flex justify-between mb-1.5">
         <span className="text-xs font-medium text-text-secondary">Progress</span>
         {showPercentage && (
-          <span className="text-xs font-semibold text-text">
+          <span className="text-xs font-semibold text-text-primary">
             {Math.round(clampedProgress)}%
           </span>
         )}
@@ -298,6 +298,23 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
     </div>
   );
 };
+
+// Protein info skeleton (moved from Skeleton.tsx)
+export function ProteinInfoSkeleton() {
+  return (
+    <div className="bg-background rounded-lg border border-border p-6 space-y-4">
+      <Skeleton variant="text" height={24} width="50%" />
+      <div className="space-y-2">
+        <Skeleton variant="text" height={16} width="100%" />
+        <Skeleton variant="text" height={16} width="75%" />
+        <Skeleton variant="text" height={16} width="50%" />
+      </div>
+      <div className="pt-4 border-t border-border">
+        <Skeleton variant="rounded" height={128} width="100%" />
+      </div>
+    </div>
+  );
+}
 
 // Convenience exports
 export default Spinner;

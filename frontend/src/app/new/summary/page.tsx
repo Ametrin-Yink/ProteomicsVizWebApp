@@ -88,7 +88,7 @@ function SummaryContent() {
           <CheckCircle className="w-4 h-4" />
           Review & Confirm
         </div>
-        <h1 className="text-2xl font-bold text-text">Analysis Summary</h1>
+        <h1 className="font-bold text-text-primary">Analysis Summary</h1>
         <p className="text-text-muted mt-1">
           Review all settings before starting the analysis
         </p>
@@ -99,7 +99,7 @@ function SummaryContent() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-3">
           <PipelineIcon className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold text-text">Pipeline</h2>
+            <h2 className="font-semibold text-text-primary">Pipeline</h2>
           </div>
         </div>
         <div className="p-5">
@@ -115,18 +115,18 @@ function SummaryContent() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-3">
           <FileText className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold text-text">Files</h2>
+            <h2 className="font-semibold text-text-primary">Files</h2>
           </div>
         </div>
         <div className="p-5">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Total Files</span>
-              <span className="text-text font-medium">{uploadedFiles.length}</span>
+              <span className="text-text-primaryfont-medium">{uploadedFiles.length}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Total Size</span>
-              <span className="text-text font-medium">{(totalSize / 1024 / 1024).toFixed(1)} MB</span>
+              <span className="text-text-primaryfont-medium">{(totalSize / 1024 / 1024).toFixed(1)} MB</span>
             </div>
           </div>
         </div>
@@ -137,7 +137,7 @@ function SummaryContent() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-3">
           <Table2 className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold text-text">Experiment Structure</h2>
+            <h2 className="font-semibold text-text-primary">Experiment Structure</h2>
           </div>
         </div>
         <div className="p-5">
@@ -159,14 +159,14 @@ function SummaryContent() {
                   const meta = config.metadata_columns?.[file.filename] || {};
                   return (
                     <tr key={file.filename} className="border-b border-border/50">
-                      <td className="py-1.5 px-3 text-text text-xs font-mono truncate max-w-[200px]" title={file.filename}>
+                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono truncate max-w-[200px]" title={file.filename}>
                         {file.filename}
                       </td>
-                      <td className="py-1.5 px-3 text-text text-xs">{meta.experiment || file.experiment}</td>
-                      <td className="py-1.5 px-3 text-text text-xs">{meta.condition || file.condition}</td>
-                      <td className="py-1.5 px-3 text-text text-xs font-mono">#{meta.replicate || file.replicate}</td>
+                      <td className="py-1.5 px-3 text-text-primarytext-xs">{meta.experiment || file.experiment}</td>
+                      <td className="py-1.5 px-3 text-text-primarytext-xs">{meta.condition || file.condition}</td>
+                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono">#{meta.replicate || file.replicate}</td>
                       {customColumns.map((col) => (
-                        <td key={col} className="py-1.5 px-3 text-text text-xs">{meta[col] || '—'}</td>
+                        <td key={col} className="py-1.5 px-3 text-text-primarytext-xs">{meta[col] || '—'}</td>
                       ))}
                     </tr>
                   );
@@ -182,7 +182,7 @@ function SummaryContent() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-3">
           <GitCompare className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold text-text">Comparisons</h2>
+            <h2 className="font-semibold text-text-primary">Comparisons</h2>
           </div>
         </div>
         <div className="p-5">
@@ -191,7 +191,7 @@ function SummaryContent() {
           ) : (
             <div className="space-y-1">
               {config.comparisons.map((comp, idx) => (
-                <div key={idx} className="flex items-center gap-2 text-sm text-text px-3 py-2 bg-surface rounded-lg border border-border">
+                <div key={idx} className="flex items-center gap-2 text-sm text-text-primarypx-3 py-2 bg-surface rounded-lg border border-border">
                   <span className="font-medium text-blue-700">{formatGroup(comp.group1)}</span>
                   <span className="text-text-muted">vs</span>
                   <span className="font-medium text-red-700">{formatGroup(comp.group2)}</span>
@@ -207,14 +207,14 @@ function SummaryContent() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-3">
           <Sliders className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold text-text">Configuration</h2>
+            <h2 className="font-semibold text-text-primary">Configuration</h2>
           </div>
         </div>
         <div className="p-5">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Organism</span>
-              <span className="text-text font-medium">{organismLabel}</span>
+              <span className="text-text-primaryfont-medium">{organismLabel}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Remove Razor Peptides</span>
@@ -230,15 +230,15 @@ function SummaryContent() {
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">P-Value Threshold</span>
-              <span className="text-text font-medium">{config.pvalue_threshold ?? 0.05}</span>
+              <span className="text-text-primaryfont-medium">{config.pvalue_threshold ?? 0.05}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Log2 FC Threshold</span>
-              <span className="text-text font-medium">{config.logfc_threshold ?? 1.0}</span>
+              <span className="text-text-primaryfont-medium">{config.logfc_threshold ?? 1.0}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Min Peptides per Protein</span>
-              <span className="text-text font-medium">{config.min_peptides_per_protein ?? 1}</span>
+              <span className="text-text-primaryfont-medium">{config.min_peptides_per_protein ?? 1}</span>
             </div>
           </div>
         </div>
@@ -248,7 +248,7 @@ function SummaryContent() {
       {selectedPipeline === 'msstats' && (config.covariate_columns?.length ?? 0) > 0 && (
         <section className="bg-background border border-border rounded-lg">
           <div className="px-5 py-3 border-b border-border">
-            <h2 className="text-lg font-semibold text-text">Covariates</h2>
+            <h2 className="font-semibold text-text-primary">Covariates</h2>
           </div>
           <div className="p-5">
             <div className="flex flex-wrap gap-2">
@@ -266,7 +266,7 @@ function SummaryContent() {
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           onClick={handleBack}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text bg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primarybg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Configuration
@@ -299,7 +299,9 @@ function SummaryContent() {
 
 export default function SummaryPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-text-muted">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>}>
       <SummaryContent />
     </Suspense>
   );

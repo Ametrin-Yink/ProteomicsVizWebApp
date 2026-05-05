@@ -238,7 +238,7 @@ function ResultsContent() {
     return (
       <div data-testid="no-session-selected" className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
-          <p className="text-lg text-text font-medium mb-2">No session selected</p>
+          <p className="text-lg text-text-primary font-medium mb-2">No session selected</p>
           <p className="text-sm text-text-muted mb-4">Create a new analysis to get started.</p>
           <Link
             data-testid="start-analysis-link"
@@ -256,7 +256,7 @@ function ResultsContent() {
     return (
       <div data-testid="no-results-message" className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
-          <p className="text-lg text-text">No results available</p>
+          <p className="text-lg text-text-primary">No results available</p>
           <a
             data-testid="start-analysis-link"
             href="/analysis"
@@ -274,29 +274,32 @@ function ResultsContent() {
       <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-text">Differential Expression Results</h1>
+          <h1 className="font-semibold text-text-primary">Differential Expression Results</h1>
         </div>
 
         {/* General Info Panel */}
-        <div className="flex items-center gap-4 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3 flex-wrap" data-testid="general-info-panel">
-          <span className="font-semibold text-text">Results</span>
-          <span className="text-border">|</span>
-          {sessionConfig?.comparisons && sessionConfig.comparisons.length > 1 ? (
-            <select
-              value={selectedComparison}
-              onChange={(e) => setSelectedComparison(e.target.value)}
-              className="text-sm bg-surface border border-border rounded-md px-2 py-1 text-text focus:outline-none focus:ring-1 focus:ring-primary"
-              aria-label="Select comparison"
-            >
+        <div className="flex items-center gap-3 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3 flex-wrap" data-testid="general-info-panel">
+          <span className="font-semibold text-text-primary">Results</span>
+          <div className="w-px h-4 bg-border" />
+          {sessionConfig?.comparisons && sessionConfig.comparisons.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
               {sessionConfig.comparisons.map((c, i) => {
                 const val = `${c.treatment}_vs_${c.control}`;
                 return (
-                  <option key={i} value={val}>
+                  <button
+                    key={i}
+                    onClick={() => setSelectedComparison(val)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      selectedComparison === val
+                        ? 'bg-primary text-white'
+                        : 'bg-surface text-text-secondary hover:bg-border'
+                    }`}
+                  >
                     {c.treatment} vs {c.control}
-                  </option>
+                  </button>
                 );
               })}
-            </select>
+            </div>
           ) : (
             <span className="text-text-secondary">
               {sessionConfig
@@ -304,9 +307,9 @@ function ResultsContent() {
                 : 'Treatment vs Control'}
             </span>
           )}
-          <span className="text-border">|</span>
+          <div className="w-px h-4 bg-border" />
           <span className="text-text-secondary">{data.total_proteins.toLocaleString()} proteins</span>
-          <span className="text-border">|</span>
+          <div className="w-px h-4 bg-border" />
           <span className="text-text-secondary">
             {deCounts.total} DE (
             <span className="text-primary font-semibold">{deCounts.up}↑</span>

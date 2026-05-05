@@ -31,7 +31,7 @@ function Navigation() {
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-primary/5 text-primary'
-                      : 'text-text-secondary hover:bg-surface hover:text-text'
+                      : 'text-text-secondary hover:bg-surface hover:text-text-primary'
                   }`}
                 >
                   <Icon className="w-4 h-4" />

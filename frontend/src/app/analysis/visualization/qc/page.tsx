@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
 import { getQCData, getSession } from '@/lib/api';
@@ -17,6 +18,7 @@ function QCContent() {
   const [control, setControl] = useState<string>('');
 
   useEffect(() => {
+    if (!sessionId) return;
     async function fetchData() {
       setLoading(true);
       setError(null);
@@ -38,6 +40,24 @@ function QCContent() {
 
     fetchData();
   }, [sessionId]);
+
+  if (!sessionId) {
+    return (
+      <div data-testid="no-session-selected" className="flex-1 bg-surface flex items-center justify-center">
+        <div className="text-center text-text-secondary">
+          <p className="text-lg text-text-primary font-medium mb-2">No session selected</p>
+          <p className="text-sm text-text-muted mb-4">Create a new analysis to get started.</p>
+          <Link
+            data-testid="start-analysis-link"
+            href="/"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Start New Analysis
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -72,7 +92,7 @@ function QCContent() {
       <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-text">QC Plots</h1>
+          <h1 className="font-semibold text-text-primary">QC Plots</h1>
           <p className="text-text-secondary mt-2">
             Quality control visualizations for the proteomics analysis
           </p>
@@ -81,18 +101,18 @@ function QCContent() {
         {/* QC Summary Statistics */}
         {data && (
           <div data-testid="qc-summary" className="mb-6 bg-background rounded-lg border border-border p-4">
-            <h2 className="text-base font-semibold text-text mb-4">QC Summary Statistics</h2>
+            <h2 className="text-base font-semibold text-text-primary mb-4">QC Summary Statistics</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {/* PSM Statistics */}
               <div className="bg-surface rounded-lg p-3">
                 <span className="text-sm text-text-secondary">Total Unique PSMs</span>
-                <span className="ml-2 text-xl font-semibold text-text">
+                <span className="ml-2 text-xl font-semibold text-text-primary">
                   {data.total_psms?.toLocaleString() || 'N/A'}
                 </span>
               </div>
               <div className="bg-surface rounded-lg p-3">
                 <span className="text-sm text-text-secondary">Avg Unique PSMs/Sample</span>
-                <span className="ml-2 text-xl font-semibold text-text">
+                <span className="ml-2 text-xl font-semibold text-text-primary">
                   {data.avg_psms_per_sample?.toLocaleString() || 'N/A'}
                 </span>
               </div>
@@ -100,13 +120,13 @@ function QCContent() {
               {/* Protein Statistics */}
               <div className="bg-surface rounded-lg p-3">
                 <span className="text-sm text-text-secondary">Total Proteins</span>
-                <span className="ml-2 text-xl font-semibold text-text">
+                <span className="ml-2 text-xl font-semibold text-text-primary">
                   {data.total_proteins?.toLocaleString() || 'N/A'}
                 </span>
               </div>
               <div className="bg-surface rounded-lg p-3">
                 <span className="text-sm text-text-secondary">Avg Proteins/Sample</span>
-                <span className="ml-2 text-xl font-semibold text-text">
+                <span className="ml-2 text-xl font-semibold text-text-primary">
                   {data.avg_proteins_per_sample?.toLocaleString() || 'N/A'}
                 </span>
               </div>
@@ -114,13 +134,13 @@ function QCContent() {
               {/* CV Statistics - MIN-010: Show separate Protein and PSM CV */}
               <div className="bg-surface rounded-lg p-3">
                 <span className="text-sm text-text-secondary">Avg Protein CV</span>
-                <span className="ml-2 text-xl font-semibold text-text">
+                <span className="ml-2 text-xl font-semibold text-text-primary">
                   {data.average_protein_cv?.toFixed(1) || data.average_cv?.toFixed(1) || 'N/A'}%
                 </span>
               </div>
               <div className="bg-surface rounded-lg p-3">
                 <span className="text-sm text-text-secondary">Avg PSM CV</span>
-                <span className="ml-2 text-xl font-semibold text-text">
+                <span className="ml-2 text-xl font-semibold text-text-primary">
                   {data.average_psm_cv?.toFixed(1) || 'N/A'}%
                 </span>
               </div>
