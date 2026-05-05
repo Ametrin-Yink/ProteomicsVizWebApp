@@ -9,6 +9,7 @@ import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
+  ArrowRight,
   Loader2,
   Play,
   Sliders,
@@ -47,7 +48,7 @@ function ConfigContent() {
     router.push(`/new/comparisons?session=${sessionId}`);
   };
 
-  const handleStartAnalysis = async () => {
+  const handleContinue = async () => {
     if (!canStart || !sessionId) return;
     setIsStarting(true);
 
@@ -55,17 +56,12 @@ function ConfigContent() {
       await sessionsApi.updateConfig(sessionId, config);
     } catch (error) {
       addToast('warning', `Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-
-    try {
-      await processingApi.start(sessionId);
-    } catch {
-      addToast('error', 'Failed to start processing. Please try again.');
       setIsStarting(false);
       return;
     }
 
-    router.push(`/analysis/processing?session_id=${sessionId}&pipeline=${selectedPipeline}`);
+    setIsStarting(false);
+    router.push(`/new/summary?session=${sessionId}`);
   };
 
   const pipelineLabel = selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2';
@@ -196,32 +192,6 @@ function ConfigContent() {
         </section>
       )}
 
-      {/* Remembered experiment setup summary */}
-      <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border">
-          <h2 className="text-lg font-semibold text-text">Experiment Summary</h2>
-        </div>
-        <div className="p-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Comparisons</span>
-              <span className="text-text font-medium">
-                {state.selectedPipeline && (config.comparisons?.length ?? 0) > 0
-                  ? `${config.comparisons!.length} selected`
-                  : '—'}
-              </span>
-            </div>
-            <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Organism</span>
-              <span className="text-text font-medium capitalize">{config.organism || '—'}</span>
-            </div>
-            <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Files Selected</span>
-              <span className="text-text font-medium">{state.selectedFiles.size}</span>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Validation warning */}
       {!canStart && state.selectedFiles.size > 0 && (
@@ -249,8 +219,8 @@ function ConfigContent() {
         </button>
 
         <button
-          data-testid="start-analysis-btn"
-          onClick={handleStartAnalysis}
+          data-testid="config-continue-btn"
+          onClick={handleContinue}
           disabled={!canStart || isStarting}
           className={cn(
             'inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
@@ -262,12 +232,12 @@ function ConfigContent() {
           {isStarting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Starting Analysis...
+              Saving...
             </>
           ) : (
             <>
-              <Play className="w-4 h-4" />
-              Start Analysis
+              Continue to Summary
+              <ArrowRight className="w-4 h-4" />
             </>
           )}
         </button>

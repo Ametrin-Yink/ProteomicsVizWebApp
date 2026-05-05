@@ -17,7 +17,6 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
   const [organisms, setOrganisms] = useState<Organism[]>([]);
   const [isLoadingOrganisms, setIsLoadingOrganisms] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [newColumnName, setNewColumnName] = useState('');
 
   const state = useAnalysisStore();
   const { config, setConfig, setAvailableOrganisms } = state;
@@ -288,109 +287,6 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
         </div>
       </div>
 
-      {/* Multi-Condition: Metadata Grid */}
-      {template === "multi_condition_comparison" && (
-        <div data-testid="metadata-grid" className="space-y-4 mt-4 p-4 bg-surface rounded-lg">
-          <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
-            <span className="w-2 h-2 bg-primary rounded-full"></span>
-            Sample Metadata
-          </h4>
-          <p className="text-xs text-text-muted">
-            Auto-populated from filenames. Add custom columns for covariates (e.g., batch, dose).
-          </p>
-
-          {/* Metadata Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-1 px-2 text-text-muted text-xs font-medium">Filename</th>
-                  <th className="text-left py-1 px-2 text-text-muted text-xs font-medium">Experiment</th>
-                  <th className="text-left py-1 px-2 text-text-muted text-xs font-medium">Condition</th>
-                  <th className="text-left py-1 px-2 text-text-muted text-xs font-medium">Replicate</th>
-                  {(config.metadata_columns ? Object.keys(config.metadata_columns[Object.keys(config.metadata_columns)[0]] || {}) : []).map((col) => (
-                    <th key={col} className="text-left py-1 px-2 text-text-muted text-xs font-medium">
-                      {col}
-                      <button
-                        onClick={() => {
-                          const newCols = { ...config.metadata_columns };
-                          for (const fn of Object.keys(newCols)) {
-                            delete newCols[fn][col];
-                          }
-                          setConfig({ metadata_columns: newCols });
-                        }}
-                        className="ml-1 text-error hover:opacity-70"
-                        title="Remove column"
-                      >
-                        ×
-                      </button>
-                    </th>
-                  ))}
-                  <th className="w-8"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.uploadedFiles.map((file) => {
-                  const row = config.metadata_columns?.[file.filename] || {};
-                  return (
-                    <tr key={file.filename} className="border-b border-border/50">
-                      <td className="py-1 px-2 text-text truncate max-w-[150px]" title={file.filename}>{file.filename}</td>
-                      <td className="py-1 px-2 text-text">{file.experiment}</td>
-                      <td className="py-1 px-2 text-text">{file.condition}</td>
-                      <td className="py-1 px-2 text-text">{file.replicate}</td>
-                      {(config.metadata_columns ? Object.keys(config.metadata_columns[Object.keys(config.metadata_columns)[0]] || {}) : []).map((col) => (
-                        <td key={col}>
-                          <input
-                            type="text"
-                            value={row[col] || ''}
-                            onChange={(e) => {
-                              const newCols = {
-                                ...(config.metadata_columns || {}),
-                                [file.filename]: {
-                                  ...(config.metadata_columns?.[file.filename] || {}),
-                                  [col]: e.target.value,
-                                },
-                              };
-                              setConfig({ metadata_columns: newCols });
-                            }}
-                            className="w-full rounded-md border-border shadow-sm focus:border-primary focus:ring-primary text-xs px-2 py-1"
-                            placeholder="-"
-                          />
-                        </td>
-                      ))}
-                      <td></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Add Column */}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={newColumnName}
-              onChange={(e) => setNewColumnName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && newColumnName.trim()) {
-                  const col = newColumnName.trim();
-                  setConfig({ metadata_columns: config.metadata_columns || {} });
-                  // Initialize column for all files
-                  const newCols: Record<string, Record<string, string>> = {};
-                  for (const file of state.uploadedFiles) {
-                    newCols[file.filename] = { ...(config.metadata_columns?.[file.filename] || {}), [col]: '' };
-                  }
-                  setConfig({ metadata_columns: newCols });
-                  setNewColumnName('');
-                }
-              }}
-              className="flex-1 rounded-md border-border shadow-sm focus:border-primary focus:ring-primary text-sm px-2 py-1"
-              placeholder="New column name (press Enter)"
-            />
-          </div>
-        </div>
-      )}
 
       {/* Multi-Condition: Comparison Matrix */}
       {template === "multi_condition_comparison" && (
