@@ -8,7 +8,10 @@ from .filter_criteria import step_filter_criteria_default
 from .protein_abundance import step_protein_abundance_msqrob2
 from .qc_metrics import step_qc_metrics
 from .gsea_analysis import step_gsea_analysis
-from .group_comparison_multi import step_group_comparison_multi
+from .group_comparison_multi import (
+    step_msstats_protein_abundance,
+    step_msstats_group_comparison,
+)
 from .multi_condition_de import step_multi_condition_de
 
 __all__ = [
@@ -20,6 +23,7 @@ __all__ = [
     "step_protein_abundance_msqrob2",
     "step_qc_metrics",
     "step_gsea_analysis",
-    "step_group_comparison_multi",
+    "step_msstats_protein_abundance",
+    "step_msstats_group_comparison",
     "step_multi_condition_de",
 ]

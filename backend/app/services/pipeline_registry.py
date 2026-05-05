@@ -10,7 +10,8 @@ from app.services.steps import (
     step_filter_criteria_default,
     step_protein_abundance_msqrob2,
     step_multi_condition_de,
-    step_group_comparison_multi,
+    step_msstats_protein_abundance,
+    step_msstats_group_comparison,
     step_qc_metrics,
     step_gsea_analysis,
 )
@@ -57,7 +58,11 @@ register(
     ],
 )
 
-# Register MSstats multi-condition pipeline (same pre-processing, MSstats for abundance + DE)
+# Register MSstats multi-condition pipeline
+# Steps 1-5: Python pre-processing (shared with msqrob2 pipeline)
+# Step 6: protein abundance via MSstats dataProcess
+# Step 7: differential expression via MSstats groupComparison
+# Steps 8-9: QC metrics, GSEA
 register(
     AnalysisTemplate.MSSTATS,
     [
@@ -77,11 +82,17 @@ register(
         PipelineStep(5, "filter", "Filter by Criteria", step_filter_criteria_default),
         PipelineStep(
             6,
-            "msstats_protein_de",
-            "Protein Abundance + DE (MSstats)",
-            step_group_comparison_multi,
+            "protein_abundance",
+            "Protein Abundance (MSstats)",
+            step_msstats_protein_abundance,
         ),
-        PipelineStep(7, "qc_metrics", "QC Metrics", step_qc_metrics),
-        PipelineStep(8, "gsea", "GSEA Analysis", step_gsea_analysis),
+        PipelineStep(
+            7,
+            "differential_expression",
+            "Differential Expression (MSstats)",
+            step_msstats_group_comparison,
+        ),
+        PipelineStep(8, "qc_metrics", "QC Metrics", step_qc_metrics),
+        PipelineStep(9, "gsea", "GSEA Analysis", step_gsea_analysis),
     ],
 )
