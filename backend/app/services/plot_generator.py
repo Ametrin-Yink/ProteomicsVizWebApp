@@ -5,6 +5,7 @@ Prepares data for frontend plots and generates static plot images for PDF report
 Supports volcano plots, QC plots, and GSEA plots.
 """
 
+import asyncio
 import base64
 import io
 import logging
