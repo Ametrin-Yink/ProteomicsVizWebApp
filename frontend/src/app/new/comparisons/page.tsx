@@ -35,6 +35,11 @@ function ComparisonsContent() {
     group2: Record<string, string>;
   }>>(config.comparisons || []);
 
+  // Sync comparisons to Zustand store whenever they change
+  React.useEffect(() => {
+    setConfig({ comparisons });
+  }, [comparisons]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Covariate state ---
   const [covariateSelections, setCovariateSelections] = React.useState<Set<string>>(
     new Set(config.covariate_columns || [])
