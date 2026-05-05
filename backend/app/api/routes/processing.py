@@ -359,8 +359,8 @@ async def start_processing(
             }
         }
 
-    # Validate session has configuration
-    if not session.config:
+    # Validate session has required configuration
+    if not session.config or not session.config.organism:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Session configuration required. Please configure treatment, control, and organism.",
@@ -452,76 +452,45 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             except ValueError:
                 pass
 
-            # Convert session config to AnalysisConfig
+            # Define all config fields to forward from SessionConfig to AnalysisConfig
+            _CONFIG_FORWARD_FIELDS = [
+                # Core
+                "treatment", "control", "remove_razor", "strict_filtering",
+                # Shared advanced
+                "pvalue_threshold", "logfc_threshold", "min_peptides_per_protein",
+                # MSstats basic (existing)
+                "msstats_normalization", "msstats_feature_selection",
+                "msstats_summary_method", "msstats_impute", "msstats_log_base",
+                "msstats_censored_int", "msstats_max_quantile", "msstats_remove50missing",
+                # MSstats advanced (new)
+                "msstats_n_top_feature", "msstats_min_feature_count",
+                "msstats_remove_uninformative_feature_outlier",
+                "msstats_equal_feature_var", "msstats_name_standards",
+                "msstats_save_fitted_models",
+                "msstats_n_cores",
+                # Multi-condition
+                "comparisons",
+            ]
+
+            sc = session.config
             config_kwargs = {
-                "treatment": session.config.treatment,
-                "control": session.config.control,
-                "organism": Organism(session.config.organism),
-                "remove_razor": session.config.remove_razor,
-                "strict_filtering": session.config.strict_filtering,
+                "organism": Organism(sc.organism) if sc.organism else Organism.HUMAN,
                 "template": AnalysisTemplate(session.template),
             }
-            # Pass MSstats-specific config fields if present
-            if (
-                hasattr(session.config, "msstats_normalization")
-                and session.config.msstats_normalization
-            ):
-                config_kwargs["msstats_normalization"] = (
-                    session.config.msstats_normalization
-                )
-            if (
-                hasattr(session.config, "msstats_feature_selection")
-                and session.config.msstats_feature_selection
-            ):
-                config_kwargs["msstats_feature_selection"] = (
-                    session.config.msstats_feature_selection
-                )
-            if (
-                hasattr(session.config, "msstats_summary_method")
-                and session.config.msstats_summary_method
-            ):
-                config_kwargs["msstats_summary_method"] = (
-                    session.config.msstats_summary_method
-                )
-            if (
-                hasattr(session.config, "msstats_impute")
-                and session.config.msstats_impute is not None
-            ):
-                config_kwargs["msstats_impute"] = session.config.msstats_impute
-            if (
-                hasattr(session.config, "msstats_log_base")
-                and session.config.msstats_log_base is not None
-            ):
-                config_kwargs["msstats_log_base"] = session.config.msstats_log_base
-            if (
-                hasattr(session.config, "msstats_censored_int")
-                and session.config.msstats_censored_int
-            ):
-                config_kwargs["msstats_censored_int"] = (
-                    session.config.msstats_censored_int
-                )
-            if (
-                hasattr(session.config, "msstats_max_quantile")
-                and session.config.msstats_max_quantile is not None
-            ):
-                config_kwargs["msstats_max_quantile"] = (
-                    session.config.msstats_max_quantile
-                )
-            if (
-                hasattr(session.config, "msstats_remove50missing")
-                and session.config.msstats_remove50missing is not None
-            ):
-                config_kwargs["msstats_remove50missing"] = (
-                    session.config.msstats_remove50missing
-                )
-            # Multi-condition: comparisons and metadata
-            if hasattr(session.config, "comparisons") and session.config.comparisons:
-                config_kwargs["comparisons"] = session.config.comparisons
-            if (
-                hasattr(session.config, "metadata_columns")
-                and session.config.metadata_columns
-            ):
-                config_kwargs["metadata"] = session.config.metadata_columns
+
+            for field in _CONFIG_FORWARD_FIELDS:
+                if hasattr(sc, field):
+                    val = getattr(sc, field)
+                    if val is not None:
+                        config_kwargs[field] = val
+
+            # Map metadata_columns to metadata (different field name)
+            if hasattr(sc, "metadata_columns") and sc.metadata_columns:
+                config_kwargs["metadata"] = sc.metadata_columns
+
+            # Map covariate_columns (new)
+            if hasattr(sc, "covariate_columns") and sc.covariate_columns:
+                config_kwargs["covariate_columns"] = sc.covariate_columns
 
             config = AnalysisConfig(**config_kwargs)
             logger.info(

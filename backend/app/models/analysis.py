@@ -105,6 +105,7 @@ class AnalysisConfig(BaseModel):
     msstats_equal_feature_var: bool = Field(default=True, description="Assume equal feature variances (linear summary method only)")
     msstats_name_standards: Optional[str] = Field(default=None, description="Comma-separated standard protein names for GLOBALSTANDARDS normalization")
     msstats_save_fitted_models: bool = Field(default=True, description="Save fitted linear models in groupComparison output")
+    msstats_n_cores: int = Field(default=32, ge=1, description="Number of CPU cores for parallel R processing")
 
     # Covariate columns (selected metadata columns used as model covariates)
     covariate_columns: Optional[list[str]] = Field(default=None, description="Metadata column names to use as covariates")

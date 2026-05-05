@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     )
 
     r_n_cores: int = Field(
-        default=4,
+        default=32,
         description="Number of CPU cores for parallel R processing (Steps 6-7). Set > 1 for parallel BiocParallel.",
         ge=1,
     )

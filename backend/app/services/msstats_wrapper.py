@@ -199,6 +199,7 @@ class MsstatsWrapper:
             "equalFeatureVar": cfg.msstats_equal_feature_var,
             "nameStandards": cfg.msstats_name_standards,
             "min_peptides": cfg.min_peptides_per_protein if cfg.min_peptides_per_protein else 1,
+            "numberOfCores": cfg.msstats_n_cores if cfg.msstats_n_cores else settings.r_n_cores,
         }
 
         config_json = json.dumps(r_config)
@@ -250,6 +251,7 @@ class MsstatsWrapper:
         covariates: Optional[dict] = None,
         log_base: int = 2,
         save_fitted_models: bool = True,
+        n_cores: int = 32,
         log_callback: Optional[callable] = None,
     ) -> Path:
         """
@@ -290,7 +292,7 @@ class MsstatsWrapper:
         gc_config = {
             "log_base": log_base,
             "save_fitted_models": save_fitted_models,
-            "numberOfCores": settings.r_n_cores,
+            "numberOfCores": n_cores,
         }
         config_json = json.dumps(gc_config)
 

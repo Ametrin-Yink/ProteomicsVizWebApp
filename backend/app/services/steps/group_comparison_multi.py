@@ -75,6 +75,7 @@ async def step_group_comparison_multi(ctx: StepContext) -> None:
         covariates=covariate_data,
         log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
         save_fitted_models=ctx.config.msstats_save_fitted_models,
+        n_cores=ctx.config.msstats_n_cores,
         log_callback=create_log_callback(ctx, step=7),
     )
 

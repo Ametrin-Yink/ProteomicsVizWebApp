@@ -298,6 +298,26 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
             </div>
           )}
 
+          {/* Number of Cores */}
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Number of CPU Cores
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={64}
+              data-testid="msstats-cores-input"
+              value={config.msstats_n_cores ?? 32}
+              onChange={(e) => setConfig({ msstats_n_cores: parseInt(e.target.value, 10) || 32 })}
+              className="w-24 px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+            <p className="text-xs text-text-muted mt-1">
+              CPU cores for parallel R processing (Steps 6-7). Higher values speed up large datasets.
+            </p>
+          </div>
+
           {/* Save Fitted Models */}
           <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
             <div>

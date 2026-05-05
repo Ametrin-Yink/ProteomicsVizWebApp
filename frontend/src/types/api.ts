@@ -72,6 +72,7 @@ export interface SessionConfig {
   msstats_equal_feature_var?: boolean;
   msstats_name_standards?: string;
   msstats_save_fitted_models?: boolean;
+  msstats_n_cores?: number;
   // Covariates
   covariate_columns?: string[];
 }
