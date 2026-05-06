@@ -4,7 +4,7 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic';
 import type { QCData } from '@/types/api';
 import { transformPCARowBased } from '@/lib/utils';
-
+import { SearchableSelect } from '@/components/ui/Select';
 import { Maximize2, Download } from 'lucide-react';
 
 // Dynamically import Plotly to avoid SSR issues
@@ -39,68 +39,52 @@ function LazyPlot({ plotId, ...plotProps }: React.ComponentProps<typeof Plot> & 
 interface QCPlotsProps {
   data: QCData;
   conditionList?: string[];
-  selectedComparison?: string;
+  selectedComparison: string;
+  onComparisonChange: (value: string) => void;
+  comparisonOptions: Array<{ value: string; label: string }>;
 }
 
-// KDE color palette shared by intensity plots (stable reference)
-const kdeSampleColors = [
-  '#00ADEF', '#E73564', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
-  '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#D946EF',
+// 24-color palette — enough distinct colors for any realistic condition count
+const PALETTE_24 = [
+  '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F',
+  '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC',
+  '#D37295', '#665191', '#A05195', '#D45087', '#F95D6A',
+  '#FF7C43', '#FFA600', '#003F5C', '#2F4B7C', '#488F31',
+  '#DE425B', '#69B33D', '#F7B844', '#7B68EE',
 ];
 
-export default function QCPlots({ data, conditionList, selectedComparison }: QCPlotsProps) {
-  const TABLEAU_10 = [
-    '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F',
-    '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC',
-  ];
+// Deterministic HSL-based fallback for >24 conditions
+function hashColor(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+}
 
+export default function QCPlots({ data, conditionList, selectedComparison, onComparisonChange, comparisonOptions }: QCPlotsProps) {
   // Build a deterministic condition→color map from the condition list
   const conditionColors = useMemo(() => {
     const map: Record<string, string> = {};
     (conditionList || []).forEach((cond, i) => {
-      map[cond] = TABLEAU_10[i % TABLEAU_10.length];
+      map[cond] = PALETTE_24[i % PALETTE_24.length];
     });
     return map;
   }, [conditionList]);
 
-  // PSM CV color: direct lookup from condition list
+  // Shared color resolver — always derives from condition list, never hashes unless unknown
   const getConditionColor = useCallback((condition: string) => {
     if (conditionColors[condition]) return conditionColors[condition];
     const key = Object.keys(conditionColors).find(
       k => k.toLowerCase() === condition.toLowerCase()
     );
     if (key) return conditionColors[key];
-    // Hash-based fallback for unknown conditions
-    let hash = 0;
-    for (let i = 0; i < condition.length; i++) {
-      hash = ((hash << 5) - hash) + condition.charCodeAt(i);
-      hash |= 0;
-    }
-    return TABLEAU_10[Math.abs(hash) % TABLEAU_10.length];
+    return hashColor(condition);
   }, [conditionColors]);
 
-  // Protein CV uses a shifted palette (offset by 4) for visual distinction
-  const getProteinConditionColor = useCallback((condition: string) => {
-    const shift = 4;
-    // Look up the condition index from conditionList for deterministic shift
-    const getIndex = (c: string): number => {
-      const exact = conditionList?.indexOf(c);
-      if (exact !== undefined && exact >= 0) return exact;
-      const key = conditionList?.find(k => k.toLowerCase() === c.toLowerCase());
-      return key ? conditionList!.indexOf(key) : -1;
-    };
-    const idx = getIndex(condition);
-    if (idx >= 0) return TABLEAU_10[(idx + shift) % TABLEAU_10.length];
-    // Hash-based fallback for unknown conditions
-    let hash = 0;
-    for (let i = 0; i < condition.length; i++) {
-      hash = ((hash << 5) - hash) + condition.charCodeAt(i);
-      hash |= 0;
-    }
-    return TABLEAU_10[(Math.abs(hash) + shift) % TABLEAU_10.length];
-  }, [conditionList]);
-
-  // 1. PCA Plot - Color by sample
+  // 1. PCA Plot — one trace per condition, legend below, no point labels
   const pcaPlot = useMemo(() => {
     if (!data.pca) return null;
 
@@ -111,23 +95,27 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
       data.pca.conditions
     );
 
-    // Assign colors based on condition but ensure unique colors per sample
-    const sampleColors = rowData.map((d) => getConditionColor(d.condition));
+    // Group points by condition → one trace per condition
+    const conditionGroups: Record<string, typeof rowData> = {};
+    rowData.forEach((d) => {
+      (conditionGroups[d.condition] ??= []).push(d);
+    });
 
-    const trace = {
-      x: rowData.map((d) => d.pc1),
-      y: rowData.map((d) => d.pc2),
-      mode: 'markers+text' as const,
+    const traces = Object.entries(conditionGroups).map(([condition, points]) => ({
+      x: points.map((d) => d.pc1),
+      y: points.map((d) => d.pc2),
+      mode: 'markers' as const,
       type: 'scatter' as const,
-      text: rowData.map((d) => d.sample),
-      textposition: 'top center' as const,
+      name: condition,
+      text: points.map((d) => d.sample),
       marker: {
         size: 12,
-        color: sampleColors,
+        color: getConditionColor(condition),
       },
       hovertemplate: '<b>%{text}</b><br>PC1: %{x:.3f}<br>PC2: %{y:.3f}<extra></extra>',
-    };
+    }));
 
+    const nConditions = traces.length;
     const layout = {
       title: {
         text: `PCA Analysis (PC1: ${data.pca.pc1_variance.toFixed(1)}%, PC2: ${data.pca.pc2_variance.toFixed(1)}%)`,
@@ -143,13 +131,20 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
         zeroline: true,
         gridcolor: '#E5E7EB',
       },
-      showlegend: false,
+      showlegend: true,
+      legend: {
+        orientation: 'h' as const,
+        y: -0.15 * Math.ceil(nConditions / 4),
+        x: 0.5,
+        xanchor: 'center' as const,
+        font: { size: 11 },
+      },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 80 },
+      margin: { l: 50, r: 30, t: 50, b: 20 + nConditions * 18 },
     };
 
-    return { traces: [trace], layout };
+    return { traces, layout };
   }, [data.pca, getConditionColor]);
 
   // 2. P-value Distribution (per-comparison if selectedComparison is provided)
@@ -192,263 +187,175 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     return { traces: [trace], layout };
   }, [data.pvalue_distribution, data.pvalue_distributions, selectedComparison]);
 
-  // 3. PSM CVs - show 95th percentile top
+  // 3. PSM CVs — box plots capped at 95th percentile (whisker ends at p95)
   const psmCVPlot = useMemo(() => {
     if (!data.psm_cv) return null;
 
-    // Filter values to 95th percentile
-    const filteredCV: { [condition: string]: number[] } = {};
-    Object.entries(data.psm_cv).forEach(([condition, values]) => {
+    const traces = Object.entries(data.psm_cv).map(([condition, values]) => {
       const sorted = [...values].sort((a, b) => a - b);
-      const p95Index = Math.floor(sorted.length * 0.95);
-      const p95 = sorted[p95Index];
-      filteredCV[condition] = values.filter(v => v <= p95);
+      const p95 = sorted[Math.floor(sorted.length * 0.95)];
+      return {
+        y: values.filter(v => v <= p95),
+        type: 'box' as const,
+        name: condition,
+        marker: { color: getConditionColor(condition) },
+        boxpoints: false,
+        hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
+      };
     });
 
-    const traces = Object.entries(filteredCV).map(([condition, values]) => ({
-      y: values,
-      type: 'violin' as const,
-      name: condition,
-      box: { visible: true },
-      line: { color: getConditionColor(condition) },
-      fillcolor: getConditionColor(condition) + '80', // 50% opacity hex
-      hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
-      // Hide individual points - only show violin and box
-      points: false,
-      jitter: 0,
-      pointpos: 0,
-    }));
-
+    const nConditions = traces.length;
     const layout = {
-      title: { text: 'PSM CVs by Condition (95% of data)', font: { size: 14, color: '#111827' } },
+      title: { text: 'PSM CVs by Condition (whiskers at 95th %ile)', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
       },
       xaxis: {
-        title: { text: 'Condition', font: { size: 12 } },
+        tickangle: nConditions > 2 ? -90 : 0,
+        tickfont: { size: 11 },
+        automargin: true,
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 50 },
+      margin: { l: 50, r: 30, t: 50, b: nConditions > 2 ? 120 : 50 },
       showlegend: false,
     };
 
     return { traces, layout };
   }, [data.psm_cv, getConditionColor]);
 
-  // 3b. Protein CVs (with different colors) - show 95th percentile top
+  // 3b. Protein CVs — box plots capped at 95th percentile (whisker ends at p95)
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
 
-    // Filter values to 95th percentile
-    const filteredCV: { [condition: string]: number[] } = {};
-    Object.entries(data.protein_cv).forEach(([condition, values]) => {
+    const traces = Object.entries(data.protein_cv).map(([condition, values]) => {
       const sorted = [...values].sort((a, b) => a - b);
-      const p95Index = Math.floor(sorted.length * 0.95);
-      const p95 = sorted[p95Index];
-      filteredCV[condition] = values.filter(v => v <= p95);
+      const p95 = sorted[Math.floor(sorted.length * 0.95)];
+      return {
+        y: values.filter(v => v <= p95),
+        type: 'box' as const,
+        name: condition,
+        marker: { color: getConditionColor(condition) },
+        boxpoints: false,
+        hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
+      };
     });
 
-    const traces = Object.entries(filteredCV).map(([condition, values]) => ({
-      y: values,
-      type: 'violin' as const,
-      name: condition,
-      box: { visible: true },
-      line: { color: getProteinConditionColor(condition) },
-      fillcolor: getProteinConditionColor(condition) + '80', // 50% opacity hex
-      hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
-      // Hide individual points - only show violin and box
-      points: false,
-      jitter: 0,
-      pointpos: 0,
-    }));
-
+    const nConditions = traces.length;
     const layout = {
-      title: { text: 'Protein CVs by Condition (95% of data)', font: { size: 14, color: '#111827' } },
+      title: { text: 'Protein CVs by Condition (whiskers at 95th %ile)', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
       },
       xaxis: {
-        title: { text: 'Condition', font: { size: 12 } },
+        tickangle: nConditions > 2 ? -90 : 0,
+        tickfont: { size: 11 },
+        automargin: true,
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 50 },
+      margin: { l: 50, r: 30, t: 50, b: nConditions > 2 ? 120 : 50 },
       showlegend: false,
     };
 
     return { traces, layout };
-  }, [data.protein_cv, getProteinConditionColor]);
+  }, [data.protein_cv, getConditionColor]);
 
-  // PSM intensity distribution KDE curves (pre-computed on backend)
-  const psmKDEData = useMemo(() => {
-    if (!data.intensity_distributions?.psm) return null;
+  // 4. PSM Intensity Distribution — flat box plots, one trace per condition×replicate combo
+  const psmIntensityPlot = useMemo(() => {
+    const boxData = data.intensity_distributions?.psm_boxplot;
+    if (!boxData || Object.keys(boxData).length === 0) return null;
 
-    let globalMin = Infinity;
-    let globalMax = -Infinity;
-    let colorIndex = 0;
-    const kdes: Array<{
-      name: string;
-      x: number[];
+    const traces: Array<{
       y: number[];
-      color: string;
+      type: 'box';
+      name: string;
+      marker: { color: string; size: number; outliercolor: string };
+      boxpoints: 'outliers';
+      hovertemplate: string;
     }> = [];
 
-    Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
-      Object.entries(replicates).forEach(([replicate, kdeCurve]) => {
-        if (kdeCurve.kde_x.length > 0) {
-          globalMin = Math.min(globalMin, kdeCurve.kde_x[0]);
-          globalMax = Math.max(globalMax, kdeCurve.kde_x[kdeCurve.kde_x.length - 1]);
-          const color = kdeSampleColors[colorIndex % kdeSampleColors.length];
-          colorIndex++;
-          kdes.push({
-            name: `${condition} - ${replicate}`,
-            x: kdeCurve.kde_x,
-            y: kdeCurve.kde_y,
-            color,
+    Object.entries(boxData).forEach(([condition, replicates]) => {
+      const color = getConditionColor(condition);
+      Object.entries(replicates).forEach(([repKey, vals]) => {
+        if (vals && vals.length > 0) {
+          traces.push({
+            y: vals,
+            type: 'box',
+            name: `${condition} - ${repKey}`,
+            marker: { color, size: 3, outliercolor: color + '66' },
+            boxpoints: 'outliers',
+            hovertemplate: `<b>${condition} - ${repKey}</b><br>Log2 Intensity: %{y:.2f}<extra></extra>`,
           });
         }
       });
     });
 
-    return { kdes, range: { min: globalMin, max: globalMax } };
-  }, [data.intensity_distributions?.psm]);
-
-  // 4. PSM Intensity Distribution - KDE curves (lines) showing all data
-  const psmIntensityPlot = useMemo(() => {
-    if (!psmKDEData) return null;
-
-    const traces: Array<{
-      x: number[];
-      y: number[];
-      type: 'scatter';
-      mode: 'lines';
-      name: string;
-      line: { color: string; width: number };
-      fill?: 'tozeroy';
-      fillcolor?: string;
-      hovertemplate: string;
-    }> = [];
-
-    psmKDEData.kdes.forEach((kde) => {
-      traces.push({
-        x: kde.x,
-        y: kde.y,
-        type: 'scatter',
-        mode: 'lines',
-        name: kde.name,
-        line: { color: kde.color, width: 2 },
-        fill: 'tozeroy',
-        fillcolor: kde.color + '33', // 20% opacity hex
-        hovertemplate: 'Log2 Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
-      });
-    });
-
+    const nTraces = traces.length;
     const layout = {
       title: { text: 'PSM Intensity Distribution', font: { size: 14, color: '#111827' } },
-      xaxis: {
-        title: { text: 'Log2 Intensity', font: { size: 12 } },
-        range: [psmKDEData.range.min, psmKDEData.range.max],
-        gridcolor: '#E5E7EB',
-      },
       yaxis: {
-        title: { text: 'Density', font: { size: 12 } },
+        title: { text: 'Log2 Intensity', font: { size: 12 } },
         gridcolor: '#E5E7EB',
       },
+      xaxis: {
+        tickangle: nTraces > 2 ? -90 : 0,
+        tickfont: { size: 11 },
+        automargin: true,
+      },
+      boxgap: 0.3,
+      boxgroupgap: 0,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 50 },
-      showlegend: true,
-      legend: { orientation: 'h' as const, y: -0.3 },
+      margin: { l: 50, r: 30, t: 50, b: nTraces > 2 ? 120 : 50 },
+      showlegend: nTraces <= 12,
+      legend: { orientation: 'h' as const, y: -0.25 },
     };
 
     return { traces, layout };
-  }, [psmKDEData]);
+  }, [data.intensity_distributions?.psm_boxplot, getConditionColor]);
 
-  // Protein intensity distribution KDE curves (pre-computed on backend)
-  const proteinKDEData = useMemo(() => {
-    if (!data.intensity_distributions?.protein) return null;
-
-    let globalMin = Infinity;
-    let globalMax = -Infinity;
-    let colorIndex = 0;
-    const kdes: Array<{
-      name: string;
-      x: number[];
-      y: number[];
-      color: string;
-    }> = [];
-
-    Object.entries(data.intensity_distributions.protein).forEach(([sampleName, kdeCurve]) => {
-      if (kdeCurve.kde_x.length > 0) {
-        globalMin = Math.min(globalMin, kdeCurve.kde_x[0]);
-        globalMax = Math.max(globalMax, kdeCurve.kde_x[kdeCurve.kde_x.length - 1]);
-        const color = kdeSampleColors[colorIndex % kdeSampleColors.length];
-        colorIndex++;
-        kdes.push({
-          name: sampleName,
-          x: kdeCurve.kde_x,
-          y: kdeCurve.kde_y,
-          color,
-        });
-      }
-    });
-
-    return { kdes, range: { min: globalMin, max: globalMax } };
-  }, [data.intensity_distributions?.protein]);
-
-  // 5. Protein Intensity Distribution - Line plots (KDE) showing all data
+  // 5. Protein Intensity Distribution — box plots per sample, wider boxes, small outliers
   const proteinIntensityPlot = useMemo(() => {
-    if (!proteinKDEData) return null;
+    const boxData = data.intensity_distributions?.protein_boxplot;
+    if (!boxData || Object.keys(boxData).length === 0) return null;
 
-    const traces: Array<{
-      x: number[];
-      y: number[];
-      type: 'scatter';
-      mode: 'lines';
-      name: string;
-      line: { color: string; width: number };
-      fill?: 'tozeroy';
-      fillcolor?: string;
-      hovertemplate: string;
-    }> = [];
+    const sampleNames = Object.keys(boxData);
+    const nSamples = sampleNames.length;
 
-    proteinKDEData.kdes.forEach((kde) => {
-      traces.push({
-        x: kde.x,
-        y: kde.y,
-        type: 'scatter',
-        mode: 'lines',
-        name: kde.name,
-        line: { color: kde.color, width: 2 },
-        fill: 'tozeroy',
-        fillcolor: kde.color + '33', // 20% opacity hex
-        hovertemplate: 'Intensity: %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
-      });
-    });
+    const traces = sampleNames.map(sample => ({
+      y: boxData[sample],
+      type: 'box' as const,
+      name: sample,
+      marker: { color: getConditionColor(sample), size: 3, outliercolor: getConditionColor(sample) + '66' },
+      boxpoints: 'outliers' as const,
+      hovertemplate: `<b>${sample}</b><br>Intensity: %{y:.2f}<extra></extra>`,
+    }));
 
     const layout = {
       title: { text: 'Protein Intensity Distribution', font: { size: 14, color: '#111827' } },
-      xaxis: {
-        title: { text: 'Intensity', font: { size: 12 } },
-        range: [proteinKDEData.range.min, proteinKDEData.range.max],
-        gridcolor: '#E5E7EB',
-      },
       yaxis: {
-        title: { text: 'Density', font: { size: 12 } },
+        title: { text: 'Intensity', font: { size: 12 } },
         gridcolor: '#E5E7EB',
       },
+      xaxis: {
+        tickangle: nSamples > 2 ? -90 : 0,
+        tickfont: { size: 11 },
+        automargin: true,
+      },
+      boxgap: 0.3,
+      boxgroupgap: 0,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 50 },
-      showlegend: true,
-      legend: { orientation: 'h' as const, y: -0.2 },
+      margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
+      showlegend: nSamples <= 12,
+      legend: { orientation: 'h' as const, y: -0.25 },
     };
 
     return { traces, layout };
-  }, [proteinKDEData]);
+  }, [data.intensity_distributions?.protein_boxplot, getConditionColor]);
 
   // 6. Data Completeness - Protein Level
   const completenessPlot = useMemo(() => {
@@ -457,6 +364,7 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     const samples = Object.keys(data.data_completeness);
     const present = samples.map((s) => data.data_completeness![s].present);
     const missing = samples.map((s) => data.data_completeness![s].missing);
+    const nSamples = samples.length;
 
     const traces = [
       {
@@ -480,8 +388,9 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     const layout = {
       title: { text: 'Protein Data Completeness by Sample', font: { size: 14, color: '#111827' } },
       xaxis: {
-        title: { text: 'Sample', font: { size: 12 } },
-        tickangle: -45,
+        tickangle: nSamples > 2 ? -90 : 0,
+        tickfont: { size: 11 },
+        automargin: true,
         gridcolor: '#E5E7EB',
       },
       yaxis: {
@@ -491,7 +400,7 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
       barmode: 'stack' as const,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 100 },
+      margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
       showlegend: true,
       legend: { orientation: 'h' as const, y: -0.3 },
     };
@@ -506,6 +415,7 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     const samples = Object.keys(data.psm_completeness);
     const present = samples.map((s) => data.psm_completeness![s].present);
     const missing = samples.map((s) => data.psm_completeness![s].missing);
+    const nSamples = samples.length;
 
     const traces = [
       {
@@ -529,8 +439,9 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     const layout = {
       title: { text: 'PSM Data Completeness by Sample', font: { size: 14, color: '#111827' } },
       xaxis: {
-        title: { text: 'Sample', font: { size: 12 } },
-        tickangle: -45,
+        tickangle: nSamples > 2 ? -90 : 0,
+        tickfont: { size: 11 },
+        automargin: true,
         gridcolor: '#E5E7EB',
       },
       yaxis: {
@@ -540,7 +451,7 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
       barmode: 'stack' as const,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 100 },
+      margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
       showlegend: true,
       legend: { orientation: 'h' as const, y: -0.3 },
     };
@@ -602,6 +513,15 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-text-primary">{plot.title}</h3>
                 <div className="flex items-center gap-2">
+                  {plot.id === 'pvalue' && comparisonOptions.length > 1 && (
+                    <SearchableSelect
+                      options={comparisonOptions}
+                      value={selectedComparison}
+                      onChange={onComparisonChange}
+                      placeholder="Select comparison..."
+                      searchPlaceholder="Filter comparisons..."
+                    />
+                  )}
                   <button
                     data-testid={`expand-${plot.id}-btn`}
                     onClick={() => setExpandedPlot(plot.id)}
@@ -620,7 +540,7 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
                   </button>
                 </div>
               </div>
-              <div className="h-[400px]">
+              <div className="h-[480px]">
                 <LazyPlot
                   plotId={plot.id}
                   data={plot.data.traces}
@@ -634,7 +554,7 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
             <div
               key={plot.id}
               data-testid={`${plot.id}-plot`}
-              className="bg-surface rounded-lg border border-border p-4 flex items-center justify-center h-[400px]"
+              className="bg-surface rounded-lg border border-border p-4 flex items-center justify-center h-[480px]"
             >
               <div data-testid="no-data" className="text-center text-text-muted">
                 <p className="text-lg font-medium">{plot.title}</p>

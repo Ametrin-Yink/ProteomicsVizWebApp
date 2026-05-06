@@ -102,13 +102,19 @@ class KDECurve(BaseModel):
 
 
 class IntensityDistribution(BaseModel):
-    """Intensity distribution data — KDE curves pre-computed on backend."""
+    """Intensity distribution data — KDE curves and raw values for box plots."""
 
     psm: dict[str, dict[str, KDECurve]] = Field(
         default_factory=dict, description="PSM KDE curves by condition and replicate"
     )
     protein: dict[str, KDECurve] = Field(
         default_factory=dict, description="Protein KDE curves by sample"
+    )
+    psm_boxplot: dict[str, dict[str, list[float]]] = Field(
+        default_factory=dict, description="PSM raw log2 intensities for box plots: condition -> replicate -> values"
+    )
+    protein_boxplot: dict[str, list[float]] = Field(
+        default_factory=dict, description="Protein raw intensities for box plots by sample"
     )
 
 

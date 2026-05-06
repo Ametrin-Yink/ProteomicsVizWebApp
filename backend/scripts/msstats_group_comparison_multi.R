@@ -184,10 +184,14 @@ for (i in seq_along(comparisons_raw)) {
         # Group 1: samples matching ALL criteria in group1
         g1_mask <- rep(TRUE, nrow(pdata))
         for (col_name in names(g1_criteria)) {
+            target_val <- as.character(g1_criteria[[col_name]])
             if (col_name %in% names(pdata)) {
-                g1_mask <- g1_mask & (as.character(pdata[[col_name]]) == as.character(g1_criteria[[col_name]]))
+                g1_mask <- g1_mask & (as.character(pdata[[col_name]]) == target_val)
+            } else if ("GROUP" %in% names(pdata)) {
+                cat("  Column", col_name, "not in ProteinLevelData, matching '", target_val, "' against GROUP\n")
+                g1_mask <- g1_mask & (as.character(pdata[["GROUP"]]) == target_val)
             } else {
-                cat("  WARNING: column", col_name, "not found in ProteinLevelData\n")
+                stop("Column '", col_name, "' not found and no GROUP column for fallback matching")
             }
         }
         g1_groups <- unique(pdata$GROUP[g1_mask])
@@ -196,10 +200,14 @@ for (i in seq_along(comparisons_raw)) {
         # Group 2: samples matching ALL criteria in group2
         g2_mask <- rep(TRUE, nrow(pdata))
         for (col_name in names(g2_criteria)) {
+            target_val <- as.character(g2_criteria[[col_name]])
             if (col_name %in% names(pdata)) {
-                g2_mask <- g2_mask & (as.character(pdata[[col_name]]) == as.character(g2_criteria[[col_name]]))
+                g2_mask <- g2_mask & (as.character(pdata[[col_name]]) == target_val)
+            } else if ("GROUP" %in% names(pdata)) {
+                cat("  Column", col_name, "not in ProteinLevelData, matching '", target_val, "' against GROUP\n")
+                g2_mask <- g2_mask & (as.character(pdata[["GROUP"]]) == target_val)
             } else {
-                cat("  WARNING: column", col_name, "not found in ProteinLevelData\n")
+                stop("Column '", col_name, "' not found and no GROUP column for fallback matching")
             }
         }
         g2_groups <- unique(pdata$GROUP[g2_mask])

@@ -6,8 +6,7 @@ import Link from 'next/link';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
 import { getQCData, getSession } from '@/lib/api';
-import { formatGroup } from '@/lib/utils';
-import { SearchableSelect } from '@/components/ui/Select';
+
 
 function QCContent() {
   const searchParams = useSearchParams();
@@ -164,29 +163,19 @@ function QCContent() {
           </div>
         )}
 
-        {/* Comparison selector for p-value distribution */}
-        {comparisons.length > 0 && (
-          <div className="mb-4 bg-background rounded-lg border border-border p-4">
-            <label className="block text-sm font-medium text-text-primary mb-3">
-              P-value Distribution: Select Comparison
-            </label>
-            <SearchableSelect
-              options={comparisons.map((c) => {
-                const g1 = formatGroup(c.group1);
-                const g2 = formatGroup(c.group2);
-                return { value: `${g1}_vs_${g2}`, label: `${g1} vs ${g2}` };
-              })}
-              value={selectedComparison}
-              onChange={setSelectedComparison}
-              placeholder="Select comparison..."
-              searchPlaceholder="Filter comparisons..."
-            />
-          </div>
-        )}
-
         {/* QC Plots Grid */}
         {data ? (
-          <QCPlots data={data} conditionList={conditionList.length > 0 ? conditionList : undefined} selectedComparison={selectedComparison || undefined} />
+          <QCPlots
+            data={data}
+            conditionList={conditionList.length > 0 ? conditionList : undefined}
+            selectedComparison={selectedComparison}
+            onComparisonChange={setSelectedComparison}
+            comparisonOptions={comparisons.map((c) => {
+              const g1Label = Object.values(c.group1).join('+');
+              const g2Label = Object.values(c.group2).join('+');
+              return { value: `${g1Label}_vs_${g2Label}`, label: `${g1Label} vs ${g2Label}` };
+            })}
+          />
         ) : (
           <div className="bg-surface rounded-lg border border-border p-5 text-center">
             <p className="text-text-secondary">No QC data available</p>

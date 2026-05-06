@@ -485,7 +485,7 @@ class QCCalculator:
         Returns:
             Dictionary with intensity distributions
         """
-        result = {"psm": {}, "protein": {}}
+        result = {"psm": {}, "protein": {}, "psm_boxplot": {}, "protein_boxplot": {}}
 
         # PSM intensities by condition
         if psm_df is not None and "Condition" in psm_df.columns:
@@ -500,7 +500,7 @@ class QCCalculator:
             norm = psm_df["Abundance"] * (global_median / sample_medians)
             log2_vals = np.where(pos, np.log2(np.where(pos, norm, 1)), np.nan)
 
-            # Build result dict with pre-computed KDE curves
+            # Build result dict with pre-computed KDE curves and raw boxplot values
             for group_key, idx in psm_df.groupby(group_cols).groups.items():
                 if not has_replicate:
                     condition = group_key
@@ -510,9 +510,12 @@ class QCCalculator:
                 vals = log2_vals[idx]
                 valid = vals[np.isfinite(vals)]
                 if len(valid) > 0:
-                    result["psm"].setdefault(str(condition), {})[f"replicate_{replicate}"] = self._compute_kde(valid)
+                    cond_str = str(condition)
+                    rep_key = f"replicate_{replicate}"
+                    result["psm"].setdefault(cond_str, {})[rep_key] = self._compute_kde(valid)
+                    result["psm_boxplot"].setdefault(cond_str, {})[rep_key] = valid.tolist()
 
-        # Protein intensities — per-sample KDE curves
+        # Protein intensities — per-sample KDE curves and raw boxplot values
         id_cols = [
             "Master Protein Accessions",
             "Gene_Name",
@@ -532,6 +535,7 @@ class QCCalculator:
             intensities = protein_df[col].dropna().values
             if len(intensities) > 0:
                 result["protein"][col] = self._compute_kde(intensities)
+                result["protein_boxplot"][col] = intensities.tolist()
 
         return result
 

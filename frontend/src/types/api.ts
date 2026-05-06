@@ -146,6 +146,14 @@ export interface IntensityDistributions {
   protein: {
     [sample: string]: KDECurve;
   };
+  psm_boxplot: {
+    [condition: string]: {
+      [replicate: string]: number[];
+    };
+  };
+  protein_boxplot: {
+    [sample: string]: number[];
+  };
 }
 
 export interface DataCompleteness {
