@@ -264,7 +264,7 @@ async def load_diff_expression_results(
             results.append(result)
 
         # Fallback: if all PSM_Count values are 0 (MSstats pipeline doesn't populate them),
-        # count unique peptide sequences per protein from the PSM abundance file
+        # count unique PSMs per protein from the PSM abundance file
         if results and not any_psm_nonzero:
             psm_parquet = results_dir / "PSM_Abundances.parquet"
             psm_tsv = results_dir / "PSM_Abundances.tsv"
@@ -273,21 +273,21 @@ async def load_diff_expression_results(
                     psm_df = await asyncio.to_thread(
                         pd.read_parquet,
                         psm_parquet,
-                        columns=["Master_Protein_Accessions", "Sequence"],
+                        columns=["Master_Protein_Accessions", "Unique_PSM"],
                     )
                 elif psm_tsv.exists():
                     psm_df = await asyncio.to_thread(
                         pd.read_csv,
                         psm_tsv,
                         sep="\t",
-                        usecols=["Master_Protein_Accessions", "Sequence"],
+                        usecols=["Master_Protein_Accessions", "Unique_PSM"],
                     )
                 else:
                     psm_df = None
 
                 if psm_df is not None:
                     psm_counts = (
-                        psm_df.groupby("Master_Protein_Accessions")["Sequence"]
+                        psm_df.groupby("Master_Protein_Accessions")["Unique_PSM"]
                         .nunique()
                     )
                     for r in results:
