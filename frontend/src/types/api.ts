@@ -226,6 +226,14 @@ export interface GSEAHeatmapData {
 
 export type GSEADatabase = 'go_bp' | 'go_mf' | 'go_cc' | 'kegg' | 'reactome';
 
+export interface GSEARunStatus {
+  status: 'idle' | 'running' | 'completed' | 'error';
+  comparison?: string;
+  databases?: Record<string, 'pending' | 'running' | 'completed' | 'error'>;
+  started_at?: string;
+  error?: string | null;
+}
+
 export const GSEADatabaseLabels: Record<GSEADatabase, string> = {
   go_bp: 'GO Biological Process',
   go_mf: 'GO Molecular Function',

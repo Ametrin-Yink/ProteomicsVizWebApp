@@ -882,18 +882,140 @@ class GseaRunRequest(BaseModel):
     permutations: int = 1000
 
 
+# In-memory lock dict to prevent concurrent runs on the same session
+_gsea_run_locks: dict[str, asyncio.Lock] = {}
+
+
+def _gsea_status_path(session_id: str) -> Path:
+    return settings.sessions_dir / session_id / "gsea_run_status.json"
+
+
+def _read_gsea_status(session_id: str) -> dict | None:
+    path = _gsea_status_path(session_id)
+    if not path.exists():
+        return None
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _write_gsea_status(session_id: str, data: dict) -> None:
+    path = _gsea_status_path(session_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+@router.get("/{session_id}/gsea/status")
+async def get_gsea_run_status(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Get the current status of an on-demand GSEA run."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    status_data = _read_gsea_status(session_id)
+    if status_data is None:
+        return create_response({"status": "idle"})
+
+    return create_response(status_data)
+
+
+async def _background_gsea_run(
+    session_id: str,
+    request: GseaRunRequest,
+    results_dir: Path,
+    de_file: Path,
+    protein_file: Path,
+    gsea_output_dir: Path,
+) -> None:
+    """Run GSEA in background, updating status file per database."""
+    status_data = {
+        "status": "running",
+        "comparison": request.comparison,
+        "databases": {db: "pending" for db in request.databases},
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "error": None,
+    }
+    _write_gsea_status(session_id, status_data)
+
+    try:
+        # Mark all databases as running (they execute in parallel via asyncio.gather)
+        for db in request.databases:
+            status_data["databases"][db] = "running"
+        _write_gsea_status(session_id, status_data)
+
+        async def on_db_done(db_name: str, success: bool) -> None:
+            status_data["databases"][db_name] = "completed" if success else "error"
+            _write_gsea_status(session_id, status_data)
+
+        gsea_results = await gsea_service.run_gsea_for_comparison(
+            diff_expression_path=de_file,
+            comparison_name=request.comparison,
+            output_dir=gsea_output_dir,
+            databases=request.databases,
+            protein_abundance_path=protein_file if protein_file.exists() else None,
+            min_size=request.min_size,
+            max_size=request.max_size,
+            permutations=request.permutations,
+            on_db_complete=on_db_done,
+        )
+
+        # Mark all completed
+        for db in request.databases:
+            status_data["databases"][db] = (
+                "completed" if db in gsea_results else "error"
+            )
+        status_data["status"] = "completed"
+        _write_gsea_status(session_id, status_data)
+
+        # Save full results
+        results_dict = {db: result.model_dump() for db, result in gsea_results.items()}
+        gsea_output_dir.mkdir(parents=True, exist_ok=True)
+        results_file = gsea_output_dir / "GSEA_Results.json"
+        with open(results_file, "w", encoding="utf-8") as f:
+            json.dump(results_dict, f, indent=2, default=str)
+
+        # Invalidate in-memory GSEA cache so next GET picks up new results
+        with _cache_lock:
+            _gsea_file_cache.invalidate(str(results_file))
+
+    except Exception as e:
+        logger.error(f"Background GSEA failed: {e}")
+        status_data["status"] = "error"
+        status_data["error"] = str(e)
+        _write_gsea_status(session_id, status_data)
+    finally:
+        _gsea_run_locks.pop(session_id, None)
+
+
 @router.post("/{session_id}/gsea/run")
 async def run_gsea_on_demand(
     session_id: str,
     request: GseaRunRequest,
     store: SessionStore = Depends(get_session_store),
 ):
-    """Run GSEA on-demand for a specific comparison."""
+    """Run GSEA on-demand for a specific comparison (async background task)."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found",
+        )
+
+    # Check for already-running job
+    existing = _read_gsea_status(session_id)
+    if existing and existing.get("status") == "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A GSEA run is already in progress for this session",
         )
 
     results_dir = settings.sessions_dir / session_id / "results"
@@ -907,44 +1029,36 @@ async def run_gsea_on_demand(
     protein_file = results_dir / "Protein_Abundances.tsv"
     gsea_output_dir = results_dir / "gsea" / request.comparison
 
-    try:
-        gsea_results = await gsea_service.run_gsea_for_comparison(
-            diff_expression_path=de_file,
-            comparison_name=request.comparison,
-            output_dir=gsea_output_dir,
-            databases=request.databases,
-            protein_abundance_path=protein_file if protein_file.exists() else None,
-            min_size=request.min_size,
-            max_size=request.max_size,
-            permutations=request.permutations,
-        )
+    # Prevent duplicate runs via lock
+    if session_id not in _gsea_run_locks:
+        _gsea_run_locks[session_id] = asyncio.Lock()
 
-        # Save results to JSON for subsequent GET requests
-        results_dict = {db: result.model_dump() for db, result in gsea_results.items()}
-        gsea_output_dir.mkdir(parents=True, exist_ok=True)
-        results_file = gsea_output_dir / "GSEA_Results.json"
-        with open(results_file, "w", encoding="utf-8") as f:
-            json.dump(results_dict, f, indent=2, default=str)
-
-        return create_response(
-            {
-                "comparison": request.comparison,
-                "databases": list(gsea_results.keys()),
-                "summary": {
-                    db: {
-                        "total_pathways": r.total_pathways,
-                        "significant_pathways": r.significant_pathways,
-                    }
-                    for db, r in gsea_results.items()
-                },
-            }
-        )
-    except Exception as e:
-        logger.error(f"On-demand GSEA failed: {e}")
+    lock = _gsea_run_locks[session_id]
+    if lock.locked():
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"GSEA failed: {str(e)}",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A GSEA run is already in progress for this session",
         )
+
+    # Launch background task
+    asyncio.create_task(
+        _background_gsea_run(
+            session_id=session_id,
+            request=request,
+            results_dir=results_dir,
+            de_file=de_file,
+            protein_file=protein_file,
+            gsea_output_dir=gsea_output_dir,
+        )
+    )
+
+    return create_response(
+        {
+            "status": "started",
+            "comparison": request.comparison,
+            "databases": request.databases,
+        }
+    )
 
 
 @router.get("/{session_id}/gsea/{database}")

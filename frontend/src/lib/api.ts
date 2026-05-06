@@ -9,6 +9,7 @@ import type {
   QCData,
   GSEAData,
   GSEADatabase,
+  GSEARunStatus,
   ProteinAbundance,
   PeptideAbundanceData,
   GSEAPlotData,
@@ -181,6 +182,11 @@ export async function runGSEA(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+// GSEA Run Status
+export async function getGSEAStatus(sessionId: string): Promise<GSEARunStatus> {
+  return fetchApi<GSEARunStatus>(`/api/sessions/${sessionId}/gsea/status`);
 }
 
 // Protein Abundance API

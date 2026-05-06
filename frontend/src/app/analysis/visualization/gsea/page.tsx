@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import GSEADashboard from '@/components/visualization/GSEADashboard';
 import PathwayTable from '@/components/visualization/PathwayTable';
 import GSEAPlot from '@/components/visualization/GSEAPlot';
-import type { GSEAData, GSEAResult, GSEADatabase } from '@/types/api';
+import type { GSEAData, GSEAResult, GSEADatabase, GSEARunStatus } from '@/types/api';
 import { GSEADatabaseLabels } from '@/types/api';
-import { getGSEAData, getSession, runGSEA } from '@/lib/api';
+import { getGSEAData, getSession, runGSEA, getGSEAStatus } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 
@@ -33,6 +33,8 @@ function GSEAAnalysisContent() {
   const [runningGSEA, setRunningGSEA] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [selectedPathway, setSelectedPathway] = useState<GSEAResult | null>(null);
+  const [gseaRunStatus, setGseaRunStatus] = useState<GSEARunStatus | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Server-side pagination state
   const [page, setPage] = useState(1);
@@ -105,6 +107,69 @@ function GSEAAnalysisContent() {
     }).catch(() => {});
   }, [sessionId]);
 
+  // Poll GSEA run status
+  const pollStatus = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const status = await getGSEAStatus(sessionId);
+      setGseaRunStatus(status);
+      if (status.status === 'completed' || status.status === 'error') {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        setRunningGSEA(false);
+        if (status.status === 'error') {
+          setRunError(status.error || 'GSEA run failed');
+        }
+        if (status.status === 'completed') {
+          setPage(1);
+          const gseaData = await getGSEAData(sessionId, selectedDatabase, {
+            page: 1, per_page: pageSize, sort_by: sortBy, sort_order: sortOrder,
+            significant_only: significantOnly, search: debouncedSearch,
+            comparison: selectedComparison || undefined,
+          });
+          setData(gseaData);
+          setTotalResults((gseaData as unknown as Record<string, unknown>).total as number || 0);
+        }
+      }
+    } catch {
+      // Silently ignore polling errors
+    }
+  }, [sessionId, selectedDatabase, pageSize, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison]);
+
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+    pollStatus();
+    pollIntervalRef.current = setInterval(pollStatus, 2000);
+  }, [pollStatus]);
+
+  // Check GSEA status on mount — resume polling if run in progress, load if completed
+  useEffect(() => {
+    if (!sessionId) return;
+    getGSEAStatus(sessionId).then((status) => {
+      setGseaRunStatus(status);
+      if (status.status === 'running') {
+        startPolling();
+      } else if (status.status === 'completed' && !data) {
+        // Results were computed while user was away — fetch them
+        setPage(1);
+      }
+    }).catch(() => {});
+    // Only run on mount / session change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
+
   const handleRunGSEA = async () => {
     if (!selectedComparison || runDatabases.length === 0) return;
     setRunningGSEA(true);
@@ -117,16 +182,15 @@ function GSEAAnalysisContent() {
         max_size: runParams.max_size,
         permutations: runParams.permutations,
       });
-      // Re-fetch to show results
-      const gseaData = await getGSEAData(sessionId, selectedDatabase, {
-        page: 1,
-        per_page: 50,
+      // Run started — begin polling for progress
+      setGseaRunStatus({
+        status: 'running',
         comparison: selectedComparison,
+        databases: Object.fromEntries(runDatabases.map((db) => [db, 'running'])),
       });
-      setData(gseaData);
+      startPolling();
     } catch (err) {
       setRunError(err instanceof Error ? err.message : 'GSEA run failed');
-    } finally {
       setRunningGSEA(false);
     }
   };
@@ -205,49 +269,90 @@ function GSEAAnalysisContent() {
         {/* Run GSEA Section */}
         {selectedComparison && (
           <div className="bg-background rounded-lg border border-border p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-text-primary">
-                Run GSEA for: {selectedComparison.replace(/_vs_/g, ' vs ')}
-              </span>
-              <button onClick={() => setShowAdvanced(!showAdvanced)}
-                className="text-xs text-text-muted hover:text-text-secondary">
-                {showAdvanced ? 'Hide' : 'Show'} Advanced
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {DATABASES.map((db) => (
-                <label key={db} className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer">
-                  <input type="checkbox" checked={runDatabases.includes(db)}
-                    onChange={(e) => {
-                      if (e.target.checked) setRunDatabases(prev => [...prev, db]);
-                      else setRunDatabases(prev => prev.filter(d => d !== db));
-                    }}
-                    className="rounded border-border text-primary focus:ring-primary" />
-                  {GSEADatabaseLabels[db]}
-                </label>
-              ))}
-            </div>
-            {showAdvanced && (
-              <div className="grid grid-cols-3 gap-3 mb-3 p-3 bg-surface rounded-lg">
-                <div><label className="block text-xs text-text-muted mb-1">Min Size</label>
-                  <input type="number" value={runParams.min_size}
-                    onChange={(e) => setRunParams(prev => ({ ...prev, min_size: parseInt(e.target.value) || 15 }))}
-                    className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
-                <div><label className="block text-xs text-text-muted mb-1">Max Size</label>
-                  <input type="number" value={runParams.max_size}
-                    onChange={(e) => setRunParams(prev => ({ ...prev, max_size: parseInt(e.target.value) || 500 }))}
-                    className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
-                <div><label className="block text-xs text-text-muted mb-1">Permutations</label>
-                  <input type="number" value={runParams.permutations}
-                    onChange={(e) => setRunParams(prev => ({ ...prev, permutations: parseInt(e.target.value) || 1000 }))}
-                    className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
+            {gseaRunStatus?.status === 'running' ? (
+              /* Progress panel while GSEA is running */
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                  <span className="text-sm font-medium text-text-primary">
+                    GSEA in progress: {gseaRunStatus.comparison?.replace(/_vs_/g, ' vs ')}
+                  </span>
+                  <span className="text-xs text-text-muted">
+                    You can navigate away and return
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {Object.entries(gseaRunStatus.databases || {}).map(([db, dbStatus]) => (
+                    <div key={db} className="flex items-center gap-2 text-sm">
+                      {dbStatus === 'completed' ? (
+                        <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : dbStatus === 'error' ? (
+                        <svg className="w-4 h-4 text-error flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                      )}
+                      <span className={dbStatus === 'completed' ? 'text-green-600' : dbStatus === 'error' ? 'text-error' : 'text-text-secondary'}>
+                        {GSEADatabaseLabels[db as GSEADatabase] || db}
+                      </span>
+                      <span className="text-text-muted text-xs">
+                        {dbStatus === 'completed' ? 'Done' : dbStatus === 'running' ? 'Running' : dbStatus === 'error' ? 'Failed' : 'Pending'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
+            ) : (
+              /* Run controls when not running */
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-text-primary">
+                    Run GSEA for: {selectedComparison.replace(/_vs_/g, ' vs ')}
+                  </span>
+                  <button onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="text-xs text-text-muted hover:text-text-secondary">
+                    {showAdvanced ? 'Hide' : 'Show'} Advanced
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {DATABASES.map((db) => (
+                    <label key={db} className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer">
+                      <input type="checkbox" checked={runDatabases.includes(db)}
+                        onChange={(e) => {
+                          if (e.target.checked) setRunDatabases(prev => [...prev, db]);
+                          else setRunDatabases(prev => prev.filter(d => d !== db));
+                        }}
+                        className="rounded border-border text-primary focus:ring-primary" />
+                      {GSEADatabaseLabels[db]}
+                    </label>
+                  ))}
+                </div>
+                {showAdvanced && (
+                  <div className="grid grid-cols-3 gap-3 mb-3 p-3 bg-surface rounded-lg">
+                    <div><label className="block text-xs text-text-muted mb-1">Min Size</label>
+                      <input type="number" value={runParams.min_size}
+                        onChange={(e) => setRunParams(prev => ({ ...prev, min_size: parseInt(e.target.value) || 15 }))}
+                        className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
+                    <div><label className="block text-xs text-text-muted mb-1">Max Size</label>
+                      <input type="number" value={runParams.max_size}
+                        onChange={(e) => setRunParams(prev => ({ ...prev, max_size: parseInt(e.target.value) || 500 }))}
+                        className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
+                    <div><label className="block text-xs text-text-muted mb-1">Permutations</label>
+                      <input type="number" value={runParams.permutations}
+                        onChange={(e) => setRunParams(prev => ({ ...prev, permutations: parseInt(e.target.value) || 1000 }))}
+                        className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
+                  </div>
+                )}
+                <button onClick={handleRunGSEA} disabled={runningGSEA || runDatabases.length === 0}
+                  className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">
+                  {runningGSEA ? 'Starting...' : 'Run GSEA'}
+                </button>
+                {runError && <p className="mt-2 text-sm text-error">{runError}</p>}
+              </>
             )}
-            <button onClick={handleRunGSEA} disabled={runningGSEA || runDatabases.length === 0}
-              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">
-              {runningGSEA ? 'Running GSEA...' : 'Run GSEA'}
-            </button>
-            {runError && <p className="mt-2 text-sm text-error">{runError}</p>}
           </div>
         )}
 

@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import pandas as pd
 import numpy as np
@@ -612,6 +612,7 @@ class GSEAService:
         max_size: int = 500,
         permutations: int = 1000,
         threads: int = 4,
+        on_db_complete: Callable[[str, bool], Any] | None = None,
     ) -> dict[str, GSEAResults]:
         """
         Run GSEA on-demand for a specific comparison.
@@ -679,6 +680,8 @@ class GSEAService:
 
             if cached_result is not None:
                 logger.info(f"GSEA cache HIT for {full_db_name} ({comparison_name})")
+                if on_db_complete:
+                    await on_db_complete(db_type.value, True)
                 return (db_type.value, cached_result)
 
             try:
@@ -694,9 +697,13 @@ class GSEAService:
                     permutation_num=permutations,
                 )
                 gsea_cache_service.store(cache_key, result)
+                if on_db_complete:
+                    await on_db_complete(db_type.value, True)
                 return (db_type.value, result)
             except Exception as e:
                 logger.error(f"GSEA failed for {full_db_name} ({comparison_name}): {e}")
+                if on_db_complete:
+                    await on_db_complete(db_type.value, False)
                 return (
                     db_type.value,
                     GSEAResults(
