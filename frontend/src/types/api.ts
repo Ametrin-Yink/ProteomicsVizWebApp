@@ -207,6 +207,9 @@ export interface GSEAData {
   overrepresented: number;
   underrepresented: number;
   results: GSEAResult[];
+  total?: number;
+  page?: number;
+  page_size?: number;
 }
 
 export interface GSEAPlotData {

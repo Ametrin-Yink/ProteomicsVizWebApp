@@ -11,6 +11,7 @@ import { GSEADatabaseLabels } from '@/types/api';
 import { getGSEAData, getSession, runGSEA, getGSEAStatus } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
+import { Check, X, LoaderCircle } from 'lucide-react';
 
 const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
 
@@ -30,11 +31,12 @@ function GSEAAnalysisContent() {
   const [runDatabases, setRunDatabases] = useState<GSEADatabase[]>(['go_bp', 'kegg', 'reactome']);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [runParams, setRunParams] = useState({ min_size: 15, max_size: 500, permutations: 1000 });
-  const [runningGSEA, setRunningGSEA] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [selectedPathway, setSelectedPathway] = useState<GSEAResult | null>(null);
   const [gseaRunStatus, setGseaRunStatus] = useState<GSEARunStatus | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastStatusRef = useRef<GSEARunStatus | null>(null);
+  const isRunning = gseaRunStatus?.status === 'running';
 
   // Server-side pagination state
   const [page, setPage] = useState(1);
@@ -73,8 +75,7 @@ function GSEAAnalysisContent() {
         });
         if (!cancelled) {
           setData(gseaData);
-          // Backend returns total in the response
-          setTotalResults((gseaData as unknown as Record<string, unknown>).total as number || 0);
+          setTotalResults(gseaData.total || 0);
         }
       } catch (err) {
         if (!cancelled) {
@@ -107,36 +108,35 @@ function GSEAAnalysisContent() {
     }).catch(() => {});
   }, [sessionId]);
 
-  // Poll GSEA run status
+  // Poll GSEA run status — only depends on sessionId to avoid stale closures
   const pollStatus = useCallback(async () => {
     if (!sessionId) return;
     try {
       const status = await getGSEAStatus(sessionId);
+      if (lastStatusRef.current?.status === status.status) {
+        const prev = lastStatusRef.current.databases || {};
+        const next = status.databases || {};
+        const changed = Object.keys(next).some((k) => prev[k] !== next[k]);
+        if (!changed) return;
+      }
+      lastStatusRef.current = status;
       setGseaRunStatus(status);
       if (status.status === 'completed' || status.status === 'error') {
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
-        setRunningGSEA(false);
         if (status.status === 'error') {
           setRunError(status.error || 'GSEA run failed');
         }
         if (status.status === 'completed') {
           setPage(1);
-          const gseaData = await getGSEAData(sessionId, selectedDatabase, {
-            page: 1, per_page: pageSize, sort_by: sortBy, sort_order: sortOrder,
-            significant_only: significantOnly, search: debouncedSearch,
-            comparison: selectedComparison || undefined,
-          });
-          setData(gseaData);
-          setTotalResults((gseaData as unknown as Record<string, unknown>).total as number || 0);
         }
       }
     } catch {
       // Silently ignore polling errors
     }
-  }, [sessionId, selectedDatabase, pageSize, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison]);
+  }, [sessionId]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;
@@ -144,18 +144,19 @@ function GSEAAnalysisContent() {
     pollIntervalRef.current = setInterval(pollStatus, 2000);
   }, [pollStatus]);
 
-  // Check GSEA status on mount — resume polling if run in progress, load if completed
+  // Check GSEA status on mount — resume polling if run in progress
   useEffect(() => {
     if (!sessionId) return;
+    let cancelled = false;
     getGSEAStatus(sessionId).then((status) => {
+      if (cancelled) return;
+      lastStatusRef.current = status;
       setGseaRunStatus(status);
       if (status.status === 'running') {
         startPolling();
-      } else if (status.status === 'completed' && !data) {
-        // Results were computed while user was away — fetch them
-        setPage(1);
       }
     }).catch(() => {});
+    return () => { cancelled = true; };
     // Only run on mount / session change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
@@ -172,7 +173,6 @@ function GSEAAnalysisContent() {
 
   const handleRunGSEA = async () => {
     if (!selectedComparison || runDatabases.length === 0) return;
-    setRunningGSEA(true);
     setRunError(null);
     try {
       await runGSEA(sessionId, {
@@ -182,16 +182,9 @@ function GSEAAnalysisContent() {
         max_size: runParams.max_size,
         permutations: runParams.permutations,
       });
-      // Run started — begin polling for progress
-      setGseaRunStatus({
-        status: 'running',
-        comparison: selectedComparison,
-        databases: Object.fromEntries(runDatabases.map((db) => [db, 'running'])),
-      });
       startPolling();
     } catch (err) {
       setRunError(err instanceof Error ? err.message : 'GSEA run failed');
-      setRunningGSEA(false);
     }
   };
 
@@ -269,11 +262,10 @@ function GSEAAnalysisContent() {
         {/* Run GSEA Section */}
         {selectedComparison && (
           <div className="bg-background rounded-lg border border-border p-4 mb-4">
-            {gseaRunStatus?.status === 'running' ? (
-              /* Progress panel while GSEA is running */
+            {isRunning ? (
               <div>
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                  <LoaderCircle className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm font-medium text-text-primary">
                     GSEA in progress: {gseaRunStatus.comparison?.replace(/_vs_/g, ' vs ')}
                   </span>
@@ -285,15 +277,11 @@ function GSEAAnalysisContent() {
                   {Object.entries(gseaRunStatus.databases || {}).map(([db, dbStatus]) => (
                     <div key={db} className="flex items-center gap-2 text-sm">
                       {dbStatus === 'completed' ? (
-                        <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                       ) : dbStatus === 'error' ? (
-                        <svg className="w-4 h-4 text-error flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <X className="w-4 h-4 text-error flex-shrink-0" />
                       ) : (
-                        <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin flex-shrink-0" />
+                        <LoaderCircle className="w-4 h-4 animate-spin text-primary flex-shrink-0" />
                       )}
                       <span className={dbStatus === 'completed' ? 'text-green-600' : dbStatus === 'error' ? 'text-error' : 'text-text-secondary'}>
                         {GSEADatabaseLabels[db as GSEADatabase] || db}
@@ -306,7 +294,6 @@ function GSEAAnalysisContent() {
                 </div>
               </div>
             ) : (
-              /* Run controls when not running */
               <>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-text-primary">
@@ -346,9 +333,9 @@ function GSEAAnalysisContent() {
                         className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
                   </div>
                 )}
-                <button onClick={handleRunGSEA} disabled={runningGSEA || runDatabases.length === 0}
+                <button onClick={handleRunGSEA} disabled={isRunning || runDatabases.length === 0}
                   className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">
-                  {runningGSEA ? 'Starting...' : 'Run GSEA'}
+                  {isRunning ? 'Starting...' : 'Run GSEA'}
                 </button>
                 {runError && <p className="mt-2 text-sm text-error">{runError}</p>}
               </>
