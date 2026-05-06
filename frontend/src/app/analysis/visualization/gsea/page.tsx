@@ -8,7 +8,8 @@ import PathwayTable from '@/components/visualization/PathwayTable';
 import GSEAPlot from '@/components/visualization/GSEAPlot';
 import type { GSEAData, GSEAResult, GSEADatabase } from '@/types/api';
 import { GSEADatabaseLabels } from '@/types/api';
-import { getGSEAData } from '@/lib/api';
+import { getGSEAData, getSession, runGSEA } from '@/lib/api';
+import { formatGroup } from '@/lib/utils';
 
 const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
 
@@ -21,6 +22,15 @@ function GSEAAnalysisContent() {
   const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<{
+    comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
+  } | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState<string>('');
+  const [runDatabases, setRunDatabases] = useState<GSEADatabase[]>(['go_bp', 'kegg', 'reactome']);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [runParams, setRunParams] = useState({ min_size: 15, max_size: 500, permutations: 1000 });
+  const [runningGSEA, setRunningGSEA] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
   const [selectedPathway, setSelectedPathway] = useState<GSEAResult | null>(null);
 
   // Server-side pagination state
@@ -56,6 +66,7 @@ function GSEAAnalysisContent() {
           sort_order: sortOrder,
           significant_only: significantOnly,
           search: debouncedSearch,
+          comparison: selectedComparison || undefined,
         });
         if (!cancelled) {
           setData(gseaData);
@@ -76,7 +87,48 @@ function GSEAAnalysisContent() {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch]);
+  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison]);
+
+  // Fetch session config for comparisons
+  useEffect(() => {
+    if (!sessionId) return;
+    getSession(sessionId).then(session => {
+      if (session?.config) {
+        setSessionConfig({ comparisons: session.config.comparisons });
+        const comps = session.config.comparisons;
+        if (comps && comps.length > 0) {
+          const first = comps[0];
+          setSelectedComparison(formatGroup(first.group1) + '_vs_' + formatGroup(first.group2));
+        }
+      }
+    }).catch(() => {});
+  }, [sessionId]);
+
+  const handleRunGSEA = async () => {
+    if (!selectedComparison || runDatabases.length === 0) return;
+    setRunningGSEA(true);
+    setRunError(null);
+    try {
+      await runGSEA(sessionId, {
+        comparison: selectedComparison,
+        databases: runDatabases,
+        min_size: runParams.min_size,
+        max_size: runParams.max_size,
+        permutations: runParams.permutations,
+      });
+      // Re-fetch to show results
+      const gseaData = await getGSEAData(sessionId, selectedDatabase, {
+        page: 1,
+        per_page: 50,
+        comparison: selectedComparison,
+      });
+      setData(gseaData);
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'GSEA run failed');
+    } finally {
+      setRunningGSEA(false);
+    }
+  };
 
   if (!sessionId) {
     return (
@@ -131,6 +183,76 @@ function GSEAAnalysisContent() {
           </p>
         </div>
 
+        {/* Comparison Selector */}
+        {sessionConfig?.comparisons && sessionConfig.comparisons.length > 0 && (
+          <div className="bg-background rounded-lg border border-border p-4 mb-4">
+            <label className="block text-sm font-medium text-text-primary mb-3">Select Comparison</label>
+            <div className="flex flex-wrap gap-2">
+              {sessionConfig.comparisons.map((c, i) => {
+                const val = formatGroup(c.group1) + '_vs_' + formatGroup(c.group2);
+                const label = formatGroup(c.group1) + ' vs ' + formatGroup(c.group2);
+                return (
+                  <button key={i} onClick={() => setSelectedComparison(val)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      selectedComparison === val ? 'bg-primary text-white' : 'bg-surface text-text-secondary hover:bg-border'
+                    }`}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Run GSEA Section */}
+        {selectedComparison && (
+          <div className="bg-background rounded-lg border border-border p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-text-primary">
+                Run GSEA for: {selectedComparison.replace(/_vs_/g, ' vs ')}
+              </span>
+              <button onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-xs text-text-muted hover:text-text-secondary">
+                {showAdvanced ? 'Hide' : 'Show'} Advanced
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {DATABASES.map((db) => (
+                <label key={db} className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer">
+                  <input type="checkbox" checked={runDatabases.includes(db)}
+                    onChange={(e) => {
+                      if (e.target.checked) setRunDatabases(prev => [...prev, db]);
+                      else setRunDatabases(prev => prev.filter(d => d !== db));
+                    }}
+                    className="rounded border-border text-primary focus:ring-primary" />
+                  {GSEADatabaseLabels[db]}
+                </label>
+              ))}
+            </div>
+            {showAdvanced && (
+              <div className="grid grid-cols-3 gap-3 mb-3 p-3 bg-surface rounded-lg">
+                <div><label className="block text-xs text-text-muted mb-1">Min Size</label>
+                  <input type="number" value={runParams.min_size}
+                    onChange={(e) => setRunParams(prev => ({ ...prev, min_size: parseInt(e.target.value) || 15 }))}
+                    className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
+                <div><label className="block text-xs text-text-muted mb-1">Max Size</label>
+                  <input type="number" value={runParams.max_size}
+                    onChange={(e) => setRunParams(prev => ({ ...prev, max_size: parseInt(e.target.value) || 500 }))}
+                    className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
+                <div><label className="block text-xs text-text-muted mb-1">Permutations</label>
+                  <input type="number" value={runParams.permutations}
+                    onChange={(e) => setRunParams(prev => ({ ...prev, permutations: parseInt(e.target.value) || 1000 }))}
+                    className="w-full px-2 py-1 text-sm border border-border rounded-md" /></div>
+              </div>
+            )}
+            <button onClick={handleRunGSEA} disabled={runningGSEA || runDatabases.length === 0}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">
+              {runningGSEA ? 'Running GSEA...' : 'Run GSEA'}
+            </button>
+            {runError && <p className="mt-2 text-sm text-error">{runError}</p>}
+          </div>
+        )}
+
         {/* Content with inline loading overlay */}
         <div className="relative">
           {loading && !initialLoad && (
@@ -180,7 +302,7 @@ function GSEAAnalysisContent() {
             {/* Pathway Details and Plot */}
             {selectedPathway && (
               <div className="w-full">
-                <GSEAPlot pathway={selectedPathway} sessionId={sessionId} database={selectedDatabase} onPathwayUpdated={setSelectedPathway} />
+                <GSEAPlot pathway={selectedPathway} sessionId={sessionId} database={selectedDatabase} comparison={selectedComparison || undefined} onPathwayUpdated={setSelectedPathway} />
               </div>
             )}
 
