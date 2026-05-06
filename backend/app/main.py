@@ -22,6 +22,7 @@ from app.api.routes import (
     visualization,
     reports,
     compounds,
+    compare,
 )
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -213,6 +214,7 @@ app.include_router(analysis.router, prefix="/api/sessions", tags=["analysis"])
 app.include_router(visualization.router, prefix="/api/sessions", tags=["visualization"])
 app.include_router(reports.router, prefix="/api/sessions", tags=["reports"])
 app.include_router(compounds.router, prefix="/api/sessions", tags=["compounds"])
+app.include_router(compare.router, prefix="/api/sessions", tags=["compare"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 
 
