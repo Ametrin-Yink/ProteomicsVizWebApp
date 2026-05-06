@@ -264,29 +264,38 @@ async def load_diff_expression_results(
             results.append(result)
 
         # Fallback: if all PSM_Count values are 0 (MSstats pipeline doesn't populate them),
-        # read real values from Protein_Abundances.tsv
+        # count unique peptide sequences per protein from the PSM abundance file
         if results and not any_psm_nonzero:
-            protein_abundance_file = results_dir / "Protein_Abundances.tsv"
-            if protein_abundance_file.exists():
-                try:
-                    pa_df = await asyncio.to_thread(
-                        pd.read_csv,
-                        protein_abundance_file,
-                        sep="\t",
-                        usecols=["PSM_Count", "Master_Protein_Accessions"],
+            psm_parquet = results_dir / "PSM_Abundances.parquet"
+            psm_tsv = results_dir / "PSM_Abundances.tsv"
+            try:
+                if psm_parquet.exists():
+                    psm_df = await asyncio.to_thread(
+                        pd.read_parquet,
+                        psm_parquet,
+                        columns=["Master_Protein_Accessions", "Sequence"],
                     )
-                    psm_lookup = dict(
-                        zip(
-                            pa_df["Master_Protein_Accessions"].astype(str),
-                            pa_df["PSM_Count"].fillna(0).astype(int),
-                        )
+                elif psm_tsv.exists():
+                    psm_df = await asyncio.to_thread(
+                        pd.read_csv,
+                        psm_tsv,
+                        sep="\t",
+                        usecols=["Master_Protein_Accessions", "Sequence"],
+                    )
+                else:
+                    psm_df = None
+
+                if psm_df is not None:
+                    psm_counts = (
+                        psm_df.groupby("Master_Protein_Accessions")["Sequence"]
+                        .nunique()
                     )
                     for r in results:
                         acc = r["master_protein_accessions"]
-                        if acc in psm_lookup:
-                            r["psm_count"] = psm_lookup[acc]
-                except Exception as e:
-                    logger.warning(f"Could not load PSM_Count from Protein_Abundances.tsv: {e}")
+                        if acc in psm_counts.index:
+                            r["psm_count"] = int(psm_counts[acc])
+            except Exception as e:
+                logger.warning(f"Could not compute PSM counts from PSM file: {e}")
 
         viz_cache.set(cache_key, results)
         return results
