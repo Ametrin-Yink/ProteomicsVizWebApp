@@ -22,6 +22,7 @@ import {
   getSession,
 } from '@/lib/api';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
+import { formatComparisonKey } from '@/lib/utils';
 
 interface Props {
   sessionId: string;
@@ -80,12 +81,8 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   }, [sessionId]);
 
   const availableVennComparisons = useMemo(() => {
-    return comparisons.filter((c) => comparisons.indexOf(c) < 10);
+    return comparisons.filter((_, i) => i < 10);
   }, [comparisons]);
-
-  const vennCheckboxOptions = useMemo(() => {
-    return availableVennComparisons;
-  }, [availableVennComparisons]);
 
   const pollStatus = useCallback(async () => {
     if (!sessionId) return;
@@ -296,7 +293,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
             <div>
               <h3 className="text-sm font-medium text-text-primary mb-3">Venn Diagram</h3>
               <div className="flex items-center gap-3 flex-wrap">
-                {vennCheckboxOptions.map((comp) => (
+                {availableVennComparisons.map((comp) => (
                   <label
                     key={comp.value}
                     className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer"
@@ -337,7 +334,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
           {/* Comparison Correlation Bar Chart */}
           <CorrelationBarChart
             data={data.comparison_correlations.map((c) => ({
-              label: c.comparison.replace(/_vs_/g, ' vs '),
+              label: formatComparisonKey(c.comparison),
               correlation: c.correlation,
             }))}
             title="Comparison Correlations to Primary"

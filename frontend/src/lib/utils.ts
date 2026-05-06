@@ -179,6 +179,13 @@ export function isSignificantVolcano(
   return y > pLog10Threshold + c / (absX - actualS0);
 }
 
+/** Format a comparison key like "A_vs_B" to "A vs B" */
+export function formatComparisonKey(key: string): string {
+  return key.replace(/_vs_/g, ' vs ');
+}
+
+export const CHART_COLORS = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#84cc16'] as const;
+
 // Get color based on significance (supports both rectangular and S0 hyperbolic cutoffs)
 export function getVolcanoPointColor(
   logFC: number,

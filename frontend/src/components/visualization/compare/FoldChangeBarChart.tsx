@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { formatComparisonKey } from '@/lib/utils';
 import type { ProteinFCResult } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -15,7 +16,7 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
   const { traceBar, traceDot, layout } = useMemo(() => {
     if (!data.length) return { traceBar: undefined, traceDot: undefined, layout: {} };
 
-    const comparisons = data.map((d) => d.comparison.replace(/_vs_/g, ' vs '));
+    const comparisons = data.map((d) => formatComparisonKey(d.comparison));
     const logFC = data.map((d) => d.log_fc);
     const negLogP = data.map((d) => (d.pval > 0 ? -Math.log10(d.pval) : 0));
     const colors = logFC.map((v) => (v >= 0 ? '#ef4444' : '#3b82f6'));

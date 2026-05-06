@@ -4,11 +4,14 @@ Compare service -- on-demand protein and comparison correlation analysis.
 All computation is synchronous (called via asyncio.to_thread from routes).
 """
 
+import json
 import logging
 import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
+
+from app.core.config import settings
 
 import numpy as np
 import pandas as pd
@@ -45,7 +48,37 @@ def _load_de_file(session_dir: str, comparison: str) -> Optional[pd.DataFrame]:
     return df
 
 
-def _load_pvalues_for_protein(
+def _status_path(session_id: str, compute_type: str) -> Path:
+    return settings.sessions_dir / session_id / "results" / "compare" / f"{compute_type}_status.json"
+
+
+def _result_path(session_id: str, compute_type: str) -> Path:
+    return settings.sessions_dir / session_id / "results" / "compare" / f"{compute_type}_result.json"
+
+
+def _read_status(session_id: str, compute_type: str) -> dict:
+    sp = _status_path(session_id, compute_type)
+    if not sp.exists():
+        return {"status": "idle"}
+    with open(sp, "r") as f:
+        return json.load(f)
+
+
+def _write_status(session_id: str, compute_type: str, data: dict):
+    sp = _status_path(session_id, compute_type)
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    with open(sp, "w") as f:
+        json.dump(data, f)
+
+
+def _write_result(session_id: str, compute_type: str, data: dict):
+    rp = _result_path(session_id, compute_type)
+    rp.parent.mkdir(parents=True, exist_ok=True)
+    with open(rp, "w") as f:
+        json.dump(data, f, default=str)
+
+
+def load_pvalues_for_protein(
     session_dir: str, comparisons: list[str], protein_id: str, accessions: list[str]
 ) -> dict[str, dict[str, float]]:
     """

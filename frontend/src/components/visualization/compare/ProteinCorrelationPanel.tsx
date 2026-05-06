@@ -138,16 +138,6 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     }
   };
 
-  // Compute colorBy map from selected_protein_fc data
-  const colorBy = useMemo(() => {
-    if (!data) return {};
-    const map: Record<string, number> = {};
-    for (const p of data.selected_protein_fc) {
-      map[selectedProtein] = p.log_fc;
-    }
-    return map;
-  }, [data, selectedProtein]);
-
   // Handle click on correlated protein bar chart
   const handleCorrelatedClick = useCallback((label: string) => {
     if (!data) return;
@@ -271,7 +261,6 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
             mode="protein"
             points={data.cluster_coords}
             selectedKey={selectedProtein}
-            colorBy={colorBy}
             varExplained={data.cluster_var_explained}
           />
 

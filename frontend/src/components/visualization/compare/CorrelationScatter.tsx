@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { formatComparisonKey, CHART_COLORS } from '@/lib/utils';
 import type { ProteinFCResult } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -56,14 +57,10 @@ export default function CorrelationScatter({
     const regY = regX.map((x) => m * x + b);
 
     // Unique colors by comparison
-    const colorScale = [
-      '#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899',
-      '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#84cc16',
-    ];
     const pointColors = points.map(
-      (p, i) => colorScale[i % colorScale.length]
+      (p, i) => CHART_COLORS[i % CHART_COLORS.length]
     );
-    const comparisons = points.map((p) => p.comparison.replace(/_vs_/g, ' vs '));
+    const comparisons = points.map((p) => formatComparisonKey(p.comparison));
 
     const traceScatter = {
       type: 'scatter' as const,

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { formatComparisonKey, CHART_COLORS } from '@/lib/utils';
 import type { VennData } from '@/types/api';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
@@ -25,12 +26,11 @@ export default function VennDiagram({ data }: Props) {
     const colors: string[] = [];
 
     // Set bars
-    const setColors = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899'];
     let colorIdx = 0;
     for (const [setName, size] of Object.entries(data.set_sizes)) {
-      labels.push(setName.replace(/_vs_/g, ' vs '));
+      labels.push(formatComparisonKey(setName));
       values.push(size);
-      colors.push(setColors[colorIdx % setColors.length]);
+      colors.push(CHART_COLORS[colorIdx % CHART_COLORS.length]);
       colorIdx++;
     }
 
@@ -44,7 +44,7 @@ export default function VennDiagram({ data }: Props) {
     // Overlap rows for table
     const rows = data.overlaps.map((overlap) => ({
       key: overlap.region.join('+'),
-      region: overlap.region.map((r) => r.replace(/_vs_/g, ' vs ')),
+      region: overlap.region.map((r) => formatComparisonKey(r)),
       count: overlap.count,
     }));
 

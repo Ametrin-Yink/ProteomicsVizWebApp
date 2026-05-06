@@ -7,8 +7,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,12 +17,17 @@ from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.compare_service import (
+    _status_path,
+    _result_path,
+    _read_status,
+    _write_status,
+    _write_result,
     build_fold_change_matrix,
     compute_protein_correlations,
     compute_correlation_matrix,
     compute_venn_data,
     run_cluster,
-    _load_pvalues_for_protein,
+    load_pvalues_for_protein,
 )
 
 logger = logging.getLogger("proteomics")
@@ -52,8 +56,8 @@ def _get_session_lock(session_id: str) -> asyncio.Lock:
 
 class ProteinCorrelationRequest(BaseModel):
     protein_id: str
-    correlation_method: str = "pearson"
-    cluster_method: str = "pca"
+    correlation_method: Literal["pearson", "spearman"] = "pearson"
+    cluster_method: Literal["pca", "umap", "tsne"] = "pca"
     color_comparison: str
 
 
@@ -61,8 +65,8 @@ class ComparisonCorrelationRequest(BaseModel):
     primary_comparison: str
     selected_comparisons: list[str]
     marked_proteins: dict[str, list[str]]
-    correlation_method: str = "pearson"
-    cluster_method: str = "pca"
+    correlation_method: Literal["pearson", "spearman"] = "pearson"
+    cluster_method: Literal["pca", "umap", "tsne"] = "pca"
 
 
 class VennRequest(BaseModel):
@@ -72,42 +76,12 @@ class VennRequest(BaseModel):
 
 
 class RunStatusResponse(BaseModel):
-    status: str
+    status: Literal["idle", "running", "completed", "error"]
     error: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
 
 
-# ── Helpers ──
-
-def _status_path(session_id: str, compute_type: str) -> Path:
-    return settings.sessions_dir / session_id / "results" / "compare" / f"{compute_type}_status.json"
-
-
-def _result_path(session_id: str, compute_type: str) -> Path:
-    return settings.sessions_dir / session_id / "results" / "compare" / f"{compute_type}_result.json"
-
-
-def _read_status(session_id: str, compute_type: str) -> dict:
-    sp = _status_path(session_id, compute_type)
-    if not sp.exists():
-        return {"status": "idle"}
-    with open(sp, "r") as f:
-        return json.load(f)
-
-
-def _write_status(session_id: str, compute_type: str, data: dict):
-    sp = _status_path(session_id, compute_type)
-    sp.parent.mkdir(parents=True, exist_ok=True)
-    with open(sp, "w") as f:
-        json.dump(data, f)
-
-
-def _write_result(session_id: str, compute_type: str, data: dict):
-    rp = _result_path(session_id, compute_type)
-    rp.parent.mkdir(parents=True, exist_ok=True)
-    with open(rp, "w") as f:
-        json.dump(data, f, default=str)
 
 
 def _get_comparisons_from_session(session_id: str) -> list[str]:
@@ -144,7 +118,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
             raise ValueError(f"Protein {req.protein_id} not found in any comparison")
 
         # Selected protein fold changes across comparisons (with real p-values)
-        pvals = _load_pvalues_for_protein(
+        pvals = load_pvalues_for_protein(
             session_dir, comparisons, req.protein_id, accessions
         )
         selected_fc = []
@@ -233,7 +207,8 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
                     marked_set.add(accessions[i])
 
         marked_list = sorted(marked_set)
-        row_indices = [accessions.index(acc) for acc in marked_list if acc in set(accessions)]
+        acc_to_idx = {acc: i for i, acc in enumerate(accessions)}
+        row_indices = [acc_to_idx[acc] for acc in marked_list if acc in acc_to_idx]
         sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
         heatmap_fc = matrix[np.array(row_indices)][:, sel_indices]
         heatmap_proteins = [

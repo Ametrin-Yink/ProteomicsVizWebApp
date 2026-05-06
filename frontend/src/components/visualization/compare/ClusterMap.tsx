@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { formatComparisonKey } from '@/lib/utils';
 import type { ProteinClusterPoint, ComparisonClusterPoint } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -10,7 +11,7 @@ interface ProteinModeProps {
   mode: 'protein';
   points: ProteinClusterPoint[];
   selectedKey: string;
-  colorBy: Record<string, number>;
+  colorBy?: Record<string, number>;
   varExplained?: number;
 }
 
@@ -23,10 +24,6 @@ interface ComparisonModeProps {
 
 type Props = ProteinModeProps | ComparisonModeProps;
 
-const COLORS = [
-  '#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899',
-  '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#84cc16',
-];
 
 export default function ClusterMap(props: Props) {
   const { traces, layout } = useMemo(() => {
@@ -60,8 +57,6 @@ export default function ClusterMap(props: Props) {
 
 function buildProteinTraces(props: ProteinModeProps) {
   const { points, selectedKey, colorBy, varExplained } = props;
-
-  const fcValues = points.map((p) => colorBy[p.accession] ?? 0);
   const { selected, others } = partitionPoints(points, selectedKey, (p) => p.accession);
 
   const title = varExplained
@@ -71,19 +66,20 @@ function buildProteinTraces(props: ProteinModeProps) {
   const traces = [];
 
   if (others.length > 0) {
-    const otherFC = others.map((p) => colorBy[p.accession] ?? 0);
     traces.push({
       type: 'scatter' as const,
       mode: 'markers' as const,
       x: others.map((p) => p.x),
       y: others.map((p) => p.y),
-      marker: {
-        color: otherFC,
-        colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']] as unknown as string[][],
-        size: 6,
-        showscale: true,
-        colorbar: { title: 'log2 FC', len: 0.4 },
-      },
+      marker: colorBy
+        ? {
+            color: others.map((p) => colorBy[p.accession] ?? 0),
+            colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']] as unknown as string[][],
+            size: 6,
+            showscale: true,
+            colorbar: { title: 'log2 FC', len: 0.4 },
+          }
+        : { color: '#6366f1', size: 6 },
       text: others.map((p) => p.gene_name || p.accession),
       hoverinfo: 'text' as const,
       name: 'Proteins',
@@ -96,13 +92,19 @@ function buildProteinTraces(props: ProteinModeProps) {
       mode: 'markers' as const,
       x: selected.map((p) => p.x),
       y: selected.map((p) => p.y),
-      marker: {
-        color: [colorBy[selected[0]?.accession] ?? 0],
-        colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']] as unknown as string[][],
-        size: 16,
-        line: { color: '#1e293b', width: 2 },
-        showscale: false,
-      },
+      marker: colorBy
+        ? {
+            color: [colorBy[selected[0]?.accession] ?? 0],
+            colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']] as unknown as string[][],
+            size: 16,
+            line: { color: '#1e293b', width: 2 },
+            showscale: false,
+          }
+        : {
+            color: '#ef4444',
+            size: 16,
+            line: { color: '#1e293b', width: 2 },
+          },
       text: selected.map((p) => `${p.gene_name || p.accession} (selected)`),
       hoverinfo: 'text' as const,
       name: 'Selected',
@@ -144,7 +146,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
         color: '#6366f1',
         size: 6,
       },
-      text: others.map((p) => p.comparison.replace(/_vs_/g, ' vs ')),
+      text: others.map((p) => formatComparisonKey(p.comparison)),
       hoverinfo: 'text' as const,
       name: 'Comparisons',
     });
@@ -161,7 +163,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
         size: 16,
         line: { color: '#1e293b', width: 2 },
       },
-      text: selected.map((p) => `${p.comparison.replace(/_vs_/g, ' vs ')} (selected)`),
+      text: selected.map((p) => `${formatComparisonKey(p.comparison)} (selected)`),
       hoverinfo: 'text' as const,
       name: 'Selected',
     });

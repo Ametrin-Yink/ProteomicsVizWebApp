@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { formatComparisonKey } from '@/lib/utils';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -31,7 +32,7 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
   const trace = {
     type: 'heatmap' as const,
     z: zData,
-    x: comparisons.map((c) => c.replace(/_vs_/g, ' vs ')),
+    x: comparisons.map((c) => formatComparisonKey(c)),
     y: yLabels,
     colorscale: [
       [0, '#3b82f6'],

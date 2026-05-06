@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { formatComparisonKey } from '@/lib/utils';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -49,7 +50,8 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
   }
 
   const labels = comparisons.map((c) => {
-    const parts = c.replace(/_vs_/g, ' vs ').split(' vs ');
+    const formatted = formatComparisonKey(c);
+    const parts = formatted.split(' vs ');
     if (parts.length === 2) {
       return `${parts[0].substring(0, 8)} vs ${parts[1].substring(0, 8)}`;
     }
