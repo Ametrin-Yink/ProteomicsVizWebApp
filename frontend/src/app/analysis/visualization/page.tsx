@@ -190,6 +190,17 @@ function ResultsContent() {
     return () => clearTimeout(timer);
   }, [filters, sessionId]);
 
+  // Compute a human-readable comparison label for display
+  const comparisonLabel = useMemo(() => {
+    if (selectedComparison) {
+      return selectedComparison.replace(/_vs_/g, ' vs ');
+    }
+    if (sessionConfig?.treatment && sessionConfig?.control) {
+      return `${sessionConfig.treatment} vs ${sessionConfig.control}`;
+    }
+    return undefined;
+  }, [selectedComparison, sessionConfig]);
+
   // Calculate DE counts based on current filters
   const deCounts = useMemo(() => {
     if (!data) return { total: 0, up: 0, down: 0 };
@@ -333,6 +344,7 @@ function ResultsContent() {
               markedProteins={markedProteins}
               onSelectProteins={handleSelectProteins}
               onClearSelection={clearSelection}
+              comparisonLabel={comparisonLabel}
             />
 
             {/* Filters (collapsed by default) */}
@@ -357,6 +369,7 @@ function ResultsContent() {
               markedProteins={markedProteins}
               onToggleMark={handleToggleMark}
               onClearAllMarks={handleClearAllMarks}
+              comparisonLabel={comparisonLabel}
             />
           </div>
 
