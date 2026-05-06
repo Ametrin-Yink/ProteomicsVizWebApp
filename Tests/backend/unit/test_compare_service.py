@@ -5,6 +5,8 @@ Tests the core computation functions for fold-change matrix building,
 correlation analysis, and dimensionality reduction.
 """
 
+import tempfile
+
 import pytest
 import numpy as np
 import pandas as pd
@@ -35,7 +37,7 @@ class TestCorrelationMatrix:
         corr = compute_correlation_matrix(matrix, method='spearman')
         assert corr[0, 1] == pytest.approx(1.0, abs=1e-6)
 
-    def test_fewer_than_3_comparisons_returns_empty(self):
+    def test_fewer_than_3_comparisons_returns_nan(self):
         matrix = np.array([
             [1.0, 2.0],
             [1.0, 2.0],
@@ -68,7 +70,6 @@ class TestProteinCorrelations:
 
 class TestFoldChangeMatrix:
     def test_extracts_per_protein_per_comparison(self):
-        import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             results_dir = Path(tmpdir) / "results"
             results_dir.mkdir()
@@ -102,3 +103,8 @@ class TestPCA:
         coords, var = run_pca(matrix)
         assert coords.shape == (50, 2)
         assert 0 < var < 1
+        # Verify variance explained is sum of first 2 component ratios
+        assert var > 0.3  # with 5 features, first 2 should explain >30%
+        # Coordinates should be centered (mean ~0)
+        assert abs(coords[:, 0].mean()) < 1e-6
+        assert abs(coords[:, 1].mean()) < 1e-6

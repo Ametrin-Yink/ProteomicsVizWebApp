@@ -4,9 +4,9 @@ Compare service -- on-demand protein and comparison correlation analysis.
 All computation is synchronous (called via asyncio.to_thread from routes).
 """
 
-import json
 import logging
-import os
+import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -58,7 +58,7 @@ def _load_pvalues_for_protein(
         if df is None:
             continue
         # Match protein_id against accessions (handles multi-ID like "P00367; P49448")
-        match = df[df["accession"].str.contains(protein_id.replace("(", "\\(").replace(")", "\\)"), na=False, regex=True)]
+        match = df[df["accession"].str.contains(re.escape(protein_id), na=False, regex=True)]
         if len(match) > 0:
             result[comp] = {
                 "pval": float(match.iloc[0]["pval"]),
@@ -116,19 +116,14 @@ def compute_correlation_matrix(matrix: np.ndarray, method: str = "pearson") -> n
 
     if method == "pearson":
         corr = np.corrcoef(matrix)
-        return np.nan_to_num(corr, nan=0.0)
+        return corr
 
-    # Spearman: compute pairwise
-    corr = np.eye(n)
-    for i in range(n):
-        for j in range(i + 1, n):
-            valid = ~(np.isnan(matrix[i]) | np.isnan(matrix[j]))
-            if valid.sum() < 3:
-                corr[i, j] = corr[j, i] = 0.0
-                continue
-            r, _ = stats.spearmanr(matrix[i][valid], matrix[j][valid])
-            corr[i, j] = corr[j, i] = r if not np.isnan(r) else 0.0
-    return corr
+    # Spearman: vectorized computation
+    corr, _ = stats.spearmanr(matrix, axis=1)
+    if n == 2:
+        # spearmanr returns scalar for exactly 2 variables
+        corr = np.array([[1.0, corr], [corr, 1.0]])
+    return np.nan_to_num(corr, nan=0.0)
 
 
 def compute_protein_correlations(
@@ -170,7 +165,7 @@ def compute_protein_correlations(
         for i in range(n)
     ]
     result.sort(key=lambda x: x["correlation"], reverse=True)
-    return result
+    return result[:top_n] + result[-top_n:]
 
 
 def run_pca(matrix: np.ndarray) -> tuple[np.ndarray, float]:
@@ -262,7 +257,6 @@ def compute_venn_data(
         if region:
             overlaps.append({"region": region, "accession": acc})
 
-    from collections import defaultdict
     by_region = defaultdict(list)
     for ov in overlaps:
         key = "+".join(ov["region"])
