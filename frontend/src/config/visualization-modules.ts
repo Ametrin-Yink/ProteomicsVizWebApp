@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { ChartScatter, Activity, Spline } from 'lucide-react';
+import { ChartScatter, Activity, Spline, GitCompare } from 'lucide-react';
 
 export interface VisualizationModule {
   id: string;
@@ -34,6 +34,14 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization/gsea',
     icon: Spline,
     description: 'Gene Set Enrichment Analysis results',
+    supportedTemplates: ['multi_condition_comparison'],
+  },
+  {
+    id: 'compare',
+    label: 'Compare',
+    href: '/analysis/visualization/compare',
+    icon: GitCompare,
+    description: 'Protein and comparison correlation analysis',
     supportedTemplates: ['multi_condition_comparison'],
   },
 ];
