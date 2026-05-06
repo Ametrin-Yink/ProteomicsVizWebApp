@@ -26,10 +26,11 @@ function QCContent() {
       setLoading(true);
       setError(null);
       try {
-        const qcData = await getQCData(sessionId);
+        const [qcData, session] = await Promise.all([
+          getQCData(sessionId),
+          getSession(sessionId),
+        ]);
         setData(qcData);
-        // Build condition list from session config
-        const session = await getSession(sessionId);
         if (session?.config) {
           const config = session.config;
           const conditions = new Set<string>();

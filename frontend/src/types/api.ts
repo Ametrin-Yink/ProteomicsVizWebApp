@@ -132,14 +132,19 @@ export interface PSMCV {
   [condition: string]: number[];
 }
 
+export interface KDECurve {
+  kde_x: number[];
+  kde_y: number[];
+}
+
 export interface IntensityDistributions {
   psm: {
     [condition: string]: {
-      [replicate: string]: number[];
+      [replicate: string]: KDECurve;
     };
   };
   protein: {
-    [condition: string]: number[];
+    [sample: string]: KDECurve;
   };
 }
 

@@ -54,19 +54,27 @@ class QCCalculator:
         protein_df = await asyncio.to_thread(
             pd.read_csv, protein_abundances_path, sep="\t"
         )
-        # Load first DE file for backward-compatible pvalue_distribution field
-        first_diff_df = await asyncio.to_thread(pd.read_csv, diff_expression_paths[0], sep="\t") if diff_expression_paths else None
 
-        # Compute per-comparison p-value distributions
+        # Compute per-comparison p-value distributions (parallel reads)
+        async def _read_de_file(path: Path):
+            return path, await asyncio.to_thread(pd.read_csv, path, sep="\t")
+
         pvalue_distributions: dict[str, PValueDistribution] = {}
-        for diff_path in diff_expression_paths:
-            # Extract comparison label: Diff_Expression_<label>.tsv -> <label>
-            label = diff_path.stem.replace("Diff_Expression_", "")
-            try:
-                comp_df = await asyncio.to_thread(pd.read_csv, diff_path, sep="\t")
-                pvalue_distributions[label] = self._calculate_pvalue_distribution(comp_df)
-            except Exception:
-                logger.warning(f"Could not compute p-value distribution for {diff_path.name}", exc_info=True)
+        if diff_expression_paths:
+            results = await asyncio.gather(
+                *[_read_de_file(p) for p in diff_expression_paths],
+                return_exceptions=True,
+            )
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning(f"Could not read DE file: {result}", exc_info=True)
+                    continue
+                path, comp_df = result
+                label = path.stem.replace("Diff_Expression_", "")
+                try:
+                    pvalue_distributions[label] = self._calculate_pvalue_distribution(comp_df)
+                except Exception:
+                    logger.warning(f"Could not compute p-value distribution for {path.name}", exc_info=True)
 
         psm_df = None
         if psm_abundances_path and psm_abundances_path.exists():
@@ -122,7 +130,7 @@ class QCCalculator:
 
         qc_data = QCData(
             pca=pca_result,
-            pvalue_distribution=self._calculate_pvalue_distribution(first_diff_df) if first_diff_df is not None else PValueDistribution(bins=[], counts=[]),
+            pvalue_distribution=next(iter(pvalue_distributions.values())) if pvalue_distributions else PValueDistribution(bins=[], counts=[]),
             pvalue_distributions=pvalue_distributions if pvalue_distributions else None,
             psm_cv=psm_cv,
             protein_cv=protein_cv,
@@ -336,21 +344,12 @@ class QCCalculator:
 
         for condition in psm_df["Condition"].unique():
             condition_df = psm_df[psm_df["Condition"] == condition]
-
-            # Group by Unique_PSM and calculate CV across replicates
-            cv_values = []
-            for unique_psm, group in condition_df.groupby("Unique_PSM"):
-                # Get abundance values across all replicates for this PSM
-                raw_abundances = group["Abundance"].dropna()
-                if len(raw_abundances) > 1:  # Need at least 2 values to calculate CV
-                    # Calculate CV directly on raw abundances
-                    mean = raw_abundances.mean()
-                    std = raw_abundances.std()
-                    if mean > 0:
-                        cv = (std / mean) * 100  # CV as percentage
-                        cv_values.append(cv)
-
-            cv_by_condition[str(condition)] = cv_values
+            grouped = condition_df.groupby("Unique_PSM")["Abundance"]
+            agg = grouped.agg(std="std", mean="mean", count="count")
+            valid = (agg["count"] >= 2) & (agg["mean"] > 0)
+            agg = agg[valid]
+            cvs = ((agg["std"] / agg["mean"]) * 100).tolist()
+            cv_by_condition[str(condition)] = cvs
 
         return cv_by_condition
 
@@ -489,57 +488,31 @@ class QCCalculator:
         result = {"psm": {}, "protein": {}}
 
         # PSM intensities by condition
-        # MAJ-007: Apply log2 transform to PSM intensities
-        # MAJ-013: Apply median normalization to PSM intensities
         if psm_df is not None and "Condition" in psm_df.columns:
-            # Calculate median abundance per sample for normalization
-            sample_medians = {}
-            for condition in psm_df["Condition"].unique():
-                condition_df = psm_df[psm_df["Condition"] == condition]
-                for replicate in condition_df.get("Replicate", pd.Series([1])).unique():
-                    rep_df = condition_df[
-                        condition_df.get("Replicate", pd.Series([1])) == replicate
-                    ]
-                    raw_intensities = rep_df["Abundance"].dropna()
-                    if len(raw_intensities) > 0:
-                        sample_medians[f"{condition}_{replicate}"] = (
-                            raw_intensities.median()
-                        )
+            has_replicate = "Replicate" in psm_df.columns
+            group_cols = ["Condition", "Replicate"] if has_replicate else ["Condition"]
 
-            # Calculate global median across all samples
-            global_median = (
-                np.median(list(sample_medians.values())) if sample_medians else 1
-            )
+            # Vectorized median normalization via groupby transform (single pass)
+            sample_medians = psm_df.groupby(group_cols)["Abundance"].transform("median")
+            global_median = sample_medians.median()
 
-            for condition in psm_df["Condition"].unique():
-                condition_df = psm_df[psm_df["Condition"] == condition]
+            pos = psm_df["Abundance"] > 0
+            norm = psm_df["Abundance"] * (global_median / sample_medians)
+            log2_vals = np.where(pos, np.log2(np.where(pos, norm, 1)), np.nan)
 
-                # Group by replicate
-                replicates = {}
-                for replicate in condition_df.get("Replicate", pd.Series([1])).unique():
-                    rep_df = condition_df[
-                        condition_df.get("Replicate", pd.Series([1])) == replicate
-                    ]
-                    sample_key = f"{condition}_{replicate}"
+            # Build result dict with pre-computed KDE curves
+            for group_key, idx in psm_df.groupby(group_cols).groups.items():
+                if not has_replicate:
+                    condition = group_key
+                    replicate = 1
+                else:
+                    condition, replicate = group_key
+                vals = log2_vals[idx]
+                valid = vals[np.isfinite(vals)]
+                if len(valid) > 0:
+                    result["psm"].setdefault(str(condition), {})[f"replicate_{replicate}"] = self._compute_kde(valid)
 
-                    # Get raw abundances
-                    raw_intensities = rep_df["Abundance"].dropna()
-                    if len(raw_intensities) > 0 and sample_key in sample_medians:
-                        # Apply median normalization: value * (global_median / sample_median)
-                        sample_median = sample_medians[sample_key]
-                        normalized_intensities = raw_intensities * (
-                            global_median / sample_median
-                        )
-                        # Apply log2 transform
-                        log2_intensities = np.log2(
-                            normalized_intensities[normalized_intensities > 0]
-                        ).tolist()
-                        replicates[f"replicate_{replicate}"] = log2_intensities
-
-                result["psm"][str(condition)] = replicates
-
-        # Protein intensities
-        # MAJ-008: Return per-sample intensities, not aggregated by condition
+        # Protein intensities — per-sample KDE curves
         id_cols = [
             "Master Protein Accessions",
             "Gene_Name",
@@ -555,11 +528,10 @@ class QCCalculator:
             and protein_df[col].dtype in ["float64", "float32", "int64"]
         ]
 
-        # Return each sample as its own entry (not grouped by condition)
         for col in abundance_cols:
-            intensities = protein_df[col].dropna().tolist()
-            if intensities:  # Only add if there are values
-                result["protein"][col] = intensities
+            intensities = protein_df[col].dropna().values
+            if len(intensities) > 0:
+                result["protein"][col] = self._compute_kde(intensities)
 
         return result
 
@@ -655,6 +627,39 @@ class QCCalculator:
         if total == 0:
             return None
         return round((total_present / total) * 100, 1)
+
+    @staticmethod
+    def _compute_kde(values: np.ndarray, n_points: int = 100) -> dict:
+        """Compute Gaussian KDE curve with Silverman bandwidth.
+
+        Returns a compact dict of {kde_x, kde_y} suitable for serialization
+        and direct rendering — avoids shipping raw values to the frontend.
+        """
+        clean = values[np.isfinite(values)]
+        if len(clean) < 2:
+            return {"kde_x": [], "kde_y": []}
+
+        std = float(np.std(clean, ddof=1))
+        bandwidth = max(1e-10, 1.06 * std * len(clean) ** (-0.2))
+
+        x_min, x_max = float(clean.min()), float(clean.max())
+        if x_min == x_max:
+            return {"kde_x": [x_min], "kde_y": [float(len(clean))]}
+
+        x = np.linspace(x_min, x_max, n_points)
+        y = np.zeros(n_points)
+        denom = len(clean) * bandwidth * np.sqrt(2 * np.pi)
+
+        # Chunked to limit memory for large datasets
+        chunk_size = 5000
+        for start in range(0, len(clean), chunk_size):
+            chunk = clean[start : start + chunk_size]
+            z = (x[:, np.newaxis] - chunk) / bandwidth
+            y += np.exp(-0.5 * z * z).sum(axis=1)
+
+        y /= denom
+
+        return {"kde_x": x.tolist(), "kde_y": y.tolist()}
 
     def save_qc_data(self, qc_data: QCData, output_path: Path) -> None:
         """

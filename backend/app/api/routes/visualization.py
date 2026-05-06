@@ -521,8 +521,8 @@ async def get_qc_plots(
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
 
-    # Load QC results from file
-    qc_data = load_qc_results(results_dir)
+    # Load QC results from file (off-thread to avoid blocking event loop)
+    qc_data = await asyncio.to_thread(load_qc_results, results_dir)
 
     # Filter p-value distribution to requested comparison
     if comparison and qc_data.get("pvalue_distributions"):
@@ -536,7 +536,7 @@ async def get_qc_plots(
         psm_file = results_dir / "PSM_Abundances.tsv"
         if psm_file.exists():
             try:
-                psm_df = pd.read_csv(psm_file, sep="\t")
+                psm_df = await asyncio.to_thread(pd.read_csv, psm_file, sep="\t")
                 if "Unique_PSM" in psm_df.columns:
                     correct_total = psm_df["Unique_PSM"].nunique()
                     qc_data["total_psms"] = int(correct_total)
@@ -563,7 +563,8 @@ async def get_gsea_plot_data(
         )
 
     # Get results directory — for multi-condition, look in comparison subdir
-    results_dir = settings.sessions_dir / session_id / "results"
+    base_results_dir = settings.sessions_dir / session_id / "results"
+    results_dir = base_results_dir
     if comparison:
         results_dir = results_dir / "gsea" / comparison
 
@@ -574,8 +575,12 @@ async def get_gsea_plot_data(
             detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}",
         )
 
-    # Load slim GSEA results to get lead_genes and pathway metadata
+    # Load slim GSEA results to get lead_genes and pathway metadata.
+    # When comparison is specified, try comparison-specific path first
+    # (on-demand GSEA), then fall back to base results dir (pipeline GSEA).
     gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
+    if not gsea_data.get("results") and comparison:
+        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, session_id)
     results = gsea_data.get("results", [])
 
     # Find the specific pathway
@@ -591,8 +596,11 @@ async def get_gsea_plot_data(
             detail=f"Pathway '{term}' not found in {database}",
         )
 
-    # Compute running ES curve on-demand from gseapy output files
-    gsea_dir = results_dir / "gsea" / database
+    # Compute running ES curve on-demand from gseapy output files.
+    # For pipeline GSEA: results/gsea/<db>/
+    # For on-demand GSEA: results/gsea/<comparison>/<db>/ (results_dir already
+    # includes gsea/<comparison> from above, so just append database)
+    gsea_dir = results_dir / "gsea" / database if not comparison else results_dir / database
 
     ranked_genes = []
     ranked_metrics = []
@@ -620,9 +628,11 @@ async def get_gsea_plot_data(
             except Exception as e:
                 logger.warning(f"Could not read alternate .rnk file: {e}")
 
-    # Fallback: reconstruct ranked list from Diff_Expression*.tsv
+    # Fallback: reconstruct ranked list from Diff_Expression*.tsv.
+    # Use base_results_dir — DE files live in the session results dir,
+    # not under gsea/<comparison>/.
     if not ranked_genes:
-        de_file = _resolve_de_file(results_dir)
+        de_file = _resolve_de_file(base_results_dir)
         if de_file and de_file.exists():
             try:
                 de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
@@ -742,7 +752,8 @@ async def get_gsea_heatmap_data(
         )
 
     # Get results directory — for multi-condition, look in comparison subdir
-    results_dir = settings.sessions_dir / session_id / "results"
+    base_results_dir = settings.sessions_dir / session_id / "results"
+    results_dir = base_results_dir
     if comparison:
         results_dir = results_dir / "gsea" / comparison
 
@@ -753,8 +764,12 @@ async def get_gsea_heatmap_data(
             detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}",
         )
 
-    # Load slim GSEA results to get lead_genes
+    # Load slim GSEA results to get lead_genes.
+    # When comparison is specified, try comparison-specific path first
+    # (on-demand GSEA), then fall back to base results dir (pipeline GSEA).
     gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
+    if not gsea_data.get("results") and comparison:
+        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, session_id)
     results = gsea_data.get("results", [])
 
     # Find the specific pathway
@@ -780,8 +795,9 @@ async def get_gsea_heatmap_data(
     if not lead_genes:
         return create_response({"genes": [], "samples": [], "z_scores": []})
 
-    # Build ranked gene list to order heatmap genes by rank position
-    de_file = _resolve_de_file(results_dir)
+    # Build ranked gene list to order heatmap genes by rank position.
+    # DE files live in the session results dir, not under gsea/<comparison>/.
+    de_file = _resolve_de_file(base_results_dir)
     gene_rank_map: dict[str, int] = {}
     if de_file and de_file.exists():
         try:
@@ -826,8 +842,8 @@ async def get_gsea_heatmap_data(
         except Exception as e:
             logger.debug(f"Could not build gene rank map: {e}")
 
-    # Load protein abundance data
-    protein_file = results_dir / "Protein_Abundances.tsv"
+    # Load protein abundance data from session results dir (not comparison subdir)
+    protein_file = base_results_dir / "Protein_Abundances.tsv"
     if not protein_file.exists():
         return create_response({"genes": [], "samples": [], "z_scores": []})
 
@@ -1074,7 +1090,8 @@ async def get_gsea_results(
         )
 
     # Get results directory
-    results_dir = settings.sessions_dir / session_id / "results"
+    base_results_dir = settings.sessions_dir / session_id / "results"
+    results_dir = base_results_dir
 
     # Route to per-comparison directory when comparison is specified
     if comparison:
@@ -1087,8 +1104,12 @@ async def get_gsea_results(
             detail=f"Invalid GSEA database: {database}. Must be one of: {', '.join(sorted(VALID_GSEA_DATABASES))}",
         )
 
-    # Load GSEA results (cached in memory after first load)
+    # Load GSEA results (cached in memory after first load).
+    # When comparison is specified, try comparison-specific path first
+    # (on-demand GSEA), then fall back to base results dir (pipeline GSEA).
     gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
+    if not gsea_data.get("results") and comparison:
+        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, session_id)
 
     results = gsea_data.pop("results")
 

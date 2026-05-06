@@ -1,14 +1,40 @@
 'use client';
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import type { QCData } from '@/types/api';
 import { transformPCARowBased } from '@/lib/utils';
-import { calculateKDE } from '@/lib/kde';
+
 import { Maximize2, Download } from 'lucide-react';
 
 // Dynamically import Plotly to avoid SSR issues
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+
+function LazyPlot({ plotId, ...plotProps }: React.ComponentProps<typeof Plot> & { plotId: string }) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { rootMargin: '200px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} style={plotProps.style}>
+      {visible ? (
+        <Plot {...plotProps} style={{ width: '100%', height: '100%' }} useResizeHandler />
+      ) : (
+        <div data-testid={`${plotId}-skeleton`} className="h-full w-full animate-pulse bg-border/20 rounded" />
+      )}
+    </div>
+  );
+}
 
 interface QCPlotsProps {
   data: QCData;
@@ -256,21 +282,12 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     return { traces, layout };
   }, [data.protein_cv, getProteinConditionColor]);
 
-  // Pre-compute KDE data for PSM intensity distribution with memoization
+  // PSM intensity distribution KDE curves (pre-computed on backend)
   const psmKDEData = useMemo(() => {
     if (!data.intensity_distributions?.psm) return null;
 
-    let allValues: number[] = [];
-    Object.entries(data.intensity_distributions.psm).forEach(([, replicates]) => {
-      Object.entries(replicates).forEach(([, values]) => {
-        allValues = allValues.concat(values);
-      });
-    });
-
-    const min = allValues.reduce((a, b) => Math.min(a, b), Infinity);
-    const max = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
-    const range = { min, max };
-
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
     let colorIndex = 0;
     const kdes: Array<{
       name: string;
@@ -280,22 +297,23 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     }> = [];
 
     Object.entries(data.intensity_distributions.psm).forEach(([condition, replicates]) => {
-      Object.entries(replicates).forEach(([replicate, values]) => {
-        const kde = calculateKDE(values);
-        if (kde.x.length > 0) {
+      Object.entries(replicates).forEach(([replicate, kdeCurve]) => {
+        if (kdeCurve.kde_x.length > 0) {
+          globalMin = Math.min(globalMin, kdeCurve.kde_x[0]);
+          globalMax = Math.max(globalMax, kdeCurve.kde_x[kdeCurve.kde_x.length - 1]);
           const color = kdeSampleColors[colorIndex % kdeSampleColors.length];
           colorIndex++;
           kdes.push({
             name: `${condition} - ${replicate}`,
-            x: kde.x,
-            y: kde.y,
+            x: kdeCurve.kde_x,
+            y: kdeCurve.kde_y,
             color,
           });
         }
       });
     });
 
-    return { kdes, range };
+    return { kdes, range: { min: globalMin, max: globalMax } };
   }, [data.intensity_distributions?.psm]);
 
   // 4. PSM Intensity Distribution - KDE curves (lines) showing all data
@@ -349,19 +367,12 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
     return { traces, layout };
   }, [psmKDEData]);
 
-  // Pre-compute KDE data for Protein intensity distribution with memoization
+  // Protein intensity distribution KDE curves (pre-computed on backend)
   const proteinKDEData = useMemo(() => {
     if (!data.intensity_distributions?.protein) return null;
 
-    let allValues: number[] = [];
-    Object.entries(data.intensity_distributions.protein).forEach(([, values]) => {
-      allValues = allValues.concat(values);
-    });
-
-    const globalMin = allValues.reduce((a, b) => Math.min(a, b), Infinity);
-    const globalMax = allValues.reduce((a, b) => Math.max(a, b), -Infinity);
-    const range = { min: globalMin, max: globalMax };
-
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
     let colorIndex = 0;
     const kdes: Array<{
       name: string;
@@ -370,21 +381,22 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
       color: string;
     }> = [];
 
-    Object.entries(data.intensity_distributions.protein).forEach(([sampleName, values]) => {
-      const kde = calculateKDE(values);
-      if (kde.x.length > 0) {
+    Object.entries(data.intensity_distributions.protein).forEach(([sampleName, kdeCurve]) => {
+      if (kdeCurve.kde_x.length > 0) {
+        globalMin = Math.min(globalMin, kdeCurve.kde_x[0]);
+        globalMax = Math.max(globalMax, kdeCurve.kde_x[kdeCurve.kde_x.length - 1]);
         const color = kdeSampleColors[colorIndex % kdeSampleColors.length];
         colorIndex++;
         kdes.push({
           name: sampleName,
-          x: kde.x,
-          y: kde.y,
+          x: kdeCurve.kde_x,
+          y: kdeCurve.kde_y,
           color,
         });
       }
     });
 
-    return { kdes, range };
+    return { kdes, range: { min: globalMin, max: globalMax } };
   }, [data.intensity_distributions?.protein]);
 
   // 5. Protein Intensity Distribution - Line plots (KDE) showing all data
@@ -609,12 +621,12 @@ export default function QCPlots({ data, conditionList, selectedComparison }: QCP
                 </div>
               </div>
               <div className="h-[400px]">
-                <Plot
+                <LazyPlot
+                  plotId={plot.id}
                   data={plot.data.traces}
                   layout={plot.data.layout}
                   config={config}
                   style={{ width: '100%', height: '100%' }}
-                  useResizeHandler={true}
                 />
               </div>
             </div>
