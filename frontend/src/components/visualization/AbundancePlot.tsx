@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import type { ProteinAbundance, PeptideAbundanceData } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+
+const LEGEND_ITEM_HEIGHT_EST = 22;
 
 interface ProteinAbundancePlotProps {
   data: ProteinAbundance;
@@ -121,10 +123,11 @@ interface PeptideAbundancePlotProps {
 }
 
 export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
+  const graphDivRef = useRef<HTMLElement | null>(null);
+  const [visible, setVisible] = useState<boolean[]>([]);
   const plotData = useMemo(() => {
-    // Defensive: ensure data exists and has peptides array
     if (!data || !data.peptides || data.peptides.length === 0) {
-      return [];
+      return { traces: [], legendItems: [] };
     }
 
     const traces: Array<{
@@ -138,6 +141,8 @@ export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
       type: 'scatter';
     }> = [];
 
+    const legendItems: Array<{ name: string; color: string; index: number }> = [];
+
     const colors = ['#E73564', '#00ADEF', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
 
     data.peptides.forEach((peptide, index) => {
@@ -145,47 +150,48 @@ export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
         return;
       }
 
-      // Aggregate abundances by sample (multiple rows per sample from different charge states)
       const aggregated = new Map<string, number>();
       peptide.samples.forEach((s, i) => {
         aggregated.set(s, (aggregated.get(s) || 0) + peptide.abundances[i]);
       });
 
-      // Sort by sample name for consistent ordering
       const sorted = [...aggregated.entries()].sort((a, b) => a[0].localeCompare(b[0]));
       const sortedSamples = sorted.map(([s]) => s);
       const sortedAbundances = sorted.map(([, v]) => v);
 
-      // Min-max normalize to 0-1
       const minVal = Math.min(...sortedAbundances);
       const maxVal = Math.max(...sortedAbundances);
       const range = maxVal - minVal || 1;
       const normalizedY = sortedAbundances.map(v => (v - minVal) / range);
 
       const color = colors[index % colors.length];
+      const name = peptide.sequence || peptide.peptide_id || `Peptide ${index + 1}`;
       traces.push({
         x: sortedSamples,
         y: normalizedY,
         mode: 'lines+markers' as const,
-        name: peptide.sequence || peptide.peptide_id || `Peptide ${index + 1}`,
+        name,
         line: { color, width: 2 },
         marker: { size: 6 },
         hovertemplate: `<b>${peptide.peptide_id || 'Unknown'}</b><br>Sample: %{x}<br>Abundance: %{y:.2f}<extra></extra>`,
         type: 'scatter' as const,
       });
+      legendItems.push({ name, color, index });
     });
 
-    return traces;
+    return { traces, legendItems };
   }, [data]);
 
-  const peptideCount = data?.peptides?.length ?? 0;
-  const plotHeight = 450 + peptideCount * 12;
-  const maxPlotHeight = Math.min(plotHeight, 750);
+  const traceCount = plotData.traces.length;
+
+  useEffect(() => {
+    setVisible(new Array(traceCount).fill(true));
+  }, [traceCount]);
 
   const layout = useMemo(
     () => ({
       xaxis: {
-        title: { text: 'Sample', font: { size: 12 }, standoff: 20 },
+        title: { text: 'Sample', font: { size: 12 }, standoff: 60 },
         tickangle: -45,
         tickfont: { size: 10 },
         gridcolor: '#E5E7EB',
@@ -196,20 +202,12 @@ export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
         gridcolor: '#E5E7EB',
         range: [-0.05, 1.05],
       },
-      showlegend: true,
-      legend: {
-        orientation: 'h' as const,
-        x: 0.5,
-        y: -0.7,
-        xanchor: 'center' as const,
-        yanchor: 'top' as const,
-        font: { size: 10 },
-      },
+      showlegend: false,
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 30, b: 200 + peptideCount * 10 },
+      margin: { l: 50, r: 10, t: 30, b: 120 },
     }),
-    [peptideCount]
+    []
   );
 
   const config = useMemo(
@@ -221,16 +219,67 @@ export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
     []
   );
 
+  const toggleTrace = useCallback((index: number) => {
+    const gd = graphDivRef.current;
+    if (!gd) return;
+
+    const Plotly = (window as Record<string, unknown>).Plotly as {
+      restyle: (gd: HTMLElement, update: Record<string, unknown>, indices: number[]) => void;
+    } | undefined;
+    if (!Plotly?.restyle) return;
+
+    setVisible(prev => {
+      const next = [...prev];
+      next[index] = !next[index];
+      Plotly.restyle(gd, { visible: next[index] }, [index]);
+      return next;
+    });
+  }, []);
+
   return (
-    <div className="w-full bg-background rounded-lg border border-border p-2"
-      style={{ height: `${plotHeight}px`, maxHeight: `${maxPlotHeight}px`, overflowY: 'auto' }}>
-      <Plot
-        data={plotData}
-        layout={layout}
-        config={config}
-        style={{ width: '100%', height: '100%' }}
-        useResizeHandler={true}
-      />
+    <div className="w-full bg-background rounded-lg border border-border p-2">
+      <div style={{ height: '400px' }}>
+        <Plot
+          data={plotData.traces}
+          layout={layout}
+          config={config}
+          style={{ width: '100%', height: '100%' }}
+          useResizeHandler={true}
+          onInitialized={(_figure, graphDiv) => { graphDivRef.current = graphDiv; }}
+        />
+      </div>
+      <div className="mt-3">
+        <div
+          className="flex items-center gap-2 pb-1"
+          style={{
+            scrollbarWidth: 'thin',
+            maxHeight: `${LEGEND_ITEM_HEIGHT_EST * 3 + 4}px`,
+            flexWrap: 'wrap',
+            overflowY: 'auto',
+          }}
+        >
+          {plotData.legendItems.map((item) => (
+            <button
+              key={item.index}
+              type="button"
+              onClick={() => toggleTrace(item.index)}
+              className="flex items-center gap-1.5 text-xs shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+              style={{ opacity: visible[item.index] ? 1 : 0.4 }}
+            >
+              <span
+                className="inline-block shrink-0"
+                style={{
+                  width: '14px',
+                  height: '3px',
+                  backgroundColor: item.color,
+                  borderRadius: '2px',
+                }}
+              />
+              <span className="text-text-secondary truncate max-w-[180px]">{item.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
