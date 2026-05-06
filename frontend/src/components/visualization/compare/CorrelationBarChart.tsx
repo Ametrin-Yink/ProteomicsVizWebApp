@@ -1,0 +1,88 @@
+'use client';
+
+import React, { useMemo } from 'react';
+import dynamic from 'next/dynamic';
+
+const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+
+interface CorrelationItem {
+  label: string;
+  correlation: number;
+}
+
+interface Props {
+  data: CorrelationItem[];
+  title: string;
+  topN?: number;
+  onItemClick?: (label: string) => void;
+}
+
+export default function CorrelationBarChart({ data, title, topN = 10, onItemClick }: Props) {
+  const { labels, values, colors } = useMemo(() => {
+    const sorted = [...data].sort((a, b) => b.correlation - a.correlation);
+    const topBottom: CorrelationItem[] = [];
+
+    // Take top N and bottom N
+    const top = sorted.slice(0, topN);
+    const bottom = sorted.slice(-topN).reverse();
+
+    // Deduplicate: if 2*topN > data.length, just show top N
+    if (top.length + bottom.length > data.length && sorted.length <= topN * 2) {
+      topBottom.push(...sorted);
+    } else {
+      topBottom.push(...top, ...bottom);
+    }
+
+    return {
+      labels: topBottom.map((d) => d.label),
+      values: topBottom.map((d) => d.correlation),
+      colors: topBottom.map((d) => (d.correlation >= 0 ? '#ef4444' : '#3b82f6')),
+    };
+  }, [data, topN]);
+
+  const height = Math.max(400, labels.length * 30 + 80);
+
+  const trace = {
+    type: 'bar' as const,
+    x: values,
+    y: labels,
+    orientation: 'h' as const,
+    marker: { color: colors },
+    text: values.map((v) => v.toFixed(3)),
+    textposition: 'outside' as const,
+    hoverinfo: 'x' as const,
+  };
+
+  const layout = {
+    title,
+    xaxis: { title: 'Correlation', range: [-1.1, 1.1] },
+    yaxis: { autorange: 'reversed' as const },
+    height,
+    margin: { t: 40, b: 60, l: 120, r: 60 },
+  };
+
+  if (!data.length) {
+    return (
+      <div className="bg-background border border-border rounded-lg p-4 text-center text-text-muted">
+        No correlation data available
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-background border border-border rounded-lg p-4">
+      <Plot
+        data={[trace]}
+        layout={layout}
+        config={{ displayModeBar: false, displaylogo: false, responsive: true }}
+        style={{ width: '100%' }}
+        useResizeHandler
+        onClick={(eventData: { points?: Array<{ y: string | number }> }) => {
+          if (onItemClick && eventData.points && eventData.points.length > 0) {
+            onItemClick(String(eventData.points[0].y));
+          }
+        }}
+      />
+    </div>
+  );
+}
