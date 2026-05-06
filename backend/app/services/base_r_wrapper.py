@@ -380,6 +380,111 @@ class BaseRWrapper(ABC):
             )
 
     # ------------------------------------------------------------------
+    # Batched subprocess execution
+    # ------------------------------------------------------------------
+
+    async def run_batched(
+        self,
+        *,
+        items: list[dict],
+        batch_size: int,
+        max_workers: int,
+        n_cores_cap: int,
+        build_batch_cmd,
+        log_callback=None,
+    ):
+        """Split items into batches and execute concurrently.
+
+        When len(items) <= batch_size, runs a single batch via _run_r_script
+        (no parallelism overhead). Used by MSstats Step 7 to parallelize
+        groupComparison across many comparisons.
+        """
+        import time
+
+        n_total = len(items)
+
+        if n_total <= batch_size:
+            logger.info(
+                "Batch mode: %d items, single batch (no parallelism)", n_total
+            )
+            cmd, timeout = build_batch_cmd(items, 0)
+            await self._run_r_script(
+                cmd,
+                self.scripts_dir / self._gc_script_name,
+                log_callback=log_callback,
+                timeout=timeout,
+            )
+            return
+
+        # Split into batches
+        batches: list[list[dict]] = []
+        for i in range(0, n_total, batch_size):
+            batches.append(items[i : i + batch_size])
+
+        n_batches = len(batches)
+        total_cores = os.cpu_count() or 4
+        effective_workers = min(n_batches, max_workers)
+        n_cores_per = max(1, min(total_cores // effective_workers, n_cores_cap))
+
+        logger.info(
+            "Batch mode: %d items -> %d batches (size=%d), %d concurrent, %d cores/process",
+            n_total, n_batches, batch_size, effective_workers, n_cores_per,
+        )
+        if log_callback:
+            await _safe_log(
+                log_callback, "info",
+                f"Splitting {n_total} items into {n_batches} batches "
+                f"({n_cores_per} cores each, {effective_workers} concurrent)",
+            )
+
+        semaphore = asyncio.Semaphore(effective_workers)
+
+        async def _run_batch(batch_items: list[dict], batch_idx: int):
+            async with semaphore:
+                cmd, timeout = build_batch_cmd(batch_items, batch_idx)
+                t0 = time.time()
+                await self._run_r_script(
+                    cmd,
+                    self.scripts_dir / self._gc_script_name,
+                    log_callback=log_callback,
+                    timeout=timeout,
+                )
+                elapsed = time.time() - t0
+                return {"batch_idx": batch_idx, "ok": True, "elapsed": elapsed}
+
+        tasks = [
+            _run_batch(batch_items, idx)
+            for idx, batch_items in enumerate(batches)
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        failures: list[tuple[int, str]] = []
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                msg = f"Batch {idx + 1}/{n_batches} FAILED: {result}"
+                logger.error(msg)
+                failures.append((idx, str(result)))
+            else:
+                batch_num = idx + 1
+                elapsed = result.get("elapsed", 0)
+                msg = (
+                    f"Batch {batch_num}/{n_batches} complete "
+                    f"({elapsed:.0f}s)"
+                )
+                logger.info(msg)
+                if log_callback:
+                    await _safe_log(log_callback, "info", msg)
+
+        if failures:
+            batch_nums = [str(i + 1) for i, _ in failures]
+            raise RuntimeError(
+                f"Step 7 batching failed: batches {', '.join(batch_nums)} failed. "
+                "Partial results for other batches are available in the output "
+                "directory."
+            )
+
+    # ------------------------------------------------------------------
     # Pre-flight memory check (Phase 4)
     # ------------------------------------------------------------------
 
