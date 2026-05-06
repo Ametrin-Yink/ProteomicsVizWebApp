@@ -43,7 +43,7 @@ export interface CorrelatedProtein {
   correlation: number;
 }
 
-export interface ClusterPoint {
+export interface ProteinClusterPoint {
   accession: string;
   gene_name: string;
   x: number;
@@ -51,10 +51,16 @@ export interface ClusterPoint {
   cluster_id?: number;
 }
 
+export interface ComparisonClusterPoint {
+  comparison: string;
+  x: number;
+  y: number;
+}
+
 export interface ProteinCorrelationData {
   selected_protein_fc: ProteinFCResult[];
   correlated_proteins: CorrelatedProtein[];
-  cluster_coords: ClusterPoint[];
+  cluster_coords: ProteinClusterPoint[];
   cluster_var_explained?: number;
 }
 
@@ -75,7 +81,13 @@ export interface ComparisonCorrelationData {
     fold_changes: number[][];
   };
   comparison_correlations: Array<{ comparison: string; correlation: number }>;
-  cluster_coords: Array<{ comparison: string; x: number; y: number }>;
+  cluster_coords: ComparisonClusterPoint[];
+}
+
+/** Protein list entry for selector dropdowns */
+export interface ProteinListEntry {
+  accession: string;
+  gene_name: string;
 }
 ```
 
@@ -131,6 +143,7 @@ export async function runComparisonCorrelation(
   body: {
     primary_comparison: string;
     selected_comparisons: string[];
+    marked_proteins: Record<string, string[]>;
     correlation_method: CorrelationMethod;
     cluster_method: ClusterMethod;
   }
@@ -150,23 +163,24 @@ export async function getComparisonCorrelationData(sessionId: string): Promise<C
   return fetchApi<ComparisonCorrelationData>(`/api/sessions/${sessionId}/compare/comparison-correlation`);
 }
 
-export async function runVennDiagram(
+export async function computeVennData(
   sessionId: string,
   body: {
     comparisons: string[];
     pvalue_threshold: number;
     logfc_threshold: number;
   }
-): Promise<{ status: string }> {
-  return fetchApi(`/api/sessions/${sessionId}/compare/venn`, {
+): Promise<VennData> {
+  return fetchApi<VennData>(`/api/sessions/${sessionId}/compare/venn`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 }
 
-export async function getVennData(sessionId: string): Promise<VennData> {
-  return fetchApi<VennData>(`/api/sessions/${sessionId}/compare/venn`);
+/** List all proteins across all comparisons for the protein selector dropdown */
+export async function listProteins(sessionId: string): Promise<ProteinListEntry[]> {
+  return fetchApi<ProteinListEntry[]>(`/api/sessions/${sessionId}/compare/proteins`);
 }
 ```
 
@@ -180,6 +194,7 @@ import type {
   ProteinCorrelationData,
   ComparisonCorrelationData,
   VennData,
+  ProteinListEntry,
   CorrelationMethod,
   ClusterMethod,
 } from '@/types/api';
@@ -269,9 +284,34 @@ class TestProteinCorrelations:
 
 class TestFoldChangeMatrix:
     def test_extracts_per_protein_per_comparison(self):
-        """build_fold_change_matrix extracts FC values for all proteins across comparisons"""
-        # This test will guide building the matrix from DE result files
-        pass  # TDD: write assertion first, then implement
+        """build_fold_change_matrix returns matrix with dimensions proteins × comparisons"""
+        # Create temporary DE files in a session dir for testing
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results_dir = Path(tmpdir) / "results"
+            results_dir.mkdir()
+            # Write two comparison files
+            pd.DataFrame({
+                "Master_Protein_Accessions": ["P1", "P2"],
+                "Gene_Name": ["Gene1", "Gene2"],
+                "logFC": [1.5, -0.8],
+                "pval": [0.001, 0.05],
+                "adjPval": [0.01, 0.2],
+            }).to_csv(results_dir / "Diff_Expression_A_vs_B.tsv", sep="\t", index=False)
+            pd.DataFrame({
+                "Master_Protein_Accessions": ["P1", "P2"],
+                "Gene_Name": ["Gene1", "Gene2"],
+                "logFC": [2.0, 0.3],
+                "pval": [0.0001, 0.5],
+                "adjPval": [0.005, 0.8],
+            }).to_csv(results_dir / "Diff_Expression_C_vs_D.tsv", sep="\t", index=False)
+
+            matrix, accessions, gene_names = build_fold_change_matrix(tmpdir, ["A_vs_B", "C_vs_D"])
+            assert matrix.shape == (2, 2)
+            assert matrix[0, 0] == pytest.approx(1.5)
+            assert matrix[1, 1] == pytest.approx(0.3)
+            assert accessions == ["P1", "P2"]
+            assert gene_names == ["Gene1", "Gene2"]
 
 
 class TestPCA:
@@ -336,6 +376,28 @@ def _load_de_file(session_dir: str, comparison: str) -> Optional[pd.DataFrame]:
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(subset=["log_fc", "pval"])
     return df
+
+
+def _load_pvalues_for_protein(
+    session_dir: str, comparisons: list[str], protein_id: str, accessions: list[str]
+) -> dict[str, dict[str, float]]:
+    """
+    Load pval and adj_pval for a specific protein across all comparisons.
+    Returns dict keyed by comparison with 'pval' and 'adj_pval'.
+    """
+    result = {}
+    for comp in comparisons:
+        df = _load_de_file(session_dir, comp)
+        if df is None:
+            continue
+        # Match protein_id against accessions (handles multi-ID like "P00367; P49448")
+        match = df[df["accession"].str.contains(protein_id.replace("(", "\\(").replace(")", "\\)"), na=False, regex=True)]
+        if len(match) > 0:
+            result[comp] = {
+                "pval": float(match.iloc[0]["pval"]),
+                "adj_pval": float(match.iloc[0].get("adj_pval", 1.0)),
+            }
+    return result
 
 
 def build_fold_change_matrix(
@@ -634,6 +696,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -644,6 +707,7 @@ from app.services.compare_service import (
     compute_correlation_matrix,
     compute_venn_data,
     run_cluster,
+    _load_pvalues_for_protein,
 )
 
 logger = logging.getLogger("proteomics")
@@ -663,6 +727,7 @@ class ProteinCorrelationRequest(BaseModel):
 class ComparisonCorrelationRequest(BaseModel):
     primary_comparison: str
     selected_comparisons: list[str]  # primary + up to 9 more
+    marked_proteins: dict[str, list[str]]  # per-comparison marked protein accessions
     correlation_method: str = "pearson"
     cluster_method: str = "pca"
 
@@ -746,20 +811,23 @@ async def _run_protein_correlation(session_dir: str, req: ProteinCorrelationRequ
         if query_idx is None:
             raise ValueError(f"Protein {req.protein_id} not found in any comparison")
 
-        # Selected protein fold changes across comparisons
+        # Selected protein fold changes across comparisons (with real p-values)
+        pvals = _load_pvalues_for_protein(
+            session_dir, comparisons, req.protein_id, accessions
+        )
         selected_fc = []
         for j, comp in enumerate(comparisons):
             val = matrix[query_idx, j]
             if not np.isnan(val):
+                pv = pvals.get(comp, {})
                 selected_fc.append({
                     "comparison": comp,
                     "log_fc": float(val),
-                    "pval": 0.0,  # We don't have per-protein per-comparison pval in the matrix; approximate
-                    "adj_pval": 0.0,
+                    "pval": pv.get("pval", 1.0),
+                    "adj_pval": pv.get("adj_pval", 1.0),
                 })
 
         # Correlated proteins
-        import numpy as np
         correlated = compute_protein_correlations(
             matrix, accessions, gene_names, query_idx, req.correlation_method
         )
@@ -809,17 +877,32 @@ async def _run_comparison_correlation(session_dir: str, req: ComparisonCorrelati
         }
 
         # Heatmap data: selected comparisons, marked proteins
-        # Build a reduced matrix for selected comparisons
+        # Union of all marked proteins across the SELECTED comparisons
+        marked_set = set()
+        for comp in selected:
+            if comp in req.marked_proteins:
+                marked_set.update(req.marked_proteins[comp])
+        # Fall back to top 100 significant proteins if no marks
+        if not marked_set:
+            sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
+            sel_matrix = matrix[:, sel_indices]
+            # Sort by max absolute FC across selected comparisons
+            max_fc = np.nanmax(np.abs(sel_matrix), axis=1)
+            top_100 = np.argsort(max_fc)[-100:]
+            for i in top_100:
+                if not np.isnan(sel_matrix[i]).all():
+                    marked_set.add(accessions[i])
+
+        # Filter matrix to marked proteins
+        marked_list = sorted(marked_set)
+        row_indices = [accessions.index(acc) for acc in marked_list if acc in set(accessions)]
         sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
-        sel_matrix = matrix[:, sel_indices]
-        # Keep only proteins with at least one non-NaN value
-        valid_rows = ~np.isnan(sel_matrix).all(axis=1)
-        heatmap_fc = sel_matrix[valid_rows]
+        heatmap_fc = matrix[np.array(row_indices)][:, sel_indices]
         heatmap_proteins = [
             {"accession": accessions[i], "gene_name": gene_names[i]}
-            for i in range(len(accessions)) if valid_rows[i]
+            for i in row_indices
         ]
-        # Limit to top 500 by max absolute FC
+        # Truncate to top 500 by max absolute FC if too many
         if len(heatmap_proteins) > 500:
             max_fc = np.nanmax(np.abs(heatmap_fc), axis=1)
             top_idx = np.argsort(max_fc)[-500:]
@@ -957,6 +1040,26 @@ async def get_comparison_correlation_data(
         return json.load(f)
 
 
+# ── Protein List Endpoint ──
+
+@router.get("/{session_id}/compare/proteins")
+async def list_proteins(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """List all proteins across all comparisons for dropdown selectors."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    comparisons = _get_comparisons_from_session(session.session_dir)
+    matrix, accessions, gene_names = build_fold_change_matrix(session.session_dir, comparisons)
+    return [
+        {"accession": acc, "gene_name": gn}
+        for acc, gn in zip(accessions, gene_names)
+    ]
+
+
 # ── Venn Diagram Endpoints ──
 
 @router.post("/{session_id}/compare/venn")
@@ -984,16 +1087,12 @@ async def trigger_venn(
     return result
 ```
 
-- [ ] **Step 4: Add missing numpy import**
-
-The `_run_protein_correlation` function uses `np.isnan` and `np.nan` — add `import numpy as np` at the top of the file.
-
-- [ ] **Step 5: Verify routes compile**
+- [ ] **Step 4: Verify routes compile**
 
 Run: `cd backend && .venv/Scripts/python.exe -c "from app.api.routes.compare import router; print('OK')"`
 Expected: "OK" (no ImportError)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add backend/app/api/routes/compare.py Tests/backend/integration/test_compare_api.py
@@ -1152,7 +1251,11 @@ if (session.markers && typeof session.markers === 'object' && !Array.isArray(ses
   setMarkedProteins(restored);
 } else if (Array.isArray(session.markers) && session.markers.length > 0) {
   // Migrate old flat format to per-comparison
-  const compKey = selectedComparison || comparisons?.[0] ? `${formatGroup(comparisons[0].group1)}_vs_${formatGroup(comparisons[0].group2)}` : 'default';
+  const comps = session.config?.comparisons;
+  let compKey = selectedComparison || 'default';
+  if (comps && comps.length > 0) {
+    compKey = `${formatGroup(comps[0].group1)}_vs_${formatGroup(comps[0].group2)}`;
+  }
   setMarkedProteins({ [compKey]: new Set(session.markers) });
 } else {
   setMarkedProteins({});
@@ -1433,7 +1536,13 @@ Write `frontend/src/components/visualization/compare/CorrelationBarChart.tsx` �
 
 - [ ] **Step 4: Create ClusterMap component**
 
-Write `frontend/src/components/visualization/compare/ClusterMap.tsx` — scatter plot for PCA/UMAP/tSNE coordinates. Accepts: `points: ClusterPoint[]`, `selectedAccession: string`, `colorBy: Record<string, number>` (fold change per accession for coloring), `varExplained?: number`. Selected point gets larger marker + higher z-order.
+Write `frontend/src/components/visualization/compare/ClusterMap.tsx` — scatter plot for PCA/UMAP/tSNE coordinates. Supports two modes via generics:
+
+Protein mode: `points: ProteinClusterPoint[]`, `selectedKey: string` (accession), `colorBy: Record<string, number>` (fold change per accession), `varExplained?: number`, `mode: 'protein'`.
+
+Comparison mode: `points: ComparisonClusterPoint[]`, `selectedKey: string` (comparison name), `colorBy?: undefined`, `varExplained?: number`, `mode: 'comparison'`.
+
+In both modes, the selected point gets a larger marker (`size: 16` vs `size: 6`) and is drawn last (top layer). Comparison mode uses a single color for all dots (since there's no fold change to color by). PCA variance explained is shown in the axis label or title when available.
 
 - [ ] **Step 5: Create ComparisonHeatmap component**
 
