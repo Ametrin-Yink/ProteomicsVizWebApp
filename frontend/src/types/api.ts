@@ -350,3 +350,75 @@ export type WebSocketMessageUnion =
   | ProcessingCompleteMessage
   | ProcessingErrorMessage
   | UploadProgressMessage;
+
+// Compare Page Types
+
+export type CorrelationMethod = 'pearson' | 'spearman';
+export type ClusterMethod = 'pca' | 'umap' | 'tsne';
+
+export interface CompareRunStatus {
+  status: 'idle' | 'running' | 'completed' | 'error';
+  error?: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface ProteinFCResult {
+  comparison: string;
+  log_fc: number;
+  pval: number;
+  adj_pval: number;
+}
+
+export interface CorrelatedProtein {
+  accession: string;
+  gene_name: string;
+  correlation: number;
+}
+
+export interface ProteinClusterPoint {
+  accession: string;
+  gene_name: string;
+  x: number;
+  y: number;
+  cluster_id?: number;
+}
+
+export interface ComparisonClusterPoint {
+  comparison: string;
+  x: number;
+  y: number;
+}
+
+export interface ProteinCorrelationData {
+  selected_protein_fc: ProteinFCResult[];
+  correlated_proteins: CorrelatedProtein[];
+  cluster_coords: ProteinClusterPoint[];
+  cluster_var_explained?: number;
+}
+
+export interface VennData {
+  sets: Record<string, string[]>;
+  overlaps: Array<{ region: string[]; count: number; label: string }>;
+  set_sizes: Record<string, number>;
+}
+
+export interface ComparisonCorrelationData {
+  similarity_matrix: {
+    comparisons: string[];
+    matrix: number[][];
+  };
+  heatmap_data: {
+    proteins: Array<{ accession: string; gene_name: string }>;
+    comparisons: string[];
+    fold_changes: number[][];
+  };
+  comparison_correlations: Array<{ comparison: string; correlation: number }>;
+  cluster_coords: ComparisonClusterPoint[];
+}
+
+/** Protein list entry for selector dropdowns */
+export interface ProteinListEntry {
+  accession: string;
+  gene_name: string;
+}
