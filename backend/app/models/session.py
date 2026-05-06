@@ -114,9 +114,9 @@ class Session(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     error_message: Optional[str] = None
-    markers: list[str] = Field(
-        default_factory=list,
-        description="Marked protein accessions for volcano plot labels",
+    markers: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Marked protein accessions per comparison for volcano plot labels",
     )
     volcano_filters: Optional[dict[str, Any]] = Field(
         default=None,
@@ -157,7 +157,7 @@ class SessionUpdate(BaseModel):
 class VisualizationStateUpdate(BaseModel):
     """Partial update for visualization state (markers + volcano filters)."""
 
-    markers: Optional[list[str]] = None
+    markers: Optional[dict[str, list[str]]] = None
     volcano_filters: Optional[dict[str, Any]] = None
 
 
