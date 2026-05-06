@@ -84,7 +84,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return hashColor(condition);
   }, [conditionColors]);
 
-  // 1. PCA Plot — one trace per condition, legend below, no point labels
   const pcaPlot = useMemo(() => {
     if (!data.pca) return null;
 
@@ -95,7 +94,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
       data.pca.conditions
     );
 
-    // Group points by condition → one trace per condition
     const conditionGroups: Record<string, typeof rowData> = {};
     rowData.forEach((d) => {
       (conditionGroups[d.condition] ??= []).push(d);
@@ -147,7 +145,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return { traces, layout };
   }, [data.pca, getConditionColor]);
 
-  // 2. P-value Distribution (per-comparison if selectedComparison is provided)
   const pvalueDistPlot = useMemo(() => {
     const pvDist = selectedComparison && data.pvalue_distributions
       ? data.pvalue_distributions[selectedComparison]
@@ -187,7 +184,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return { traces: [trace], layout };
   }, [data.pvalue_distribution, data.pvalue_distributions, selectedComparison]);
 
-  // 3. PSM CVs — box plots capped at 95th percentile (whisker ends at p95)
   const psmCVPlot = useMemo(() => {
     if (!data.psm_cv) return null;
 
@@ -225,7 +221,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return { traces, layout };
   }, [data.psm_cv, getConditionColor]);
 
-  // 3b. Protein CVs — box plots capped at 95th percentile (whisker ends at p95)
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
 
@@ -263,7 +258,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return { traces, layout };
   }, [data.protein_cv, getConditionColor]);
 
-  // 4. PSM Intensity Distribution — flat box plots, one trace per condition×replicate combo
   const psmIntensityPlot = useMemo(() => {
     const boxData = data.intensity_distributions?.psm_boxplot;
     if (!boxData || Object.keys(boxData).length === 0) return null;
@@ -317,7 +311,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return { traces, layout };
   }, [data.intensity_distributions?.psm_boxplot, getConditionColor]);
 
-  // 5. Protein Intensity Distribution — box plots per sample, wider boxes, small outliers
   const proteinIntensityPlot = useMemo(() => {
     const boxData = data.intensity_distributions?.protein_boxplot;
     if (!boxData || Object.keys(boxData).length === 0) return null;
@@ -357,7 +350,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return { traces, layout };
   }, [data.intensity_distributions?.protein_boxplot, getConditionColor]);
 
-  // 6. Data Completeness - Protein Level
   const completenessPlot = useMemo(() => {
     if (!data.data_completeness) return null;
 
@@ -408,7 +400,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     return { traces, layout };
   }, [data.data_completeness]);
 
-  // 6b. Data Completeness - PSM Level
   const psmCompletenessPlot = useMemo(() => {
     if (!data.psm_completeness) return null;
 
@@ -468,7 +459,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
 
   const plots = [
     { id: 'pca', data: pcaPlot, title: 'PCA Analysis' },
-    { id: 'pvalue', data: pvalueDistPlot, title: 'P-value Distribution' },
+    { id: 'pvalue', data: pvalueDistPlot, title: 'P-value Distribution', showComparisonDropdown: true },
     { id: 'psm-cv', data: psmCVPlot, title: 'PSM CVs' },
     { id: 'protein-cv', data: proteinCVPlot, title: 'Protein CVs' },
     { id: 'psm-intensity', data: psmIntensityPlot, title: 'PSM Intensity Distribution' },
@@ -477,12 +468,9 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     { id: 'psm-completeness', data: psmCompletenessPlot, title: 'PSM Data Completeness' },
   ];
 
-  // State for expanded plot modal
   const [expandedPlot, setExpandedPlot] = useState<string | null>(null);
 
-  // Handle download plot
   const handleDownload = (plotId: string) => {
-    // Trigger download using Plotly's toImage
     const plotElement = document.querySelector(`[data-testid="${plotId}-plot"] .js-plotly-plot`);
     if (plotElement) {
       // @ts-expect-error - Plotly is loaded globally
@@ -509,11 +497,10 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
               data-testid={`${plot.id}-plot`}
               className="bg-background rounded-lg border border-border p-4"
             >
-              {/* Plot header with actions */}
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-text-primary">{plot.title}</h3>
                 <div className="flex items-center gap-2">
-                  {plot.id === 'pvalue' && comparisonOptions.length > 1 && (
+                  {plot.showComparisonDropdown && comparisonOptions.length > 1 && (
                     <SearchableSelect
                       options={comparisonOptions}
                       value={selectedComparison}
@@ -565,7 +552,6 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
         )}
       </div>
 
-      {/* Expanded Plot Modal */}
       {expandedPlot && (
         <div
           data-testid="plot-modal"

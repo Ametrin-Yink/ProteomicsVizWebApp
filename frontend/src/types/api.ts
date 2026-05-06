@@ -132,20 +132,7 @@ export interface PSMCV {
   [condition: string]: number[];
 }
 
-export interface KDECurve {
-  kde_x: number[];
-  kde_y: number[];
-}
-
 export interface IntensityDistributions {
-  psm: {
-    [condition: string]: {
-      [replicate: string]: KDECurve;
-    };
-  };
-  protein: {
-    [sample: string]: KDECurve;
-  };
   psm_boxplot: {
     [condition: string]: {
       [replicate: string]: number[];

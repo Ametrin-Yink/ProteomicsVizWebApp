@@ -94,22 +94,9 @@ class CVData(BaseModel):
     cv_values: list[float]
 
 
-class KDECurve(BaseModel):
-    """Pre-computed Gaussian KDE curve points."""
-
-    kde_x: list[float]
-    kde_y: list[float]
-
-
 class IntensityDistribution(BaseModel):
-    """Intensity distribution data — KDE curves and raw values for box plots."""
+    """Intensity distribution data for box plots."""
 
-    psm: dict[str, dict[str, KDECurve]] = Field(
-        default_factory=dict, description="PSM KDE curves by condition and replicate"
-    )
-    protein: dict[str, KDECurve] = Field(
-        default_factory=dict, description="Protein KDE curves by sample"
-    )
     psm_boxplot: dict[str, dict[str, list[float]]] = Field(
         default_factory=dict, description="PSM raw log2 intensities for box plots: condition -> replicate -> values"
     )

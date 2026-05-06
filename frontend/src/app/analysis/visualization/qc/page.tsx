@@ -6,7 +6,7 @@ import Link from 'next/link';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
 import { getQCData, getSession } from '@/lib/api';
-
+import { formatGroup } from '@/lib/utils';
 
 function QCContent() {
   const searchParams = useSearchParams();
@@ -171,8 +171,8 @@ function QCContent() {
             selectedComparison={selectedComparison}
             onComparisonChange={setSelectedComparison}
             comparisonOptions={comparisons.map((c) => {
-              const g1Label = Object.values(c.group1).join('+');
-              const g2Label = Object.values(c.group2).join('+');
+              const g1Label = formatGroup(c.group1);
+              const g2Label = formatGroup(c.group2);
               return { value: `${g1Label}_vs_${g2Label}`, label: `${g1Label} vs ${g2Label}` };
             })}
           />

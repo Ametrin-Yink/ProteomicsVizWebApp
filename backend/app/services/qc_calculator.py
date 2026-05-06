@@ -485,7 +485,7 @@ class QCCalculator:
         Returns:
             Dictionary with intensity distributions
         """
-        result = {"psm": {}, "protein": {}, "psm_boxplot": {}, "protein_boxplot": {}}
+        result = {"psm_boxplot": {}, "protein_boxplot": {}}
 
         # PSM intensities by condition
         if psm_df is not None and "Condition" in psm_df.columns:
@@ -500,7 +500,6 @@ class QCCalculator:
             norm = psm_df["Abundance"] * (global_median / sample_medians)
             log2_vals = np.where(pos, np.log2(np.where(pos, norm, 1)), np.nan)
 
-            # Build result dict with pre-computed KDE curves and raw boxplot values
             for group_key, idx in psm_df.groupby(group_cols).groups.items():
                 if not has_replicate:
                     condition = group_key
@@ -512,10 +511,9 @@ class QCCalculator:
                 if len(valid) > 0:
                     cond_str = str(condition)
                     rep_key = f"replicate_{replicate}"
-                    result["psm"].setdefault(cond_str, {})[rep_key] = self._compute_kde(valid)
                     result["psm_boxplot"].setdefault(cond_str, {})[rep_key] = valid.tolist()
 
-        # Protein intensities — per-sample KDE curves and raw boxplot values
+        # Protein intensities — raw boxplot values per sample
         id_cols = [
             "Master Protein Accessions",
             "Gene_Name",
@@ -534,7 +532,6 @@ class QCCalculator:
         for col in abundance_cols:
             intensities = protein_df[col].dropna().values
             if len(intensities) > 0:
-                result["protein"][col] = self._compute_kde(intensities)
                 result["protein_boxplot"][col] = intensities.tolist()
 
         return result
@@ -631,39 +628,6 @@ class QCCalculator:
         if total == 0:
             return None
         return round((total_present / total) * 100, 1)
-
-    @staticmethod
-    def _compute_kde(values: np.ndarray, n_points: int = 100) -> dict:
-        """Compute Gaussian KDE curve with Silverman bandwidth.
-
-        Returns a compact dict of {kde_x, kde_y} suitable for serialization
-        and direct rendering — avoids shipping raw values to the frontend.
-        """
-        clean = values[np.isfinite(values)]
-        if len(clean) < 2:
-            return {"kde_x": [], "kde_y": []}
-
-        std = float(np.std(clean, ddof=1))
-        bandwidth = max(1e-10, 1.06 * std * len(clean) ** (-0.2))
-
-        x_min, x_max = float(clean.min()), float(clean.max())
-        if x_min == x_max:
-            return {"kde_x": [x_min], "kde_y": [float(len(clean))]}
-
-        x = np.linspace(x_min, x_max, n_points)
-        y = np.zeros(n_points)
-        denom = len(clean) * bandwidth * np.sqrt(2 * np.pi)
-
-        # Chunked to limit memory for large datasets
-        chunk_size = 5000
-        for start in range(0, len(clean), chunk_size):
-            chunk = clean[start : start + chunk_size]
-            z = (x[:, np.newaxis] - chunk) / bandwidth
-            y += np.exp(-0.5 * z * z).sum(axis=1)
-
-        y /= denom
-
-        return {"kde_x": x.tolist(), "kde_y": y.tolist()}
 
     def save_qc_data(self, qc_data: QCData, output_path: Path) -> None:
         """
