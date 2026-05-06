@@ -13,6 +13,7 @@ import logging
 import os
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -34,6 +35,53 @@ async def _safe_log(callback, level: str, message: str) -> None:
             callback(level, message)
     except Exception:
         pass
+
+
+def _execute_batch(
+    batch_items: list[dict],
+    batch_idx: int,
+    n_cores_per: int,
+    build_batch_cmd: callable,
+) -> dict:
+    """Run a single batch subprocess (called from ProcessPoolExecutor worker).
+
+    This is a module-level function so it can be pickled by ProcessPoolExecutor.
+    """
+    cmd, timeout = build_batch_cmd(batch_items, batch_idx, n_cores_per)
+    t0 = time.time()
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+        elapsed = time.time() - t0
+        if result.returncode == 0:
+            return {"batch_idx": batch_idx, "ok": True, "elapsed": elapsed}
+        else:
+            error_msg = (
+                result.stderr[:500]
+                if result.stderr
+                else f"exit code {result.returncode}"
+            )
+            return {
+                "batch_idx": batch_idx,
+                "ok": False,
+                "elapsed": elapsed,
+                "error": error_msg,
+            }
+    except subprocess.TimeoutExpired:
+        elapsed = time.time() - t0
+        return {
+            "batch_idx": batch_idx,
+            "ok": False,
+            "elapsed": elapsed,
+            "error": "timeout",
+        }
 
 
 class BaseRWrapper(ABC):
@@ -392,14 +440,14 @@ class BaseRWrapper(ABC):
         n_cores_cap: int,
         build_batch_cmd,
         log_callback=None,
-    ):
-        """Split items into batches and execute concurrently.
+    ) -> None:
+        """Split items into batches and execute concurrently via ProcessPoolExecutor.
 
         When len(items) <= batch_size, runs a single batch via _run_r_script
         (no parallelism overhead). Used by MSstats Step 7 to parallelize
         groupComparison across many comparisons.
         """
-        import time
+        import concurrent.futures
 
         n_total = len(items)
 
@@ -407,7 +455,9 @@ class BaseRWrapper(ABC):
             logger.info(
                 "Batch mode: %d items, single batch (no parallelism)", n_total
             )
-            cmd, timeout = build_batch_cmd(items, 0)
+            total_cores = os.cpu_count() or 4
+            n_cores_per = max(1, min(total_cores, n_cores_cap))
+            cmd, timeout = build_batch_cmd(items, 0, n_cores_per)
             await self._run_r_script(
                 cmd,
                 self.scripts_dir / self._gc_script_name,
@@ -437,44 +487,54 @@ class BaseRWrapper(ABC):
                 f"({n_cores_per} cores each, {effective_workers} concurrent)",
             )
 
-        semaphore = asyncio.Semaphore(effective_workers)
-
-        async def _run_batch(batch_items: list[dict], batch_idx: int):
-            async with semaphore:
-                cmd, timeout = build_batch_cmd(batch_items, batch_idx)
-                t0 = time.time()
-                await self._run_r_script(
-                    cmd,
-                    self.scripts_dir / self._gc_script_name,
-                    log_callback=log_callback,
-                    timeout=timeout,
-                )
-                elapsed = time.time() - t0
-                return {"batch_idx": batch_idx, "ok": True, "elapsed": elapsed}
-
-        tasks = [
-            _run_batch(batch_items, idx)
-            for idx, batch_items in enumerate(batches)
-        ]
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
         failures: list[tuple[int, str]] = []
-        for idx, result in enumerate(results):
-            if isinstance(result, Exception):
-                msg = f"Batch {idx + 1}/{n_batches} FAILED: {result}"
-                logger.error(msg)
-                failures.append((idx, str(result)))
-            else:
-                batch_num = idx + 1
-                elapsed = result.get("elapsed", 0)
-                msg = (
-                    f"Batch {batch_num}/{n_batches} complete "
-                    f"({elapsed:.0f}s)"
-                )
-                logger.info(msg)
-                if log_callback:
-                    await _safe_log(log_callback, "info", msg)
+        t0_total = time.time()
+
+        loop = asyncio.get_running_loop()
+
+        try:
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=effective_workers,
+            ) as executor:
+                futures = []
+                for idx, batch_items in enumerate(batches):
+                    fut = loop.run_in_executor(
+                        executor, _execute_batch, batch_items, idx, n_cores_per, build_batch_cmd,
+                    )
+                    futures.append((idx, fut))
+
+                for idx, fut in futures:
+                    try:
+                        result = await fut
+                        batch_num = idx + 1
+                        if result["ok"]:
+                            msg = (
+                                f"Batch {batch_num}/{n_batches} complete "
+                                f"({result['elapsed']:.0f}s)"
+                            )
+                            logger.info(msg)
+                            if log_callback:
+                                await _safe_log(log_callback, "info", msg)
+                        else:
+                            msg = (
+                                f"Batch {batch_num}/{n_batches} FAILED: "
+                                f"{result.get('error', 'unknown')}"
+                            )
+                            logger.error(msg)
+                            failures.append((idx, result.get("error", "unknown")))
+                    except Exception as e:
+                        msg = f"Batch {idx + 1}/{n_batches} FAILED: {e}"
+                        logger.error(msg)
+                        failures.append((idx, str(e)))
+        except asyncio.CancelledError:
+            logger.warning(
+                "run_batched cancelled - %d/%d batches may have partial results",
+                len([f for _, f in futures if f.done()]), n_batches,
+            )
+            raise
+
+        elapsed_total = time.time() - t0_total
+        logger.info("All batches complete in %.0fs", elapsed_total)
 
         if failures:
             batch_nums = [str(i + 1) for i, _ in failures]
