@@ -14,8 +14,7 @@ function QCContent() {
   const [data, setData] = useState<QCData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [treatment, setTreatment] = useState<string>('');
-  const [control, setControl] = useState<string>('');
+  const [conditionList, setConditionList] = useState<string[]>([]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -25,11 +24,20 @@ function QCContent() {
       try {
         const qcData = await getQCData(sessionId);
         setData(qcData);
-        // Fetch session config for treatment/control group names
+        // Build condition list from session config
         const session = await getSession(sessionId);
         if (session?.config) {
-          setTreatment(session.config.treatment ?? '');
-          setControl(session.config.control ?? '');
+          const config = session.config;
+          const conditions = new Set<string>();
+          if (config.comparisons && config.comparisons.length > 0) {
+            config.comparisons.forEach((comp) => {
+              Object.keys(comp.group1 || {}).forEach((c) => conditions.add(c));
+              Object.keys(comp.group2 || {}).forEach((c) => conditions.add(c));
+            });
+          }
+          if (config.treatment) conditions.add(config.treatment);
+          if (config.control) conditions.add(config.control);
+          setConditionList(Array.from(conditions));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load QC data');
@@ -150,7 +158,7 @@ function QCContent() {
 
         {/* QC Plots Grid */}
         {data ? (
-          <QCPlots data={data} treatment={treatment || undefined} control={control || undefined} />
+          <QCPlots data={data} conditionList={conditionList.length > 0 ? conditionList : undefined} />
         ) : (
           <div className="bg-surface rounded-lg border border-border p-5 text-center">
             <p className="text-text-secondary">No QC data available</p>

@@ -12,8 +12,8 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface QCPlotsProps {
   data: QCData;
-  treatment?: string;
-  control?: string;
+  conditionList?: string[];
+  selectedComparison?: string;
 }
 
 // KDE color palette shared by intensity plots (stable reference)
@@ -22,32 +22,57 @@ const kdeSampleColors = [
   '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#06B6D4', '#D946EF',
 ];
 
-export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
-  // Color by treatment/control groups from session config
-  const treatmentColor = '#E73564';
-  const controlColor = '#00ADEF';
+export default function QCPlots({ data, conditionList, selectedComparison }: QCPlotsProps) {
+  const TABLEAU_10 = [
+    '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F',
+    '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC',
+  ];
 
+  // Build a deterministic condition→color map from the condition list
+  const conditionColors = useMemo(() => {
+    const map: Record<string, string> = {};
+    (conditionList || []).forEach((cond, i) => {
+      map[cond] = TABLEAU_10[i % TABLEAU_10.length];
+    });
+    return map;
+  }, [conditionList]);
+
+  // PSM CV color: direct lookup from condition list
   const getConditionColor = useCallback((condition: string) => {
-    if (treatment && condition.toLowerCase() === treatment.toLowerCase()) return treatmentColor;
-    if (control && condition.toLowerCase() === control.toLowerCase()) return controlColor;
-    // Fallback: if treatment/control not available, use default mapping
-    if (condition.includes('INCZ')) return treatmentColor;
-    if (condition === 'DMSO' || condition === 'Control') return controlColor;
-    return '#94a3b8';
-  }, [treatment, control]);
+    if (conditionColors[condition]) return conditionColors[condition];
+    const key = Object.keys(conditionColors).find(
+      k => k.toLowerCase() === condition.toLowerCase()
+    );
+    if (key) return conditionColors[key];
+    // Hash-based fallback for unknown conditions
+    let hash = 0;
+    for (let i = 0; i < condition.length; i++) {
+      hash = ((hash << 5) - hash) + condition.charCodeAt(i);
+      hash |= 0;
+    }
+    return TABLEAU_10[Math.abs(hash) % TABLEAU_10.length];
+  }, [conditionColors]);
 
-  // Protein CV uses different colors from PSM CV for visual distinction
-  const proteinTreatmentColor = '#F59E0B';
-  const proteinControlColor = '#10B981';
-
+  // Protein CV uses a shifted palette (offset by 4) for visual distinction
   const getProteinConditionColor = useCallback((condition: string) => {
-    if (treatment && condition.toLowerCase() === treatment.toLowerCase()) return proteinTreatmentColor;
-    if (control && condition.toLowerCase() === control.toLowerCase()) return proteinControlColor;
-    // Fallback: if treatment/control not available, use default mapping
-    if (condition.includes('INCZ')) return proteinTreatmentColor;
-    if (condition === 'DMSO' || condition === 'Control') return proteinControlColor;
-    return '#94a3b8';
-  }, [treatment, control]);
+    const shift = 4;
+    // Look up the condition index from conditionList for deterministic shift
+    const getIndex = (c: string): number => {
+      const exact = conditionList?.indexOf(c);
+      if (exact !== undefined && exact >= 0) return exact;
+      const key = conditionList?.find(k => k.toLowerCase() === c.toLowerCase());
+      return key ? conditionList!.indexOf(key) : -1;
+    };
+    const idx = getIndex(condition);
+    if (idx >= 0) return TABLEAU_10[(idx + shift) % TABLEAU_10.length];
+    // Hash-based fallback for unknown conditions
+    let hash = 0;
+    for (let i = 0; i < condition.length; i++) {
+      hash = ((hash << 5) - hash) + condition.charCodeAt(i);
+      hash |= 0;
+    }
+    return TABLEAU_10[(Math.abs(hash) + shift) % TABLEAU_10.length];
+  }, [conditionList]);
 
   // 1. PCA Plot - Color by sample
   const pcaPlot = useMemo(() => {
@@ -101,15 +126,18 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     return { traces: [trace], layout };
   }, [data.pca, getConditionColor]);
 
-  // 2. P-value Distribution
+  // 2. P-value Distribution (per-comparison if selectedComparison is provided)
   const pvalueDistPlot = useMemo(() => {
-    if (!data.pvalue_distribution) return null;
+    const pvDist = selectedComparison && data.pvalue_distributions
+      ? data.pvalue_distributions[selectedComparison]
+      : data.pvalue_distribution;
+    if (!pvDist) return null;
 
     const trace = {
-      x: data.pvalue_distribution.bins.slice(0, -1).map((bin, i) =>
-        (bin + data.pvalue_distribution!.bins[i + 1]) / 2
+      x: pvDist.bins.slice(0, -1).map((bin, i) =>
+        (bin + pvDist.bins[i + 1]) / 2
       ),
-      y: data.pvalue_distribution.counts,
+      y: pvDist.counts,
       type: 'bar' as const,
       marker: {
         color: '#3B82F6',
@@ -136,7 +164,7 @@ export default function QCPlots({ data, treatment, control }: QCPlotsProps) {
     };
 
     return { traces: [trace], layout };
-  }, [data.pvalue_distribution]);
+  }, [data.pvalue_distribution, data.pvalue_distributions, selectedComparison]);
 
   // 3. PSM CVs - show 95th percentile top
   const psmCVPlot = useMemo(() => {
