@@ -6,6 +6,7 @@ import Link from 'next/link';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
 import { getQCData, getSession } from '@/lib/api';
+import { formatGroup } from '@/lib/utils';
 
 function QCContent() {
   const searchParams = useSearchParams();
@@ -15,6 +16,8 @@ function QCContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [conditionList, setConditionList] = useState<string[]>([]);
+  const [comparisons, setComparisons] = useState<Array<{ group1: Record<string, string>; group2: Record<string, string> }>>([]);
+  const [selectedComparison, setSelectedComparison] = useState<string>('');
 
   useEffect(() => {
     if (!sessionId) return;
@@ -38,6 +41,9 @@ function QCContent() {
           if (config.treatment) conditions.add(config.treatment);
           if (config.control) conditions.add(config.control);
           setConditionList(Array.from(conditions));
+          if (config.comparisons && config.comparisons.length > 0) {
+            setComparisons(config.comparisons);
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load QC data');
@@ -156,9 +162,37 @@ function QCContent() {
           </div>
         )}
 
+        {/* Comparison selector for p-value distribution */}
+        {comparisons.length > 0 && (
+          <div className="mb-4 bg-background rounded-lg border border-border p-4">
+            <label className="block text-sm font-medium text-text-primary mb-3">
+              P-value Distribution: Select Comparison
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {comparisons.map((c, i) => {
+                const val = formatGroup(c.group1) + '_vs_' + formatGroup(c.group2);
+                const label = formatGroup(c.group1) + ' vs ' + formatGroup(c.group2);
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedComparison(val)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      selectedComparison === val
+                        ? 'bg-primary text-white'
+                        : 'bg-surface text-text-secondary hover:bg-border'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* QC Plots Grid */}
         {data ? (
-          <QCPlots data={data} conditionList={conditionList.length > 0 ? conditionList : undefined} />
+          <QCPlots data={data} conditionList={conditionList.length > 0 ? conditionList : undefined} selectedComparison={selectedComparison || undefined} />
         ) : (
           <div className="bg-surface rounded-lg border border-border p-5 text-center">
             <p className="text-text-secondary">No QC data available</p>
