@@ -98,45 +98,41 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
         }
 
     gene_mapping = get_gene_mapping(ctx.config.organism)
+    log_base = ctx.config.msstats_log_base or 2
+    save_fitted_models = ctx.config.msstats_save_fitted_models
+    log_cb = create_log_callback(ctx, step=7)
+
+    common = dict(
+        rds_file=rds_input,
+        output_dir=ctx.results_dir,
+        comparisons=comparisons,
+        gene_mapping_file=gene_mapping,
+        covariates=covariate_data,
+        log_base=log_base,
+        save_fitted_models=save_fitted_models,
+        log_callback=log_cb,
+        timeout_multiplier=ctx.timeout_multiplier,
+    )
 
     if len(comparisons) > settings.msstats_batch_size:
-        # Batched path: parallel R subprocesses via ProcessPoolExecutor
         await msstats_wrapper.group_comparison_batched(
-            rds_file=rds_input,
-            output_dir=ctx.results_dir,
-            comparisons=comparisons,
-            gene_mapping_file=gene_mapping,
-            covariates=covariate_data,
+            **common,
             batch_size=settings.msstats_batch_size,
             max_workers=settings.msstats_max_workers,
             n_cores_cap=settings.msstats_n_cores_cap,
-            log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
-            save_fitted_models=ctx.config.msstats_save_fitted_models,
-            log_callback=create_log_callback(ctx, step=7),
-            timeout_multiplier=ctx.timeout_multiplier,
         )
     else:
-        # Single-process path (unchanged from current behavior)
         await msstats_wrapper.group_comparison_multi(
-            rds_file=rds_input,
-            output_dir=ctx.results_dir,
-            comparisons=comparisons,
-            gene_mapping_file=gene_mapping,
+            **common,
             config=ctx.config,
-            covariates=covariate_data,
-            log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
-            save_fitted_models=ctx.config.msstats_save_fitted_models,
-            log_callback=create_log_callback(ctx, step=7),
-            timeout_multiplier=ctx.timeout_multiplier,
         )
+
+    def build_label(group: dict) -> str:
+        return "+".join(str(v) for v in group.values())
 
     # Record the first comparison result as the primary diff_expression_path
     if comparisons:
         first = comparisons[0]
-
-        def build_label(group: dict) -> str:
-            return "+".join(str(v) for v in group.values())
-
         label = f"{build_label(first['group1'])}_vs_{build_label(first['group2'])}"
         ctx.result.diff_expression_path = str(
             ctx.results_dir / f"Diff_Expression_{label}.tsv"
@@ -145,9 +141,7 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
     # Count total significant proteins across all comparisons
     total_sig = 0
     for comp in comparisons:
-        g1_label = "+".join(str(v) for v in comp["group1"].values())
-        g2_label = "+".join(str(v) for v in comp["group2"].values())
-        label = f"{g1_label}_vs_{g2_label}"
+        label = f"{build_label(comp['group1'])}_vs_{build_label(comp['group2'])}"
         de_file = ctx.results_dir / f"Diff_Expression_{label}.tsv"
         if de_file.exists():
             de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")

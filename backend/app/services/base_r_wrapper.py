@@ -61,6 +61,8 @@ def _execute_batch(
         )
         elapsed = time.time() - t0
         if result.returncode == 0:
+            if result.stderr:
+                logger.debug("Batch %d stderr: %s", batch_idx, result.stderr[:500])
             return {"batch_idx": batch_idx, "ok": True, "elapsed": elapsed}
         else:
             error_msg = (
@@ -450,12 +452,12 @@ class BaseRWrapper(ABC):
         import concurrent.futures
 
         n_total = len(items)
+        total_cores = os.cpu_count() or 4
 
         if n_total <= batch_size:
             logger.info(
                 "Batch mode: %d items, single batch (no parallelism)", n_total
             )
-            total_cores = os.cpu_count() or 4
             n_cores_per = max(1, min(total_cores, n_cores_cap))
             cmd, timeout = build_batch_cmd(items, 0, n_cores_per)
             await self._run_r_script(
@@ -466,13 +468,11 @@ class BaseRWrapper(ABC):
             )
             return
 
-        # Split into batches
         batches: list[list[dict]] = []
         for i in range(0, n_total, batch_size):
             batches.append(items[i : i + batch_size])
 
         n_batches = len(batches)
-        total_cores = os.cpu_count() or 4
         effective_workers = min(n_batches, max_workers)
         n_cores_per = max(1, min(total_cores // effective_workers, n_cores_cap))
 
