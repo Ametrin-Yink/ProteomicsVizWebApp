@@ -14,6 +14,13 @@ import type {
   PeptideAbundanceData,
   GSEAPlotData,
   GSEAHeatmapData,
+  CompareRunStatus,
+  ProteinCorrelationData,
+  ComparisonCorrelationData,
+  VennData,
+  ProteinListEntry,
+  CorrelationMethod,
+  ClusterMethod,
 } from '@/types/api';
 import {
   ProcessingStatusResponse,
@@ -328,4 +335,82 @@ export async function updateSessionVisualizationState(
       localStorage.setItem(`viz_state_${sessionId}`, JSON.stringify(data));
     } catch { /* localStorage unavailable */ }
   }
+}
+
+// Compare API
+
+/** Trigger on-demand protein correlation computation */
+export async function runProteinCorrelation(
+  sessionId: string,
+  body: {
+    protein_id: string;
+    correlation_method: CorrelationMethod;
+    cluster_method: ClusterMethod;
+    color_comparison: string;
+  }
+): Promise<{ status: string }> {
+  return fetchApi(`/api/sessions/${sessionId}/compare/protein-correlation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Poll protein correlation compute status */
+export async function getProteinCorrelationStatus(sessionId: string): Promise<CompareRunStatus> {
+  return fetchApi<CompareRunStatus>(`/api/sessions/${sessionId}/compare/protein-correlation/status`);
+}
+
+/** Get cached protein correlation results */
+export async function getProteinCorrelationData(sessionId: string): Promise<ProteinCorrelationData> {
+  return fetchApi<ProteinCorrelationData>(`/api/sessions/${sessionId}/compare/protein-correlation`);
+}
+
+/** Trigger on-demand comparison correlation computation */
+export async function runComparisonCorrelation(
+  sessionId: string,
+  body: {
+    primary_comparison: string;
+    selected_comparisons: string[];
+    marked_proteins: Record<string, string[]>;
+    correlation_method: CorrelationMethod;
+    cluster_method: ClusterMethod;
+  }
+): Promise<{ status: string }> {
+  return fetchApi(`/api/sessions/${sessionId}/compare/comparison-correlation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Poll comparison correlation compute status */
+export async function getComparisonCorrelationStatus(sessionId: string): Promise<CompareRunStatus> {
+  return fetchApi<CompareRunStatus>(`/api/sessions/${sessionId}/compare/comparison-correlation/status`);
+}
+
+/** Get cached comparison correlation results */
+export async function getComparisonCorrelationData(sessionId: string): Promise<ComparisonCorrelationData> {
+  return fetchApi<ComparisonCorrelationData>(`/api/sessions/${sessionId}/compare/comparison-correlation`);
+}
+
+/** Compute Venn diagram data (synchronous, returns result directly) */
+export async function computeVennData(
+  sessionId: string,
+  body: {
+    comparisons: string[];
+    pvalue_threshold: number;
+    logfc_threshold: number;
+  }
+): Promise<VennData> {
+  return fetchApi<VennData>(`/api/sessions/${sessionId}/compare/venn`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/** List all proteins across all comparisons for selector dropdowns */
+export async function listProteins(sessionId: string): Promise<ProteinListEntry[]> {
+  return fetchApi<ProteinListEntry[]>(`/api/sessions/${sessionId}/compare/proteins`);
 }
