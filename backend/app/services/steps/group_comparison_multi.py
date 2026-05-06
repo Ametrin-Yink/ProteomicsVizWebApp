@@ -5,6 +5,7 @@ import logging
 
 import pandas as pd
 
+from app.core.config import settings
 from app.services.msstats_wrapper import msstats_wrapper
 from app.services.pipeline_engine import StepContext
 from app.services.steps._helpers import (
@@ -98,18 +99,36 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
 
     gene_mapping = get_gene_mapping(ctx.config.organism)
 
-    await msstats_wrapper.group_comparison_multi(
-        rds_file=rds_input,
-        output_dir=ctx.results_dir,
-        comparisons=comparisons,
-        gene_mapping_file=gene_mapping,
-        config=ctx.config,
-        covariates=covariate_data,
-        log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
-        save_fitted_models=ctx.config.msstats_save_fitted_models,
-        log_callback=create_log_callback(ctx, step=7),
-        timeout_multiplier=ctx.timeout_multiplier,
-    )
+    if len(comparisons) > settings.msstats_batch_size:
+        # Batched path: parallel R subprocesses via ProcessPoolExecutor
+        await msstats_wrapper.group_comparison_batched(
+            rds_file=rds_input,
+            output_dir=ctx.results_dir,
+            comparisons=comparisons,
+            gene_mapping_file=gene_mapping,
+            covariates=covariate_data,
+            batch_size=settings.msstats_batch_size,
+            max_workers=settings.msstats_max_workers,
+            n_cores_cap=settings.msstats_n_cores_cap,
+            log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
+            save_fitted_models=ctx.config.msstats_save_fitted_models,
+            log_callback=create_log_callback(ctx, step=7),
+            timeout_multiplier=ctx.timeout_multiplier,
+        )
+    else:
+        # Single-process path (unchanged from current behavior)
+        await msstats_wrapper.group_comparison_multi(
+            rds_file=rds_input,
+            output_dir=ctx.results_dir,
+            comparisons=comparisons,
+            gene_mapping_file=gene_mapping,
+            config=ctx.config,
+            covariates=covariate_data,
+            log_base=ctx.config.msstats_log_base if ctx.config.msstats_log_base else 2,
+            save_fitted_models=ctx.config.msstats_save_fitted_models,
+            log_callback=create_log_callback(ctx, step=7),
+            timeout_multiplier=ctx.timeout_multiplier,
+        )
 
     # Record the first comparison result as the primary diff_expression_path
     if comparisons:
