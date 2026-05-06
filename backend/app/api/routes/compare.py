@@ -6,6 +6,7 @@ Follows the same async polling pattern as GSEA routes.
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +29,23 @@ from app.services.compare_service import (
 logger = logging.getLogger("proteomics")
 
 router = APIRouter()
+
+# Keep strong references to background tasks to prevent GC
+_background_tasks: set[asyncio.Task] = set()
+
+def _schedule_background_task(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+# Per-session locks to prevent concurrent compute runs on shared files
+_session_locks: dict[str, asyncio.Lock] = {}
+
+def _get_session_lock(session_id: str) -> asyncio.Lock:
+    if session_id not in _session_locks:
+        _session_locks[session_id] = asyncio.Lock()
+    return _session_locks[session_id]
 
 
 # ── Request/Response models ──
@@ -107,13 +125,13 @@ def _get_comparisons_from_session(session_id: str) -> list[str]:
     return comparisons
 
 
-async def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
+# ── Background Tasks (sync functions, run via asyncio.to_thread) ──
+
+def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
     """Background task: compute protein correlation analysis."""
     compute_type = "protein-correlation"
     session_dir = str(settings.sessions_dir / session_id)
     try:
-        _write_status(session_id, compute_type, {"status": "running"})
-
         comparisons = _get_comparisons_from_session(session_id)
         matrix, accessions, gene_names = build_fold_change_matrix(session_dir, comparisons)
 
@@ -159,21 +177,31 @@ async def _run_protein_correlation(session_id: str, req: ProteinCorrelationReque
             "correlated_proteins": correlated,
             "cluster_coords": cluster_coords,
             "cluster_var_explained": var,
+            "color_comparison": req.color_comparison,
         }
+        current_status = _read_status(session_id, compute_type)
         _write_result(session_id, compute_type, result)
-        _write_status(session_id, compute_type, {"status": "completed"})
+        _write_status(session_id, compute_type, {
+            "status": "completed",
+            "started_at": current_status.get("started_at"),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
     except Exception as e:
         logger.exception(f"Protein correlation compute failed: {e}")
-        _write_status(session_id, compute_type, {"status": "error", "error": str(e)})
+        current_status = _read_status(session_id, compute_type)
+        _write_status(session_id, compute_type, {
+            "status": "error",
+            "error": str(e),
+            "started_at": current_status.get("started_at"),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
 
 
-async def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationRequest):
+def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationRequest):
     """Background task: compute comparison correlation analysis."""
     compute_type = "comparison-correlation"
     session_dir = str(settings.sessions_dir / session_id)
     try:
-        _write_status(session_id, compute_type, {"status": "running"})
-
         all_comparisons = _get_comparisons_from_session(session_id)
         selected = [c for c in req.selected_comparisons if c in all_comparisons]
         if not selected:
@@ -249,11 +277,22 @@ async def _run_comparison_correlation(session_id: str, req: ComparisonCorrelatio
             "comparison_correlations": comp_corrs,
             "cluster_coords": cluster_coords,
         }
+        current_status = _read_status(session_id, compute_type)
         _write_result(session_id, compute_type, result)
-        _write_status(session_id, compute_type, {"status": "completed"})
+        _write_status(session_id, compute_type, {
+            "status": "completed",
+            "started_at": current_status.get("started_at"),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
     except Exception as e:
         logger.exception(f"Comparison correlation compute failed: {e}")
-        _write_status(session_id, compute_type, {"status": "error", "error": str(e)})
+        current_status = _read_status(session_id, compute_type)
+        _write_status(session_id, compute_type, {
+            "status": "error",
+            "error": str(e),
+            "started_at": current_status.get("started_at"),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
 
 
 # ── Protein Correlation Endpoints ──
@@ -267,7 +306,16 @@ async def trigger_protein_correlation(
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    asyncio.create_task(_run_protein_correlation(session_id, req))
+    lock = _get_session_lock(session_id)
+    async with lock:
+        status = _read_status(session_id, "protein-correlation")
+        if status.get("status") == "running":
+            raise HTTPException(status_code=409, detail="Computation already in progress")
+        _write_status(session_id, "protein-correlation", {
+            "status": "running",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        })
+    _schedule_background_task(asyncio.to_thread(_run_protein_correlation, session_id, req))
     return {"status": "running"}
 
 
@@ -308,7 +356,16 @@ async def trigger_comparison_correlation(
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    asyncio.create_task(_run_comparison_correlation(session_id, req))
+    lock = _get_session_lock(session_id)
+    async with lock:
+        status = _read_status(session_id, "comparison-correlation")
+        if status.get("status") == "running":
+            raise HTTPException(status_code=409, detail="Computation already in progress")
+        _write_status(session_id, "comparison-correlation", {
+            "status": "running",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        })
+    _schedule_background_task(asyncio.to_thread(_run_comparison_correlation, session_id, req))
     return {"status": "running"}
 
 
@@ -350,12 +407,18 @@ async def list_proteins(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     comparisons = _get_comparisons_from_session(session_id)
-    session_dir = str(settings.sessions_dir / session_id)
-    matrix, accessions, gene_names = build_fold_change_matrix(session_dir, comparisons)
-    return [
-        {"accession": acc, "gene_name": gn}
-        for acc, gn in zip(accessions, gene_names)
-    ]
+    if not comparisons:
+        return []
+
+    def _load():
+        session_dir = str(settings.sessions_dir / session_id)
+        matrix, accessions, gene_names = build_fold_change_matrix(session_dir, comparisons)
+        return [
+            {"accession": acc, "gene_name": gn}
+            for acc, gn in zip(accessions, gene_names)
+        ]
+
+    return await asyncio.to_thread(_load)
 
 
 # ── Venn Diagram Endpoints ──
