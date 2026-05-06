@@ -94,14 +94,21 @@ class CVData(BaseModel):
     cv_values: list[float]
 
 
-class IntensityDistribution(BaseModel):
-    """Intensity distribution data."""
+class KDECurve(BaseModel):
+    """Pre-computed Gaussian KDE curve points."""
 
-    psm: dict[str, dict[str, list[float]]] = Field(
-        default_factory=dict, description="PSM intensities by condition and replicate"
+    kde_x: list[float]
+    kde_y: list[float]
+
+
+class IntensityDistribution(BaseModel):
+    """Intensity distribution data — KDE curves pre-computed on backend."""
+
+    psm: dict[str, dict[str, KDECurve]] = Field(
+        default_factory=dict, description="PSM KDE curves by condition and replicate"
     )
-    protein: dict[str, list[float]] = Field(
-        default_factory=dict, description="Protein intensities by condition"
+    protein: dict[str, KDECurve] = Field(
+        default_factory=dict, description="Protein KDE curves by sample"
     )
 
 

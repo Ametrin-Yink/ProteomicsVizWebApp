@@ -88,13 +88,21 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
 
     logger.info(f"Step 7 (MSstats groupComparison): Running {len(comparisons)} comparisons")
 
-    # Filter metadata to only include columns selected as covariates
-    covariate_data = ctx.config.metadata or {}
-    if getattr(ctx.config, "covariate_columns", None):
-        selected_cols = set(ctx.config.covariate_columns)
+    # Only pass covariates when explicitly selected by the user.
+    # An empty list means "no covariates"; None means "not configured".
+    # Both must result in an empty covariate dict, otherwise the full
+    # metadata dict (experiment, condition, replicate) leaks through,
+    # causing MSstats to rebuild GROUP into 16 unique run-level labels
+    # instead of 5 condition-level labels — saturating the model (DF=0)
+    # and making groupComparison 3-5x slower.
+    covariate_data = {}
+    covariate_cols = getattr(ctx.config, "covariate_columns", None)
+    if covariate_cols:
+        full_meta = ctx.config.metadata or {}
+        selected_cols = set(covariate_cols)
         covariate_data = {
             fn: {k: v for k, v in cols.items() if k in selected_cols}
-            for fn, cols in covariate_data.items()
+            for fn, cols in full_meta.items()
         }
 
     gene_mapping = get_gene_mapping(ctx.config.organism)
