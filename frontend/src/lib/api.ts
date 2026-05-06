@@ -192,17 +192,21 @@ export async function getGSEAStatus(sessionId: string): Promise<GSEARunStatus> {
 // Protein Abundance API
 export async function getProteinAbundance(
   sessionId: string,
-  proteinId: string
+  proteinId: string,
+  comparison?: string
 ): Promise<ProteinAbundance> {
-  return fetchApi<ProteinAbundance>(`/api/sessions/${sessionId}/protein/${proteinId}/abundance`);
+  const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
+  return fetchApi<ProteinAbundance>(`/api/sessions/${sessionId}/protein/${proteinId}/abundance${compParam}`);
 }
 
 // Peptide Abundance API
 export async function getPeptideAbundance(
   sessionId: string,
-  proteinId: string
+  proteinId: string,
+  comparison?: string
 ): Promise<PeptideAbundanceData> {
-  return fetchApi<PeptideAbundanceData>(`/api/sessions/${sessionId}/protein/${proteinId}/peptide`);
+  const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
+  return fetchApi<PeptideAbundanceData>(`/api/sessions/${sessionId}/protein/${proteinId}/peptide${compParam}`);
 }
 
 // Processing API - Following AGENTS/04-api-contract.md

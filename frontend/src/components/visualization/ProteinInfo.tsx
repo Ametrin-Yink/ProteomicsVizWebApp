@@ -14,6 +14,7 @@ interface ProteinInfoProps {
   sessionId: string;
   isLoading?: boolean;
   filters?: VolcanoFilters;
+  comparison?: string;
 }
 
 interface ParsedProteinInfo {
@@ -45,7 +46,7 @@ function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
   return { accessions, geneNames: paddedGeneNames };
 }
 
-export default function ProteinInfo({ protein, sessionId, isLoading, filters }: ProteinInfoProps) {
+export default function ProteinInfo({ protein, sessionId, isLoading, filters, comparison }: ProteinInfoProps) {
   const [proteinAbundance, setProteinAbundance] = useState<ProteinAbundance | null>(null);
   const [peptideAbundance, setPeptideAbundance] = useState<PeptideAbundanceData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,8 +67,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
       setError(null);
       try {
         const [proteinData, peptideData] = await Promise.all([
-          getProteinAbundance(sessionId, protein.master_protein_accessions),
-          getPeptideAbundance(sessionId, protein.master_protein_accessions),
+          getProteinAbundance(sessionId, protein.master_protein_accessions, comparison),
+          getPeptideAbundance(sessionId, protein.master_protein_accessions, comparison),
         ]);
         setProteinAbundance(proteinData);
         setPeptideAbundance(peptideData);
@@ -186,7 +187,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters }: 
         <div className="flex justify-between items-center py-2 border-b border-border">
           <span className="text-sm text-text-muted">Number of PSMs</span>
           <span className="text-sm font-medium text-text-primary">
-            {protein.psm_count && protein.psm_count > 0 ? protein.psm_count : '-'}
+            {protein.psm_count != null ? protein.psm_count : '-'}
           </span>
         </div>
 

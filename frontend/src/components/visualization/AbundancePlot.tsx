@@ -8,10 +8,9 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface ProteinAbundancePlotProps {
   data: ProteinAbundance;
-  title?: string;
 }
 
-export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: ProteinAbundancePlotProps) {
+export function ProteinAbundancePlot({ data }: ProteinAbundancePlotProps) {
   const plotData = useMemo(() => {
     // Defensive: ensure data exists and has required arrays
     if (!data || !data.samples || !data.abundances || data.samples.length === 0) {
@@ -67,10 +66,6 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
 
   const layout = useMemo(
     () => ({
-      title: {
-        text: title,
-        font: { size: 14, color: '#111827' },
-      },
       xaxis: {
         title: { text: 'Sample', font: { size: 12 }, standoff: 20 },
         tickangle: -45,
@@ -92,10 +87,10 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 60, r: 30, t: 50, b: 170 },
+      margin: { l: 60, r: 30, t: 30, b: 170 },
       barmode: 'group' as const,
     }),
-    [title]
+    []
   );
 
   const config = useMemo(
@@ -123,10 +118,9 @@ export function ProteinAbundancePlot({ data, title = 'Protein Abundance' }: Prot
 
 interface PeptideAbundancePlotProps {
   data: PeptideAbundanceData;
-  title?: string;
 }
 
-export function PeptideAbundancePlot({ data, title = 'Peptide Abundance' }: PeptideAbundancePlotProps) {
+export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
   const plotData = useMemo(() => {
     // Defensive: ensure data exists and has peptides array
     if (!data || !data.peptides || data.peptides.length === 0) {
@@ -190,10 +184,6 @@ export function PeptideAbundancePlot({ data, title = 'Peptide Abundance' }: Pept
 
   const layout = useMemo(
     () => ({
-      title: {
-        text: title,
-        font: { size: 14, color: '#111827' },
-      },
       xaxis: {
         title: { text: 'Sample', font: { size: 12 }, standoff: 20 },
         tickangle: -45,
@@ -217,9 +207,9 @@ export function PeptideAbundancePlot({ data, title = 'Peptide Abundance' }: Pept
       },
       plot_bgcolor: '#FFFFFF',
       paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: 200 + peptideCount * 10 },
+      margin: { l: 50, r: 30, t: 30, b: 200 + peptideCount * 10 },
     }),
-    [title, peptideCount]
+    [peptideCount]
   );
 
   const config = useMemo(

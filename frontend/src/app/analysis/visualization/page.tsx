@@ -302,7 +302,7 @@ function ResultsContent() {
 
         {/* General Info Panel */}
         <div className="flex items-center gap-3 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3 flex-wrap" data-testid="general-info-panel">
-          <span className="font-semibold text-text-primary">Results</span>
+          <span className="font-semibold text-text-primary">{sessionConfig?.experiment || 'Results'}</span>
           <div className="w-px h-4 bg-border" />
           {comparisonOptions.length > 0 ? (
             <SearchableSelect
@@ -396,6 +396,7 @@ function ResultsContent() {
                 protein={selectedProteins.size === 1 ? selectedProteinData : null}
                 sessionId={sessionId}
                 filters={filters}
+                comparison={selectedComparison || undefined}
               />
             )}
           </div>
