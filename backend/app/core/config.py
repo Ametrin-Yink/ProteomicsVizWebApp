@@ -4,6 +4,7 @@ Core configuration module for the Proteomics Visualization Web App.
 Uses pydantic-settings for environment-based configuration with .env file support.
 """
 
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -105,6 +106,22 @@ class Settings(BaseSettings):
         description="Timeout for MSstats groupComparison (differential expression) in seconds",
         ge=30,
         le=14400,
+    )
+
+    # --- MSstats Step 7 batching ---
+    msstats_batch_size: int = Field(
+        default=10, ge=1, le=50,
+        description="Comparisons per R subprocess batch for Step 7",
+    )
+
+    msstats_max_workers: int = Field(
+        default=min((os.cpu_count() or 4) // 2, 32), ge=1, le=64,
+        description="Max concurrent R subprocesses for Step 7 batching",
+    )
+
+    msstats_n_cores_cap: int = Field(
+        default=32, ge=1, le=64,
+        description="Max BiocParallel cores per R subprocess",
     )
 
     r_msqrob2_data_process_timeout: int = Field(
