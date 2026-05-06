@@ -885,7 +885,10 @@ class GseaRunRequest(BaseModel):
 # Strong references to prevent background task GC
 _background_tasks: set[asyncio.Task] = set()
 
-# Per-session locks for status file writes
+# Per-session locks for preventing concurrent GSEA runs
+_gsea_run_locks: dict[str, asyncio.Lock] = {}
+
+# Per-session locks for serializing status file writes
 _gsea_write_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -987,7 +990,7 @@ async def _background_gsea_run(
         await _write_gsea_status(session_id, status_data)
     finally:
         lock.release()
-        _gsea_write_locks.pop(session_id, None)
+        _gsea_run_locks.pop(session_id, None)
 
 
 @router.post("/{session_id}/gsea/run")
@@ -1014,17 +1017,17 @@ async def run_gsea_on_demand(
     protein_file = results_dir / "Protein_Abundances.tsv"
     gsea_output_dir = results_dir / "gsea" / request.comparison
 
-    if session_id not in _gsea_write_locks:
-        _gsea_write_locks[session_id] = asyncio.Lock()
+    if session_id not in _gsea_run_locks:
+        _gsea_run_locks[session_id] = asyncio.Lock()
 
-    lock = _gsea_write_locks[session_id]
-    if lock.locked():
+    run_lock = _gsea_run_locks[session_id]
+    if run_lock.locked():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A GSEA run is already in progress for this session",
         )
 
-    await lock.acquire()
+    await run_lock.acquire()
 
     task = asyncio.create_task(
         _background_gsea_run(
@@ -1034,7 +1037,7 @@ async def run_gsea_on_demand(
             de_file=de_file,
             protein_file=protein_file,
             gsea_output_dir=gsea_output_dir,
-            lock=lock,
+            lock=run_lock,
         )
     )
     _background_tasks.add(task)

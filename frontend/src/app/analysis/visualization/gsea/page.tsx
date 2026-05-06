@@ -108,7 +108,11 @@ function GSEAAnalysisContent() {
     }).catch(() => {});
   }, [sessionId]);
 
-  // Poll GSEA run status — only depends on sessionId to avoid stale closures
+  // Poll GSEA run status — only depends on sessionId to avoid stale closures.
+  // Uses a ref to always access the latest filter params for the completion data fetch.
+  const fetchParamsRef = useRef({ selectedDatabase, pageSize, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison });
+  fetchParamsRef.current = { selectedDatabase, pageSize, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison };
+
   const pollStatus = useCallback(async () => {
     if (!sessionId) return;
     try {
@@ -130,7 +134,15 @@ function GSEAAnalysisContent() {
           setRunError(status.error || 'GSEA run failed');
         }
         if (status.status === 'completed') {
-          setPage(1);
+          const p = fetchParamsRef.current;
+          const gseaData = await getGSEAData(sessionId, p.selectedDatabase, {
+            page: 1, per_page: p.pageSize, sort_by: p.sortBy, sort_order: p.sortOrder,
+            significant_only: p.significantOnly, search: p.debouncedSearch,
+            comparison: p.selectedComparison || undefined,
+          });
+          setData(gseaData);
+          setTotalResults(gseaData.total || 0);
+          setInitialLoad(false);
         }
       }
     } catch {
@@ -144,16 +156,27 @@ function GSEAAnalysisContent() {
     pollIntervalRef.current = setInterval(pollStatus, 2000);
   }, [pollStatus]);
 
-  // Check GSEA status on mount — resume polling if run in progress
+  // Check GSEA status on mount — resume polling if run in progress, load if completed
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
-    getGSEAStatus(sessionId).then((status) => {
+    getGSEAStatus(sessionId).then(async (status) => {
       if (cancelled) return;
       lastStatusRef.current = status;
       setGseaRunStatus(status);
       if (status.status === 'running') {
         startPolling();
+      } else if (status.status === 'completed') {
+        const p = fetchParamsRef.current;
+        const gseaData = await getGSEAData(sessionId, p.selectedDatabase, {
+          page: 1, per_page: p.pageSize, sort_by: p.sortBy, sort_order: p.sortOrder,
+          significant_only: p.significantOnly, search: p.debouncedSearch,
+          comparison: p.selectedComparison || undefined,
+        });
+        if (!cancelled) {
+          setData(gseaData);
+          setTotalResults(gseaData.total || 0);
+        }
       }
     }).catch(() => {});
     return () => { cancelled = true; };
