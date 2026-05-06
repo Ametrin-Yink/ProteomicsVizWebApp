@@ -33,6 +33,18 @@ export default function VolcanoPlot({
   const group2Label = parts[1] || 'Control';
   const plotRef = useRef<HTMLDivElement>(null);
 
+  // Marked protein points (shared between traces and annotations)
+  const markedPoints = useMemo(() => {
+    return data
+      .filter((d) => markedProteins.has(d.master_protein_accessions))
+      .map((d) => ({
+        x: d.log_fc,
+        y: -Math.log10(d.pval || 1e-300),
+        color: getVolcanoPointColor(d.log_fc, d.pval, d.adj_pval, filters),
+        label: d.gene_name || parseDelimited(d.master_protein_accessions)[0],
+      }));
+  }, [data, markedProteins, filters]);
+
   // Prepare plot data
   const plotData = useMemo(() => {
     // Single pass: build all point properties at once
@@ -84,25 +96,30 @@ export default function VolcanoPlot({
       name: 'Proteins',
     };
 
-    // Marker labels trace -- only for marked proteins
-    const marked = data.filter((d) => markedProteins.has(d.master_protein_accessions));
+    const traces: Array<Record<string, unknown>> = [mainTrace];
 
-    return marked.length > 0
-      ? [mainTrace, {
-          x: marked.map((d) => d.log_fc),
-          y: marked.map((d) => -Math.log10(d.pval || 1e-300)),
-          mode: 'text' as const,
-          type: 'scatter' as const,
-          text: marked.map((d) => d.gene_name || parseDelimited(d.master_protein_accessions)[0]),
-          textposition: 'top center' as const,
-          texttemplate: '%{text}',
-          hoverinfo: 'skip',
-          showlegend: false,
-          marker: { size: 0, opacity: 0 },
-          name: 'Markers',
-        }]
-      : [mainTrace];
-  }, [data, filters, selectedProteins, markedProteins]);
+    if (markedPoints.length > 0) {
+      // Visible marker trace for marked proteins (darker with border)
+      traces.push({
+        x: markedPoints.map((p) => p.x),
+        y: markedPoints.map((p) => p.y),
+        mode: 'markers' as const,
+        type: 'scatter' as const,
+        marker: {
+          color: markedPoints.map((p) => p.color),
+          size: 10,
+          opacity: 0.9,
+          line: { color: '#1F2937', width: 1.5 },
+        },
+        text: markedPoints.map((p) => p.label),
+        hoverinfo: 'text',
+        showlegend: false,
+        name: 'Marked',
+      });
+    }
+
+    return traces;
+  }, [data, filters, selectedProteins, markedPoints]);
 
   // Dynamic y-axis max: ceil the tallest -log10(p-value) and add 10% headroom, minimum 2
   const dynamicMaxY = useMemo(() => {
@@ -209,6 +226,23 @@ export default function VolcanoPlot({
         gridcolor: '#E5E7EB',
       },
       shapes: thresholdShapes,
+      annotations: markedPoints.map((p) => ({
+        x: p.x,
+        y: p.y,
+        ax: 0,
+        ay: -28,
+        text: p.label,
+        showarrow: true,
+        arrowhead: 2,
+        arrowcolor: '#6B7280',
+        arrowsize: 1.2,
+        arrowwidth: 1,
+        font: { size: 10, color: '#1F2937' },
+        bgcolor: 'rgba(255, 255, 255, 0.85)',
+        borderpad: 2,
+        xanchor: 'center',
+        yanchor: 'bottom',
+      })),
       showlegend: false,
       hovermode: 'closest' as const,
       clickmode: 'event' as const,
@@ -216,7 +250,7 @@ export default function VolcanoPlot({
       paper_bgcolor: '#FFFFFF',
       margin: { l: 60, r: 30, t: 50, b: 60 },
     }),
-    [thresholdShapes, dynamicMaxY]
+    [thresholdShapes, dynamicMaxY, markedPoints, group1Label, group2Label]
   );
 
   // Config for plot

@@ -150,6 +150,32 @@ def _resolve_de_file(results_dir: Path) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def _build_sample_filter(session, comparison: str) -> list[str] | None:
+    """Build a list of condition name prefixes to filter sample columns by.
+
+    Parses the comparison name against session.config.comparisons to extract
+    the condition names that define which samples belong to this comparison.
+
+    Args:
+        session: Session object with config.comparisons
+        comparison: Comparison name (e.g. 'INCB224525_24h_vs_DMSO_24h')
+
+    Returns:
+        List of condition name prefixes, or None if no comparison specified
+    """
+    if not comparison:
+        return None
+    comparisons = session.config.comparisons if session.config else []
+    for comp in comparisons:
+        g1 = comp.get("group1", {})
+        g2 = comp.get("group2", {})
+        g1_str = "+".join(g1.values())
+        g2_str = "+".join(g2.values())
+        if f"{g1_str}_vs_{g2_str}" == comparison:
+            return list(g1.values()) + list(g2.values())
+    return None
+
+
 # Global cache instance
 viz_cache = FileCache(max_size=50)
 
@@ -192,6 +218,7 @@ async def load_diff_expression_results(
         # Convert to list of dictionaries
         # Field names must match frontend DEResult interface
         results = []
+        any_psm_nonzero = False
         for _, row in df.iterrows():
             # Handle NaN values - convert to None for JSON serialization
             log_fc = row.get("logFC", 0)
@@ -210,6 +237,8 @@ async def load_diff_expression_results(
                 adj_pval = 1  # Conservative default for missing adjusted p-value
             if pd.isna(psm_count):
                 psm_count = 0
+            elif int(psm_count) > 0:
+                any_psm_nonzero = True
 
             se = row.get("se", None)
             if pd.isna(se) if se is not None else True:
@@ -233,6 +262,31 @@ async def load_diff_expression_results(
                 "psm_count": int(psm_count) if psm_count is not None else 0,
             }
             results.append(result)
+
+        # Fallback: if all PSM_Count values are 0 (MSstats pipeline doesn't populate them),
+        # read real values from Protein_Abundances.tsv
+        if results and not any_psm_nonzero:
+            protein_abundance_file = results_dir / "Protein_Abundances.tsv"
+            if protein_abundance_file.exists():
+                try:
+                    pa_df = await asyncio.to_thread(
+                        pd.read_csv,
+                        protein_abundance_file,
+                        sep="\t",
+                        usecols=["PSM_Count", "Master_Protein_Accessions"],
+                    )
+                    psm_lookup = dict(
+                        zip(
+                            pa_df["Master_Protein_Accessions"].astype(str),
+                            pa_df["PSM_Count"].fillna(0).astype(int),
+                        )
+                    )
+                    for r in results:
+                        acc = r["master_protein_accessions"]
+                        if acc in psm_lookup:
+                            r["psm_count"] = psm_lookup[acc]
+                except Exception as e:
+                    logger.warning(f"Could not load PSM_Count from Protein_Abundances.tsv: {e}")
 
         viz_cache.set(cache_key, results)
         return results
@@ -853,6 +907,26 @@ async def get_gsea_heatmap_data(
         logger.warning(f"Could not load protein abundance for heatmap: {e}")
         return create_response({"genes": [], "samples": [], "z_scores": []})
 
+    # Filter to only comparison-relevant sample columns
+    sample_filter = _build_sample_filter(session, comparison)
+    if sample_filter and not protein_df.empty:
+        _METADATA_COLS = {
+            "Master_Protein_Accessions",
+            "Master Protein Accessions",
+            "Gene_Name",
+            "Gene",
+            "Protein",
+            "PSM_Count",
+            "psm_count",
+        }
+        keep_cols = [
+            c
+            for c in protein_df.columns
+            if c in _METADATA_COLS
+            or any(c.startswith(prefix) for prefix in sample_filter)
+        ]
+        protein_df = protein_df[keep_cols]
+
     # Use existing method to generate heatmap data (PSM_Count already excluded)
     heatmap_data = gsea_service.generate_heatmap_data(protein_df, lead_genes)
 
@@ -1151,6 +1225,7 @@ async def load_protein_abundance(
     session_id: str = "",
     control: str = "",
     treatment: str = "",
+    sample_filter: list[str] | None = None,
 ) -> Dict[str, Any]:
     """Load protein abundance data from TSV file.
 
@@ -1160,11 +1235,14 @@ async def load_protein_abundance(
         session_id: Session ID for cache keying
         control: Control condition name for label matching
         treatment: Treatment condition name for label matching
+        sample_filter: Optional list of condition name prefixes to filter samples by.
+                       Only sample columns starting with any of these prefixes are included.
 
     Returns:
         Protein abundance data dictionary matching frontend ProteinAbundance interface
     """
-    cache_key = _cache_key(session_id, "protein_v2", protein_id)
+    filter_tag = ",".join(sorted(sample_filter)) if sample_filter else ""
+    cache_key = _cache_key(session_id, "protein_v2", protein_id, filter_tag)
     cached = viz_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -1196,6 +1274,14 @@ async def load_protein_abundance(
             "Protein",
         ]
         abundance_cols = [col for col in df.columns if col not in metadata_cols]
+
+        # Filter to comparison-relevant samples when sample_filter is provided
+        if sample_filter:
+            abundance_cols = [
+                col
+                for col in abundance_cols
+                if any(col.startswith(prefix) for prefix in sample_filter)
+            ]
 
         # Build arrays for frontend format - include ALL samples, even with NA/0 values
         samples = []
@@ -1234,9 +1320,12 @@ async def load_protein_abundance(
 
 @router.get("/{session_id}/protein/{protein_id}/abundance")
 async def get_protein_abundance(
-    session_id: str, protein_id: str, store: SessionStore = Depends(get_session_store)
+    session_id: str,
+    protein_id: str,
+    comparison: str = Query("", description="Comparison name to filter samples"),
+    store: SessionStore = Depends(get_session_store),
 ):
-    """Get protein abundance data."""
+    """Get protein abundance data, optionally filtered by comparison."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
@@ -1251,6 +1340,9 @@ async def get_protein_abundance(
     control = session.config.control if session.config else ""
     treatment = session.config.treatment if session.config else ""
 
+    # Build sample filter from comparison config
+    sample_filter = _build_sample_filter(session, comparison)
+
     # Load protein abundance from file
     abundance_data = await load_protein_abundance(
         results_dir,
@@ -1258,13 +1350,17 @@ async def get_protein_abundance(
         session_id,
         control=control,
         treatment=treatment,
+        sample_filter=sample_filter,
     )
 
     return create_response(abundance_data)
 
 
 async def load_peptide_abundance(
-    results_dir: Path, protein_id: str, session_id: str = ""
+    results_dir: Path,
+    protein_id: str,
+    session_id: str = "",
+    sample_filter: list[str] | None = None,
 ) -> Dict[str, Any]:
     """Load peptide abundance data from Parquet or TSV file.
 
@@ -1276,11 +1372,13 @@ async def load_peptide_abundance(
         results_dir: Path to session results directory
         protein_id: Protein accession ID
         session_id: Session ID for cache keying
+        sample_filter: Optional list of condition name prefixes to filter samples by.
 
     Returns:
         Peptide abundance data dictionary matching frontend PeptideAbundanceData interface
     """
-    cache_key = _cache_key(session_id, "peptide", protein_id)
+    filter_tag = ",".join(sorted(sample_filter)) if sample_filter else ""
+    cache_key = _cache_key(session_id, "peptide", protein_id, filter_tag)
     cached = viz_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -1332,6 +1430,14 @@ async def load_peptide_abundance(
         # Get unique samples
         all_samples = sorted(protein_rows["Sample_Origination"].dropna().unique())
 
+        # Filter to comparison-relevant samples when sample_filter is provided
+        if sample_filter:
+            all_samples = [
+                s
+                for s in all_samples
+                if any(str(s).startswith(prefix) for prefix in sample_filter)
+            ]
+
         # Group by Sequence to aggregate PSMs into peptides
         peptides = []
         for sequence, group in protein_rows.groupby("Sequence"):
@@ -1374,9 +1480,12 @@ async def load_peptide_abundance(
 
 @router.get("/{session_id}/protein/{protein_id}/peptide")
 async def get_protein_peptide(
-    session_id: str, protein_id: str, store: SessionStore = Depends(get_session_store)
+    session_id: str,
+    protein_id: str,
+    comparison: str = Query("", description="Comparison name to filter samples"),
+    store: SessionStore = Depends(get_session_store),
 ):
-    """Get peptide abundance data for a protein."""
+    """Get peptide abundance data for a protein, optionally filtered by comparison."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
@@ -1387,7 +1496,12 @@ async def get_protein_peptide(
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
 
+    # Build sample filter from comparison config
+    sample_filter = _build_sample_filter(session, comparison)
+
     # Load peptide data from file
-    peptide_data = await load_peptide_abundance(results_dir, protein_id, session_id)
+    peptide_data = await load_peptide_abundance(
+        results_dir, protein_id, session_id, sample_filter=sample_filter
+    )
 
     return create_response(peptide_data)
