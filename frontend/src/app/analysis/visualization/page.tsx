@@ -10,6 +10,7 @@ import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
 import { getDEResults, getSession, updateSessionVisualizationState } from '@/lib/api';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
+import { SearchableSelect } from '@/components/ui/Select';
 
 
 function ResultsContent() {
@@ -190,7 +191,18 @@ function ResultsContent() {
     return () => clearTimeout(timer);
   }, [filters, sessionId]);
 
-  // Compute a human-readable comparison label for display
+  const comparisonOptions = useMemo(() => {
+    if (!sessionConfig?.comparisons) return [];
+    return sessionConfig.comparisons.map((c) => {
+      const g1 = formatGroup(c.group1);
+      const g2 = formatGroup(c.group2);
+      return {
+        value: `${g1}_vs_${g2}`,
+        label: `${g1} vs ${g2}`,
+      };
+    });
+  }, [sessionConfig?.comparisons]);
+
   const comparisonLabel = useMemo(() => {
     if (selectedComparison) {
       return selectedComparison.replace(/_vs_/g, ' vs ');
@@ -292,27 +304,15 @@ function ResultsContent() {
         <div className="flex items-center gap-3 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3 flex-wrap" data-testid="general-info-panel">
           <span className="font-semibold text-text-primary">Results</span>
           <div className="w-px h-4 bg-border" />
-          {sessionConfig?.comparisons && sessionConfig.comparisons.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {sessionConfig.comparisons.map((c, i) => {
-                const g1 = formatGroup(c.group1);
-                const g2 = formatGroup(c.group2);
-                const val = `${g1}_vs_${g2}`;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedComparison(val)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      selectedComparison === val
-                        ? 'bg-primary text-white'
-                        : 'bg-surface text-text-secondary hover:bg-border'
-                    }`}
-                  >
-                    {g1} vs {g2}
-                  </button>
-                );
-              })}
-            </div>
+          {comparisonOptions.length > 0 ? (
+            <SearchableSelect
+              options={comparisonOptions}
+              value={selectedComparison}
+              onChange={setSelectedComparison}
+              placeholder="Select comparison..."
+              searchPlaceholder="Filter comparisons..."
+              className="min-w-[280px]"
+            />
           ) : (
             <span className="text-text-secondary">
               {sessionConfig
