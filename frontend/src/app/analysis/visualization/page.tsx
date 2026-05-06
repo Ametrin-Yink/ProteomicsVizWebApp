@@ -41,7 +41,7 @@ function ResultsContent() {
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
   const [selectedProteinData, setSelectedProteinData] = useState<DEResult | null>(null);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
-  const [markedProteins, setMarkedProteins] = useState<Set<string>>(new Set());
+  const [markedProteins, setMarkedProteins] = useState<Record<string, Set<string>>>({});
 
 
   // Fetch data on mount and when comparison changes
@@ -94,11 +94,23 @@ function ResultsContent() {
           comparisonInitialized.current = true;
         }
 
-        // Restore markers from session (always reset, don't carry over from previous session)
-        if (session.markers && session.markers.length > 0) {
-          setMarkedProteins(new Set(session.markers));
+        // Restore markers from session (per-comparison)
+        if (session.markers && typeof session.markers === 'object' && !Array.isArray(session.markers)) {
+          const restored: Record<string, Set<string>> = {};
+          for (const [comp, accessions] of Object.entries(session.markers as Record<string, string[]>)) {
+            restored[comp] = new Set(accessions);
+          }
+          setMarkedProteins(restored);
+        } else if (Array.isArray(session.markers) && session.markers.length > 0) {
+          // Migrate old flat format to per-comparison
+          const comps = session.config?.comparisons;
+          let compKey = selectedComparison || 'default';
+          if (comps && comps.length > 0) {
+            compKey = `${formatGroup(comps[0].group1)}_vs_${formatGroup(comps[0].group2)}`;
+          }
+          setMarkedProteins({ [compKey]: new Set(session.markers) });
         } else {
-          setMarkedProteins(new Set());
+          setMarkedProteins({});
         }
 
         // Restore volcano filters from session (always reset, fall back to defaults)
@@ -148,31 +160,43 @@ function ResultsContent() {
 
   // Handle marker toggle from table
   const handleToggleMark = useCallback((protein: DEResult) => {
+    const compKey = selectedComparison || 'default';
     setMarkedProteins((prev) => {
-      const next = new Set(prev);
-      if (next.has(protein.master_protein_accessions)) {
-        next.delete(protein.master_protein_accessions);
+      const next = { ...prev };
+      if (!next[compKey]) next[compKey] = new Set<string>();
+      const compSet = new Set(next[compKey]);
+      if (compSet.has(protein.master_protein_accessions)) {
+        compSet.delete(protein.master_protein_accessions);
       } else {
-        next.add(protein.master_protein_accessions);
+        compSet.add(protein.master_protein_accessions);
       }
+      next[compKey] = compSet;
       return next;
     });
-  }, []);
+  }, [selectedComparison]);
 
   // Clear all markers
   const handleClearAllMarks = useCallback(() => {
-    setMarkedProteins(new Set());
-  }, []);
+    const compKey = selectedComparison || 'default';
+    setMarkedProteins((prev) => {
+      const next = { ...prev };
+      delete next[compKey];
+      return next;
+    });
+  }, [selectedComparison]);
 
   // Save markers to backend when they change (debounced)
   useEffect(() => {
-    const markersArray = Array.from(markedProteins);
     if (!sessionId) return;
+    const markersObj: Record<string, string[]> = {};
+    for (const [comp, set] of Object.entries(markedProteins)) {
+      if (set.size > 0) markersObj[comp] = Array.from(set);
+    }
     const timer = setTimeout(async () => {
       try {
-        await updateSessionVisualizationState(sessionId, { markers: markersArray });
+        await updateSessionVisualizationState(sessionId, { markers: markersObj });
       } catch {
-        // Silently fail — markers are still in local state
+        // Silently fail
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -330,6 +354,23 @@ function ResultsContent() {
             <span className="text-secondary font-semibold">{deCounts.down}↓</span>
             )
           </span>
+          <div className="w-px h-4 bg-border" />
+          <button
+            onClick={() => {
+              if (!data) return;
+              const compKey = selectedComparison || 'default';
+              const significant = data.results
+                .filter((r) => r.significant)
+                .map((r) => r.master_protein_accessions);
+              setMarkedProteins((prev) => ({
+                ...prev,
+                [compKey]: new Set(significant),
+              }));
+            }}
+            className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+          >
+            Mark All Significant
+          </button>
         </div>
 
         {/* Main Content */}
@@ -341,7 +382,7 @@ function ResultsContent() {
               data={data.results}
               filters={filters}
               selectedProteins={selectedProteins}
-              markedProteins={markedProteins}
+              markedProteins={markedProteins[selectedComparison || 'default'] ?? new Set()}
               onSelectProteins={handleSelectProteins}
               onClearSelection={clearSelection}
               comparisonLabel={comparisonLabel}
@@ -366,7 +407,7 @@ function ResultsContent() {
               onToggleShowSelected={() => setShowSelectedOnly(!showSelectedOnly)}
               filters={filters}
               sessionConfig={sessionConfig}
-              markedProteins={markedProteins}
+              markedProteins={markedProteins[selectedComparison || 'default'] ?? new Set()}
               onToggleMark={handleToggleMark}
               onClearAllMarks={handleClearAllMarks}
               comparisonLabel={comparisonLabel}

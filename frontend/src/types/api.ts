@@ -29,7 +29,7 @@ export interface Session {
   files?: SessionFiles;
   created_at: string;
   updated_at: string;
-  markers?: string[];
+  markers?: Record<string, string[]> | string[];
   volcano_filters?: {
     foldChange: number;
     pValue: number;

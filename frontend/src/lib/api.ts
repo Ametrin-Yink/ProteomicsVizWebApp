@@ -307,7 +307,7 @@ export const processingAPI = {
 export async function updateSessionVisualizationState(
   sessionId: string,
   data: {
-    markers?: string[];
+    markers?: Record<string, string[]>;
     volcano_filters?: {
       foldChange: number;
       pValue: number;
