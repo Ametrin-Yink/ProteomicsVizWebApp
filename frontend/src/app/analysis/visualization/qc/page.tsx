@@ -7,6 +7,7 @@ import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
 import { getQCData, getSession } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
+import { SearchableSelect } from '@/components/ui/Select';
 
 function QCContent() {
   const searchParams = useSearchParams();
@@ -168,25 +169,17 @@ function QCContent() {
             <label className="block text-sm font-medium text-text-primary mb-3">
               P-value Distribution: Select Comparison
             </label>
-            <div className="flex flex-wrap gap-2">
-              {comparisons.map((c, i) => {
-                const val = formatGroup(c.group1) + '_vs_' + formatGroup(c.group2);
-                const label = formatGroup(c.group1) + ' vs ' + formatGroup(c.group2);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedComparison(val)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      selectedComparison === val
-                        ? 'bg-primary text-white'
-                        : 'bg-surface text-text-secondary hover:bg-border'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
+            <SearchableSelect
+              options={comparisons.map((c) => {
+                const g1 = formatGroup(c.group1);
+                const g2 = formatGroup(c.group2);
+                return { value: `${g1}_vs_${g2}`, label: `${g1} vs ${g2}` };
               })}
-            </div>
+              value={selectedComparison}
+              onChange={setSelectedComparison}
+              placeholder="Select comparison..."
+              searchPlaceholder="Filter comparisons..."
+            />
           </div>
         )}
 
