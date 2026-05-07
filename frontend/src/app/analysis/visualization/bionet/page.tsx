@@ -36,7 +36,7 @@ function BioNetContent() {
   // Run state
   const [runStatus, setRunStatus] = useState<BioNetRunStatus | null>(null);
   const [subnetwork, setSubnetwork] = useState<BioNetSubnetwork | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
   const [runError, setRunError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +88,7 @@ function BioNetContent() {
           const data = await getBioNetSubnetwork(sessionId);
           setSubnetwork(data);
           setInitialLoad(false);
+          setLoading(false);
         }
       }
     } catch {
@@ -116,7 +117,8 @@ function BioNetContent() {
         if (!cancelled) setSubnetwork(data);
       }
       setInitialLoad(false);
-    }).catch(() => { setInitialLoad(false); });
+      setLoading(false);
+    }).catch(() => { setInitialLoad(false); setLoading(false); });
     return () => { cancelled = true; };
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
