@@ -981,6 +981,41 @@ class GseaRunRequest(BaseModel):
     permutations: int = 1000
 
 
+# --- BioNet Models ---
+
+class BioNetRunRequest(BaseModel):
+    comparison: str
+    pvalue_cutoff: float = 0.05       # NOTE: filters on adj.pvalue (adjusted p-value)
+    logfc_cutoff: float = 0.5
+    statement_types: list[str] = ["IncreaseAmount", "DecreaseAmount"]
+    paper_count_cutoff: int = 1
+    evidence_count_cutoff: int = 1
+    correlation_cutoff: float | None = None
+    sources_filter: list[str] | None = None
+
+
+class BioNetNode(BaseModel):
+    id: str            # UniProt accession
+    logFC: float
+    pvalue: float      # adjusted p-value (from adj.pvalue column)
+    hgncName: str
+
+
+class BioNetEdge(BaseModel):
+    source: str
+    target: str
+    interaction: str
+    evidenceCount: int
+    paperCount: int
+    evidenceLink: str
+    sourceCounts: dict[str, int]
+
+
+class BioNetSubnetwork(BaseModel):
+    nodes: list[BioNetNode]
+    edges: list[BioNetEdge]
+
+
 # Strong references to prevent background task GC
 _background_tasks: set[asyncio.Task] = set()
 
@@ -1009,6 +1044,43 @@ async def _write_gsea_status(session_id: str, data: dict) -> None:
     if session_id not in _gsea_write_locks:
         _gsea_write_locks[session_id] = asyncio.Lock()
     async with _gsea_write_locks[session_id]:
+        await asyncio.to_thread(_write_json_file, path, data)
+
+
+# --- BioNet helpers ---
+
+_bionet_run_locks: dict[str, asyncio.Lock] = {}
+_bionet_status_write_locks: dict[str, asyncio.Lock] = {}  # separate from run locks (avoids deadlock)
+
+_BIONET_OUTPUT_DIR_NAME = "bionet"
+
+
+def _bionet_output_dir(session_id: str) -> Path:
+    return settings.sessions_dir / session_id / _BIONET_OUTPUT_DIR_NAME
+
+
+def _bionet_status_path(session_id: str) -> Path:
+    return _bionet_output_dir(session_id) / "bionet_status.json"
+
+
+def _bionet_subnetwork_path(session_id: str) -> Path:
+    return _bionet_output_dir(session_id) / "bionet_subnetwork.json"
+
+
+def _read_bionet_status(session_id: str) -> dict | None:
+    path = _bionet_status_path(session_id)
+    if not path.exists():
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+async def _write_bionet_status(session_id: str, data: dict) -> None:
+    path = _bionet_status_path(session_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if session_id not in _bionet_status_write_locks:
+        _bionet_status_write_locks[session_id] = asyncio.Lock()
+    async with _bionet_status_write_locks[session_id]:
         await asyncio.to_thread(_write_json_file, path, data)
 
 
@@ -1226,6 +1298,165 @@ async def get_gsea_results(
     gsea_data["total"] = total
 
     return create_response(gsea_data)
+
+
+async def _background_bionet_run(
+    session_id: str,
+    request: BioNetRunRequest,
+    results_dir: Path,
+    de_file: Path,
+    lock: asyncio.Lock,
+) -> None:
+    from app.services.bionet_service import bionet_service
+
+    status_data = {
+        "status": "running",
+        "comparison": request.comparison,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "error": None,
+    }
+    _bionet_output_dir(session_id).mkdir(parents=True, exist_ok=True)
+    await _write_bionet_status(session_id, status_data)
+
+    try:
+        config_dict = request.model_dump()
+        nodes_csv = _bionet_output_dir(session_id) / "nodes.csv"
+        edges_csv = _bionet_output_dir(session_id) / "edges.csv"
+
+        node_count, edge_count = await asyncio.to_thread(
+            bionet_service.run_bionet,
+            de_file=de_file,
+            config=config_dict,
+            nodes_csv=nodes_csv,
+            edges_csv=edges_csv,
+        )
+
+        # Convert CSVs to JSON for API response
+        import pandas as pd
+        nodes_df = pd.read_csv(nodes_csv)
+        edges_df = pd.read_csv(edges_csv)
+
+        # Parse sourceCounts from JSON string (R write.csv serializes dicts as JSON strings)
+        if "sourceCounts" in edges_df.columns:
+            import json as _json
+            edges_df["sourceCounts"] = edges_df["sourceCounts"].apply(
+                lambda x: _json.loads(x) if isinstance(x, str) else x
+            )
+
+        subnetwork = {
+            "nodes": nodes_df.to_dict(orient="records"),
+            "edges": edges_df.to_dict(orient="records"),
+        }
+        subnetwork_path = _bionet_subnetwork_path(session_id)
+        await asyncio.to_thread(_write_json_file, subnetwork_path, subnetwork)
+
+        status_data["status"] = "completed"
+        status_data["node_count"] = node_count
+        status_data["edge_count"] = edge_count
+        status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        await _write_bionet_status(session_id, status_data)
+
+    except Exception as e:
+        logger.error(f"Background BioNet run failed: {e}")
+        status_data["status"] = "error"
+        status_data["error"] = str(e)
+        await _write_bionet_status(session_id, status_data)
+    finally:
+        lock.release()
+        _bionet_run_locks.pop(session_id, None)
+
+
+@router.post("/{session_id}/bionet/run")
+async def run_bionet_on_demand(
+    session_id: str,
+    request: BioNetRunRequest,
+    store: SessionStore = Depends(get_session_store),
+):
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    results_dir = settings.sessions_dir / session_id / "results"
+    de_file = results_dir / f"Diff_Expression_{request.comparison}.tsv"
+    if not de_file.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Differential expression file not found: {de_file.name}",
+        )
+
+    # Per-session lock to prevent concurrent BioNet runs
+    if session_id not in _bionet_run_locks:
+        _bionet_run_locks[session_id] = asyncio.Lock()
+
+    run_lock = _bionet_run_locks[session_id]
+    if run_lock.locked():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A BioNet analysis is already running for this session",
+        )
+
+    await run_lock.acquire()
+
+    task = asyncio.create_task(
+        _background_bionet_run(
+            session_id=session_id,
+            request=request,
+            results_dir=results_dir,
+            de_file=de_file,
+            lock=run_lock,
+        )
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return create_response({"status": "started", "comparison": request.comparison})
+
+
+@router.get("/{session_id}/bionet/status")
+async def get_bionet_run_status(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    status_data = _read_bionet_status(session_id)
+    if status_data is None:
+        return create_response({"status": "idle"})
+
+    return create_response(status_data)
+
+
+@router.get("/{session_id}/bionet/subnetwork")
+async def get_bionet_subnetwork(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    subnetwork_path = _bionet_subnetwork_path(session_id)
+    if not subnetwork_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No BioNet subnetwork computed yet. Run the analysis first.",
+        )
+
+    with open(subnetwork_path, "r", encoding="utf-8") as f:
+        subnetwork = json.load(f)
+
+    return create_response(subnetwork)
 
 
 async def load_protein_abundance(
