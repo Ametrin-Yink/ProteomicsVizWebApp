@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { VISUALIZATION_MODULES, getActiveModuleId } from '@/config/visualization-modules';
 import { SessionManager } from '@/components/session/SessionManager';
+import ExportButton from '@/components/visualization/ExportButton';
 
 function Navigation() {
   const pathname = usePathname();
@@ -39,6 +40,7 @@ function Navigation() {
               );
             })}
           </div>
+          <ExportButton sessionId={sessionId} />
         </div>
       </div>
     </div>
