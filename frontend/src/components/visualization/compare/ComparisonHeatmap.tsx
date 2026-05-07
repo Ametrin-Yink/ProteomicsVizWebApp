@@ -19,7 +19,7 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
     const xLabels = comparisons.map((c) => formatComparisonKey(c, 30));
     const truncatedYLabels = yLabels.map((l) => truncateText(l, 25));
 
-    const height = Math.max(400, proteins.length * 12 + 150);
+    const height = Math.max(400, proteins.length * 16 + 150);
 
     if (!proteins.length || !comparisons.length) {
       return { trace: undefined, layout: { height: 0 } };
@@ -34,13 +34,14 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
       zmid: 0,
       zmin: -1,
       zmax: 1,
+      ygap: 1,
       hovertemplate: 'Protein: %{y}<br>Comparison: %{x}<br>log2 FC: %{z:.2f}<extra></extra>',
     };
 
     const layout = {
       title: { text: 'Comparison Fold Change Heatmap', font: { size: 16, color: '#111827' } },
       xaxis: { tickangle: -45, automargin: true, title: { text: '', font: { size: 14 } } },
-      yaxis: { autorange: 'reversed' as const, automargin: true, title: { text: '', font: { size: 14 } } },
+      yaxis: { autorange: 'reversed' as const, automargin: true, tickfont: { size: 9 }, title: { text: '', font: { size: 14 } } },
       height,
       margin: { t: 60, b: 120, l: 130, r: 60 },
     };
