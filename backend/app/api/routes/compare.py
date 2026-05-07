@@ -196,8 +196,8 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
 
         # Heatmap: union all marked proteins across all comparison keys
         marked_set = set()
-        for accessions in req.marked_proteins.values():
-            marked_set.update(accessions)
+        for acc_list in req.marked_proteins.values():
+            marked_set.update(acc_list)
         # Fall back to proteins significant in at least one selected comparison
         if not marked_set:
             from app.services.compare_service import _load_de_file
