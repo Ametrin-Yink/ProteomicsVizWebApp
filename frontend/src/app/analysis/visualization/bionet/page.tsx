@@ -31,8 +31,9 @@ function BioNetContent() {
   const [allSourcesSelected, setAllSourcesSelected] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Key targets
+  // Key targets & volcano markers
   const [keyTargetsInput, setKeyTargetsInput] = useState('');
+  const [sessionMarkers, setSessionMarkers] = useState<Record<string, string[]>>({});
   const keyTargets = useMemo(
     () => keyTargetsInput.split(',').map((s) => s.trim()).filter(Boolean),
     [keyTargetsInput]
@@ -48,7 +49,7 @@ function BioNetContent() {
   const lastStatusRef = useRef<BioNetRunStatus | null>(null);
   const isRunning = runStatus?.status === 'running';
 
-  // Fetch session config for comparisons
+  // Fetch session config for comparisons and markers
   useEffect(() => {
     if (!sessionId) return;
     getSession(sessionId).then((session) => {
@@ -61,6 +62,10 @@ function BioNetContent() {
             formatGroup(first.group1) + '_vs_' + formatGroup(first.group2)
           );
         }
+      }
+      // Read per-comparison markers from volcano plot
+      if (session?.markers && typeof session.markers === 'object' && !Array.isArray(session.markers)) {
+        setSessionMarkers(session.markers as Record<string, string[]>);
       }
     }).catch(() => {});
   }, [sessionId]);
@@ -342,15 +347,40 @@ function BioNetContent() {
                 {/* Key targets */}
                 <div className="mb-3">
                   <label className="block text-xs text-text-secondary mb-1">
-                    Key Targets (comma-separated gene names, optional)
+                    Key Targets (comma-separated gene names or UniProt IDs)
                   </label>
-                  <input
-                    type="text"
-                    value={keyTargetsInput}
-                    onChange={(e) => setKeyTargetsInput(e.target.value)}
-                    placeholder="e.g., TP53, AKT1, MYC"
-                    className="w-full max-w-md px-2 py-1.5 text-sm border border-border rounded bg-background text-text-primary"
-                  />
+                  <div className="flex gap-2 items-start">
+                    <input
+                      type="text"
+                      value={keyTargetsInput}
+                      onChange={(e) => setKeyTargetsInput(e.target.value)}
+                      placeholder="e.g., TP53, AKT1, MYC"
+                      className="flex-1 max-w-md px-2 py-1.5 text-sm border border-border rounded bg-background text-text-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const markers = sessionMarkers[selectedComparison];
+                        if (markers && markers.length > 0) {
+                          setKeyTargetsInput((prev) => {
+                            const existing = new Set(prev.split(',').map((s) => s.trim()).filter(Boolean));
+                            markers.forEach((m) => existing.add(m));
+                            return Array.from(existing).join(', ');
+                          });
+                        }
+                      }}
+                      disabled={!sessionMarkers[selectedComparison]?.length}
+                      className="px-2 py-1.5 text-xs border border-border rounded bg-surface text-text-secondary hover:bg-background disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                      title="Load marked proteins from volcano plot"
+                    >
+                      Load marked proteins
+                    </button>
+                  </div>
+                  {sessionMarkers[selectedComparison]?.length > 0 && (
+                    <p className="text-xs text-text-muted mt-1">
+                      {sessionMarkers[selectedComparison].length} marked protein(s) available for this comparison
+                    </p>
+                  )}
                 </div>
 
                 {/* Advanced toggle */}
