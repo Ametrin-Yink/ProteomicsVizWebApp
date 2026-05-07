@@ -2,6 +2,11 @@
 
 import React, { useMemo, useState } from 'react';
 import { formatComparisonKey, formatComparisonKeyWrapped, CHART_COLORS } from '@/lib/utils';
+
+function fcColor(v: number | null | undefined): string {
+  if (v == null) return '';
+  return v > 0 ? '#E73564' : '#00ADEF';
+}
 import type { VennData, VennOverlap } from '@/types/api';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
@@ -52,11 +57,12 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
 
     const parts1 = formatComparisonKeyWrapped(c1).split('<br>');
     const parts2 = formatComparisonKeyWrapped(c2).split('<br>');
+    const labelY2 = cy + r1 + 18;
     circles.push(
       { comparisons: [c1], cx: cx1, cy, r: r1, color: CHART_COLORS[0], labelParts: parts1,
-        labelX: cx1 - r1 - 8, labelY: cy, textAnchor: 'end' },
+        labelX: cx1, labelY: labelY2, textAnchor: 'middle' },
       { comparisons: [c2], cx: cx2, cy, r: r2, color: CHART_COLORS[1], labelParts: parts2,
-        labelX: cx2 + r2 + 8, labelY: cy, textAnchor: 'start' },
+        labelX: cx2, labelY: labelY2, textAnchor: 'middle' },
     );
 
     // Region labels
@@ -83,16 +89,18 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
   const topY = 100;
   const botY = topY + avgR + gap;
 
+  const maxR3 = Math.max(r1, r2, r3);
+  const labelYBot = botY + maxR3 + 18;
   circles.push(
     { comparisons: [c1], cx: mid, cy: topY, r: r1, color: CHART_COLORS[0],
       labelParts: formatComparisonKeyWrapped(c1).split('<br>'),
       labelX: mid, labelY: topY - r1 - 8, textAnchor: 'middle' },
     { comparisons: [c2], cx: mid - avgR * 0.8, cy: botY, r: r2, color: CHART_COLORS[1],
       labelParts: formatComparisonKeyWrapped(c2).split('<br>'),
-      labelX: mid - avgR * 0.8 - r2 - 8, labelY: botY, textAnchor: 'end' },
+      labelX: mid - avgR * 0.8, labelY: labelYBot, textAnchor: 'middle' },
     { comparisons: [c3], cx: mid + avgR * 0.8, cy: botY, r: r3, color: CHART_COLORS[2],
       labelParts: formatComparisonKeyWrapped(c3).split('<br>'),
-      labelX: mid + avgR * 0.8 + r3 + 8, labelY: botY, textAnchor: 'end' },
+      labelX: mid + avgR * 0.8, labelY: labelYBot, textAnchor: 'middle' },
   );
 
   // Approximate region label positions
@@ -221,19 +229,19 @@ export default function VennDiagram({ data, sideBySide }: Props) {
               )}
             </div>
             {expandedRegions.has(overlap.label) && (
-              <div className="max-h-64 overflow-y-auto border-t border-border">
+              <div className="max-h-60 overflow-auto border-t border-border">
                 {overlap.details && overlap.details.length > 0 ? (
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-surface text-text-secondary">
-                        <th className="text-left px-2 py-1.5 font-medium">UniProt ID</th>
-                        <th className="text-left px-2 py-1.5 font-medium">Gene</th>
+                      <tr className="bg-surface text-text-secondary sticky top-0">
+                        <th className="text-left px-2 py-1.5 font-medium whitespace-nowrap">UniProt ID</th>
+                        <th className="text-left px-2 py-1.5 font-medium whitespace-nowrap">Gene</th>
                         {overlap.region.map((comp) => (
                           <React.Fragment key={comp}>
-                            <th className="text-right px-2 py-1.5 font-medium">
+                            <th className="text-right px-2 py-1.5 font-medium whitespace-nowrap">
                               {formatComparisonKey(comp)}<br />log2 FC
                             </th>
-                            <th className="text-right px-2 py-1.5 font-medium">
+                            <th className="text-right px-2 py-1.5 font-medium whitespace-nowrap">
                               {formatComparisonKey(comp)}<br />adj.p
                             </th>
                           </React.Fragment>
@@ -243,14 +251,16 @@ export default function VennDiagram({ data, sideBySide }: Props) {
                     <tbody>
                       {overlap.details.map((d) => (
                         <tr key={d.accession} className="border-t border-border hover:bg-surface/30">
-                          <td className="px-2 py-1 text-text-primary font-mono">{d.accession}</td>
-                          <td className="px-2 py-1 text-text-primary">{d.gene_name}</td>
+                          <td className="px-2 py-1 text-text-primary font-mono whitespace-nowrap">{d.accession}</td>
+                          <td className="px-2 py-1 text-text-primary whitespace-nowrap">{d.gene_name}</td>
                           {overlap.region.map((comp) => (
                             <React.Fragment key={comp}>
-                              <td className="px-2 py-1 text-right text-text-primary">
+                              <td className="px-2 py-1 text-right font-medium whitespace-nowrap" style={{
+                                color: fcColor(d[`log_fc_${comp}`] as number | null | undefined),
+                              }}>
                                 {d[`log_fc_${comp}`] != null ? (d[`log_fc_${comp}`] as number).toFixed(2) : '-'}
                               </td>
-                              <td className="px-2 py-1 text-right text-text-primary">
+                              <td className="px-2 py-1 text-right text-text-primary whitespace-nowrap">
                                 {d[`adj_pval_${comp}`] != null
                                   ? (d[`adj_pval_${comp}`] as number) < 0.001
                                     ? (d[`adj_pval_${comp}`] as number).toExponential(1)
@@ -278,11 +288,11 @@ export default function VennDiagram({ data, sideBySide }: Props) {
 
   if (sideBySide) {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-background border border-border rounded-lg p-4 flex items-center justify-center">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 bg-background border border-border rounded-lg p-4 flex items-center justify-center">
           {vennSvg}
         </div>
-        <div className="bg-background border border-border rounded-lg p-4">
+        <div className="lg:col-span-2 bg-background border border-border rounded-lg p-4">
           {overlapTable || (
             <p className="text-text-muted text-sm text-center py-8">No overlap data</p>
           )}
