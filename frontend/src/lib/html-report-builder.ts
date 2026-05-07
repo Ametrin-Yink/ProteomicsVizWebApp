@@ -64,7 +64,19 @@ export async function buildZipBlob(
   // Read template and replace placeholder
   const templateResponse = await fetch('/report-template.html');
   const template = await templateResponse.text();
-  const html = template.replace('{{REPORT_DATA}}', JSON.stringify(reportData));
+
+  // Inject the user's current theme CSS custom property values
+  let themeOverride = '';
+  if (typeof window !== 'undefined') {
+    const cs = getComputedStyle(document.documentElement);
+    const vars = ['--primary','--primary-dark','--background','--surface',
+      '--border','--text-primary','--text-secondary','--text-muted',
+      '--success','--error','--warning','--shadow-sm','--shadow-md'];
+    const decls = vars.map(v => `${v}: ${cs.getPropertyValue(v).trim()};`).join(' ');
+    themeOverride = `<style id="theme-override">:root{${decls}}</style>`;
+  }
+  const finalHtml = template.replace('{{REPORT_DATA}}', JSON.stringify(reportData));
+  const html = themeOverride ? finalHtml.replace('</head>', `${themeOverride}\n</head>`) : finalHtml;
   zip.file('index.html', html);
 
   // Bundle assets
