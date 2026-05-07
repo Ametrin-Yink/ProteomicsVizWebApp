@@ -135,10 +135,15 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     setError(null);
     try {
       setStatus({ status: 'running' });
+      // Convert Sets to arrays for JSON serialization (Set → {} in JSON, not [])
+      const markersForApi: Record<string, string[]> = {};
+      for (const [comp, set] of Object.entries(markedProteins)) {
+        markersForApi[comp] = Array.from(set);
+      }
       await runComparisonCorrelation(sessionId, {
         primary_comparison: effectivePrimary,
         selected_comparisons: selectedComparisons,
-        marked_proteins: markedProteins,
+        marked_proteins: markersForApi,
         cluster_method: clusterMethod,
       });
       startPolling();
