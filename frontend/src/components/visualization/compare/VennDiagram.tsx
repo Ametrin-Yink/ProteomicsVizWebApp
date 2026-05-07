@@ -10,9 +10,10 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface Props {
   data: VennData | null;
+  sideBySide?: boolean;
 }
 
-export default function VennDiagram({ data }: Props) {
+export default function VennDiagram({ data, sideBySide }: Props) {
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
 
   const { barLabels, barValues, barColors, overlapRows } = useMemo(() => {
@@ -102,6 +103,77 @@ export default function VennDiagram({ data }: Props) {
     margin: { t: 60, b: 140, l: 70, r: 40 },
   };
 
+  const overlapTable = overlapRows.length > 0 && (
+    <div>
+      <h4 className="text-sm font-medium text-text-primary mb-2">Overlap Details</h4>
+      <div className="border border-border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-surface border-b border-border">
+              <th className="text-left px-3 py-2 text-text-secondary font-medium">Regions</th>
+              <th className="text-right px-3 py-2 text-text-secondary font-medium">Proteins</th>
+              <th className="w-8 px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {overlapRows.map((row) => (
+              <React.Fragment key={row.key}>
+                <tr
+                  className="border-b border-border hover:bg-surface/50 cursor-pointer"
+                  onClick={() => toggleRegion(row.key)}
+                >
+                  <td className="px-3 py-2 text-text-primary">
+                    {row.region.join(', ')}
+                  </td>
+                  <td className="px-3 py-2 text-right text-text-primary font-medium">
+                    {row.count}
+                  </td>
+                  <td className="px-3 py-2">
+                    {expandedRegions.has(row.key) ? (
+                      <ChevronDown className="w-4 h-4 text-text-muted" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-text-muted" />
+                    )}
+                  </td>
+                </tr>
+                {expandedRegions.has(row.key) && (
+                  <tr key={`${row.key}-proteins`} className="bg-surface/30">
+                    <td colSpan={3} className="px-3 py-2">
+                      <p className="text-xs text-text-muted max-h-48 overflow-y-auto">
+                        {row.displayProteins}
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  if (sideBySide) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-background border border-border rounded-lg p-4">
+          <Plot
+            data={[trace]}
+            layout={layout}
+            config={{ displayModeBar: false, displaylogo: false, responsive: true }}
+            style={{ width: '100%' }}
+            useResizeHandler
+          />
+        </div>
+        <div className="bg-background border border-border rounded-lg p-4">
+          {overlapTable || (
+            <p className="text-text-muted text-sm text-center py-8">No overlap data</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-background border border-border rounded-lg p-4 space-y-4">
       <Plot
@@ -111,57 +183,7 @@ export default function VennDiagram({ data }: Props) {
         style={{ width: '100%' }}
         useResizeHandler
       />
-
-      {/* Overlap table */}
-      {overlapRows.length > 0 && (
-        <div>
-          <h4 className="text-sm font-medium text-text-primary mb-2">Overlap Details</h4>
-          <div className="border border-border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-surface border-b border-border">
-                  <th className="text-left px-3 py-2 text-text-secondary font-medium">Regions</th>
-                  <th className="text-right px-3 py-2 text-text-secondary font-medium">Proteins</th>
-                  <th className="w-8 px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {overlapRows.map((row) => (
-                  <React.Fragment key={row.key}>
-                    <tr
-                      className="border-b border-border hover:bg-surface/50 cursor-pointer"
-                      onClick={() => toggleRegion(row.key)}
-                    >
-                      <td className="px-3 py-2 text-text-primary">
-                        {row.region.join(', ')}
-                      </td>
-                      <td className="px-3 py-2 text-right text-text-primary font-medium">
-                        {row.count}
-                      </td>
-                      <td className="px-3 py-2">
-                        {expandedRegions.has(row.key) ? (
-                          <ChevronDown className="w-4 h-4 text-text-muted" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-text-muted" />
-                        )}
-                      </td>
-                    </tr>
-                    {expandedRegions.has(row.key) && (
-                      <tr key={`${row.key}-proteins`} className="bg-surface/30">
-                        <td colSpan={3} className="px-3 py-2">
-                          <p className="text-xs text-text-muted max-h-48 overflow-y-auto">
-                            {row.displayProteins}
-                          </p>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {overlapTable}
     </div>
   );
 }

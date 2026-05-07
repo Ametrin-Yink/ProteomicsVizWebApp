@@ -6,6 +6,7 @@ import SimilarityMatrix from '@/components/visualization/compare/SimilarityMatri
 import VennDiagram from '@/components/visualization/compare/VennDiagram';
 import ComparisonHeatmap from '@/components/visualization/compare/ComparisonHeatmap';
 import CorrelationBarChart from '@/components/visualization/compare/CorrelationBarChart';
+import ClusterMap from '@/components/visualization/compare/ClusterMap';
 import type {
   ComparisonCorrelationData,
   CompareRunStatus,
@@ -290,40 +291,49 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
             </div>
           </div>
 
-          {/* Row 3: Venn Diagram (left) + Comparison Heatmap (right) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-background border border-border rounded-lg p-4 space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-text-primary mb-3">Venn Diagram</h3>
-                <div className="flex items-center gap-3 flex-wrap">
-                  {availableVennComparisons.map((comp) => (
-                    <label
-                      key={comp.value}
-                      className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={vennComparisons.includes(comp.value)}
-                        onChange={() => toggleVennComparison(comp.value)}
-                        className="rounded border-border text-primary focus:ring-primary"
-                      />
-                      <span className="text-xs">{comp.label}</span>
-                    </label>
-                  ))}
-                  <button
-                    onClick={handleComputeVenn}
-                    disabled={vennComparisons.length < 2 || vennLoading}
-                    className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          {/* Row 3: Venn Diagram (graph left, overlap details right) */}
+          <div className="bg-background border border-border rounded-lg p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-medium text-text-primary mb-3">Venn Diagram</h3>
+              <div className="flex items-center gap-3 flex-wrap">
+                {availableVennComparisons.map((comp) => (
+                  <label
+                    key={comp.value}
+                    className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer"
                   >
-                    {vennLoading ? 'Computing...' : 'Compute Venn'}
-                  </button>
-                </div>
-                {vennError && (
-                  <p className="mt-2 text-xs text-error">{vennError}</p>
-                )}
+                    <input
+                      type="checkbox"
+                      checked={vennComparisons.includes(comp.value)}
+                      onChange={() => toggleVennComparison(comp.value)}
+                      className="rounded border-border text-primary focus:ring-primary"
+                    />
+                    <span className="text-xs">{comp.label}</span>
+                  </label>
+                ))}
+                <button
+                  onClick={handleComputeVenn}
+                  disabled={vennComparisons.length < 2 || vennLoading}
+                  className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {vennLoading ? 'Computing...' : 'Compute Venn'}
+                </button>
               </div>
-              <VennDiagram data={vennData} />
+              {vennError && (
+                <p className="mt-2 text-xs text-error">{vennError}</p>
+              )}
             </div>
+            <VennDiagram data={vennData} sideBySide />
+          </div>
+
+          {/* Row 4: Cluster Map (left) + Comparison Heatmap (right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ClusterMap
+              mode="comparison"
+              points={data.cluster_coords}
+              selectedKey={effectivePrimary}
+              title={`${clusterMethod.toUpperCase()} — Comparisons`}
+              varExplained={data.cluster_var_explained}
+            />
             <div>
               {data.heatmap_data.proteins.length > 0 ? (
                 <ComparisonHeatmap
