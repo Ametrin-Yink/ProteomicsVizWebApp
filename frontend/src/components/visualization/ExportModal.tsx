@@ -13,6 +13,12 @@ interface ExportModalProps {
 
 type ModalState = 'input' | 'generating' | 'weblink-ready' | 'error';
 
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof ExportError) return err.message;
+  if (err instanceof Error) return err.message;
+  return 'Unknown error';
+}
+
 export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProps) {
   const [name, setName] = useState(sessionName ? `${sessionName} Report` : '');
   const [state, setState] = useState<ModalState>('input');
@@ -44,7 +50,7 @@ export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProp
         setState('weblink-ready');
       }
     } catch (err) {
-      const msg = err instanceof ExportError ? err.message : (err instanceof Error ? err.message : 'Unknown error');
+      const msg = extractErrorMessage(err);
       setErrorMsg(msg);
       setState('error');
     }

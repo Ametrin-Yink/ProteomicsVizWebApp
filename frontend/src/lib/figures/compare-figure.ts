@@ -7,7 +7,7 @@
  */
 
 import type { ComparisonCorrelationData } from '@/types/api';
-import { formatComparisonKey, COLORSCALE_CYAN_GREY_CORAL } from '@/lib/utils';
+import { formatComparisonKey, truncateText, COLORSCALE_CYAN_GREY_CORAL } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -133,7 +133,7 @@ function buildComparisonHeatmapSpec(
   const xLabels = comparisons.map((c) => formatComparisonKey(c, 30));
   const yLabels = proteins.map((p) => {
     const label = p.gene_name || p.accession;
-    return label.length > 25 ? `${label.slice(0, 25)}...` : label;
+    return truncateText(label, 25);
   });
 
   const height = Math.max(400, proteins.length * 12 + 150);

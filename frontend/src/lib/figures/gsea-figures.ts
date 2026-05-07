@@ -9,6 +9,7 @@
  */
 
 import type { GSEAData, GSEAResult } from '@/types/api';
+import { truncateText } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,7 +57,7 @@ function buildBarChart(data: GSEAData): GseaDatabaseExport['barChart'] {
   const selectedPathways = [...topPositive, ...topNegative];
 
   const labels = selectedPathways.map(
-    (p) => p.name.substring(0, 50) + (p.name.length > 50 ? '...' : ''),
+    (p) => truncateText(p.name, 50),
   );
 
   const trace: Record<string, unknown> = {
@@ -112,7 +113,7 @@ function buildHeatmap(data: GSEAData): GseaDatabaseExport['heatmap'] {
   ]);
 
   const labels = topPathways.map(
-    (p) => p.name.substring(0, 45) + (p.name.length > 45 ? '...' : ''),
+    (p) => truncateText(p.name, 45),
   );
 
   const trace: Record<string, unknown> = {

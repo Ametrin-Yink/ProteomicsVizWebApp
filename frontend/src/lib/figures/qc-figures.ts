@@ -3,6 +3,7 @@
  * Produces Plotly figure specs that match the QCPlots component EXACTLY.
  */
 
+import { transformPCARowBased } from '@/lib/utils';
 import type {
   QCData,
   PCAData,
@@ -83,13 +84,7 @@ function pcaTracesAndLayout(
   pca: PCAData,
   conditionColors: Record<string, string>,
 ): { data: unknown[]; layout: Record<string, unknown> } | null {
-  // transformPCARowBased equivalent
-  const rowData = pca.samples.map((sample, i) => ({
-    sample,
-    pc1: pca.pc1[i] || 0,
-    pc2: pca.pc2[i] || 0,
-    condition: pca.conditions[i] || 'Unknown',
-  }));
+  const rowData = transformPCARowBased(pca.samples, pca.pc1, pca.pc2, pca.conditions);
 
   const conditionGroups: Record<string, typeof rowData> = {};
   rowData.forEach((d) => {

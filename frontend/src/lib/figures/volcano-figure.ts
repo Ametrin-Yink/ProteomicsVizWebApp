@@ -47,18 +47,16 @@ export function buildVolcanoExport(
   const markedSet = new Set(markedProteins);
 
   // ── Dynamic y-axis range ──────────────────────────────────────────────
-  // Ceil the tallest -log10(p-value) and add 10 % headroom, minimum 2.
-  const rawMaxY =
-    deResults.length > 0
-      ? Math.max(0, ...deResults.map((d) => -Math.log10(d.pval || 1e-300)))
-      : 0;
+  let rawMaxY = 0;
+  let maxAbsFC = 0;
+  for (const d of deResults) {
+    rawMaxY = Math.max(rawMaxY, -Math.log10(d.pval || 1e-300));
+    maxAbsFC = Math.max(maxAbsFC, Math.abs(d.log_fc));
+  }
   const dynamicMaxY = Math.max(2, Math.ceil(rawMaxY * 1.1));
 
   // ── Threshold lines / curves ──────────────────────────────────────────
-  const maxX =
-    deResults.length > 0
-      ? Math.max(...deResults.map((d) => Math.abs(d.log_fc))) * 1.1
-      : 1;
+  const maxX = maxAbsFC * 1.1;
 
   const thresholdShapes = buildThresholdShapes(
     filters,

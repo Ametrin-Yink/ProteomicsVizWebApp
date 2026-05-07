@@ -1,4 +1,4 @@
-import { exportStateRegistry, type ExportState } from '@/config/visualization-modules';
+import { exportStateRegistry, VISUALIZATION_MODULES, getModuleById, type ExportState } from '@/config/visualization-modules';
 
 export interface ReportData {
   report: { name: string; session_name: string; created_at: string };
@@ -34,7 +34,6 @@ export async function captureAllStates(sessionId: string): Promise<{ data: Repor
   }
 
   // Sort tabs to match the order in VISUALIZATION_MODULES
-  const { VISUALIZATION_MODULES } = await import('@/config/visualization-modules');
   const order = VISUALIZATION_MODULES.map((m) => m.id);
   tabs.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 
@@ -49,11 +48,7 @@ export async function captureAllStates(sessionId: string): Promise<{ data: Repor
 }
 
 function getModuleLabel(id: string): string {
-  const labels: Record<string, string> = {
-    volcano: 'Volcano Plot', qc: 'QC Plots', gsea: 'GSEA Analysis',
-    compare: 'Compare', bionet: 'BioNet',
-  };
-  return labels[id] || id;
+  return getModuleById(id)?.label ?? id;
 }
 
 /** Build a self-contained ZIP blob from report data. */
