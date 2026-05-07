@@ -16,7 +16,10 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
   const { traceBar, traceDot, layout } = useMemo(() => {
     if (!data.length) return { traceBar: undefined, traceDot: undefined, layout: {} };
 
-    const comparisons = data.map((d) => formatComparisonKey(d.comparison));
+    const comparisons = data.map((d) => {
+      const key = formatComparisonKey(d.comparison);
+      return key.length > 35 ? key.substring(0, 33) + '…' : key;
+    });
     const logFC = data.map((d) => d.log_fc);
     const negLogP = data.map((d) => (d.pval > 0 ? -Math.log10(d.pval) : 0));
     const colors = logFC.map((v) => (v >= 0 ? '#ef4444' : '#3b82f6'));
@@ -28,6 +31,7 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
       marker: { color: colors },
       name: 'log2 Fold Change',
       yaxis: 'y',
+      hovertemplate: '%{x}<br>log2 FC: %{y:.3f}<extra></extra>',
     };
 
     const traceDot = {
@@ -38,16 +42,17 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
       marker: { color: '#6366f1', size: 10, symbol: 'circle' as const },
       name: '-log10(p-value)',
       yaxis: 'y2',
+      hovertemplate: '%{x}<br>-log10(p): %{y:.2f}<extra></extra>',
     };
 
     const layout = {
       title: `Fold Change: ${proteinName}`,
-      yaxis: { title: 'log2 Fold Change', side: 'left' as const },
-      yaxis2: { title: '-log10(p-value)', overlaying: 'y' as const, side: 'right' as const },
+      yaxis: { title: 'log2 Fold Change', side: 'left' as const, automargin: true },
+      yaxis2: { title: '-log10(p-value)', overlaying: 'y' as const, side: 'right' as const, automargin: true },
       legend: { x: 0.01, y: 1.1, orientation: 'h' as const },
-      height: 350,
-      margin: { t: 40, b: 100, l: 60, r: 60 },
-      xaxis: { tickangle: -45 },
+      height: 380,
+      margin: { t: 50, b: 120, l: 70, r: 70 },
+      xaxis: { tickangle: -45, automargin: true },
     };
 
     return { traceBar, traceDot, layout };

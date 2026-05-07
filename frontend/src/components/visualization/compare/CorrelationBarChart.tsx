@@ -50,15 +50,26 @@ export default function CorrelationBarChart({ data, title, topN = 10, onItemClic
     marker: { color: colors },
     text: values.map((v) => v.toFixed(3)),
     textposition: 'outside' as const,
-    hoverinfo: 'x' as const,
+    hovertemplate: '%{y}: %{x:.3f}<extra></extra>',
+  };
+
+  const plotConfig = {
+    displayModeBar: false,
+    displaylogo: false,
+    responsive: true,
+    scrollZoom: false,
+    doubleClick: 'reset' as const,
   };
 
   const layout = {
     title,
-    xaxis: { title: 'Correlation', range: [-1.1, 1.1] },
-    yaxis: { autorange: 'reversed' as const },
+    xaxis: { title: 'Correlation', range: [-1.1, 1.1], automargin: true },
+    yaxis: { automargin: true },
     height,
-    margin: { t: 40, b: 60, l: 120, r: 60 },
+    margin: { t: 50, b: 60, l: 10, r: 60 },
+    dragmode: onItemClick ? (false as const) : ('zoom' as const),
+    hovermode: 'closest' as const,
+    bargap: 0.15,
   };
 
   if (!data.length) {
@@ -69,19 +80,24 @@ export default function CorrelationBarChart({ data, title, topN = 10, onItemClic
     );
   }
 
+  const handleClick = onItemClick
+    ? (eventData: Record<string, unknown>) => {
+        const points = eventData?.points as Array<Record<string, unknown>> | undefined;
+        if (points && points.length > 0) {
+          onItemClick(String(points[0].y));
+        }
+      }
+    : undefined;
+
   return (
     <div className="bg-background border border-border rounded-lg p-4">
       <Plot
         data={[trace]}
         layout={layout}
-        config={{ displayModeBar: false, displaylogo: false, responsive: true }}
+        config={plotConfig}
         style={{ width: '100%' }}
         useResizeHandler
-        onClick={(eventData: { points?: Array<{ y: string | number }> }) => {
-          if (onItemClick && eventData.points && eventData.points.length > 0) {
-            onItemClick(String(eventData.points[0].y));
-          }
-        }}
+        onClick={handleClick}
       />
     </div>
   );

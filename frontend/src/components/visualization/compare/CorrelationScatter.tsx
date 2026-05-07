@@ -84,10 +84,10 @@ export default function CorrelationScatter({
 
     const layout = {
       title: `${selectedName} vs ${correlatedName} (r = ${correlation.toFixed(3)})`,
-      xaxis: { title: `${selectedName} log2 FC` },
-      yaxis: { title: `${correlatedName} log2 FC` },
+      xaxis: { title: `${selectedName} log2 FC`, automargin: true },
+      yaxis: { title: `${correlatedName} log2 FC`, automargin: true },
       height: 350,
-      margin: { t: 40, b: 60, l: 60, r: 40 },
+      margin: { t: 50, b: 70, l: 70, r: 40 },
       showlegend: true,
       legend: { x: 0.01, y: 0.99 },
       hovermode: 'closest' as const,

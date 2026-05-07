@@ -84,10 +84,10 @@ export default function VennDiagram({ data }: Props) {
 
   const layout = {
     title: 'Venn Diagram (Set Sizes & Overlaps)',
-    xaxis: { tickangle: -45 },
-    yaxis: { title: 'Protein Count' },
+    xaxis: { tickangle: -45, automargin: true },
+    yaxis: { title: 'Protein Count', automargin: true },
     height: 400,
-    margin: { t: 40, b: 120, l: 60, r: 40 },
+    margin: { t: 50, b: 140, l: 70, r: 40 },
   };
 
   return (

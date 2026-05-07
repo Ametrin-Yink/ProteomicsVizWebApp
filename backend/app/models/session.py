@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SessionState(str, Enum):
@@ -118,6 +118,17 @@ class Session(BaseModel):
         default_factory=dict,
         description="Marked protein accessions per comparison for volcano plot labels",
     )
+
+    @field_validator("markers", mode="before")
+    @classmethod
+    def normalize_markers(cls, v: Any) -> dict[str, list[str]]:
+        """Accept old flat list format and migrate to per-comparison dict."""
+        if isinstance(v, list):
+            return {"default": v}
+        if isinstance(v, dict):
+            return {k: v for k, v in v.items()}
+        return {}
+
     volcano_filters: Optional[dict[str, Any]] = Field(
         default=None,
         description="Volcano plot filter settings (foldChange, pValue, adjPValue, s0)",

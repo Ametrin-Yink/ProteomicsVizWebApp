@@ -80,6 +80,16 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     }).catch(() => {});
   }, [sessionId]);
 
+  // Load cached results on mount (survives tab switch / page reload)
+  useEffect(() => {
+    if (!sessionId) return;
+    getComparisonCorrelationStatus(sessionId).then((s) => {
+      if (s.status === 'completed') {
+        getComparisonCorrelationData(sessionId).then((d) => setData(d)).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [sessionId]);
+
   const availableVennComparisons = useMemo(() => {
     return comparisons.filter((_, i) => i < 10);
   }, [comparisons]);
@@ -346,6 +356,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
             mode="comparison"
             points={data.cluster_coords}
             selectedKey={primaryComparison}
+            title={`${clusterMethod.toUpperCase()} — Comparisons`}
           />
         </div>
       )}

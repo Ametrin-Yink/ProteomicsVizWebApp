@@ -58,6 +58,16 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     }).catch(() => {});
   }, [sessionId]);
 
+  // Load cached results on mount (survives tab switch / page reload)
+  useEffect(() => {
+    if (!sessionId) return;
+    getProteinCorrelationStatus(sessionId).then((s) => {
+      if (s.status === 'completed') {
+        getProteinCorrelationData(sessionId).then((d) => setData(d)).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [sessionId]);
+
   // Auto-select first comparison for color-by
   useEffect(() => {
     if (!colorComparison && comparisons.length > 0) {
@@ -262,6 +272,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
             points={data.cluster_coords}
             selectedKey={selectedProtein}
             varExplained={data.cluster_var_explained}
+            title={`${clusterMethod.toUpperCase()} — Proteins`}
           />
 
           {/* Bottom-left: Correlation Bar Chart */}

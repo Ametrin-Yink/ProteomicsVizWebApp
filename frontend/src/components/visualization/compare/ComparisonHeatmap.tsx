@@ -29,11 +29,19 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
     );
   }
 
+  const xLabels = comparisons.map((c) => {
+    const key = formatComparisonKey(c);
+    return key.length > 30 ? key.substring(0, 28) + '…' : key;
+  });
+  const truncatedYLabels = yLabels.map((l) =>
+    l.length > 25 ? l.substring(0, 23) + '…' : l
+  );
+
   const trace = {
     type: 'heatmap' as const,
     z: zData,
-    x: comparisons.map((c) => formatComparisonKey(c)),
-    y: yLabels,
+    x: xLabels,
+    y: truncatedYLabels,
     colorscale: [
       [0, '#3b82f6'],
       [0.5, '#ffffff'],
@@ -45,10 +53,10 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
 
   const layout = {
     title: 'Marked Proteins Fold Change Heatmap',
-    xaxis: { tickangle: -45 },
-    yaxis: { autorange: 'reversed' as const },
+    xaxis: { tickangle: -45, automargin: true },
+    yaxis: { autorange: 'reversed' as const, automargin: true },
     height,
-    margin: { t: 40, b: 100, l: 120, r: 40 },
+    margin: { t: 50, b: 120, l: 130, r: 60 },
   };
 
   return (

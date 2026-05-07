@@ -13,6 +13,7 @@ interface ProteinModeProps {
   selectedKey: string;
   colorBy?: Record<string, number>;
   varExplained?: number;
+  title: string;
 }
 
 interface ComparisonModeProps {
@@ -20,6 +21,7 @@ interface ComparisonModeProps {
   points: ComparisonClusterPoint[];
   selectedKey: string;
   varExplained?: number;
+  title: string;
 }
 
 type Props = ProteinModeProps | ComparisonModeProps;
@@ -59,9 +61,8 @@ function buildProteinTraces(props: ProteinModeProps) {
   const { points, selectedKey, colorBy, varExplained } = props;
   const { selected, others } = partitionPoints(points, selectedKey, (p) => p.accession);
 
-  const title = varExplained
-    ? `PCA (${varExplained.toFixed(1)}% variance explained)`
-    : 'Cluster Map';
+  const varSuffix = varExplained ? ` (${varExplained.toFixed(1)}% variance)` : '';
+  const title = `${props.title}${varSuffix}`;
 
   const traces = [];
 
@@ -115,10 +116,10 @@ function buildProteinTraces(props: ProteinModeProps) {
     traces,
     layout: {
       title,
-      xaxis: { title: 'Component 1', zeroline: false },
-      yaxis: { title: 'Component 2', zeroline: false },
+      xaxis: { title: 'Component 1', zeroline: false, automargin: true },
+      yaxis: { title: 'Component 2', zeroline: false, automargin: true },
       height: 400,
-      margin: { t: 40, b: 60, l: 60, r: 80 },
+      margin: { t: 50, b: 70, l: 70, r: 80 },
       hovermode: 'closest' as const,
       showlegend: selected.length > 0,
     },
@@ -130,9 +131,8 @@ function buildComparisonTraces(props: ComparisonModeProps) {
 
   const { selected, others } = partitionPoints(points, selectedKey, (p) => p.comparison);
 
-  const title = varExplained
-    ? `PCA (${varExplained.toFixed(1)}% variance explained)`
-    : 'Cluster Map';
+  const varSuffix = varExplained ? ` (${varExplained.toFixed(1)}% variance)` : '';
+  const title = `${props.title}${varSuffix}`;
 
   const traces = [];
 
@@ -173,10 +173,10 @@ function buildComparisonTraces(props: ComparisonModeProps) {
     traces,
     layout: {
       title,
-      xaxis: { title: 'Component 1', zeroline: false },
-      yaxis: { title: 'Component 2', zeroline: false },
+      xaxis: { title: 'Component 1', zeroline: false, automargin: true },
+      yaxis: { title: 'Component 2', zeroline: false, automargin: true },
       height: 400,
-      margin: { t: 40, b: 60, l: 60, r: 20 },
+      margin: { t: 50, b: 70, l: 70, r: 40 },
       hovermode: 'closest' as const,
       showlegend: selected.length > 0,
     },

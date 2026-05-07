@@ -53,9 +53,9 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
     const formatted = formatComparisonKey(c);
     const parts = formatted.split(' vs ');
     if (parts.length === 2) {
-      return `${parts[0].substring(0, 8)} vs ${parts[1].substring(0, 8)}`;
+      return `${parts[0].substring(0, 10)} vs ${parts[1].substring(0, 10)}`;
     }
-    return c.substring(0, 20);
+    return formatted.length > 24 ? formatted.substring(0, 22) + '…' : formatted;
   });
 
   const trace = {
@@ -71,11 +71,11 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
 
   const layout = {
     title: 'Comparison Similarity Matrix',
-    xaxis: { tickangle: -45 },
-    yaxis: { autorange: 'reversed' as const },
+    xaxis: { tickangle: -45, automargin: true },
+    yaxis: { autorange: 'reversed' as const, automargin: true },
     height,
     width: height,
-    margin: { t: 40, b: 100, l: 100, r: 40 },
+    margin: { t: 50, b: 120, l: 120, r: 60 },
     annotations,
   };
 
