@@ -199,6 +199,9 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         for comp in selected:
             if comp in req.marked_proteins:
                 marked_set.update(req.marked_proteins[comp])
+        # Also include marks under 'default' key (from manual marking in volcano page)
+        if 'default' in req.marked_proteins:
+            marked_set.update(req.marked_proteins['default'])
         # Fall back to proteins significant in at least one selected comparison
         if not marked_set:
             from app.services.compare_service import _load_de_file
