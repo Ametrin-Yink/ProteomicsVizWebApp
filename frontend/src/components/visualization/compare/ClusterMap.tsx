@@ -86,7 +86,7 @@ function buildProteinTraces(props: ProteinModeProps) {
             showscale: true,
             colorbar: { title: 'log2 FC', len: 0.4 },
           }
-        : { color: '#6366f1', size: 6 },
+        : { color: '#9ca3af', size: 6 },
       text: others.map((p) => p.gene_name || p.accession),
       hoverinfo: 'text' as const,
       name: 'Proteins',
@@ -121,11 +121,11 @@ function buildProteinTraces(props: ProteinModeProps) {
   return {
     traces,
     layout: {
-      title,
-      xaxis: { title: 'Component 1', zeroline: false, automargin: true },
-      yaxis: { title: 'Component 2', zeroline: false, automargin: true },
+      title: { text: title, font: { size: 16, color: '#111827' } },
+      xaxis: { title: { text: 'Component 1', font: { size: 14 } }, zeroline: false, automargin: true },
+      yaxis: { title: { text: 'Component 2', font: { size: 14 } }, zeroline: false, automargin: true },
       height: 400,
-      margin: { t: 50, b: 70, l: 70, r: 80 },
+      margin: { t: 60, b: 70, l: 70, r: 80 },
       hovermode: 'closest' as const,
       showlegend: selected.length > 0,
     },
@@ -148,7 +148,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
       x: others.map((p) => p.x),
       y: others.map((p) => p.y),
       marker: {
-        color: '#6366f1',
+        color: '#9ca3af',
         size: 6,
       },
       text: others.map((p) => formatComparisonKey(p.comparison)),
@@ -177,11 +177,11 @@ function buildComparisonTraces(props: ComparisonModeProps) {
   return {
     traces,
     layout: {
-      title,
-      xaxis: { title: 'Component 1', zeroline: false, automargin: true },
-      yaxis: { title: 'Component 2', zeroline: false, automargin: true },
+      title: { text: title, font: { size: 16, color: '#111827' } },
+      xaxis: { title: { text: 'Component 1', font: { size: 14 } }, zeroline: false, automargin: true },
+      yaxis: { title: { text: 'Component 2', font: { size: 14 } }, zeroline: false, automargin: true },
       height: 400,
-      margin: { t: 50, b: 70, l: 70, r: 40 },
+      margin: { t: 60, b: 70, l: 70, r: 40 },
       hovermode: 'closest' as const,
       showlegend: selected.length > 0,
     },

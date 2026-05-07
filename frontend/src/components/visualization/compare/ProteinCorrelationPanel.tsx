@@ -253,51 +253,55 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
         </div>
       )}
 
-      {/* 2x2 Grid */}
+      {/* Charts */}
       {data && !isRunning && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top-left: Fold Change Bar Chart */}
-          <FoldChangeBarChart
-            data={data.selected_protein_fc}
-            proteinName={selectedProteinName}
-          />
-
-          {/* Top-right: Cluster Map */}
-          <ClusterMap
-            mode="protein"
-            points={data.cluster_coords}
-            selectedKey={selectedProtein}
-            varExplained={data.cluster_var_explained}
-            title={`${clusterMethod.toUpperCase()} — Proteins`}
-          />
-
-          {/* Bottom-left: Correlation Bar Chart */}
-          <CorrelationBarChart
-            data={data.correlated_proteins.map((c) => ({
-              label: c.gene_name ? `${c.gene_name} (${c.accession})` : c.accession,
-              correlation: c.correlation,
-            }))}
-            title="Top/Bottom Correlated Proteins"
-            topN={10}
-            onItemClick={handleCorrelatedClick}
-          />
-
-          {/* Bottom-right: Correlation Scatter */}
-          {selectedCorrelated ? (
-            <CorrelationScatter
-              selectedProtein={data.selected_protein_fc}
-              correlatedProtein={selectedCorrelated.fc}
-              correlation={selectedCorrelated.correlation}
-              selectedName={selectedProteinName}
-              correlatedName={selectedCorrelated.gene_name || selectedCorrelated.accession}
+        <div className="space-y-6">
+          {/* Top row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <FoldChangeBarChart
+              data={data.selected_protein_fc}
+              proteinName={selectedProteinName}
             />
-          ) : (
-            <div className="bg-background border border-border rounded-lg p-4 flex items-center justify-center min-h-[350px]">
-              <p className="text-text-muted text-sm text-center">
-                Click a protein in the correlation bar chart to view pairwise scatter plot
-              </p>
+            <ClusterMap
+              mode="protein"
+              points={data.cluster_coords}
+              selectedKey={selectedProtein}
+              varExplained={data.cluster_var_explained}
+              title={`${clusterMethod.toUpperCase()} — Proteins`}
+            />
+          </div>
+
+          {/* Bottom row: 3/4 correlation bars + 1/4 scatter */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-3">
+              <CorrelationBarChart
+                data={data.correlated_proteins.map((c) => ({
+                  label: c.gene_name ? `${c.gene_name} (${c.accession})` : c.accession,
+                  correlation: c.correlation,
+                }))}
+                title="Top/Bottom Correlated Proteins"
+                topN={10}
+                onItemClick={handleCorrelatedClick}
+              />
             </div>
-          )}
+            <div className="lg:col-span-1">
+              {selectedCorrelated ? (
+                <CorrelationScatter
+                  selectedProtein={data.selected_protein_fc}
+                  correlatedProtein={selectedCorrelated.fc}
+                  correlation={selectedCorrelated.correlation}
+                  selectedName={selectedProteinName}
+                  correlatedName={selectedCorrelated.gene_name || selectedCorrelated.accession}
+                />
+              ) : (
+                <div className="bg-background border border-border rounded-lg p-4 flex items-center justify-center min-h-[350px]">
+                  <p className="text-text-muted text-sm text-center">
+                    Click a protein in the correlation bar chart to view pairwise scatter
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

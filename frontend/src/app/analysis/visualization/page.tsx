@@ -185,6 +185,19 @@ function ResultsContent() {
     });
   }, [selectedComparison]);
 
+  // Mark all proteins significant per current filters
+  const handleMarkAllSignificant = useCallback(() => {
+    if (!data) return;
+    const compKey = selectedComparison || 'default';
+    const significant = data.results
+      .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters))
+      .map((r) => r.master_protein_accessions);
+    setMarkedProteins((prev) => ({
+      ...prev,
+      [compKey]: new Set(significant),
+    }));
+  }, [data, selectedComparison, filters]);
+
   // Save markers to backend when they change (debounced)
   useEffect(() => {
     if (!sessionId) return;
@@ -354,23 +367,6 @@ function ResultsContent() {
             <span className="text-secondary font-semibold">{deCounts.down}↓</span>
             )
           </span>
-          <div className="w-px h-4 bg-border" />
-          <button
-            onClick={() => {
-              if (!data) return;
-              const compKey = selectedComparison || 'default';
-              const significant = data.results
-                .filter((r) => r.significant)
-                .map((r) => r.master_protein_accessions);
-              setMarkedProteins((prev) => ({
-                ...prev,
-                [compKey]: new Set(significant),
-              }));
-            }}
-            className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
-          >
-            Mark All Significant
-          </button>
         </div>
 
         {/* Main Content */}
@@ -402,14 +398,13 @@ function ResultsContent() {
             <ProteinTable
               data={data.results}
               selectedProteins={selectedProteins}
-               onSelectProtein={handleSelectProteinFromTable}
-              showSelectedOnly={showSelectedOnly}
-              onToggleShowSelected={() => setShowSelectedOnly(!showSelectedOnly)}
+              onSelectProtein={handleSelectProteinFromTable}
               filters={filters}
               sessionConfig={sessionConfig}
               markedProteins={markedProteins[selectedComparison || 'default'] ?? new Set()}
               onToggleMark={handleToggleMark}
               onClearAllMarks={handleClearAllMarks}
+              onMarkAllSignificant={handleMarkAllSignificant}
               comparisonLabel={comparisonLabel}
             />
           </div>

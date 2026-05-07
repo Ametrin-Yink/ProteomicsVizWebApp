@@ -40,11 +40,11 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
     };
 
     const layout = {
-      title: 'Marked Proteins Fold Change Heatmap',
-      xaxis: { tickangle: -45, automargin: true },
-      yaxis: { autorange: 'reversed' as const, automargin: true },
+      title: { text: 'Marked Proteins Fold Change Heatmap', font: { size: 16, color: '#111827' } },
+      xaxis: { tickangle: -45, automargin: true, title: { text: '', font: { size: 14 } } },
+      yaxis: { autorange: 'reversed' as const, automargin: true, title: { text: '', font: { size: 14 } } },
       height,
-      margin: { t: 50, b: 120, l: 130, r: 60 },
+      margin: { t: 60, b: 120, l: 130, r: 60 },
     };
 
     return { trace, layout };

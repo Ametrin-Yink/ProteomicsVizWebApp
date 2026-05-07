@@ -63,9 +63,9 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
   };
 
   const layout = {
-    title: 'Comparison Similarity Matrix',
-    xaxis: { tickangle: -45, automargin: true },
-    yaxis: { autorange: 'reversed' as const, automargin: true },
+    title: { text: 'Comparison Similarity Matrix', font: { size: 16, color: '#111827' } },
+    xaxis: { tickangle: -45, automargin: true, title: { text: '', font: { size: 14 } } },
+    yaxis: { autorange: 'reversed' as const, automargin: true, title: { text: '', font: { size: 14 } } },
     height,
     width: height,
     margin: { t: 50, b: 120, l: 120, r: 60 },

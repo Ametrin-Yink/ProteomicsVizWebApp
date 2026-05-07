@@ -38,7 +38,7 @@ export default function CorrelationScatter({
       return {
         traceScatter: undefined,
         traceRegression: undefined,
-        layout: { title: `${selectedName} vs ${correlatedName} (r = ${correlation.toFixed(3)})` },
+        layout: { title: { text: `${selectedName} vs ${correlatedName} (r = ${correlation.toFixed(3)})`, font: { size: 16, color: '#111827' } } },
       };
     }
 
@@ -83,9 +83,9 @@ export default function CorrelationScatter({
     };
 
     const layout = {
-      title: `${selectedName} vs ${correlatedName} (r = ${correlation.toFixed(3)})`,
-      xaxis: { title: `${selectedName} log2 FC`, automargin: true },
-      yaxis: { title: `${correlatedName} log2 FC`, automargin: true },
+      title: { text: `${selectedName} vs ${correlatedName} (r = ${correlation.toFixed(3)})`, font: { size: 16, color: '#111827' } },
+      xaxis: { title: { text: `${selectedName} log2 FC`, font: { size: 14 } }, automargin: true },
+      yaxis: { title: { text: `${correlatedName} log2 FC`, font: { size: 14 } }, automargin: true },
       height: 350,
       margin: { t: 50, b: 70, l: 70, r: 40 },
       showlegend: true,

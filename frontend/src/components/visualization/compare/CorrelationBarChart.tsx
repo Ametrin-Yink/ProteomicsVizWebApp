@@ -62,8 +62,8 @@ export default function CorrelationBarChart({ data, title, topN = 10, onItemClic
   };
 
   const layout = {
-    title,
-    xaxis: { title: 'Correlation', range: [-1.1, 1.1], automargin: true },
+    title: { text: title, font: { size: 16, color: '#111827' } },
+    xaxis: { title: { text: 'Correlation', font: { size: 14 } }, range: [-1.1, 1.1], automargin: true },
     yaxis: { automargin: true },
     height,
     margin: { t: 50, b: 60, l: 10, r: 60 },

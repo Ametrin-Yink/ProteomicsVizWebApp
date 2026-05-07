@@ -143,8 +143,8 @@ def compute_correlation_matrix(matrix: np.ndarray, method: str = "pearson") -> n
     n = matrix.shape[0]
     if n < 2:
         return np.array([[1.0]])
-    # Require at least 3 comparisons for meaningful correlation
-    if matrix.shape[1] < 3:
+    # Require at least 5 comparisons for meaningful correlation
+    if matrix.shape[1] < 5:
         return np.full((n, n), np.nan)
 
     if method == "pearson":
@@ -180,7 +180,7 @@ def compute_protein_correlations(
             corrs.append(1.0)
             continue
         valid = ~(np.isnan(query_row) | np.isnan(matrix[i]))
-        if valid.sum() < 3:
+        if valid.sum() < 5:
             corrs.append(0.0)
             continue
         if method == "pearson":

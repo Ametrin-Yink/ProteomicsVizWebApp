@@ -7,52 +7,51 @@ import type { ProteinFCResult } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
+function logPColor(negLogP: number): string {
+  // blue at -log10(p) <= 1 (p >= 0.1), red at -log10(p) >= 5 (p <= 1e-5)
+  if (negLogP <= 1) return '#3b82f6';
+  if (negLogP >= 5) return '#ef4444';
+  const t = (negLogP - 1) / 4;
+  const r = Math.round(59 + (239 - 59) * t);
+  const g = Math.round(130 + (68 - 130) * t);
+  const b = Math.round(246 + (68 - 246) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
 interface Props {
   data: ProteinFCResult[];
   proteinName: string;
 }
 
 export default function FoldChangeBarChart({ data, proteinName }: Props) {
-  const { traceBar, traceDot, layout } = useMemo(() => {
-    if (!data.length) return { traceBar: undefined, traceDot: undefined, layout: {} };
+  const { traceBar, layout } = useMemo(() => {
+    if (!data.length) return { traceBar: undefined, layout: {} };
 
     const comparisons = data.map((d) => formatComparisonKey(d.comparison, 35));
     const logFC = data.map((d) => d.log_fc);
     const negLogP = data.map((d) => (d.pval > 0 ? -Math.log10(d.pval) : 0));
-    const colors = logFC.map((v) => (v >= 0 ? '#ef4444' : '#3b82f6'));
+    const colors = negLogP.map((v) => logPColor(v));
 
     const traceBar = {
       type: 'bar' as const,
-      x: comparisons,
-      y: logFC,
+      x: logFC,
+      y: comparisons,
+      orientation: 'h' as const,
       marker: { color: colors },
-      name: 'log2 Fold Change',
-      yaxis: 'y',
-      hovertemplate: '%{x}<br>log2 FC: %{y:.3f}<extra></extra>',
-    };
-
-    const traceDot = {
-      type: 'scatter' as const,
-      x: comparisons,
-      y: negLogP,
-      mode: 'markers' as const,
-      marker: { color: '#6366f1', size: 10, symbol: 'circle' as const },
-      name: '-log10(p-value)',
-      yaxis: 'y2',
-      hovertemplate: '%{x}<br>-log10(p): %{y:.2f}<extra></extra>',
+      customdata: negLogP,
+      hovertemplate: '%{y}<br>log2 FC: %{x:.3f}<br>-log10(p): %{customdata:.2f}<extra></extra>',
     };
 
     const layout = {
-      title: `Fold Change: ${proteinName}`,
-      yaxis: { title: 'log2 Fold Change', side: 'left' as const, automargin: true },
-      yaxis2: { title: '-log10(p-value)', overlaying: 'y' as const, side: 'right' as const, automargin: true },
-      legend: { x: 0.01, y: 1.1, orientation: 'h' as const },
-      height: 380,
-      margin: { t: 50, b: 120, l: 70, r: 70 },
-      xaxis: { tickangle: -45, automargin: true },
+      title: { text: `Fold Change: ${proteinName}`, font: { size: 16, color: '#111827' } },
+      xaxis: { title: { text: 'log2 Fold Change', font: { size: 14 } }, automargin: true },
+      yaxis: { automargin: true },
+      height: Math.max(300, data.length * 40 + 100),
+      margin: { t: 60, b: 60, l: 10, r: 60 },
+      bargap: 0.15,
     };
 
-    return { traceBar, traceDot, layout };
+    return { traceBar, layout };
   }, [data, proteinName]);
 
   if (!data.length) {
@@ -66,7 +65,7 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
   return (
     <div className="bg-background border border-border rounded-lg p-4">
       <Plot
-        data={[traceBar, traceDot]}
+        data={[traceBar]}
         layout={layout}
         config={{ displayModeBar: true, displaylogo: false, responsive: true }}
         style={{ width: '100%' }}

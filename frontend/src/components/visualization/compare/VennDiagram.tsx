@@ -83,11 +83,11 @@ export default function VennDiagram({ data }: Props) {
   };
 
   const layout = {
-    title: 'Venn Diagram (Set Sizes & Overlaps)',
-    xaxis: { tickangle: -45, automargin: true },
-    yaxis: { title: 'Protein Count', automargin: true },
+    title: { text: 'Venn Diagram (Set Sizes & Overlaps)', font: { size: 16, color: '#111827' } },
+    xaxis: { tickangle: -45, automargin: true, title: { text: '', font: { size: 14 } } },
+    yaxis: { title: { text: 'Protein Count', font: { size: 14 } }, automargin: true },
     height: 400,
-    margin: { t: 50, b: 140, l: 70, r: 40 },
+    margin: { t: 60, b: 140, l: 70, r: 40 },
   };
 
   return (
