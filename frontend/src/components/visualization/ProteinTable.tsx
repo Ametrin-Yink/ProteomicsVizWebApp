@@ -9,14 +9,13 @@ interface ProteinTableProps {
   data: DEResult[];
   selectedProteins: Set<string>;
   onSelectProtein: (protein: DEResult) => void;
-  showSelectedOnly: boolean;
-  onToggleShowSelected: () => void;
   filters: VolcanoFilters;
   sessionConfig: { treatment?: string; control?: string; experiment: string } | null;
   comparisonLabel?: string;
   markedProteins: Set<string>;
   onToggleMark: (protein: DEResult) => void;
   onClearAllMarks: () => void;
+  onMarkAllSignificant: () => void;
 }
 
 const ITEMS_PER_PAGE = 25;
@@ -42,14 +41,13 @@ export default function ProteinTable({
   data,
   selectedProteins,
   onSelectProtein,
-  showSelectedOnly,
-  onToggleShowSelected,
   filters,
   sessionConfig,
   comparisonLabel,
   markedProteins,
   onToggleMark,
   onClearAllMarks,
+  onMarkAllSignificant,
 }: ProteinTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'significant',
@@ -61,12 +59,7 @@ export default function ProteinTable({
   // Filter data
   const filteredData = useMemo(() => {
     let filtered = data;
-    
-    // Filter by selected proteins only
-    if (showSelectedOnly) {
-      filtered = filtered.filter((item) => selectedProteins.has(item.master_protein_accessions));
-    }
-    
+
     // Filter by search text
     if (filterText.trim()) {
       const search = filterText.toLowerCase();
@@ -75,9 +68,9 @@ export default function ProteinTable({
         (item.gene_name && item.gene_name.toLowerCase().includes(search))
       );
     }
-    
+
     return filtered;
-  }, [data, selectedProteins, showSelectedOnly, filterText]);
+  }, [data, filterText]);
 
   // Sort data
   const sortedData = useMemo(() => {
@@ -176,19 +169,13 @@ export default function ProteinTable({
             }}
             className="px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
           />
-          
-          {selectedProteins.size > 0 && (
-            <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showSelectedOnly}
-                onChange={onToggleShowSelected}
-                className="rounded border-border text-primary focus:ring-primary"
-                data-testid="significant-only-checkbox"
-              />
-              Show selected only ({selectedProteins.size})
-            </label>
-          )}
+
+          <button
+            onClick={onMarkAllSignificant}
+            className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+          >
+            Mark All Significant
+          </button>
 
           {markedProteins.size > 0 && (
             <button
