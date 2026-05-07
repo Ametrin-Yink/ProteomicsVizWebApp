@@ -330,6 +330,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
             points={data.cluster_coords}
             selectedKey={effectivePrimary}
             title={`${clusterMethod.toUpperCase()} — Comparisons`}
+            varExplained={data.cluster_var_explained}
           />
         </div>
       )}

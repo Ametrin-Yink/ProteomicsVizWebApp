@@ -255,7 +255,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         comp_dists.sort(key=lambda x: x["similarity"])
 
         # Cluster coords for comparisons
-        coords, _ = run_cluster(matrix.T, req.cluster_method)
+        coords, var = run_cluster(matrix.T, req.cluster_method)
         cluster_coords = [
             {"comparison": all_comparisons[i],
              "x": float(coords[i, 0]), "y": float(coords[i, 1])}
@@ -267,6 +267,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
             "heatmap_data": heatmap_data,
             "comparison_similarities": comp_dists,
             "cluster_coords": cluster_coords,
+            "cluster_var_explained": var,
         }
         current_status = _read_status(session_id, compute_type)
         _write_result(session_id, compute_type, result)

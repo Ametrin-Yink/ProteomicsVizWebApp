@@ -416,6 +416,7 @@ export interface ComparisonCorrelationData {
   };
   comparison_similarities: Array<{ comparison: string; similarity: number }>;
   cluster_coords: ComparisonClusterPoint[];
+  cluster_var_explained?: number[];
 }
 
 /** Protein list entry for selector dropdowns */
