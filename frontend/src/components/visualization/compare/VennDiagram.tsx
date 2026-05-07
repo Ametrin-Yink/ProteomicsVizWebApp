@@ -57,12 +57,11 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
 
     const parts1 = formatComparisonKeyWrapped(c1).split('<br>');
     const parts2 = formatComparisonKeyWrapped(c2).split('<br>');
-    const labelY2 = cy + r1 + 18;
     circles.push(
       { comparisons: [c1], cx: cx1, cy, r: r1, color: CHART_COLORS[0], labelParts: parts1,
-        labelX: cx1, labelY: labelY2, textAnchor: 'middle' },
+        labelX: cx1, labelY: cy + r1 + 18, textAnchor: 'middle' },
       { comparisons: [c2], cx: cx2, cy, r: r2, color: CHART_COLORS[1], labelParts: parts2,
-        labelX: cx2, labelY: labelY2, textAnchor: 'middle' },
+        labelX: cx2, labelY: cy + r2 + 18, textAnchor: 'middle' },
     );
 
     // Region labels
@@ -90,18 +89,16 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
   const topY = 100;
   const botY = topY + avgR + gap;
 
-  const maxR3 = Math.max(r1, r2, r3);
-  const labelYBot = botY + maxR3 + 18;
   circles.push(
     { comparisons: [c1], cx: mid, cy: topY, r: r1, color: CHART_COLORS[0],
       labelParts: formatComparisonKeyWrapped(c1).split('<br>'),
-      labelX: mid, labelY: topY - r1 - 8, textAnchor: 'middle' },
+      labelX: mid, labelY: topY - r1 - 16, textAnchor: 'middle' },
     { comparisons: [c2], cx: mid - avgR * 0.8, cy: botY, r: r2, color: CHART_COLORS[1],
       labelParts: formatComparisonKeyWrapped(c2).split('<br>'),
-      labelX: mid - avgR * 0.8, labelY: labelYBot, textAnchor: 'middle' },
+      labelX: mid - avgR * 0.8, labelY: botY + r2 + 18, textAnchor: 'middle' },
     { comparisons: [c3], cx: mid + avgR * 0.8, cy: botY, r: r3, color: CHART_COLORS[2],
       labelParts: formatComparisonKeyWrapped(c3).split('<br>'),
-      labelX: mid + avgR * 0.8, labelY: labelYBot, textAnchor: 'middle' },
+      labelX: mid + avgR * 0.8, labelY: botY + r3 + 18, textAnchor: 'middle' },
   );
 
   // Approximate region label positions
