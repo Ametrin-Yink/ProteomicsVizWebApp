@@ -173,7 +173,8 @@ function ResultsContent() {
 
   // Handle marker toggle from table
   const handleToggleMark = useCallback((protein: DEResult) => {
-    const compKey = selectedComparison || 'default';
+    const compKey = selectedComparison || comparisonOptions[0]?.value || '';
+    if (!compKey) return;
     setMarkedProteins((prev) => {
       const next = { ...prev };
       if (!next[compKey]) next[compKey] = new Set<string>();
@@ -190,7 +191,8 @@ function ResultsContent() {
 
   // Clear all markers
   const handleClearAllMarks = useCallback(() => {
-    const compKey = selectedComparison || 'default';
+    const compKey = selectedComparison || comparisonOptions[0]?.value || '';
+    if (!compKey) return;
     setMarkedProteins((prev) => {
       const next = { ...prev };
       delete next[compKey];
@@ -201,7 +203,8 @@ function ResultsContent() {
   // Mark all proteins significant per current filters
   const handleMarkAllSignificant = useCallback(() => {
     if (!data) return;
-    const compKey = selectedComparison || 'default';
+    const compKey = selectedComparison || comparisonOptions[0]?.value || '';
+    if (!compKey) return;
     const significant = data.results
       .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters))
       .map((r) => r.master_protein_accessions);
@@ -490,7 +493,7 @@ function ResultsContent() {
               data={data.results}
               filters={filters}
               selectedProteins={selectedProteins}
-              markedProteins={markedProteins[selectedComparison || 'default'] ?? new Set()}
+              markedProteins={markedProteins[selectedComparison || comparisonOptions[0]?.value || ''] ?? new Set()}
               onSelectProteins={handleSelectProteins}
               onClearSelection={clearSelection}
               comparisonLabel={comparisonLabel}
@@ -513,7 +516,7 @@ function ResultsContent() {
               onSelectProtein={handleSelectProteinFromTable}
               filters={filters}
               sessionConfig={sessionConfig}
-              markedProteins={markedProteins[selectedComparison || 'default'] ?? new Set()}
+              markedProteins={markedProteins[selectedComparison || comparisonOptions[0]?.value || ''] ?? new Set()}
               onToggleMark={handleToggleMark}
               onClearAllMarks={handleClearAllMarks}
               onMarkAllSignificant={handleMarkAllSignificant}
