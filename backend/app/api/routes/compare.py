@@ -28,6 +28,7 @@ from app.services.compare_service import (
     compute_venn_data,
     run_cluster,
     load_pvalues_for_protein,
+    compute_hierarchical_order,
 )
 
 logger = logging.getLogger("proteomics")
@@ -225,9 +226,23 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
             heatmap_fc = heatmap_fc[top_idx]
             heatmap_proteins = [heatmap_proteins[i] for i in top_idx]
 
+        # Hierarchical clustering on rows (proteins)
+        if heatmap_fc.shape[0] > 1:
+            row_order = compute_hierarchical_order(heatmap_fc)
+            heatmap_fc = heatmap_fc[row_order]
+            heatmap_proteins = [heatmap_proteins[i] for i in row_order]
+
+        # Hierarchical clustering on columns (comparisons)
+        if heatmap_fc.shape[1] > 1:
+            col_order = compute_hierarchical_order(heatmap_fc.T)
+            heatmap_fc = heatmap_fc[:, col_order]
+            selected_ordered = [selected[i] for i in col_order]
+        else:
+            selected_ordered = selected
+
         heatmap_data = {
             "proteins": heatmap_proteins,
-            "comparisons": selected,
+            "comparisons": selected_ordered,
             "fold_changes": heatmap_fc.tolist(),
         }
 
