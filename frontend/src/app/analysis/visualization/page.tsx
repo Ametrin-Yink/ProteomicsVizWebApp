@@ -32,6 +32,7 @@ function ResultsContent() {
     adjPValue: 1,
     s0: 0.1, // 10% of foldChange threshold
   });
+  const [markedProteins, setMarkedProteins] = useState<Record<string, Set<string>>>({});
 
   // Persist filters to localStorage for PDFExport to read
   useEffect(() => {
@@ -54,7 +55,6 @@ function ResultsContent() {
 
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
   const [selectedProteinData, setSelectedProteinData] = useState<DEResult | null>(null);
-  const [markedProteins, setMarkedProteins] = useState<Record<string, Set<string>>>({});
 
 
   // Fetch data on mount and when comparison changes
