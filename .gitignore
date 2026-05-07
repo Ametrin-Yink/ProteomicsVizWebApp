@@ -230,7 +230,7 @@ uploads/
 backend/uploads/
 
 # Generated reports
-reports/
+/reports
 *.pdf
 !docs/examples/*.pdf
 

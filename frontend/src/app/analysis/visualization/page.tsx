@@ -34,7 +34,7 @@ function ResultsContent() {
   });
   const [markedProteins, setMarkedProteins] = useState<Record<string, Set<string>>>({});
 
-  // Persist filters to localStorage for PDFExport to read
+  // Persist filters to localStorage for export use
   useEffect(() => {
     try {
       localStorage.setItem('volcano_filters', JSON.stringify(filters));

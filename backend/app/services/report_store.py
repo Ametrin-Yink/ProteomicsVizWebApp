@@ -75,15 +75,18 @@ def list_reports() -> list[dict]:
         return []
 
     reports = []
-    for report_dir in sorted(rd.iterdir(), reverse=True):
+    for report_dir in rd.iterdir():
         if not report_dir.is_dir():
             continue
         meta_path = report_dir / "report.json"
         if meta_path.exists():
             try:
-                reports.append(json.loads(meta_path.read_text(encoding="utf-8")))
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                reports.append(meta)
             except Exception:
                 logger.warning(f"Corrupt report metadata: {meta_path}")
+
+    reports.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     return reports
 
 
