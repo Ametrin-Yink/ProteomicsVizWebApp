@@ -110,16 +110,27 @@ export default function BioNetNetwork({
           style: {
             width: (ele: cytoscape.EdgeSingular) =>
               1 + Math.min(ele.data('evidenceCount'), 10) * 0.5,
-            'line-color': (ele: cytoscape.EdgeSingular) =>
-              ele.data('interaction').includes('DecreaseAmount')
-                ? '#ef4444'
-                : '#22c55e',
-            'target-arrow-color': (ele: cytoscape.EdgeSingular) =>
-              ele.data('interaction').includes('DecreaseAmount')
-                ? '#ef4444'
-                : '#22c55e',
+            'line-color': (ele: cytoscape.EdgeSingular) => {
+              const it = ele.data('interaction') as string;
+              if (it.includes('DecreaseAmount') && it.includes('IncreaseAmount'))
+                return '#a855f7'; // purple for bidirectional
+              if (it.includes('DecreaseAmount')) return '#ef4444';
+              return '#22c55e';
+            },
+            'target-arrow-color': (ele: cytoscape.EdgeSingular) => {
+              const it = ele.data('interaction') as string;
+              if (it.includes('DecreaseAmount') && it.includes('IncreaseAmount'))
+                return '#a855f7';
+              if (it.includes('DecreaseAmount')) return '#ef4444';
+              return '#22c55e';
+            },
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
+            label: 'data(interaction)',
+            'font-size': '8px',
+            'text-rotation': 'autorotate',
+            'text-margin-y': -6,
+            color: '#6b7280',
           },
         },
         // Hover highlight
@@ -238,6 +249,9 @@ export default function BioNetNetwork({
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 bg-red-500 inline-block" /> DecreaseAmount
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-purple-500 inline-block" /> Both
           </span>
         </div>
       )}
