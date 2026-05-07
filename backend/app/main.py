@@ -212,7 +212,9 @@ app.include_router(processing.router, prefix="/api/sessions", tags=["processing"
 app.include_router(upload.router, prefix="/api/sessions", tags=["upload"])
 app.include_router(analysis.router, prefix="/api/sessions", tags=["analysis"])
 app.include_router(visualization.router, prefix="/api/sessions", tags=["visualization"])
+# Reports: session-scoped weblink upload + global report serving
 app.include_router(reports.router, prefix="/api/sessions", tags=["reports"])
+app.include_router(reports.global_router, prefix="/api", tags=["reports"])
 app.include_router(compounds.router, prefix="/api/sessions", tags=["compounds"])
 app.include_router(compare.router, prefix="/api/sessions", tags=["compare"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
