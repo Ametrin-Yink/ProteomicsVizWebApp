@@ -22,75 +22,105 @@ interface CircleSpec {
   textAnchor: 'start' | 'middle' | 'end';
 }
 
-function vennLayout(data: VennData): CircleSpec[] {
+interface RegionLabel {
+  regionKey: string;
+  x: number;
+  y: number;
+  count: number;
+}
+
+function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: RegionLabel[] } {
   const entries = Object.entries(data.set_sizes);
   const scale = entries.length === 2 ? 3.5 : 3.0;
+  const circles: CircleSpec[] = [];
+  const regionLabels: RegionLabel[] = [];
 
   if (entries.length === 2) {
     const [[c1, s1], [c2, s2]] = entries;
     const r1 = Math.max(50, Math.sqrt(Math.max(s1, 1)) * scale);
     const r2 = Math.max(50, Math.sqrt(Math.max(s2, 1)) * scale);
-    // Distance so circles overlap proportionally to intersection
     const overlapKey = [c1, c2].sort().join('+');
     const overlap = data.overlaps.find((o) => o.label === overlapKey)?.count ?? 0;
     const smaller = Math.min(s1, s2);
     const overlapRatio = smaller > 0 ? overlap / smaller : 0.3;
-    // d ranges from r1+r2 (no overlap) to |r1-r2| (full containment)
     const dMax = r1 + r2;
     const dMin = Math.abs(r1 - r2) + 10;
     const d = dMax - (dMax - dMin) * Math.min(1, overlapRatio * 1.5);
     const cx1 = 170 - d * (r2 / (r1 + r2));
     const cx2 = cx1 + d;
+    const cy = 140;
+
     const parts1 = formatComparisonKeyWrapped(c1).split('<br>');
     const parts2 = formatComparisonKeyWrapped(c2).split('<br>');
-    return [
-      { comparisons: [c1], cx: cx1, cy: 140, r: r1, color: CHART_COLORS[0], labelParts: parts1,
-        labelX: cx1 - r1 - 8, labelY: 140, textAnchor: 'end' },
-      { comparisons: [c2], cx: cx2, cy: 140, r: r2, color: CHART_COLORS[1], labelParts: parts2,
-        labelX: cx2 + r2 + 8, labelY: 140, textAnchor: 'start' },
-    ];
+    circles.push(
+      { comparisons: [c1], cx: cx1, cy, r: r1, color: CHART_COLORS[0], labelParts: parts1,
+        labelX: cx1 - r1 - 8, labelY: cy, textAnchor: 'end' },
+      { comparisons: [c2], cx: cx2, cy, r: r2, color: CHART_COLORS[1], labelParts: parts2,
+        labelX: cx2 + r2 + 8, labelY: cy, textAnchor: 'start' },
+    );
+
+    // Region labels
+    const midX = (cx1 + cx2) / 2;
+    const c1Only = (data.overlaps.find((o) => o.label === c1)?.count ?? 0);
+    const c2Only = (data.overlaps.find((o) => o.label === c2)?.count ?? 0);
+    regionLabels.push(
+      { regionKey: c1, x: cx1 - r1 * 0.35, y: cy, count: c1Only },
+      { regionKey: c2, x: cx2 + r2 * 0.35, y: cy, count: c2Only },
+      { regionKey: overlapKey, x: midX, y: cy, count: overlap },
+    );
+
+    return { circles, regionLabels };
   }
 
-  // 3 circles — position so all pairwise overlaps exist
+  // 3 circles
   const [[c1, s1], [c2, s2], [c3, s3]] = entries;
   const r1 = Math.max(40, Math.sqrt(Math.max(s1, 1)) * scale);
   const r2 = Math.max(40, Math.sqrt(Math.max(s2, 1)) * scale);
   const r3 = Math.max(40, Math.sqrt(Math.max(s3, 1)) * scale);
-
-  // Center the largest circle, place others so they all overlap
   const avgR = (r1 + r2 + r3) / 3;
-  const gap = avgR * 0.5; // spacing between circle edges
+  const gap = avgR * 0.5;
   const mid = 170;
-
-  // Place circles in triangle with guaranteed overlap
   const topY = 100;
   const botY = topY + avgR + gap;
-  const spread = avgR * 0.8 + gap;
 
-  const parts1 = formatComparisonKeyWrapped(c1).split('<br>');
-  const parts2 = formatComparisonKeyWrapped(c2).split('<br>');
-  const parts3 = formatComparisonKeyWrapped(c3).split('<br>');
-
-  return [
-    { comparisons: [c1], cx: mid, cy: topY, r: r1, color: CHART_COLORS[0], labelParts: parts1,
+  circles.push(
+    { comparisons: [c1], cx: mid, cy: topY, r: r1, color: CHART_COLORS[0],
+      labelParts: formatComparisonKeyWrapped(c1).split('<br>'),
       labelX: mid, labelY: topY - r1 - 8, textAnchor: 'middle' },
-    { comparisons: [c2], cx: mid - avgR * 0.8, cy: botY, r: r2, color: CHART_COLORS[1], labelParts: parts2,
+    { comparisons: [c2], cx: mid - avgR * 0.8, cy: botY, r: r2, color: CHART_COLORS[1],
+      labelParts: formatComparisonKeyWrapped(c2).split('<br>'),
       labelX: mid - avgR * 0.8 - r2 - 8, labelY: botY, textAnchor: 'end' },
-    { comparisons: [c3], cx: mid + avgR * 0.8, cy: botY, r: r3, color: CHART_COLORS[2], labelParts: parts3,
-      labelX: mid + avgR * 0.8 + r3 + 8, labelY: botY, textAnchor: 'start' },
-  ];
+    { comparisons: [c3], cx: mid + avgR * 0.8, cy: botY, r: r3, color: CHART_COLORS[2],
+      labelParts: formatComparisonKeyWrapped(c3).split('<br>'),
+      labelX: mid + avgR * 0.8 + r3 + 8, labelY: botY, textAnchor: 'end' },
+  );
+
+  // Approximate region label positions
+  const cx = [mid, mid - avgR * 0.8, mid + avgR * 0.8];
+  const cY = [topY, botY, botY];
+  for (const ov of data.overlaps) {
+    let x = 0, y = 0, n = 0;
+    for (const comp of ov.region) {
+      const idx = entries.findIndex(([k]) => k === comp);
+      if (idx >= 0) { x += cx[idx]; y += cY[idx]; n++; }
+    }
+    if (n > 0) {
+      regionLabels.push({ regionKey: ov.label, x: x / n, y: y / n, count: ov.count });
+    }
+  }
+
+  return { circles, regionLabels };
 }
 
 export default function VennDiagram({ data, sideBySide }: Props) {
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
 
-  const circles = useMemo(() => {
-    if (!data || Object.keys(data.set_sizes).length === 0) return [] as CircleSpec[];
+  const { circles, regionLabels } = useMemo(() => {
+    if (!data || Object.keys(data.set_sizes).length === 0) {
+      return { circles: [] as CircleSpec[], regionLabels: [] as RegionLabel[] };
+    }
     return vennLayout(data);
-    // Recompute whenever the data reference changes
   }, [data]);
-
-  const overlaps = data?.overlaps ?? [];
 
   if (!data || Object.keys(data.set_sizes).length === 0) {
     return (
@@ -129,22 +159,11 @@ export default function VennDiagram({ data, sideBySide }: Props) {
               cy={c.cy}
               r={c.r}
               fill={c.color}
-              fillOpacity={0.35}
+              fillOpacity={0.3}
               stroke={c.color}
               strokeWidth={2}
               strokeOpacity={0.8}
             />
-            <text
-              x={c.cx}
-              y={c.cy}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#1e293b"
-              fontWeight={600}
-              fontSize={Math.max(11, Math.min(16, c.r / 5))}
-            >
-              {data.set_sizes[c.comparisons[0]]}
-            </text>
             <text
               x={c.labelX}
               y={c.labelY}
@@ -161,8 +180,25 @@ export default function VennDiagram({ data, sideBySide }: Props) {
             </text>
           </g>
         ))}
+      {/* Per-section count labels */}
+      {regionLabels.map((rl) => (
+        <text
+          key={rl.regionKey}
+          x={rl.x}
+          y={rl.y}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="#1e293b"
+          fontWeight={700}
+          fontSize={12}
+        >
+          {rl.count}
+        </text>
+      ))}
     </svg>
   );
+
+  const overlaps = data.overlaps ?? [];
 
   const overlapTable = overlaps.length > 0 && (
     <div>
