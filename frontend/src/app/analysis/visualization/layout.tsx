@@ -4,7 +4,6 @@ import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { VISUALIZATION_MODULES, getActiveModuleId } from '@/config/visualization-modules';
-import PDFExport from '@/components/visualization/PDFExport';
 import { SessionManager } from '@/components/session/SessionManager';
 
 function Navigation() {
@@ -40,7 +39,6 @@ function Navigation() {
               );
             })}
           </div>
-          <PDFExport sessionId={sessionId} />
         </div>
       </div>
     </div>
