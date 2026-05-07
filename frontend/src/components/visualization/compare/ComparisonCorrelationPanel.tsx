@@ -12,6 +12,7 @@ import type {
   CompareRunStatus,
   ClusterMethod,
   VennData,
+  VolcanoFilters,
 } from '@/types/api';
 import {
   runComparisonCorrelation,
@@ -43,6 +44,9 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   const [vennData, setVennData] = useState<VennData | null>(null);
   const [vennLoading, setVennLoading] = useState(false);
   const [vennError, setVennError] = useState<string | null>(null);
+  const [vennThresholds, setVennThresholds] = useState<VolcanoFilters>({
+    foldChange: 1, pValue: 0.05, adjPValue: 0.05, s0: 0.1,
+  });
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const comparisonsInitialized = useRef(false);
@@ -69,6 +73,9 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
           obj[comp] = accessions;
         }
         setMarkedProteins(obj);
+      }
+      if (session.volcano_filters) {
+        setVennThresholds(session.volcano_filters);
       }
     }).catch(() => {});
   }, [sessionId]);
@@ -148,8 +155,8 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     try {
       const result = await computeVennData(sessionId, {
         comparisons: vennComparisons,
-        pvalue_threshold: 0.05,
-        logfc_threshold: 1,
+        pvalue_threshold: vennThresholds.adjPValue,
+        logfc_threshold: vennThresholds.foldChange,
       });
       setVennData(result);
     } catch (err) {
