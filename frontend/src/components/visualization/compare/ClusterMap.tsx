@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { formatComparisonKey, COLORSCALE_BLUE_WHITE_RED } from '@/lib/utils';
+import { formatComparisonKey, COLORSCALE_CYAN_GREY_CORAL } from '@/lib/utils';
 import type { ProteinClusterPoint, ComparisonClusterPoint } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -76,7 +76,11 @@ export default function ClusterMap(props: Props) {
 
 function buildProteinTraces(props: ProteinModeProps) {
   const { points, selectedKey, colorBy, varExplained } = props;
-  const { selected, others } = partitionPoints(points, selectedKey, (p) => p.accession);
+  const { selected, others: unsorted } = partitionPoints(points, selectedKey, (p) => p.accession);
+  // Sort by absolute FC ascending so colored dots render on top of grey ones
+  const others = colorBy
+    ? [...unsorted].sort((a, b) => Math.abs(colorBy[a.accession] ?? 0) - Math.abs(colorBy[b.accession] ?? 0))
+    : unsorted;
 
   const title = buildClusterTitle(props.title, varExplained);
 
@@ -91,7 +95,7 @@ function buildProteinTraces(props: ProteinModeProps) {
       marker: colorBy
         ? {
             color: others.map((p) => colorBy[p.accession] ?? 0),
-            colorscale: COLORSCALE_BLUE_WHITE_RED as string[][],
+            colorscale: COLORSCALE_CYAN_GREY_CORAL as string[][],
             size: 6,
             showscale: true,
             colorbar: { title: 'log2 FC', len: 0.4 },
@@ -112,7 +116,7 @@ function buildProteinTraces(props: ProteinModeProps) {
       marker: colorBy
         ? {
             color: [colorBy[selected[0]?.accession] ?? 0],
-            colorscale: COLORSCALE_BLUE_WHITE_RED as string[][],
+            colorscale: COLORSCALE_CYAN_GREY_CORAL as string[][],
             size: 16,
             line: { color: '#1e293b', width: 2 },
             showscale: false,

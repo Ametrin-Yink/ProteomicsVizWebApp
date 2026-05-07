@@ -142,12 +142,19 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
             for i in range(len(accessions))
         ]
 
+        # Build fold-change map for the color-by comparison
+        color_comp_idx = comparisons.index(req.color_comparison) if req.color_comparison in comparisons else 0
+        color_fc_map = {
+            accessions[i]: float(matrix[i, color_comp_idx]) if not np.isnan(matrix[i, color_comp_idx]) else 0.0
+            for i in range(len(accessions))
+        }
+
         result = {
             "selected_protein_fc": selected_fc,
             "similar_proteins": similar,
             "cluster_coords": cluster_coords,
-            "cluster_var_explained": var,  # list[float] for PCA, None for UMAP/tSNE
-            "color_comparison": req.color_comparison,
+            "cluster_var_explained": var,
+            "color_fc_map": color_fc_map,
         }
         current_status = _read_status(session_id, compute_type)
         _write_result(session_id, compute_type, result)

@@ -21,14 +21,23 @@ interface Props {
 function rmsdColor(val: number, min: number, max: number): string {
   if (min === max) return '#9ca3af';
   const t = (val - min) / (max - min);
-  const r = Math.round(6 + (255 - 6) * t);
-  const g = Math.round(182 + (107 - 182) * t);
-  const b = Math.round(212 + (107 - 212) * t);
+  // cyan (#00ADEF) → grey (#94a3b8) → coral (#E73564)
+  if (t < 0.5) {
+    const s = t * 2;
+    const r = Math.round(0 + (148 - 0) * s);
+    const g = Math.round(173 + (163 - 173) * s);
+    const b = Math.round(239 + (184 - 239) * s);
+    return `rgb(${r},${g},${b})`;
+  }
+  const s = (t - 0.5) * 2;
+  const r = Math.round(148 + (231 - 148) * s);
+  const g = Math.round(163 + (53 - 163) * s);
+  const b = Math.round(184 + (100 - 184) * s);
   return `rgb(${r},${g},${b})`;
 }
 
 export default function CorrelationBarChart({ data, title, topN = 10, ascending = false, onItemClick }: Props) {
-  const { labels, values, colors, height } = useMemo(() => {
+  const { labels, values, rawValues, colors, height } = useMemo(() => {
     const sorted = [...data].sort((a, b) =>
       ascending ? a.correlation - b.correlation : b.correlation - a.correlation
     );
@@ -43,29 +52,52 @@ export default function CorrelationBarChart({ data, title, topN = 10, ascending 
       topBottom.push(...top, ...bottom);
     }
 
-    const vals = topBottom.map((d) => d.correlation);
-    const vmin = Math.min(...vals);
-    const vmax = Math.max(...vals);
+    // Re-sort for smooth low→high gradient when ascending
+    const final = ascending
+      ? [...topBottom].sort((a, b) => a.correlation - b.correlation)
+      : topBottom;
+
+    const rawVals = final.map((d) => d.correlation);
+    const vmin = Math.min(...rawVals);
+    const vmax = Math.max(...rawVals);
+
+    // For ascending: normalize to 1 (most similar) → -1 (most dissimilar)
+    const vals = ascending && vmax > vmin
+      ? rawVals.map((v) => 1 - 2 * (v - vmin) / (vmax - vmin))
+      : rawVals;
 
     return {
-      labels: topBottom.map((d) => d.label),
+      labels: final.map((d) => d.label),
       values: vals,
+      rawValues: ascending ? rawVals : null,
       colors: ascending
-        ? vals.map((v) => rmsdColor(v, vmin, vmax))
-        : topBottom.map((d) => (d.correlation >= 0 ? '#ef4444' : '#3b82f6')),
-      height: 350,
+        ? rawVals.map((v) => rmsdColor(v, vmin, vmax))
+        : final.map((d) => (d.correlation >= 0 ? '#ef4444' : '#3b82f6')),
+      height: 380,
+      ascending,
     };
   }, [data, topN, ascending]);
 
-  const trace = {
-    type: 'bar' as const,
-    x: labels,
-    y: values,
-    marker: { color: colors },
-    text: values.map((v) => v.toFixed(3)),
-    textposition: 'outside' as const,
-    hovertemplate: '%{x}: %{y:.3f}<extra></extra>',
-  };
+  const trace = ascending
+    ? {
+        type: 'bar' as const,
+        x: labels,
+        y: values,
+        marker: { color: colors },
+        customdata: rawValues,
+        text: values.map((v) => v.toFixed(3)),
+        textposition: 'outside' as const,
+        hovertemplate: '%{x}<br>RMSD: %{customdata:.3f}<extra></extra>',
+      }
+    : {
+        type: 'bar' as const,
+        x: labels,
+        y: values,
+        marker: { color: colors },
+        text: values.map((v) => v.toFixed(3)),
+        textposition: 'outside' as const,
+        hovertemplate: '%{x}: %{y:.3f}<extra></extra>',
+      };
 
   const plotConfig = {
     displayModeBar: false,
@@ -78,9 +110,13 @@ export default function CorrelationBarChart({ data, title, topN = 10, ascending 
   const layout = {
     title: { text: title, font: { size: 16, color: '#111827' } },
     xaxis: { tickangle: -45, automargin: true },
-    yaxis: { title: { text: ascending ? 'RMSD' : 'Correlation', font: { size: 14 } }, automargin: true },
+    yaxis: {
+      title: ascending ? { text: 'Relative Similarity', font: { size: 14 } } : { text: 'Correlation', font: { size: 14 } },
+      range: ascending ? [-1.2, 1.2] : undefined,
+      automargin: true,
+    },
     height,
-    margin: { t: 50, b: 100, l: 60, r: 20 },
+    margin: { t: 50, b: 90, l: 60, r: 20 },
     dragmode: onItemClick ? (false as const) : ('zoom' as const),
     hovermode: 'closest' as const,
     bargap: 0.15,

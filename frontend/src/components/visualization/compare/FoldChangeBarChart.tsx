@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { formatComparisonKey, COLORSCALE_CYAN_CORAL } from '@/lib/utils';
+import { formatComparisonKey, COLORSCALE_PVAL } from '@/lib/utils';
 import type { ProteinFCResult } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -27,13 +27,18 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
       orientation: 'h' as const,
       marker: {
         color: negLogP,
-        colorscale: COLORSCALE_CYAN_CORAL as string[][],
+        colorscale: COLORSCALE_PVAL as string[][],
         cmin: 0,
         cmax: 5,
         colorbar: {
-          title: { text: '-log10(p)', font: { size: 12 } },
-          len: 0.5,
-          y: 0.5,
+          title: { text: '-log10(p)', font: { size: 12 }, side: 'top' },
+          orientation: 'h',
+          y: -0.08,
+          yanchor: 'top',
+          x: -0.05,
+          xanchor: 'right',
+          len: 0.45,
+          thickness: 12,
           tickvals: [0, 1, 2, 3, 4, 5],
           ticktext: ['0', '1', '2', '3', '4', '≥5'],
         },
@@ -46,8 +51,8 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
       title: { text: `Fold Change: ${proteinName}`, font: { size: 16, color: '#111827' } },
       xaxis: { title: { text: 'log2 Fold Change', font: { size: 14 } }, automargin: true },
       yaxis: { automargin: true },
-      height: Math.max(300, data.length * 40 + 100),
-      margin: { t: 60, b: 60, l: 10, r: 80 },
+      height: 430,
+      margin: { t: 60, b: 100, l: 10, r: 20 },
       bargap: 0.15,
     };
 

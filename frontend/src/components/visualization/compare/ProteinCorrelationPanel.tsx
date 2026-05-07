@@ -142,11 +142,12 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     );
     if (!similar) return;
 
+    const fcData = similar.fold_changes?.filter((f) => f.log_fc != null) ?? data.selected_protein_fc;
     setSelectedSimilar({
       accession: similar.accession,
       gene_name: similar.gene_name,
       similarity: similar.similarity,
-      fc: similar.fold_changes.filter((f) => f.log_fc != null) as ProteinFCResult[],
+      fc: fcData as ProteinFCResult[],
     });
   }, [data]);
 
@@ -238,6 +239,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
               mode="protein"
               points={data.cluster_coords}
               selectedKey={selectedProtein}
+              colorBy={data.color_fc_map}
               varExplained={data.cluster_var_explained}
               title={`${clusterMethod.toUpperCase()} — Proteins`}
             />

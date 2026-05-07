@@ -187,6 +187,15 @@ export function formatComparisonKey(key: string, maxLength?: number): string {
 
 export const CHART_COLORS = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#84cc16'] as const;
 
+export const COLORSCALE_CYAN_GREY_CORAL: unknown[][] = [
+  [0, '#00ADEF'], [0.5, '#94a3b8'], [1, '#E73564'],
+];
+
+// grey at -log10(p)=1.3 (p=0.05) within 0–5 range → position 0.26
+export const COLORSCALE_PVAL: unknown[][] = [
+  [0, '#00ADEF'], [0.26, '#94a3b8'], [1, '#E73564'],
+];
+
 export const COLORSCALE_BLUE_WHITE_RED: unknown[][] = [
   [0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444'],
 ];
