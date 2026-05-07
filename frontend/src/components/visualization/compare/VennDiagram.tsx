@@ -2,13 +2,13 @@
 
 import React, { useMemo, useState } from 'react';
 import { formatComparisonKey, formatComparisonKeyWrapped, CHART_COLORS } from '@/lib/utils';
+import type { VennData } from '@/types/api';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 function fcColor(v: number | null | undefined): string {
   if (v == null) return '';
   return v > 0 ? '#E73564' : '#00ADEF';
 }
-import type { VennData, VennOverlap } from '@/types/api';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 
 interface Props {
   data: VennData | null;
@@ -75,6 +75,7 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
       { regionKey: overlapKey, x: midX, y: cy, count: overlap },
     );
 
+    circles.sort((a, b) => b.r - a.r);
     return { circles, regionLabels };
   }
 
@@ -117,6 +118,7 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
     }
   }
 
+  circles.sort((a, b) => b.r - a.r);
   return { circles, regionLabels };
 }
 
@@ -152,15 +154,12 @@ export default function VennDiagram({ data, sideBySide }: Props) {
     });
   };
 
-  const maxR = Math.max(...circles.map((c) => c.r));
   const vbWidth = Math.max(340, circles.reduce((m, c) => Math.max(m, c.cx + c.r + 70), 0));
   const vbHeight = Math.max(280, circles.reduce((m, c) => Math.max(m, c.cy + c.r + 40), 0));
 
   const vennSvg = (
     <svg viewBox={`0 0 ${vbWidth} ${vbHeight}`} className="w-full max-w-[550px] mx-auto">
-      {[...circles]
-        .sort((a, b) => b.r - a.r)
-        .map((c, i) => (
+      {circles.map((c, i) => (
           <g key={i}>
             <circle
               cx={c.cx}
@@ -188,7 +187,6 @@ export default function VennDiagram({ data, sideBySide }: Props) {
             </text>
           </g>
         ))}
-      {/* Per-section count labels */}
       {regionLabels.map((rl) => (
         <text
           key={rl.regionKey}
@@ -256,7 +254,7 @@ export default function VennDiagram({ data, sideBySide }: Props) {
                           {overlap.region.map((comp) => (
                             <React.Fragment key={comp}>
                               <td className="px-2 py-1 text-right font-medium whitespace-nowrap" style={{
-                                color: fcColor(d[`log_fc_${comp}`] as number | null | undefined),
+                                color: fcColor(d[`log_fc_${comp}`]),
                               }}>
                                 {d[`log_fc_${comp}`] != null ? (d[`log_fc_${comp}`] as number).toFixed(2) : '-'}
                               </td>
