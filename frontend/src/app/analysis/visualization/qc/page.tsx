@@ -7,6 +7,8 @@ import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
 import { getQCData, getSession } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
+import { registerExportState, unregisterExportState } from '@/config/visualization-modules';
+import { buildQcExport } from '@/lib/figures/qc-figures';
 
 function QCContent() {
   const searchParams = useSearchParams();
@@ -55,6 +57,16 @@ function QCContent() {
 
     fetchData();
   }, [sessionId]);
+
+  // Register export state for HTML report builder
+  useEffect(() => {
+    registerExportState('qc', async () => {
+      if (!data) return null;
+      const qcExport = buildQcExport({ data, conditionList, selectedComparison });
+      return { tabId: 'qc', data: qcExport as unknown as Record<string, unknown> };
+    });
+    return () => { unregisterExportState('qc'); };
+  }, [data, conditionList, selectedComparison]);
 
   if (!sessionId) {
     return (

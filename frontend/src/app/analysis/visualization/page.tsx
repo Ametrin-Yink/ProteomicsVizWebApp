@@ -11,6 +11,8 @@ import { getDEResults, getSession, updateSessionVisualizationState } from '@/lib
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
+import { registerExportState, unregisterExportState } from '@/config/visualization-modules';
+import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
 
 
 function ResultsContent() {
@@ -37,6 +39,18 @@ function ResultsContent() {
       localStorage.setItem('volcano_filters', JSON.stringify(filters));
     } catch {}
   }, [filters]);
+
+  // Register export state for HTML report builder
+  useEffect(() => {
+    registerExportState('volcano', async () => {
+      if (!data) return null;
+      const comparisonLabel = selectedComparison || `${sessionConfig?.treatment ?? 'Treatment'} vs ${sessionConfig?.control ?? 'Control'}`;
+      const markedList = markedProteins[selectedComparison] ? Array.from(markedProteins[selectedComparison]) : [];
+      const volcanoExport = buildVolcanoExport(data.results, filters, comparisonLabel, markedList);
+      return { tabId: 'volcano', data: volcanoExport as unknown as Record<string, unknown> };
+    });
+    return () => { unregisterExportState('volcano'); };
+  }, [data, filters, selectedComparison, markedProteins, sessionConfig]);
 
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
   const [selectedProteinData, setSelectedProteinData] = useState<DEResult | null>(null);

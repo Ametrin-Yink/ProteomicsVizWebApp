@@ -10,6 +10,8 @@ import { getBioNetStatus, getBioNetSubnetwork, runBioNet, getSession } from '@/l
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { LoaderCircle } from 'lucide-react';
+import { registerExportState, unregisterExportState } from '@/config/visualization-modules';
+import { buildBioNetExport } from '@/lib/figures/bionet-graph';
 
 const DEFAULT_SOURCES = [...INDRA_SOURCES];
 const DEFAULT_STATEMENT_TYPES = [...INDRA_STATEMENT_TYPES];
@@ -137,6 +139,23 @@ function BioNetContent() {
       }
     };
   }, []);
+
+  // Register export state for HTML report builder
+  useEffect(() => {
+    registerExportState('bionet', async () => {
+      if (!subnetwork) return null;
+      const bionetExport = buildBioNetExport(
+        subnetwork.nodes,
+        subnetwork.edges,
+        keyTargets,
+        adjPvalueCutoff,
+        logfcCutoff,
+        runStatus?.comparison,
+      );
+      return { tabId: 'bionet', data: bionetExport as unknown as Record<string, unknown> };
+    });
+    return () => { unregisterExportState('bionet'); };
+  }, [subnetwork, keyTargets, adjPvalueCutoff, logfcCutoff, runStatus]);
 
   // Run BioNet
   const handleRunBioNet = async () => {
