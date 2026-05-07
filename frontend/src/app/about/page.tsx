@@ -11,7 +11,7 @@ const steps = [
   { icon: '2', title: 'Upload Data', desc: 'Upload PSM CSV files named as PSM_ExperimentName_Condition_ReplicateNumber.csv. Minimum 3 replicates per condition.' },
   { icon: '3', title: 'Configure & Process', desc: 'Set analysis parameters and start the 9-step pipeline. Progress is shown in real time.' },
   { icon: '4', title: 'View Results', desc: 'Explore interactive volcano plots, QC plots, and GSEA enrichment analysis.' },
-  { icon: '5', title: 'Export', desc: 'Download results as CSV or generate a comprehensive PDF report.' },
+  { icon: '5', title: 'Export', desc: 'Download results as CSV or export interactive HTML reports.' },
 ];
 
 const pipelineSteps = [
@@ -45,7 +45,7 @@ export default function AboutPage() {
             { title: 'Processing Pipeline', desc: '9-step analysis pipeline with real-time progress tracking', icon: Settings },
             { title: 'Visualization', desc: 'Interactive volcano plots, QC plots, and GSEA enrichment plots', icon: BarChart3 },
             { title: 'Session Management', desc: 'Persistent sessions that survive server restarts', icon: Layers },
-            { title: 'PDF Reports', desc: 'Export comprehensive analysis reports', icon: FileDown },
+            { title: 'HTML Reports', desc: 'Export interactive HTML reports with all visualizations', icon: FileDown },
           ].map((f) => (
             <div key={f.title} className="bg-background border border-border rounded-lg p-5">
               <div className="bg-primary/10 rounded-lg p-2 inline-flex mb-3"><f.icon className="w-8 h-8 text-primary" /></div>
