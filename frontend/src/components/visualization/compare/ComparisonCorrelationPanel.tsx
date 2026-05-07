@@ -83,11 +83,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
     if (!sessionId) return;
-    getComparisonCorrelationStatus(sessionId).then((s) => {
-      if (s.status === 'completed') {
-        getComparisonCorrelationData(sessionId).then((d) => setData(d)).catch(() => {});
-      }
-    }).catch(() => {});
+    getComparisonCorrelationData(sessionId).then((d) => setData(d)).catch(() => {});
   }, [sessionId]);
 
   const availableVennComparisons = useMemo(() => {

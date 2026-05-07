@@ -81,10 +81,9 @@ export default function CorrelationBarChart({ data, title, topN = 10, onItemClic
   }
 
   const handleClick = onItemClick
-    ? (eventData: Record<string, unknown>) => {
-        const points = eventData?.points as Array<Record<string, unknown>> | undefined;
-        if (points && points.length > 0) {
-          onItemClick(String(points[0].y));
+    ? (eventData: { points?: Array<{ y: string | number }> }) => {
+        if (eventData.points && eventData.points.length > 0) {
+          onItemClick(String(eventData.points[0].y));
         }
       }
     : undefined;

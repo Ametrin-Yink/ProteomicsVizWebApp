@@ -16,10 +16,7 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
   const { traceBar, traceDot, layout } = useMemo(() => {
     if (!data.length) return { traceBar: undefined, traceDot: undefined, layout: {} };
 
-    const comparisons = data.map((d) => {
-      const key = formatComparisonKey(d.comparison);
-      return key.length > 35 ? key.substring(0, 33) + '…' : key;
-    });
+    const comparisons = data.map((d) => formatComparisonKey(d.comparison, 35));
     const logFC = data.map((d) => d.log_fc);
     const negLogP = data.map((d) => (d.pval > 0 ? -Math.log10(d.pval) : 0));
     const colors = logFC.map((v) => (v >= 0 ? '#ef4444' : '#3b82f6'));

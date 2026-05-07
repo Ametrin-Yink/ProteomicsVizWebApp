@@ -27,16 +27,23 @@ interface ComparisonModeProps {
 type Props = ProteinModeProps | ComparisonModeProps;
 
 
-export default function ClusterMap(props: Props) {
-  const { traces, layout } = useMemo(() => {
-    if (props.mode === 'protein') {
-      return buildProteinTraces(props);
-    }
-    return buildComparisonTraces(props);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.mode, props.points, props.selectedKey]);
+function buildClusterTitle(title: string, varExplained?: number): string {
+  const suffix = varExplained ? ` (${varExplained.toFixed(1)}% variance)` : '';
+  return `${title}${suffix}`;
+}
 
-  if (!props.points.length) {
+export default function ClusterMap(props: Props) {
+  const { mode, points, selectedKey, varExplained, title } = props;
+  const colorBy = mode === 'protein' ? (props as ProteinModeProps).colorBy : undefined;
+
+  const { traces, layout } = useMemo(() => {
+    if (mode === 'protein') {
+      return buildProteinTraces({ mode, points: points as ProteinClusterPoint[], selectedKey, colorBy, varExplained, title });
+    }
+    return buildComparisonTraces({ mode: 'comparison', points: points as ComparisonClusterPoint[], selectedKey, varExplained, title });
+  }, [mode, points, selectedKey, colorBy, varExplained, title]);
+
+  if (!points.length) {
     return (
       <div className="bg-background border border-border rounded-lg p-4 text-center text-text-muted">
         No cluster data available
@@ -61,8 +68,7 @@ function buildProteinTraces(props: ProteinModeProps) {
   const { points, selectedKey, colorBy, varExplained } = props;
   const { selected, others } = partitionPoints(points, selectedKey, (p) => p.accession);
 
-  const varSuffix = varExplained ? ` (${varExplained.toFixed(1)}% variance)` : '';
-  const title = `${props.title}${varSuffix}`;
+  const title = buildClusterTitle(props.title, varExplained);
 
   const traces = [];
 
@@ -131,8 +137,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
 
   const { selected, others } = partitionPoints(points, selectedKey, (p) => p.comparison);
 
-  const varSuffix = varExplained ? ` (${varExplained.toFixed(1)}% variance)` : '';
-  const title = `${props.title}${varSuffix}`;
+  const title = buildClusterTitle(props.title, varExplained);
 
   const traces = [];
 

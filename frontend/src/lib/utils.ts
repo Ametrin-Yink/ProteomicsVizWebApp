@@ -179,9 +179,10 @@ export function isSignificantVolcano(
   return y > pLog10Threshold + c / (absX - actualS0);
 }
 
-/** Format a comparison key like "A_vs_B" to "A vs B" */
-export function formatComparisonKey(key: string): string {
-  return key.replace(/_vs_/g, ' vs ');
+/** Format a comparison key like "A_vs_B" to "A vs B". Optionally truncate. */
+export function formatComparisonKey(key: string, maxLength?: number): string {
+  const formatted = key.replace(/_vs_/g, ' vs ');
+  return maxLength ? truncateText(formatted, maxLength) : formatted;
 }
 
 export const CHART_COLORS = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#84cc16'] as const;

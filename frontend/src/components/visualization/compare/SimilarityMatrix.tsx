@@ -49,14 +49,7 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
     );
   }
 
-  const labels = comparisons.map((c) => {
-    const formatted = formatComparisonKey(c);
-    const parts = formatted.split(' vs ');
-    if (parts.length === 2) {
-      return `${parts[0].substring(0, 10)} vs ${parts[1].substring(0, 10)}`;
-    }
-    return formatted.length > 24 ? formatted.substring(0, 22) + '…' : formatted;
-  });
+  const labels = comparisons.map((c) => formatComparisonKey(c, 24));
 
   const trace = {
     type: 'heatmap' as const,
