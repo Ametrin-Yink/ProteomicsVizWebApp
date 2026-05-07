@@ -94,6 +94,7 @@ class BioNetService:
 
             if result.returncode != 0:
                 error_msg = result.stderr.strip() or result.stdout.strip()
+                logger.error("BioNet R script failed: %s", error_msg)
                 raise subprocess.CalledProcessError(
                     result.returncode,
                     cmd,
@@ -103,9 +104,16 @@ class BioNetService:
 
             logger.info("BioNet R script output: %s", result.stdout.strip())
 
-        # 6. Parse nodes CSV to count
+        # 6. Parse output CSVs
         nodes_df = pd.read_csv(nodes_csv)
         edges_df = pd.read_csv(edges_csv)
+
+        # 7. Parse sourceCounts from JSON strings (R write.csv serializes dicts to JSON)
+        if "sourceCounts" in edges_df.columns:
+            edges_df["sourceCounts"] = edges_df["sourceCounts"].apply(
+                lambda x: json.loads(x) if isinstance(x, str) else x
+            )
+
         return len(nodes_df), len(edges_df)
 
 

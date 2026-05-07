@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import BioNetNetwork from '@/components/visualization/BioNetNetwork';
@@ -31,15 +31,16 @@ function BioNetContent() {
 
   // Key targets
   const [keyTargetsInput, setKeyTargetsInput] = useState('');
-  const [keyTargets, setKeyTargets] = useState<string[]>([]);
+  const keyTargets = useMemo(
+    () => keyTargetsInput.split(',').map((s) => s.trim()).filter(Boolean),
+    [keyTargetsInput]
+  );
 
   // Run state
   const [runStatus, setRunStatus] = useState<BioNetRunStatus | null>(null);
   const [subnetwork, setSubnetwork] = useState<BioNetSubnetwork | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialLoad, setInitialLoad] = useState(true);
   const [runError, setRunError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastStatusRef = useRef<BioNetRunStatus | null>(null);
@@ -87,7 +88,6 @@ function BioNetContent() {
         if (status.status === 'completed') {
           const data = await getBioNetSubnetwork(sessionId);
           setSubnetwork(data);
-          setInitialLoad(false);
           setLoading(false);
         }
       }
@@ -116,9 +116,8 @@ function BioNetContent() {
         const data = await getBioNetSubnetwork(sessionId);
         if (!cancelled) setSubnetwork(data);
       }
-      setInitialLoad(false);
       setLoading(false);
-    }).catch(() => { setInitialLoad(false); setLoading(false); });
+    }).catch(() => { setLoading(false); });
     return () => { cancelled = true; };
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -147,13 +146,6 @@ function BioNetContent() {
         correlation_cutoff: null,
         sources_filter: allSourcesSelected ? null : sourcesFilter,
       });
-      // Parse key targets from the input at run time
-      setKeyTargets(
-        keyTargetsInput
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-      );
       startPolling();
     } catch (err) {
       setRunError(err instanceof Error ? err.message : 'BioNet run failed');
@@ -179,7 +171,7 @@ function BioNetContent() {
   }
 
   // Initial load skeleton
-  if (loading && initialLoad) {
+  if (loading) {
     return (
       <div className="flex-1 bg-surface">
         <div className="mx-auto px-6 py-8 max-w-7xl">
@@ -402,14 +394,6 @@ function BioNetContent() {
                 </div>
               </>
             )}
-          </div>
-        )}
-
-        {/* Error display (non-run errors) */}
-        {error && (
-          <div className="bg-error/5 border border-error/20 rounded-lg p-5 mb-4">
-            <h2 className="text-base font-semibold text-error mb-2">Error</h2>
-            <p className="text-error text-sm">{error}</p>
           </div>
         )}
 

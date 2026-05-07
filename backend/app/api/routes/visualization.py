@@ -1332,16 +1332,10 @@ async def _background_bionet_run(
         )
 
         # Convert CSVs to JSON for API response
+        # (sourceCounts JSON parsing is handled in bionet_service.py)
         import pandas as pd
         nodes_df = pd.read_csv(nodes_csv)
         edges_df = pd.read_csv(edges_csv)
-
-        # Parse sourceCounts from JSON string (R write.csv serializes dicts as JSON strings)
-        if "sourceCounts" in edges_df.columns:
-            import json as _json
-            edges_df["sourceCounts"] = edges_df["sourceCounts"].apply(
-                lambda x: _json.loads(x) if isinstance(x, str) else x
-            )
 
         subnetwork = {
             "nodes": nodes_df.to_dict(orient="records"),
@@ -1400,15 +1394,21 @@ async def run_bionet_on_demand(
 
     await run_lock.acquire()
 
-    task = asyncio.create_task(
-        _background_bionet_run(
-            session_id=session_id,
-            request=request,
-            results_dir=results_dir,
-            de_file=de_file,
-            lock=run_lock,
+    try:
+        task = asyncio.create_task(
+            _background_bionet_run(
+                session_id=session_id,
+                request=request,
+                results_dir=results_dir,
+                de_file=de_file,
+                lock=run_lock,
+            )
         )
-    )
+    except Exception:
+        run_lock.release()
+        _bionet_run_locks.pop(session_id, None)
+        raise
+
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 

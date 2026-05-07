@@ -40,23 +40,19 @@ config_json <- args[2]
 nodes_csv   <- args[3]
 edges_csv   <- args[4]
 
-# --- Read inputs ----------------------------------------------------------------
 df <- read.delim(input_tsv, stringsAsFactors = FALSE, check.names = FALSE)
 config <- fromJSON(config_json)
 
-# --- Rename columns to match MSstatsBioNet expectations -------------------------
 # getSubnetworkFromIndra internally filters on adj.pvalue (adjusted p-value),
 # accesses the "issue" column (must exist; NA = no QC issues), and uses
 # Protein, log2FC columns.
 colnames(df)[colnames(df) == "Master_Protein_Accessions"] <- "Protein"
 colnames(df)[colnames(df) == "logFC"] <- "log2FC"
 colnames(df)[colnames(df) == "adjPval"] <- "adj.pvalue"
-df$issue <- NA  # required by .filterGetSubnetworkFromIndraInput
+df$issue <- NA  # .filterGetSubnetworkFromIndraInput requires this column
 
-# --- Annotate UniProt -> HGNC ---------------------------------------------------
 annotated <- annotateProteinInfoFromIndra(df, "Uniprot")
 
-# --- Query INDRA subnetwork -----------------------------------------------------
 subnetwork <- getSubnetworkFromIndra(
   annotated,
   pvalueCutoff          = config$pvalue_cutoff,
@@ -67,7 +63,6 @@ subnetwork <- getSubnetworkFromIndra(
   sources_filter        = if (is.null(config$sources_filter) || length(config$sources_filter) == 0) NULL else unlist(config$sources_filter)
 )
 
-# --- Write outputs --------------------------------------------------------------
 write.csv(subnetwork$nodes, nodes_csv, row.names = FALSE)
 write.csv(subnetwork$edges, edges_csv, row.names = FALSE)
 
