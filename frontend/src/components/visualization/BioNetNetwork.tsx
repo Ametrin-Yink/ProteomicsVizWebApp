@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import cytoscape, { type Core, type EventObject } from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import type { BioNetNode, BioNetEdge } from '@/types/api';
@@ -69,6 +69,9 @@ export default function BioNetNetwork({
   const cyRef = useRef<Core | null>(null);
   const [selectedLayout, setSelectedLayout] = useState<LayoutName>('cose-bilkent');
   const [showLegend, setShowLegend] = useState(true);
+  const [search, setSearch] = useState('');
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const [showEdgeFilter, setShowEdgeFilter] = useState(false);
 
   const isSignificant = useCallback(
     (pvalue: number, logFC: number) =>
@@ -76,7 +79,16 @@ export default function BioNetNetwork({
     [pvalueCutoff, logfcCutoff]
   );
 
-  // Initialize Cytoscape
+  // Derive edge types actually present in the data (for filter checkboxes)
+  const edgeTypes = useMemo(() => {
+    const types = new Set<string>();
+    edges.forEach((e) => {
+      e.interaction.split(',').forEach((t) => types.add(t.trim()));
+    });
+    return Array.from(types).sort();
+  }, [edges]);
+
+  // Initialize / rebuild Cytoscape when data or hiddenTypes change
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -120,8 +132,8 @@ export default function BioNetNetwork({
           style: {
             'background-color': (ele: cytoscape.NodeSingular) => {
               const sig = ele.data('significant');
-              if (!sig) return '#9ca3af'; // grey for non-sig
-              return ele.data('upregulated') ? '#ef4444' : '#3b82f6'; // red up, blue down
+              if (!sig) return '#9ca3af';
+              return ele.data('upregulated') ? '#ef4444' : '#3b82f6';
             },
             width: (ele: cytoscape.NodeSingular) =>
               20 + Math.min(Math.abs(ele.data('logFC')) * 8, 40),
@@ -169,6 +181,15 @@ export default function BioNetNetwork({
           selector: 'node:active',
           style: { 'border-width': 2, 'border-color': '#6366f1' },
         },
+        // Search-found node glow
+        {
+          selector: 'node.found',
+          style: {
+            'border-width': 3,
+            'border-color': '#f59e0b',
+            'background-blacken': -0.3,
+          },
+        },
       ],
       layout: { name: 'cose-bilkent' },
       wheelSensitivity: 0.3,
@@ -206,6 +227,27 @@ export default function BioNetNetwork({
     };
   }, [nodes, edges, isSignificant, keyTargets]);
 
+  // Toggle edge visibility without rebuilding the graph
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.edges().forEach((edge) => {
+      const it = edge.data('interaction') as string;
+      const types = it.split(',').map((s) => s.trim());
+      const hidden = types.some((t) => hiddenTypes.has(t));
+      edge.style('display', hidden ? 'none' : 'element');
+    });
+  }, [hiddenTypes]);
+
+  // Toggle edge type visibility without rebuilding the graph
+  const toggleEdgeType = useCallback((type: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type); else next.add(type);
+      return next;
+    });
+  }, []);
+
   // Change layout
   const applyLayout = useCallback((name: LayoutName) => {
     if (!cyRef.current) return;
@@ -213,6 +255,32 @@ export default function BioNetNetwork({
     const opts = { name, animate: true };
     cyRef.current.layout(opts as unknown as cytoscape.LayoutOptions).run();
   }, []);
+
+  // Search for a node and center on it
+  const doSearch = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cyRef.current || !search.trim()) return;
+    const cy = cyRef.current;
+    const q = search.trim().toLowerCase();
+    cy.elements().removeClass('found');
+
+    const match = cy.nodes().filter((n) =>
+      n.data('id').toLowerCase() === q ||
+      n.data('hgncName')?.toLowerCase() === q ||
+      n.data('label')?.toLowerCase() === q ||
+      n.data('hgncName')?.toLowerCase().includes(q) ||
+      n.data('id').toLowerCase().includes(q)
+    ).first();
+
+    if (match.length > 0) {
+      match.addClass('found');
+      cy.animate({
+        center: { eles: match },
+        zoom: Math.max(cy.zoom(), 1.2),
+        duration: 500,
+      });
+    }
+  }, [search]);
 
   // Export PNG
   const exportPNG = useCallback(() => {
@@ -228,6 +296,25 @@ export default function BioNetNetwork({
     <div className="relative">
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {/* Search */}
+        <form onSubmit={doSearch} className="flex items-center gap-1">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Find protein..."
+            className="w-32 px-2 py-1 text-xs border border-border rounded bg-background text-text-primary"
+          />
+          <button
+            type="submit"
+            className="px-2 py-1 text-xs bg-primary text-white rounded hover:opacity-90"
+          >
+            Find
+          </button>
+        </form>
+
+        <div className="w-px h-5 bg-border" />
+
         <div className="flex items-center gap-1">
           <span className="text-xs text-text-muted mr-1">Layout:</span>
           {(['cose-bilkent', 'concentric', 'grid', 'circle'] as LayoutName[]).map(
@@ -246,13 +333,16 @@ export default function BioNetNetwork({
             )
           )}
         </div>
+
         <div className="w-px h-5 bg-border" />
+
         <button
           onClick={exportPNG}
           className="px-2 py-1 text-xs rounded bg-background border border-border text-text-secondary hover:bg-surface"
         >
           Export PNG
         </button>
+
         <button
           onClick={() => setShowLegend(!showLegend)}
           className={`px-2 py-1 text-xs rounded ${
@@ -261,11 +351,48 @@ export default function BioNetNetwork({
         >
           Legend
         </button>
+
+        <button
+          onClick={() => setShowEdgeFilter(!showEdgeFilter)}
+          className={`px-2 py-1 text-xs rounded ${
+            showEdgeFilter ? 'bg-primary text-white' : 'bg-background border border-border text-text-secondary'
+          }`}
+        >
+          Edge filter
+        </button>
       </div>
+
+      {/* Edge type filter */}
+      {showEdgeFilter && edgeTypes.length > 0 && (
+        <div className="flex items-center gap-3 mb-3 p-2 bg-surface rounded border border-border flex-wrap">
+          <span className="text-xs text-text-muted">Show:</span>
+          {edgeTypes.map((type) => {
+            const color = EDGE_COLORS[type] || '#9ca3af';
+            return (
+              <label
+                key={type}
+                className="flex items-center gap-1 text-xs text-text-primary cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={!hiddenTypes.has(type)}
+                  onChange={() => toggleEdgeType(type)}
+                  className="rounded"
+                />
+                <span
+                  className="w-2.5 h-2.5 rounded-full inline-block"
+                  style={{ backgroundColor: color }}
+                />
+                {type}
+              </label>
+            );
+          })}
+        </div>
+      )}
 
       {/* Legend */}
       {showLegend && (
-        <div className="flex items-center gap-4 mb-3 text-xs text-text-secondary">
+        <div className="flex items-center gap-4 mb-3 text-xs text-text-secondary flex-wrap">
           <span className="flex items-center gap-1">
             <span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> Upregulated
           </span>
