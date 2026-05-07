@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { ChartScatter, Activity, Spline, GitCompare } from 'lucide-react';
+import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
 
 export interface VisualizationModule {
   id: string;
@@ -42,6 +42,14 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     href: '/analysis/visualization/compare',
     icon: GitCompare,
     description: 'Protein and comparison correlation analysis',
+    supportedTemplates: ['multi_condition_comparison'],
+  },
+  {
+    id: 'bionet',
+    label: 'BioNet',
+    href: '/analysis/visualization/bionet',
+    icon: ChartNetwork,
+    description: 'Protein-protein interaction network from INDRA database',
     supportedTemplates: ['multi_condition_comparison'],
   },
 ];
