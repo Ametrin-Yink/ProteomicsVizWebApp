@@ -19,7 +19,6 @@ import type {
   ComparisonCorrelationData,
   VennData,
   ProteinListEntry,
-  CorrelationMethod,
   ClusterMethod,
   BioNetRunRequest,
   BioNetRunStatus,
@@ -347,7 +346,6 @@ export async function runProteinCorrelation(
   sessionId: string,
   body: {
     protein_id: string;
-    correlation_method: CorrelationMethod;
     cluster_method: ClusterMethod;
     color_comparison: string;
   }
@@ -376,7 +374,6 @@ export async function runComparisonCorrelation(
     primary_comparison: string;
     selected_comparisons: string[];
     marked_proteins: Record<string, string[]>;
-    correlation_method: CorrelationMethod;
     cluster_method: ClusterMethod;
   }
 ): Promise<{ status: string }> {

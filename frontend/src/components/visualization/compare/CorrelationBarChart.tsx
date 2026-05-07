@@ -41,7 +41,7 @@ export default function CorrelationBarChart({ data, title, topN = 10, ascending 
       values: topBottom.map((d) => d.correlation),
       colors: topBottom.map((d) => (d.correlation >= 0 ? '#ef4444' : '#3b82f6')),
     };
-  }, [data, topN]);
+  }, [data, topN, ascending]);
 
   const height = Math.max(400, labels.length * 30 + 80);
 

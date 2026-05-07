@@ -31,6 +31,8 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   const [selectedProtein, setSelectedProtein] = useState<string>('');
   const [clusterMethod, setClusterMethod] = useState<ClusterMethod>('pca');
   const [colorComparison, setColorComparison] = useState<string>('');
+  // Derived: auto-select first comparison when user hasn't picked one
+  const effectiveColorComparison = colorComparison || comparisons[0]?.value || '';
 
   const [status, setStatus] = useState<CompareRunStatus>({ status: 'idle' });
   const [data, setData] = useState<ProteinCorrelationData | null>(null);
@@ -45,7 +47,6 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   } | null>(null);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const statusRef = useRef<CompareRunStatus>({ status: 'idle' });
   const isRunning = status.status === 'running';
 
   // Load available proteins on mount
@@ -61,13 +62,6 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     if (!sessionId) return;
     getProteinCorrelationData(sessionId).then((d) => setData(d)).catch(() => {});
   }, [sessionId]);
-
-  // Auto-select first comparison for color-by
-  useEffect(() => {
-    if (!colorComparison && comparisons.length > 0) {
-      setColorComparison(comparisons[0].value);
-    }
-  }, [comparisons, colorComparison]);
 
   const proteinOptions = useMemo(() => {
     return proteins.map((p) => ({
@@ -85,7 +79,6 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     if (!sessionId) return;
     try {
       const newStatus = await getProteinCorrelationStatus(sessionId);
-      statusRef.current = newStatus;
       setStatus(newStatus);
       if (newStatus.status === 'completed') {
         if (pollIntervalRef.current) {
@@ -94,7 +87,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
         }
         const result = await getProteinCorrelationData(sessionId);
         setData(result);
-        setSelectedCorrelated(null);
+        setSelectedSimilar(null);
       } else if (newStatus.status === 'error') {
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
@@ -124,16 +117,15 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   }, []);
 
   const handleRunAnalysis = async () => {
-    if (!selectedProtein || !colorComparison) return;
+    if (!selectedProtein || !effectiveColorComparison) return;
     setError(null);
-    setSelectedCorrelated(null);
+    setSelectedSimilar(null);
     try {
       setStatus({ status: 'running' });
       await runProteinCorrelation(sessionId, {
         protein_id: selectedProtein,
-        correlation_method: 'pearson', // ignored — uses Euclidean distance
         cluster_method: clusterMethod,
-        color_comparison: colorComparison,
+        color_comparison: effectiveColorComparison,
       });
       startPolling();
     } catch (err) {
@@ -205,14 +197,14 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
             </label>
             <Select
               options={comparisons}
-              value={colorComparison}
+              value={effectiveColorComparison}
               onChange={(e) => setColorComparison(e.target.value)}
             />
           </div>
           <div className="flex items-end">
             <button
               onClick={handleRunAnalysis}
-              disabled={isRunning || !selectedProtein || !colorComparison}
+              disabled={isRunning || !selectedProtein || !effectiveColorComparison}
               className="w-full px-4 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             >
               {isRunning ? 'Running...' : 'Run Analysis'}

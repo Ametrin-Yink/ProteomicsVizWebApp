@@ -30,6 +30,7 @@ interface Props {
 
 export default function ComparisonCorrelationPanel({ sessionId, comparisons }: Props) {
   const [primaryComparison, setPrimaryComparison] = useState<string>('');
+  const effectivePrimary = primaryComparison || comparisons[0]?.value || '';
   const [selectedComparisons, setSelectedComparisons] = useState<string[]>([]);
   const [clusterMethod, setClusterMethod] = useState<ClusterMethod>('pca');
 
@@ -44,15 +45,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   const [vennError, setVennError] = useState<string | null>(null);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const statusRef = useRef<CompareRunStatus>({ status: 'idle' });
   const isRunning = status.status === 'running';
-
-  // Auto-select first comparison as primary
-  useEffect(() => {
-    if (!primaryComparison && comparisons.length > 0) {
-      setPrimaryComparison(comparisons[0].value);
-    }
-  }, [comparisons, primaryComparison]);
 
   // Auto-select additional comparisons (up to 9)
   useEffect(() => {
@@ -92,7 +85,6 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     if (!sessionId) return;
     try {
       const newStatus = await getComparisonCorrelationStatus(sessionId);
-      statusRef.current = newStatus;
       setStatus(newStatus);
       if (newStatus.status === 'completed') {
         if (pollIntervalRef.current) {
@@ -130,15 +122,14 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   }, []);
 
   const handleRunAnalysis = async () => {
-    if (!primaryComparison || selectedComparisons.length === 0) return;
+    if (!effectivePrimary || selectedComparisons.length === 0) return;
     setError(null);
     try {
       setStatus({ status: 'running' });
       await runComparisonCorrelation(sessionId, {
-        primary_comparison: primaryComparison,
+        primary_comparison: effectivePrimary,
         selected_comparisons: selectedComparisons,
         marked_proteins: markedProteins,
-        correlation_method: 'pearson', // ignored — uses Euclidean distance
         cluster_method: clusterMethod,
       });
       startPolling();
@@ -195,7 +186,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
             </label>
             <SearchableSelect
               options={comparisons}
-              value={primaryComparison}
+              value={effectivePrimary}
               onChange={setPrimaryComparison}
               placeholder="Select primary..."
               searchPlaceholder="Filter comparisons..."
@@ -248,7 +239,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
         <div className="mt-3 flex items-center gap-3">
           <button
             onClick={handleRunAnalysis}
-            disabled={isRunning || !primaryComparison || selectedComparisons.length === 0}
+            disabled={isRunning || !effectivePrimary || selectedComparisons.length === 0}
             className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           >
             {isRunning ? 'Running...' : 'Run Analysis'}
@@ -337,7 +328,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
           <ClusterMap
             mode="comparison"
             points={data.cluster_coords}
-            selectedKey={primaryComparison}
+            selectedKey={effectivePrimary}
             title={`${clusterMethod.toUpperCase()} — Comparisons`}
           />
         </div>

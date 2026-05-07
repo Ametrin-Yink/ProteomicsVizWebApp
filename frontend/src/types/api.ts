@@ -353,7 +353,6 @@ export type WebSocketMessageUnion =
 
 // Compare Page Types
 
-export type CorrelationMethod = 'pearson' | 'spearman';
 export type ClusterMethod = 'pca' | 'umap' | 'tsne';
 
 export interface CompareRunStatus {

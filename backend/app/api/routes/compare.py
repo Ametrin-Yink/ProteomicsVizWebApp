@@ -56,7 +56,6 @@ def _get_session_lock(session_id: str) -> asyncio.Lock:
 
 class ProteinCorrelationRequest(BaseModel):
     protein_id: str
-    correlation_method: Literal["pearson", "spearman"] = "pearson"
     cluster_method: Literal["pca", "umap", "tsne"] = "pca"
     color_comparison: str
 
@@ -65,7 +64,6 @@ class ComparisonCorrelationRequest(BaseModel):
     primary_comparison: str
     selected_comparisons: list[str]
     marked_proteins: dict[str, list[str]]
-    correlation_method: Literal["pearson", "spearman"] = "pearson"
     cluster_method: Literal["pca", "umap", "tsne"] = "pca"
 
 
