@@ -394,7 +394,8 @@ export interface ProteinCorrelationData {
   selected_protein_fc: ProteinFCResult[];
   similar_proteins: SimilarProtein[];
   cluster_coords: ProteinClusterPoint[];
-  cluster_var_explained?: number[]; // per-component variance ratios (PCA only)
+  cluster_var_explained?: number[];
+  color_fc_map?: Record<string, number>;
 }
 
 export interface VennData {
@@ -466,6 +467,41 @@ export interface BioNetSubnetwork {
   nodes: BioNetNode[];
   edges: BioNetEdge[];
 }
+
+// INDRA interaction statement types
+export const INDRA_STATEMENT_TYPES = [
+  'Activation',
+  'Inhibition',
+  'IncreaseAmount',
+  'DecreaseAmount',
+  'Complex',
+  'Phosphorylation',
+  'Dephosphorylation',
+  'Ubiquitination',
+  'Deubiquitination',
+  'Acetylation',
+  'Sumoylation',
+  'Methylation',
+  'Demethylation',
+  'Hydroxylation',
+  'Palmitoylation',
+  'Myristoylation',
+  'Farnesylation',
+  'Geranylgeranylation',
+  'GtpActivation',
+  'GapActivation',
+  'GefActivation',
+  'Cleavage',
+  'Degradation',
+  'Translocation',
+  'Transactivation',
+  'SelfInteraction',
+  'ActiveForm',
+  'InactiveForm',
+  'Binding',
+] as const;
+
+export type IndraStatementType = (typeof INDRA_STATEMENT_TYPES)[number];
 
 // INDRA knowledge sources
 export const INDRA_SOURCES = [

@@ -5,13 +5,14 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import BioNetNetwork from '@/components/visualization/BioNetNetwork';
 import type { BioNetRunStatus, BioNetSubnetwork } from '@/types/api';
-import { INDRA_SOURCES } from '@/types/api';
+import { INDRA_SOURCES, INDRA_STATEMENT_TYPES } from '@/types/api';
 import { getBioNetStatus, getBioNetSubnetwork, runBioNet, getSession } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { LoaderCircle } from 'lucide-react';
 
 const DEFAULT_SOURCES = [...INDRA_SOURCES];
+const DEFAULT_STATEMENT_TYPES = [...INDRA_STATEMENT_TYPES];
 
 function BioNetContent() {
   const searchParams = useSearchParams();
@@ -22,7 +23,8 @@ function BioNetContent() {
   const [comparisons, setComparisons] = useState<Array<{ group1: Record<string, string>; group2: Record<string, string> }>>([]);
   const [adjPvalueCutoff, setAdjPvalueCutoff] = useState(0.05);
   const [logfcCutoff, setLogfcCutoff] = useState(0.5);
-  const [statementTypes, setStatementTypes] = useState(['IncreaseAmount', 'DecreaseAmount']);
+  const [statementTypes, setStatementTypes] = useState<string[]>(DEFAULT_STATEMENT_TYPES);
+  const [allStatementTypesSelected, setAllStatementTypesSelected] = useState(true);
   const [paperCountCutoff, setPaperCountCutoff] = useState(1);
   const [evidenceCountCutoff, setEvidenceCountCutoff] = useState(1);
   const [sourcesFilter, setSourcesFilter] = useState<string[]>(DEFAULT_SOURCES);
@@ -140,7 +142,7 @@ function BioNetContent() {
         comparison: selectedComparison,
         pvalue_cutoff: adjPvalueCutoff,
         logfc_cutoff: logfcCutoff,
-        statement_types: statementTypes,
+        statement_types: allStatementTypesSelected ? DEFAULT_STATEMENT_TYPES : statementTypes,
         paper_count_cutoff: paperCountCutoff,
         evidence_count_cutoff: evidenceCountCutoff,
         correlation_cutoff: null,
@@ -295,22 +297,45 @@ function BioNetContent() {
                   <label className="block text-xs text-text-secondary mb-1">
                     Interaction Types
                   </label>
-                  <div className="flex gap-4">
-                    {['IncreaseAmount', 'DecreaseAmount'].map((t) => (
-                      <label key={t} className="flex items-center gap-1.5 text-sm text-text-primary">
-                        <input
-                          type="checkbox"
-                          checked={statementTypes.includes(t)}
-                          onChange={() =>
-                            setStatementTypes((prev) =>
-                              prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-                            )
+                  <div className="p-3 bg-surface rounded border border-border">
+                    <label className="flex items-center gap-2 text-xs text-text-secondary mb-2">
+                      <input
+                        type="checkbox"
+                        checked={allStatementTypesSelected}
+                        onChange={() => {
+                          setAllStatementTypesSelected(!allStatementTypesSelected);
+                          if (!allStatementTypesSelected) {
+                            setStatementTypes(DEFAULT_STATEMENT_TYPES);
                           }
-                          className="rounded"
-                        />
-                        {t}
-                      </label>
-                    ))}
+                        }}
+                        className="rounded"
+                      />
+                      All interaction types (INDRA)
+                    </label>
+                    {!allStatementTypesSelected && (
+                      <div className="grid grid-cols-3 md:grid-cols-5 gap-1.5">
+                        {INDRA_STATEMENT_TYPES.map((t) => (
+                          <label
+                            key={t}
+                            className="flex items-center gap-1.5 text-xs text-text-primary"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={statementTypes.includes(t)}
+                              onChange={() =>
+                                setStatementTypes((prev) =>
+                                  prev.includes(t)
+                                    ? prev.filter((x) => x !== t)
+                                    : [...prev, t]
+                                )
+                              }
+                              className="rounded"
+                            />
+                            {t}
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -7,6 +7,47 @@ import type { BioNetNode, BioNetEdge } from '@/types/api';
 
 cytoscape.use(coseBilkent);
 
+// Color map for INDRA interaction types. Compound edges (e.g. "Activation, Complex")
+// match the first type found. Unrecognized types default to grey.
+const EDGE_COLORS: Record<string, string> = {
+  Activation: '#22c55e',
+  Inhibition: '#ef4444',
+  IncreaseAmount: '#f97316',
+  DecreaseAmount: '#3b82f6',
+  Complex: '#8b5cf6',
+  Binding: '#8b5cf6',
+  Phosphorylation: '#eab308',
+  Dephosphorylation: '#f59e0b',
+  Ubiquitination: '#ec4899',
+  Deubiquitination: '#f472b6',
+  Acetylation: '#06b6d4',
+  Sumoylation: '#14b8a6',
+  Methylation: '#6366f1',
+  Demethylation: '#818cf8',
+  Hydroxylation: '#84cc16',
+  Palmitoylation: '#a1a1aa',
+  Myristoylation: '#a1a1aa',
+  Farnesylation: '#a1a1aa',
+  Geranylgeranylation: '#a1a1aa',
+  GtpActivation: '#22c55e',
+  GapActivation: '#ef4444',
+  GefActivation: '#22c55e',
+  Cleavage: '#ef4444',
+  Degradation: '#ef4444',
+  Translocation: '#a855f7',
+  Transactivation: '#22c55e',
+  SelfInteraction: '#d4d4d8',
+  ActiveForm: '#22c55e',
+  InactiveForm: '#ef4444',
+};
+
+function edgeColor(interaction: string): string {
+  for (const [type, color] of Object.entries(EDGE_COLORS)) {
+    if (interaction.includes(type)) return color;
+  }
+  return '#9ca3af';
+}
+
 type LayoutName = 'cose-bilkent' | 'concentric' | 'grid' | 'circle';
 
 interface BioNetNetworkProps {
@@ -104,26 +145,16 @@ export default function BioNetNetwork({
             'border-color': '#f59e0b',
           },
         },
-        // Edge style
+        // Edge style — color by primary interaction type
         {
           selector: 'edge',
           style: {
             width: (ele: cytoscape.EdgeSingular) =>
               1 + Math.min(ele.data('evidenceCount'), 10) * 0.5,
-            'line-color': (ele: cytoscape.EdgeSingular) => {
-              const it = ele.data('interaction') as string;
-              if (it.includes('DecreaseAmount') && it.includes('IncreaseAmount'))
-                return '#a855f7'; // purple for bidirectional
-              if (it.includes('DecreaseAmount')) return '#ef4444';
-              return '#22c55e';
-            },
-            'target-arrow-color': (ele: cytoscape.EdgeSingular) => {
-              const it = ele.data('interaction') as string;
-              if (it.includes('DecreaseAmount') && it.includes('IncreaseAmount'))
-                return '#a855f7';
-              if (it.includes('DecreaseAmount')) return '#ef4444';
-              return '#22c55e';
-            },
+            'line-color': (ele: cytoscape.EdgeSingular) =>
+              edgeColor(ele.data('interaction') as string),
+            'target-arrow-color': (ele: cytoscape.EdgeSingular) =>
+              edgeColor(ele.data('interaction') as string),
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             label: 'data(interaction)',
@@ -245,13 +276,22 @@ export default function BioNetNetwork({
             <span className="w-3 h-3 rounded-full bg-gray-400 inline-block" /> Not significant
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 bg-green-500 inline-block" /> IncreaseAmount
+            <span className="w-2 h-2 bg-[#22c55e] inline-block" /> Activation
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 bg-red-500 inline-block" /> DecreaseAmount
+            <span className="w-2 h-2 bg-[#ef4444] inline-block" /> Inhibition
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 bg-purple-500 inline-block" /> Both
+            <span className="w-2 h-2 bg-[#8b5cf6] inline-block" /> Complex
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-[#f97316] inline-block" /> IncreaseAmount
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-[#3b82f6] inline-block" /> DecreaseAmount
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-[#eab308] inline-block" /> Phosphorylation
           </span>
         </div>
       )}
