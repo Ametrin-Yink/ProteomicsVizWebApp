@@ -36,7 +36,7 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
     };
 
     const layout = {
-      title: { text: 'Marked Proteins Fold Change Heatmap', font: { size: 16, color: '#111827' } },
+      title: { text: 'Comparison Fold Change Heatmap', font: { size: 16, color: '#111827' } },
       xaxis: { tickangle: -45, automargin: true, title: { text: '', font: { size: 14 } } },
       yaxis: { autorange: 'reversed' as const, automargin: true, title: { text: '', font: { size: 14 } } },
       height,

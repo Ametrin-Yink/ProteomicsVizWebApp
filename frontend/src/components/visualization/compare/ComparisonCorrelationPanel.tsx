@@ -45,14 +45,16 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   const [vennError, setVennError] = useState<string | null>(null);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const comparisonsInitialized = useRef(false);
   const isRunning = status.status === 'running';
 
-  // Auto-select additional comparisons (up to 9)
+  // Auto-select additional comparisons (up to 9) — only on initial load
   useEffect(() => {
-    if (selectedComparisons.length === 0 && comparisons.length > 0) {
+    if (!comparisonsInitialized.current && comparisons.length > 0) {
       setSelectedComparisons(comparisons.slice(0, 9).map((c) => c.value));
+      comparisonsInitialized.current = true;
     }
-  }, [comparisons, selectedComparisons]);
+  }, [comparisons]);
 
   // Collect marked proteins from session
   const [markedProteins, setMarkedProteins] = useState<Record<string, string[]>>({});
@@ -205,6 +207,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
                   <input
                     type="checkbox"
                     checked={selectedComparisons.includes(comp.value)}
+                    disabled={!selectedComparisons.includes(comp.value) && selectedComparisons.length >= 9}
                     onChange={(e) => {
                       if (e.target.checked) {
                         if (selectedComparisons.length < 9) {
@@ -220,6 +223,9 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
                 </label>
               ))}
             </div>
+              {selectedComparisons.length >= 9 && (
+                <p className="text-xs text-text-muted mt-1">Maximum 9 additional comparisons reached</p>
+              )}
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
