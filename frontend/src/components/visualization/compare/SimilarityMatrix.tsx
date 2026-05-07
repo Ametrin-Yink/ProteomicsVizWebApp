@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { formatComparisonKey } from '@/lib/utils';
+import { formatComparisonKey, COLORSCALE_CYAN_GREY_CORAL } from '@/lib/utils';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -27,8 +27,9 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
       for (let j = 0; j < comparisons.length; j++) {
         const val = matrix[i]?.[j];
         if (val !== undefined) {
-          const maxVal = matrix.flat().reduce((m, v) => Math.max(m, v), 0);
-          const textColor = val > maxVal * 0.6 ? '#ffffff' : '#1e293b';
+          const sorted = [...matrix.flat()].sort((a, b) => a - b);
+          const median = sorted[Math.floor(sorted.length / 2)];
+          const textColor = val > median ? '#ffffff' : '#1e293b';
           result.push({
             x: j,
             y: i,
@@ -57,7 +58,7 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
     z: matrix,
     x: labels,
     y: labels,
-    colorscale: 'Blues' as unknown as string[][],
+    colorscale: COLORSCALE_CYAN_GREY_CORAL as string[][],
     hovertemplate: 'Comparison: %{x}<br>vs %{y}<br>RMSD: %{z:.3f}<extra></extra>',
   };
 
