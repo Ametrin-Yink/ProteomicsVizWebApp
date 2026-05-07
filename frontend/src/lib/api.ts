@@ -21,6 +21,9 @@ import type {
   ProteinListEntry,
   CorrelationMethod,
   ClusterMethod,
+  BioNetRunRequest,
+  BioNetRunStatus,
+  BioNetSubnetwork,
 } from '@/types/api';
 import {
   ProcessingStatusResponse,
@@ -413,4 +416,33 @@ export async function computeVennData(
 /** List all proteins across all comparisons for selector dropdowns */
 export async function listProteins(sessionId: string): Promise<ProteinListEntry[]> {
   return fetchApi<ProteinListEntry[]>(`/api/sessions/${sessionId}/compare/proteins`);
+}
+
+// BioNet API
+
+export async function runBioNet(
+  sessionId: string,
+  body: BioNetRunRequest
+): Promise<{ status: string; comparison: string }> {
+  return fetchApi(`/api/sessions/${sessionId}/bionet/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getBioNetStatus(
+  sessionId: string
+): Promise<BioNetRunStatus> {
+  return fetchApi<BioNetRunStatus>(
+    `/api/sessions/${sessionId}/bionet/status`
+  );
+}
+
+export async function getBioNetSubnetwork(
+  sessionId: string
+): Promise<BioNetSubnetwork> {
+  return fetchApi<BioNetSubnetwork>(
+    `/api/sessions/${sessionId}/bionet/subnetwork`
+  );
 }
