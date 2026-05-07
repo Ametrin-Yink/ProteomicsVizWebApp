@@ -373,6 +373,7 @@ export interface SimilarProtein {
   accession: string;
   gene_name: string;
   similarity: number; // Euclidean distance (RMSD), lower = more similar
+  fold_changes: Array<{ comparison: string; log_fc: number | null }>;
 }
 
 export interface ProteinClusterPoint {
@@ -393,7 +394,7 @@ export interface ProteinCorrelationData {
   selected_protein_fc: ProteinFCResult[];
   similar_proteins: SimilarProtein[];
   cluster_coords: ProteinClusterPoint[];
-  cluster_var_explained?: number;
+  cluster_var_explained?: number[]; // per-component variance ratios (PCA only)
 }
 
 export interface VennData {

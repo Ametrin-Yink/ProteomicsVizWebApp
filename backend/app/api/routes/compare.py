@@ -132,7 +132,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
                 })
 
         # Protein similarities (Euclidean distance: lower = more similar)
-        similar = compute_protein_similarities(matrix, accessions, gene_names, query_idx)
+        similar = compute_protein_similarities(matrix, accessions, gene_names, comparisons, query_idx)
 
         # Cluster coordinates for all proteins
         coords, var = run_cluster(matrix, req.cluster_method)
@@ -146,7 +146,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
             "selected_protein_fc": selected_fc,
             "similar_proteins": similar,
             "cluster_coords": cluster_coords,
-            "cluster_var_explained": var,
+            "cluster_var_explained": var,  # list[float] for PCA, None for UMAP/tSNE
             "color_comparison": req.color_comparison,
         }
         current_status = _read_status(session_id, compute_type)

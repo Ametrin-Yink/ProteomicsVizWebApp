@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { formatComparisonKey, truncateText } from '@/lib/utils';
+import { formatComparisonKey, truncateText, COLORSCALE_BLUE_WHITE_RED } from '@/lib/utils';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -30,11 +30,7 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
       z: zData,
       x: xLabels,
       y: truncatedYLabels,
-      colorscale: [
-        [0, '#3b82f6'],
-        [0.5, '#ffffff'],
-        [1, '#ef4444'],
-      ] as unknown as string[][],
+      colorscale: COLORSCALE_BLUE_WHITE_RED as string[][],
       zmid: 0,
       hovertemplate: 'Protein: %{y}<br>Comparison: %{x}<br>log2 FC: %{z:.2f}<extra></extra>',
     };

@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { formatComparisonKey } from '@/lib/utils';
+import { formatComparisonKey, COLORSCALE_BLUE_WHITE_RED } from '@/lib/utils';
 import type { ProteinClusterPoint, ComparisonClusterPoint } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -12,7 +12,7 @@ interface ProteinModeProps {
   points: ProteinClusterPoint[];
   selectedKey: string;
   colorBy?: Record<string, number>;
-  varExplained?: number;
+  varExplained?: number[];
   title: string;
 }
 
@@ -20,16 +20,26 @@ interface ComparisonModeProps {
   mode: 'comparison';
   points: ComparisonClusterPoint[];
   selectedKey: string;
-  varExplained?: number;
+  varExplained?: number[];
   title: string;
 }
 
 type Props = ProteinModeProps | ComparisonModeProps;
 
 
-function buildClusterTitle(title: string, varExplained?: number): string {
-  const suffix = varExplained ? ` (${varExplained.toFixed(1)}% variance)` : '';
-  return `${title}${suffix}`;
+function buildClusterTitle(title: string, varExplained?: number[] | number): string {
+  if (!varExplained) return title;
+  if (typeof varExplained === 'number') return `${title} (${(varExplained * 100).toFixed(1)}% variance)`;
+  if (varExplained.length === 0) return title;
+  const total = varExplained.reduce((a, b) => a + b, 0);
+  return `${title} (${(total * 100).toFixed(1)}% variance)`;
+}
+
+function pcLabel(pc: number, varExplained?: number[] | number): string {
+  if (!varExplained) return `PC${pc + 1}`;
+  if (typeof varExplained === 'number') return `PC${pc + 1}`;
+  if (pc >= varExplained.length) return `PC${pc + 1}`;
+  return `PC${pc + 1} (${(varExplained[pc] * 100).toFixed(1)}%)`;
 }
 
 export default function ClusterMap(props: Props) {
@@ -81,7 +91,7 @@ function buildProteinTraces(props: ProteinModeProps) {
       marker: colorBy
         ? {
             color: others.map((p) => colorBy[p.accession] ?? 0),
-            colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']] as unknown as string[][],
+            colorscale: COLORSCALE_BLUE_WHITE_RED as string[][],
             size: 6,
             showscale: true,
             colorbar: { title: 'log2 FC', len: 0.4 },
@@ -102,7 +112,7 @@ function buildProteinTraces(props: ProteinModeProps) {
       marker: colorBy
         ? {
             color: [colorBy[selected[0]?.accession] ?? 0],
-            colorscale: [[0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444']] as unknown as string[][],
+            colorscale: COLORSCALE_BLUE_WHITE_RED as string[][],
             size: 16,
             line: { color: '#1e293b', width: 2 },
             showscale: false,
@@ -122,8 +132,8 @@ function buildProteinTraces(props: ProteinModeProps) {
     traces,
     layout: {
       title: { text: title, font: { size: 16, color: '#111827' } },
-      xaxis: { title: { text: 'Component 1', font: { size: 14 } }, zeroline: false, automargin: true },
-      yaxis: { title: { text: 'Component 2', font: { size: 14 } }, zeroline: false, automargin: true },
+      xaxis: { title: { text: pcLabel(0, varExplained), font: { size: 14 } }, zeroline: false, automargin: true },
+      yaxis: { title: { text: pcLabel(1, varExplained), font: { size: 14 } }, zeroline: false, automargin: true },
       height: 400,
       margin: { t: 60, b: 70, l: 70, r: 80 },
       hovermode: 'closest' as const,
@@ -178,8 +188,8 @@ function buildComparisonTraces(props: ComparisonModeProps) {
     traces,
     layout: {
       title: { text: title, font: { size: 16, color: '#111827' } },
-      xaxis: { title: { text: 'Component 1', font: { size: 14 } }, zeroline: false, automargin: true },
-      yaxis: { title: { text: 'Component 2', font: { size: 14 } }, zeroline: false, automargin: true },
+      xaxis: { title: { text: pcLabel(0, varExplained), font: { size: 14 } }, zeroline: false, automargin: true },
+      yaxis: { title: { text: pcLabel(1, varExplained), font: { size: 14 } }, zeroline: false, automargin: true },
       height: 400,
       margin: { t: 60, b: 70, l: 70, r: 40 },
       hovermode: 'closest' as const,

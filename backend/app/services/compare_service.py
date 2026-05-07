@@ -161,12 +161,14 @@ def compute_protein_similarities(
     matrix: np.ndarray,
     accessions: list[str],
     gene_names: list[str],
+    comparisons: list[str],
     query_idx: int,
     top_n: int = 10,
 ) -> list[dict]:
     """
     Compute fold-change similarity (Euclidean distance) to a query protein.
     Lower distance = more similar. Returns top_n most similar + top_n most dissimilar.
+    Each entry includes fold_changes for the scatter plot.
     """
     n = matrix.shape[0]
     query_row = matrix[query_idx]
@@ -184,31 +186,36 @@ def compute_protein_similarities(
         rmsd = float(np.sqrt(np.mean(diff ** 2)))
         distances.append(rmsd)
 
+    # Build light entries, sort, then enrich only the top/bottom N with fold_changes
     result = [
-        {
-            "accession": accessions[i],
-            "gene_name": gene_names[i],
-            "similarity": distances[i],
-        }
+        {"idx": i, "accession": accessions[i], "gene_name": gene_names[i], "similarity": distances[i]}
         for i in range(n)
     ]
-    # Sort by distance ascending (most similar first)
     result.sort(key=lambda x: x["similarity"])
-    # Return top_n most similar + top_n most dissimilar (excluding query itself at index 0)
-    most_similar = [r for r in result if r["similarity"] != float('inf')][:top_n + 1]  # +1 for self
-    most_dissimilar = [r for r in result if r["similarity"] != float('inf')][-top_n:]
-    return most_similar + most_dissimilar
+    result = [r for r in result if r["similarity"] != float('inf')]
+    most_similar = result[:top_n + 1]
+    most_dissimilar = result[-top_n:] if len(result) > top_n + 1 else []
+    candidates = most_similar + most_dissimilar
+
+    for entry in candidates:
+        i = entry.pop("idx")
+        entry["fold_changes"] = [
+            {"comparison": comp, "log_fc": float(matrix[i, j]) if not np.isnan(matrix[i, j]) else None}
+            for j, comp in enumerate(comparisons)
+        ]
+
+    return candidates
 
 
-def run_pca(matrix: np.ndarray) -> tuple[np.ndarray, float]:
-    """Run PCA, returns (n, 2) coords and variance explained."""
+def run_pca(matrix: np.ndarray) -> tuple[np.ndarray, list[float]]:
+    """Run PCA, returns (n, 2) coords and per-component variance ratios."""
     col_means = np.nanmean(matrix, axis=0)
     imputed = np.where(np.isnan(matrix), col_means, matrix)
     scaler = StandardScaler()
     scaled = scaler.fit_transform(imputed)
     pca = PCA(n_components=2)
     coords = pca.fit_transform(scaled)
-    var = float(sum(pca.explained_variance_ratio_))
+    var = [float(v) for v in pca.explained_variance_ratio_]
     return coords, var
 
 
@@ -241,8 +248,8 @@ def run_tsne(matrix: np.ndarray, random_state: int = 42) -> np.ndarray:
     return coords
 
 
-def run_cluster(matrix: np.ndarray, method: str = "pca") -> tuple[np.ndarray, Optional[float]]:
-    """Dispatch to PCA/UMAP/tSNE."""
+def run_cluster(matrix: np.ndarray, method: str = "pca") -> tuple[np.ndarray, Optional[list[float]]]:
+    """Dispatch to PCA/UMAP/tSNE. Returns coords and per-component variance (PCA only)."""
     if method == "umap":
         return run_umap(matrix), None
     elif method == "tsne":

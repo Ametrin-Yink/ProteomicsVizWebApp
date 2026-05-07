@@ -187,6 +187,14 @@ export function formatComparisonKey(key: string, maxLength?: number): string {
 
 export const CHART_COLORS = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#84cc16'] as const;
 
+export const COLORSCALE_BLUE_WHITE_RED: unknown[][] = [
+  [0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444'],
+];
+
+export const COLORSCALE_CYAN_CORAL: unknown[][] = [
+  [0, '#06b6d4'], [0.25, '#9ca3af'], [0.5, '#ff6b6b'], [1, '#dc2626'],
+];
+
 // Get color based on significance (supports both rectangular and S0 hyperbolic cutoffs)
 export function getVolcanoPointColor(
   logFC: number,

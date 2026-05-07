@@ -137,10 +137,8 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   // Handle click on similar protein bar chart
   const handleSimilarClick = useCallback((label: string) => {
     if (!data) return;
-    const match = label.match(/\(([^)]+)\)$/);
-    const accession = match ? match[1] : label;
     const similar = data.similar_proteins.find(
-      (c) => c.accession === accession
+      (c) => c.gene_name === label || c.accession === label
     );
     if (!similar) return;
 
@@ -148,7 +146,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
       accession: similar.accession,
       gene_name: similar.gene_name,
       similarity: similar.similarity,
-      fc: data.selected_protein_fc,
+      fc: similar.fold_changes.filter((f) => f.log_fc != null) as ProteinFCResult[],
     });
   }, [data]);
 
@@ -193,7 +191,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Color By
+              Cluster Color By
             </label>
             <Select
               options={comparisons}
@@ -250,7 +248,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
             <div className="lg:col-span-3">
               <CorrelationBarChart
                 data={data.similar_proteins.map((c) => ({
-                  label: c.gene_name ? `${c.gene_name} (${c.accession})` : c.accession,
+                  label: c.gene_name || c.accession,
                   correlation: c.similarity,
                 }))}
                 title="Most / Least Similar Proteins (RMSD)"
