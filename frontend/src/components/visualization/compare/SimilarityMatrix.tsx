@@ -23,12 +23,13 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
       showarrow: boolean;
       font: { color: string; size: number };
     }> = [];
+    const flat = matrix.flat();
+    const sorted = [...flat].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
     for (let i = 0; i < comparisons.length; i++) {
       for (let j = 0; j < comparisons.length; j++) {
         const val = matrix[i]?.[j];
         if (val !== undefined) {
-          const sorted = [...matrix.flat()].sort((a, b) => a - b);
-          const median = sorted[Math.floor(sorted.length / 2)];
           const textColor = val > median ? '#ffffff' : '#1e293b';
           result.push({
             x: j,
