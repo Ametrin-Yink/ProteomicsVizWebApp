@@ -137,9 +137,16 @@ export default function VennDiagram({ data }: Props) {
                     {expandedRegions.has(row.key) && (
                       <tr key={`${row.key}-proteins`} className="bg-surface/30">
                         <td colSpan={3} className="px-3 py-2">
-                          <p className="text-xs text-text-muted">
-                            Protein list not available in Venn data. Select comparisons in
-                            the heatmap to view individual proteins.
+                          <p className="text-xs text-text-muted max-h-48 overflow-y-auto">
+                            {(() => {
+                              if (!data.sets || row.region.length === 0) return 'No protein list available';
+                              const setList = row.region.map((r) => new Set(data.sets?.[r] ?? []));
+                              const intersection = [...(setList[0] ?? [])].filter((a) =>
+                                setList.every((s) => s.has(a))
+                              );
+                              const display = intersection.slice(0, 50);
+                              return display.join(', ') + (intersection.length > 50 ? ' ...' : '');
+                            })()}
                           </p>
                         </td>
                       </tr>
