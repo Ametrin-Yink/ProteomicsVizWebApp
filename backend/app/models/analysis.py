@@ -238,3 +238,18 @@ class ProcessingProgress(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class ReportRequest(BaseModel):
+    """Report generation request configuration."""
+    include_qc: bool = True
+    include_gsea: bool = True
+    include_volcano: bool = True
+
+
+class ReportStatus(BaseModel):
+    """Report generation status."""
+    report_id: str = ""
+    status: str = "generating"  # generating, completed, failed
+    progress: int = 0
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    download_url: Optional[str] = None
