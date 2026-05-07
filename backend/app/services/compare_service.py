@@ -276,17 +276,34 @@ def compute_venn_data(
     pvalue_threshold: float = 0.05,
     logfc_threshold: float = 1.0,
 ) -> dict:
-    """Compute Venn diagram data for 2-3 comparisons."""
-    sets = {}
+    """Compute Venn diagram data for 2-3 comparisons with per-protein details."""
+    # Load full DE data for each comparison (not just significant rows)
+    de_data: dict[str, pd.DataFrame] = {}
+    sets: dict[str, set[str]] = {}
     for comp in comparisons:
         df = _load_de_file(session_dir, comp)
         if df is None:
+            de_data[comp] = pd.DataFrame()
             sets[comp] = set()
             continue
+        de_data[comp] = df
         sig = df[
             (df["adj_pval"] < pvalue_threshold) & (df["log_fc"].abs() > logfc_threshold)
         ]
         sets[comp] = set(sig["accession"].tolist())
+
+    # Build per-protein detail lookup from DE data
+    protein_details: dict[str, dict[str, dict]] = {}
+    for comp, df in de_data.items():
+        for _, row in df.iterrows():
+            acc = row["accession"]
+            if acc not in protein_details:
+                protein_details[acc] = {"gene_name": row.get("gene_name", "")}
+            protein_details[acc][comp] = {
+                "log_fc": float(row["log_fc"]) if not pd.isna(row["log_fc"]) else None,
+                "adj_pval": float(row["adj_pval"]) if not pd.isna(row.get("adj_pval")) else None,
+                "pval": float(row["pval"]) if not pd.isna(row["pval"]) else None,
+            }
 
     overlaps = []
     accessions = sorted(set().union(*sets.values()))
@@ -300,14 +317,27 @@ def compute_venn_data(
         key = "+".join(ov["region"])
         by_region[key].append(ov["accession"])
 
-    overlap_list = [
-        {
-            "region": sorted(key.split("+")),
+    overlap_list = []
+    for key, accs in sorted(by_region.items(), key=lambda x: -len(x[1])):
+        region = sorted(key.split("+"))
+        details = []
+        for acc in sorted(accs):
+            pd_entry = protein_details.get(acc, {})
+            entry = {
+                "accession": acc,
+                "gene_name": pd_entry.get("gene_name", ""),
+            }
+            for comp in region:
+                comp_data = pd_entry.get(comp, {})
+                entry[f"log_fc_{comp}"] = comp_data.get("log_fc")
+                entry[f"adj_pval_{comp}"] = comp_data.get("adj_pval")
+            details.append(entry)
+        overlap_list.append({
+            "region": region,
             "count": len(accs),
             "label": key,
-        }
-        for key, accs in sorted(by_region.items(), key=lambda x: -len(x[1]))
-    ]
+            "details": details,
+        })
 
     return {
         "sets": {c: sorted(list(s)) for c, s in sets.items()},

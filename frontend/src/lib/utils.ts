@@ -185,6 +185,11 @@ export function formatComparisonKey(key: string, maxLength?: number): string {
   return maxLength ? truncateText(formatted, maxLength) : formatted;
 }
 
+/** Format and wrap after " vs " for narrow axis labels. */
+export function formatComparisonKeyWrapped(key: string): string {
+  return key.replace(/_vs_/g, ' vs<br>');
+}
+
 export const CHART_COLORS = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#84cc16'] as const;
 
 export const COLORSCALE_CYAN_GREY_CORAL: unknown[][] = [

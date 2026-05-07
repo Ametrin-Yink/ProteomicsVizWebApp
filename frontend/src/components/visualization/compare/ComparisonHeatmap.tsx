@@ -19,7 +19,7 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
     const xLabels = comparisons.map((c) => formatComparisonKey(c, 30));
     const truncatedYLabels = yLabels.map((l) => truncateText(l, 25));
 
-    const height = Math.max(400, Math.min(800, proteins.length * 10 + 120));
+    const height = Math.max(400, proteins.length * 12 + 150);
 
     if (!proteins.length || !comparisons.length) {
       return { trace: undefined, layout: { height: 0 } };

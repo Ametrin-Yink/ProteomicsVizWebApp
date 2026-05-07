@@ -197,7 +197,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
       height: 400,
       margin: { t: 60, b: 70, l: 70, r: 40 },
       hovermode: 'closest' as const,
-      showlegend: selected.length > 0,
+      showlegend: false,
     },
   };
 }

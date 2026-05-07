@@ -109,7 +109,7 @@ export default function CorrelationBarChart({ data, title, topN = 10, ascending 
 
   const layout = {
     title: { text: title, font: { size: 16, color: '#111827' } },
-    xaxis: { tickangle: -45, automargin: true },
+    xaxis: { tickangle: -90, automargin: true },
     yaxis: {
       title: ascending ? { text: 'Relative Similarity', font: { size: 14 } } : { text: 'Correlation', font: { size: 14 } },
       range: ascending ? [-1.2, 1.2] : undefined,

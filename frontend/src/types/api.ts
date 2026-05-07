@@ -398,9 +398,23 @@ export interface ProteinCorrelationData {
   color_fc_map?: Record<string, number>;
 }
 
+export interface VennOverlapDetail {
+  accession: string;
+  gene_name: string;
+  [key: `log_fc_${string}`]: number | null | undefined;
+  [key: `adj_pval_${string}`]: number | null | undefined;
+}
+
+export interface VennOverlap {
+  region: string[];
+  count: number;
+  label: string;
+  details: VennOverlapDetail[];
+}
+
 export interface VennData {
   sets: Record<string, string[]>;
-  overlaps: Array<{ region: string[]; count: number; label: string }>;
+  overlaps: VennOverlap[];
   set_sizes: Record<string, number>;
 }
 

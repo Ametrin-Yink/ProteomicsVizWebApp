@@ -21,7 +21,7 @@ import {
   getSession,
 } from '@/lib/api';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
-import { formatComparisonKey } from '@/lib/utils';
+import { formatComparisonKeyWrapped } from '@/lib/utils';
 
 interface Props {
   sessionId: string;
@@ -281,7 +281,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
             <div className="lg:col-span-2">
               <CorrelationBarChart
                 data={data.comparison_similarities.map((c) => ({
-                  label: formatComparisonKey(c.comparison),
+                  label: formatComparisonKeyWrapped(c.comparison),
                   correlation: c.similarity,
                 }))}
                 title="Most / Least Similar Comparisons (RMSD)"

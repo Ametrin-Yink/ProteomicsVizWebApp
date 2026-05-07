@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { formatComparisonKey, COLORSCALE_CYAN_GREY_CORAL } from '@/lib/utils';
+import { formatComparisonKeyWrapped, COLORSCALE_CYAN_GREY_CORAL } from '@/lib/utils';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -51,7 +51,7 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
     );
   }
 
-  const labels = comparisons.map((c) => formatComparisonKey(c, 24));
+  const labels = comparisons.map((c) => formatComparisonKeyWrapped(c));
 
   const trace = {
     type: 'heatmap' as const,
@@ -59,16 +59,16 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
     x: labels,
     y: labels,
     colorscale: COLORSCALE_CYAN_GREY_CORAL as string[][],
+    colorbar: { orientation: 'h', x: 0, y: -0.18, xanchor: 'right', yanchor: 'top', len: 0.35, thickness: 12 },
     hovertemplate: 'Comparison: %{x}<br>vs %{y}<br>RMSD: %{z:.3f}<extra></extra>',
   };
 
   const layout = {
     title: { text: 'Comparison Similarity Matrix', font: { size: 16, color: '#111827' } },
-    xaxis: { tickangle: -45, automargin: true, title: { text: '', font: { size: 14 } } },
+    xaxis: { tickangle: -90, automargin: true, title: { text: '', font: { size: 14 } } },
     yaxis: { autorange: 'reversed' as const, automargin: true, title: { text: '', font: { size: 14 } } },
     height,
-    width: height,
-    margin: { t: 50, b: 120, l: 120, r: 60 },
+    margin: { t: 50, b: 160, l: 140, r: 40 },
     annotations,
   };
 
