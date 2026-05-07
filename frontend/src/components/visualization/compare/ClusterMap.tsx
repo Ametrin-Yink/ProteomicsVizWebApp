@@ -97,10 +97,11 @@ function buildProteinTraces(props: ProteinModeProps) {
             color: others.map((p) => colorBy[p.accession] ?? 0),
             colorscale: COLORSCALE_CYAN_GREY_CORAL as string[][],
             size: 6,
+            opacity: 0.5,
             showscale: true,
             colorbar: { title: 'log2 FC', len: 0.4 },
           }
-        : { color: '#9ca3af', size: 6 },
+        : { color: '#9ca3af', size: 6, opacity: 0.5 },
       text: others.map((p) => p.gene_name || p.accession),
       hoverinfo: 'text' as const,
       name: 'Proteins',
@@ -164,6 +165,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
       marker: {
         color: '#9ca3af',
         size: 6,
+        opacity: 0.5,
       },
       text: others.map((p) => formatComparisonKey(p.comparison)),
       hoverinfo: 'text' as const,
