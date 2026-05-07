@@ -24,17 +24,23 @@ interface CircleSpec {
 
 function vennLayout(data: VennData): CircleSpec[] {
   const entries = Object.entries(data.set_sizes);
+  const scale = entries.length === 2 ? 3.5 : 3.0;
+
   if (entries.length === 2) {
     const [[c1, s1], [c2, s2]] = entries;
-    const r1 = Math.max(60, Math.sqrt(s1) * 2.5);
-    const r2 = Math.max(60, Math.sqrt(s2) * 2.5);
-    const total = s1 + s2;
+    const r1 = Math.max(50, Math.sqrt(Math.max(s1, 1)) * scale);
+    const r2 = Math.max(50, Math.sqrt(Math.max(s2, 1)) * scale);
+    // Distance so circles overlap proportionally to intersection
     const overlapKey = [c1, c2].sort().join('+');
-    const overlapCount = data.overlaps.find((o) => o.label === overlapKey)?.count ?? 0;
-    const distFactor = total > 0 ? 1 - (overlapCount / total) * 1.2 : 0.7;
-    const dist = (r1 + r2) * Math.max(0.3, distFactor);
-    const cx1 = 160 - dist / 2;
-    const cx2 = 160 + dist / 2;
+    const overlap = data.overlaps.find((o) => o.label === overlapKey)?.count ?? 0;
+    const smaller = Math.min(s1, s2);
+    const overlapRatio = smaller > 0 ? overlap / smaller : 0.3;
+    // d ranges from r1+r2 (no overlap) to |r1-r2| (full containment)
+    const dMax = r1 + r2;
+    const dMin = Math.abs(r1 - r2) + 10;
+    const d = dMax - (dMax - dMin) * Math.min(1, overlapRatio * 1.5);
+    const cx1 = 170 - d * (r2 / (r1 + r2));
+    const cx2 = cx1 + d;
     const parts1 = formatComparisonKeyWrapped(c1).split('<br>');
     const parts2 = formatComparisonKeyWrapped(c2).split('<br>');
     return [
@@ -44,34 +50,49 @@ function vennLayout(data: VennData): CircleSpec[] {
         labelX: cx2 + r2 + 8, labelY: 140, textAnchor: 'start' },
     ];
   }
+
+  // 3 circles — position so all pairwise overlaps exist
   const [[c1, s1], [c2, s2], [c3, s3]] = entries;
-  const r1 = Math.max(45, Math.sqrt(s1) * 2.0);
-  const r2 = Math.max(45, Math.sqrt(s2) * 2.0);
-  const r3 = Math.max(45, Math.sqrt(s3) * 2.0);
-  const cx = 160, cy = 130;
-  const d = 75;
+  const r1 = Math.max(40, Math.sqrt(Math.max(s1, 1)) * scale);
+  const r2 = Math.max(40, Math.sqrt(Math.max(s2, 1)) * scale);
+  const r3 = Math.max(40, Math.sqrt(Math.max(s3, 1)) * scale);
+
+  // Center the largest circle, place others so they all overlap
+  const avgR = (r1 + r2 + r3) / 3;
+  const gap = avgR * 0.5; // spacing between circle edges
+  const mid = 170;
+
+  // Place circles in triangle with guaranteed overlap
+  const topY = 100;
+  const botY = topY + avgR + gap;
+  const spread = avgR * 0.8 + gap;
+
   const parts1 = formatComparisonKeyWrapped(c1).split('<br>');
   const parts2 = formatComparisonKeyWrapped(c2).split('<br>');
   const parts3 = formatComparisonKeyWrapped(c3).split('<br>');
+
   return [
-    { comparisons: [c1], cx: cx, cy: cy - d * 0.55, r: r1, color: CHART_COLORS[0], labelParts: parts1,
-      labelX: cx, labelY: cy - d * 0.55 - r1 - 8, textAnchor: 'middle' },
-    { comparisons: [c2], cx: cx - d * 0.7, cy: cy + d * 0.45, r: r2, color: CHART_COLORS[1], labelParts: parts2,
-      labelX: cx - d * 0.7 - r2 - 8, labelY: cy + d * 0.45, textAnchor: 'end' },
-    { comparisons: [c3], cx: cx + d * 0.7, cy: cy + d * 0.45, r: r3, color: CHART_COLORS[2], labelParts: parts3,
-      labelX: cx + d * 0.7 + r3 + 8, labelY: cy + d * 0.45, textAnchor: 'start' },
+    { comparisons: [c1], cx: mid, cy: topY, r: r1, color: CHART_COLORS[0], labelParts: parts1,
+      labelX: mid, labelY: topY - r1 - 8, textAnchor: 'middle' },
+    { comparisons: [c2], cx: mid - avgR * 0.8, cy: botY, r: r2, color: CHART_COLORS[1], labelParts: parts2,
+      labelX: mid - avgR * 0.8 - r2 - 8, labelY: botY, textAnchor: 'end' },
+    { comparisons: [c3], cx: mid + avgR * 0.8, cy: botY, r: r3, color: CHART_COLORS[2], labelParts: parts3,
+      labelX: mid + avgR * 0.8 + r3 + 8, labelY: botY, textAnchor: 'start' },
   ];
 }
 
 export default function VennDiagram({ data, sideBySide }: Props) {
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
 
-  const { circles, overlaps } = useMemo(() => {
-    if (!data) return { circles: [] as CircleSpec[], overlaps: [] as VennOverlap[] };
-    return { circles: vennLayout(data), overlaps: data.overlaps };
+  const circles = useMemo(() => {
+    if (!data || Object.keys(data.set_sizes).length === 0) return [] as CircleSpec[];
+    return vennLayout(data);
+    // Recompute whenever the data reference changes
   }, [data]);
 
-  if (!data) {
+  const overlaps = data?.overlaps ?? [];
+
+  if (!data || Object.keys(data.set_sizes).length === 0) {
     return (
       <div className="bg-background border border-border rounded-lg p-6 text-center">
         <p className="text-text-muted">
@@ -93,8 +114,12 @@ export default function VennDiagram({ data, sideBySide }: Props) {
     });
   };
 
+  const maxR = Math.max(...circles.map((c) => c.r));
+  const vbWidth = Math.max(340, circles.reduce((m, c) => Math.max(m, c.cx + c.r + 70), 0));
+  const vbHeight = Math.max(280, circles.reduce((m, c) => Math.max(m, c.cy + c.r + 40), 0));
+
   const vennSvg = (
-    <svg viewBox="0 0 340 280" className="w-full max-w-[500px] mx-auto">
+    <svg viewBox={`0 0 ${vbWidth} ${vbHeight}`} className="w-full max-w-[550px] mx-auto">
       {[...circles]
         .sort((a, b) => b.r - a.r)
         .map((c, i) => (
@@ -116,7 +141,7 @@ export default function VennDiagram({ data, sideBySide }: Props) {
               dominantBaseline="central"
               fill="#1e293b"
               fontWeight={600}
-              fontSize={12}
+              fontSize={Math.max(11, Math.min(16, c.r / 5))}
             >
               {data.set_sizes[c.comparisons[0]]}
             </text>
@@ -204,7 +229,7 @@ export default function VennDiagram({ data, sideBySide }: Props) {
                   </table>
                 ) : (
                   <p className="text-xs text-text-muted px-3 py-4 text-center">
-                    Detailed protein data not available. Re-compute Venn to load per-protein data.
+                    Re-compute Venn to load per-protein data.
                   </p>
                 )}
               </div>
