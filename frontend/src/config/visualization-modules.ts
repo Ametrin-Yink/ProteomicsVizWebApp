@@ -1,6 +1,25 @@
 import type { ComponentType } from 'react';
 import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
 
+/** Serialized state produced by each visualization module for the HTML report. */
+export interface ExportState {
+  /** Which tab this data belongs to (matches module id). */
+  tabId: string;
+  /** Arbitrary serializable data — structure defined per module. */
+  data: Record<string, unknown>;
+}
+
+/** Registry of state-capture functions populated by mounted visualization components. */
+export const exportStateRegistry = new Map<string, (sessionId: string) => Promise<ExportState | null>>();
+
+export function registerExportState(id: string, fn: (sessionId: string) => Promise<ExportState | null>) {
+  exportStateRegistry.set(id, fn);
+}
+
+export function unregisterExportState(id: string) {
+  exportStateRegistry.delete(id);
+}
+
 export interface VisualizationModule {
   id: string;
   label: string;
@@ -9,6 +28,8 @@ export interface VisualizationModule {
   description?: string;
   /** Templates this module supports. Empty/missing = all templates. */
   supportedTemplates?: string[];
+  /** Capture current visualization state for HTML export. null = skip this tab. */
+  getExportState?: (sessionId: string) => Promise<ExportState | null>;
 }
 
 export const VISUALIZATION_MODULES: VisualizationModule[] = [
