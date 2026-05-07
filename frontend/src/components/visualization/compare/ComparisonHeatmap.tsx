@@ -32,6 +32,8 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
       y: truncatedYLabels,
       colorscale: COLORSCALE_CYAN_GREY_CORAL as string[][],
       zmid: 0,
+      cmin: -3,
+      cmax: 3,
       hovertemplate: 'Protein: %{y}<br>Comparison: %{x}<br>log2 FC: %{z:.2f}<extra></extra>',
     };
 

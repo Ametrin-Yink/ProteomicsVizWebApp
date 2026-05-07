@@ -59,9 +59,9 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
     const parts2 = formatComparisonKeyWrapped(c2).split('<br>');
     circles.push(
       { comparisons: [c1], cx: cx1, cy, r: r1, color: CHART_COLORS[0], labelParts: parts1,
-        labelX: cx1, labelY: cy + r1 + 18, textAnchor: 'middle' },
+        labelX: cx1 - r1 * 0.5, labelY: cy + r1 + 18, textAnchor: 'end' },
       { comparisons: [c2], cx: cx2, cy, r: r2, color: CHART_COLORS[1], labelParts: parts2,
-        labelX: cx2, labelY: cy + r2 + 18, textAnchor: 'middle' },
+        labelX: cx2 + r2 * 0.5, labelY: cy + r2 + 18, textAnchor: 'start' },
     );
 
     // Region labels

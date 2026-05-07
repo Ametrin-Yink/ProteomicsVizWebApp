@@ -333,7 +333,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
           </div>
 
           {/* Row 4: Cluster Map (left) + Comparison Heatmap (right) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <ClusterMap
               mode="comparison"
               points={data.cluster_coords}
