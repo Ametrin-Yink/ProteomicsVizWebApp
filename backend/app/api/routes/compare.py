@@ -199,15 +199,23 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         for comp in selected:
             if comp in req.marked_proteins:
                 marked_set.update(req.marked_proteins[comp])
-        # Fall back to top 100 by max absolute FC if no marks
+        # Fall back to proteins significant in at least one selected comparison
         if not marked_set:
-            sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
-            sel_matrix_for_fallback = matrix[:, sel_indices]
-            max_fc = np.nanmax(np.abs(sel_matrix_for_fallback), axis=1)
-            top_100 = np.argsort(max_fc)[-100:]
-            for i in top_100:
-                if not np.isnan(sel_matrix_for_fallback[i]).all():
-                    marked_set.add(accessions[i])
+            from app.services.compare_service import _load_de_file
+            for comp in selected:
+                df = _load_de_file(session_dir, comp)
+                if df is not None:
+                    sig = df[(df["adj_pval"] < 0.05) & (df["log_fc"].abs() >= 1)]
+                    marked_set.update(sig["accession"].tolist())
+            # If still empty (no DE files), fall back to top 100 by max FC
+            if not marked_set:
+                sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
+                sel_matrix_for_fallback = matrix[:, sel_indices]
+                max_fc = np.nanmax(np.abs(sel_matrix_for_fallback), axis=1)
+                top_100 = np.argsort(max_fc)[-100:]
+                for i in top_100:
+                    if not np.isnan(sel_matrix_for_fallback[i]).all():
+                        marked_set.add(accessions[i])
 
         marked_list = sorted(marked_set)
         acc_to_idx = {acc: i for i, acc in enumerate(accessions)}
