@@ -1,7 +1,5 @@
 """Step 8: QC metrics calculation."""
 
-from pathlib import Path
-
 from app.services.pipeline_engine import StepContext
 from app.services.qc_calculator import QCCalculator
 

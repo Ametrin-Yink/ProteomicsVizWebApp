@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import type { ProteinAbundance, PeptideAbundanceData } from '@/types/api';
 
@@ -124,7 +124,7 @@ interface PeptideAbundancePlotProps {
 
 export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
   const graphDivRef = useRef<HTMLElement | null>(null);
-  const [visible, setVisible] = useState<boolean[]>([]);
+  const [hiddenNames, setHiddenNames] = useState<Set<string>>(new Set());
   const plotData = useMemo(() => {
     if (!data || !data.peptides || data.peptides.length === 0) {
       return { traces: [], legendItems: [] };
@@ -182,11 +182,11 @@ export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
     return { traces, legendItems };
   }, [data]);
 
-  const traceCount = plotData.traces.length;
-
-  useEffect(() => {
-    setVisible(new Array(traceCount).fill(true));
-  }, [traceCount]);
+  // Visible derived from hiddenNames (keyed by peptide identity, survives data changes)
+  const visible = useMemo(
+    () => plotData.traces.map((t) => !hiddenNames.has(t.name)),
+    [plotData.traces, hiddenNames]
+  );
 
   const layout = useMemo(
     () => ({
@@ -223,18 +223,24 @@ export function PeptideAbundancePlot({ data }: PeptideAbundancePlotProps) {
     const gd = graphDivRef.current;
     if (!gd) return;
 
-    const Plotly = (window as Record<string, unknown>).Plotly as {
-      restyle: (gd: HTMLElement, update: Record<string, unknown>, indices: number[]) => void;
-    } | undefined;
-    if (!Plotly?.restyle) return;
+    const win = window as unknown as { Plotly?: { restyle: (gd: HTMLElement, update: Record<string, unknown>, indices: number[]) => void } };
+    if (!win.Plotly?.restyle) return;
 
-    setVisible(prev => {
-      const next = [...prev];
-      next[index] = !next[index];
-      Plotly.restyle(gd, { visible: next[index] }, [index]);
+    const name = plotData.traces[index]?.name;
+    if (!name) return;
+
+    setHiddenNames(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+        win.Plotly!.restyle(gd, { visible: true }, [index]);
+      } else {
+        next.add(name);
+        win.Plotly!.restyle(gd, { visible: false }, [index]);
+      }
       return next;
     });
-  }, []);
+  }, [plotData.traces]);
 
   return (
     <div className="w-full bg-background rounded-lg border border-border p-2">

@@ -80,7 +80,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters, co
     }
 
     fetchAbundanceData();
-  }, [protein, sessionId]);
+  }, [protein, sessionId, comparison]);
 
   // Gene names are padded to match accessions by parseProteinInfo,
   // so no UniProt API fetch is needed here.

@@ -17,7 +17,6 @@ from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.compare_service import (
-    _status_path,
     _result_path,
     _read_status,
     _write_status,

@@ -15,7 +15,6 @@ from app.core.config import settings
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 from scipy.cluster.hierarchy import linkage, leaves_list
 from scipy.spatial.distance import squareform
 from sklearn.decomposition import PCA

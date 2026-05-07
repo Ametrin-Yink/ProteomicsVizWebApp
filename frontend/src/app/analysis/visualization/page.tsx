@@ -40,7 +40,6 @@ function ResultsContent() {
 
   const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
   const [selectedProteinData, setSelectedProteinData] = useState<DEResult | null>(null);
-  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [markedProteins, setMarkedProteins] = useState<Record<string, Set<string>>>({});
 
 
@@ -123,7 +122,7 @@ function ResultsContent() {
     }
 
     fetchSessionConfig();
-  }, [sessionId]);
+  }, [sessionId, selectedComparison]);
 
   // Handle protein selection from volcano plot
   const handleSelectProteins = useCallback((proteins: string[]) => {
