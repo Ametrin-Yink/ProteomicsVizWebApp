@@ -95,10 +95,10 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
       labelX: mid, labelY: topY - r1 - 16, textAnchor: 'middle' },
     { comparisons: [c2], cx: mid - avgR * 0.8, cy: botY, r: r2, color: CHART_COLORS[1],
       labelParts: formatComparisonKeyWrapped(c2).split('<br>'),
-      labelX: mid - avgR * 0.8, labelY: botY + r2 + 18, textAnchor: 'middle' },
+      labelX: mid - avgR * 0.8 - r2 - 8, labelY: botY + r2 + 18, textAnchor: 'end' },
     { comparisons: [c3], cx: mid + avgR * 0.8, cy: botY, r: r3, color: CHART_COLORS[2],
       labelParts: formatComparisonKeyWrapped(c3).split('<br>'),
-      labelX: mid + avgR * 0.8, labelY: botY + r3 + 18, textAnchor: 'middle' },
+      labelX: mid + avgR * 0.8 + r3 + 8, labelY: botY + r3 + 18, textAnchor: 'start' },
   );
 
   // Approximate region label positions
