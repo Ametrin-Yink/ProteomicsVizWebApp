@@ -42,11 +42,24 @@ export default function VennDiagram({ data }: Props) {
     }
 
     // Overlap rows for table
-    const rows = data.overlaps.map((overlap) => ({
-      key: overlap.region.join('+'),
-      region: overlap.region.map((r) => formatComparisonKey(r)),
-      count: overlap.count,
-    }));
+    const rows = data.overlaps.map((overlap) => {
+      // Pre-compute intersection protein display string using raw keys
+      let displayProteins = 'No protein list available';
+      if (data.sets && overlap.region.length > 0) {
+        const setList = overlap.region.map((r) => new Set(data.sets?.[r] ?? []));
+        const intersection = [...(setList[0] ?? [])].filter((a) =>
+          setList.every((s) => s.has(a))
+        );
+        const display = intersection.slice(0, 50);
+        displayProteins = display.join(', ') + (intersection.length > 50 ? ' ...' : '');
+      }
+      return {
+        key: overlap.region.join('+'),
+        region: overlap.region.map((r) => formatComparisonKey(r)),
+        count: overlap.count,
+        displayProteins,
+      };
+    });
 
     return { barLabels: labels, barValues: values, barColors: colors, overlapRows: rows };
   }, [data]);
@@ -138,15 +151,7 @@ export default function VennDiagram({ data }: Props) {
                       <tr key={`${row.key}-proteins`} className="bg-surface/30">
                         <td colSpan={3} className="px-3 py-2">
                           <p className="text-xs text-text-muted max-h-48 overflow-y-auto">
-                            {(() => {
-                              if (!data.sets || row.region.length === 0) return 'No protein list available';
-                              const setList = row.region.map((r) => new Set(data.sets?.[r] ?? []));
-                              const intersection = [...(setList[0] ?? [])].filter((a) =>
-                                setList.every((s) => s.has(a))
-                              );
-                              const display = intersection.slice(0, 50);
-                              return display.join(', ') + (intersection.length > 50 ? ' ...' : '');
-                            })()}
+                            {row.displayProteins}
                           </p>
                         </td>
                       </tr>
