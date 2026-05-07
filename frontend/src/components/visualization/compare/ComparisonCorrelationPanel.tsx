@@ -325,7 +325,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
               label: formatComparisonKey(c.comparison),
               correlation: c.similarity,
             }))}
-            title="Comparison Similarities to Primary (RMSD)"
+            title="Most / Least Similar Comparisons (RMSD)"
             topN={10}
             ascending
           />
