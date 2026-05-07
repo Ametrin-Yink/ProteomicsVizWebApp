@@ -77,11 +77,6 @@ class BioNetService:
             ]
 
             env = os.environ.copy()
-            env.setdefault(
-                "R_LIBS_USER",
-                str(Path.home() / "R" / "win-library" / "4.5"),
-            )
-            env.setdefault("R_LIBS_SITE", "")
 
             result = subprocess.run(
                 cmd,
