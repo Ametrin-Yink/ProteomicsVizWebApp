@@ -512,52 +512,34 @@ export const organismsApi = {
 };
 
 /**
- * Reports API
+ * Export API — HTML report generation
  */
-export const reportsApi = {
-  /**
-   * Generate PDF report
-   */
-  generate: async (
+export const exportApi = {
+  /** Upload a ZIP for weblink generation */
+  uploadWeblink: async (
     sessionId: string,
-    opts?: {
-      fold_change?: number; p_value?: number; adj_p_value?: number; s0?: number;
-      images?: Record<string, string[]>;
-    }
-  ): Promise<{ report_id: string; status: string; progress: number; download_url: string }> => {
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/reports/generate`), {
+    zipBlob: Blob,
+    name: string,
+  ): Promise<{ report_id: string; name: string; weblink: string; download_url: string; created_at: string }> => {
+    const formData = new FormData();
+    formData.append('zip', zipBlob, 'report.zip');
+    formData.append('name', name);
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/export/weblink`), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(opts || {}),
+      body: formData,
     });
-    return handleResponse<{ report_id: string; status: string; progress: number; download_url: string }>(response);
+    return handleResponse<{ report_id: string; name: string; weblink: string; download_url: string; created_at: string }>(response);
   },
 
-  /**
-   * Download PDF report
-   */
-  download: async (sessionId: string, reportId: string): Promise<Blob> => {
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/reports/${reportId}/download`));
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type');
-      if (contentType?.includes('application/json')) {
-        const errorData = await response.json();
-        throw new APIError(
-          errorData.detail || 'Download failed',
-          'DOWNLOAD_FAILED',
-          response.status
-        );
-      }
-      throw new APIError('Download failed', 'DOWNLOAD_FAILED', response.status);
-    }
-    return response.blob();
+  /** List all reports across sessions */
+  listAll: async (): Promise<{ reports: Array<{ report_id: string; name: string; session_id: string; session_name: string; created_at: string }> }> => {
+    const response = await fetch(apiUrl('/reports'));
+    return handleResponse<{ reports: Array<{ report_id: string; name: string; session_id: string; session_name: string; created_at: string }> }>(response);
   },
 
-  /**
-   * List reports for a session
-   */
-  list: async (sessionId: string): Promise<{ reports: Array<{ report_id: string; filename: string; size_mb: number; created_at: string; download_url: string }> }> => {
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/reports`));
-    return handleResponse<{ reports: Array<{ report_id: string; filename: string; size_mb: number; created_at: string; download_url: string }> }>(response);
+  /** Delete a report */
+  delete: async (reportId: string): Promise<{ message: string }> => {
+    const response = await fetch(apiUrl(`/reports/${reportId}`), { method: 'DELETE' });
+    return handleResponse<{ message: string }>(response);
   },
 };

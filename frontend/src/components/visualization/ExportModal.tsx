@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { X, Loader2, Link, Download, Copy, CheckCircle } from 'lucide-react';
 import { captureAllStates, buildZipBlob, downloadZip, ExportError } from '@/lib/html-report-builder';
+import { exportApi } from '@/lib/api-client';
 
 interface ExportModalProps {
   sessionId: string;
@@ -38,23 +39,8 @@ export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProp
         onClose();
       } else {
         setProgressMsg('Uploading to server...');
-        const formData = new FormData();
-        formData.append('zip', zipBlob, 'report.zip');
-        formData.append('name', name.trim());
-
-        const baseUrl = window.location.origin;
-        const res = await fetch(`${baseUrl}/api/sessions/${sessionId}/export/weblink`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
-          throw new Error(err.detail || 'Upload failed');
-        }
-
-        const result = await res.json();
-        setResultUrl(`${baseUrl}${result.weblink}`);
+        const result = await exportApi.uploadWeblink(sessionId, zipBlob, name.trim());
+        setResultUrl(`${window.location.origin}${result.weblink}`);
         setState('weblink-ready');
       }
     } catch (err) {
