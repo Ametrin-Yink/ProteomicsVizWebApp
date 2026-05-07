@@ -27,7 +27,8 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
       for (let j = 0; j < comparisons.length; j++) {
         const val = matrix[i]?.[j];
         if (val !== undefined) {
-          const textColor = Math.abs(val) > 0.5 ? '#ffffff' : '#1e293b';
+          const maxVal = matrix.flat().reduce((m, v) => Math.max(m, v), 0);
+          const textColor = val > maxVal * 0.6 ? '#ffffff' : '#1e293b';
           result.push({
             x: j,
             y: i,
@@ -56,10 +57,8 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
     z: matrix,
     x: labels,
     y: labels,
-    colorscale: 'Reds' as unknown as string[][],
-    zmin: -1,
-    zmax: 1,
-    hovertemplate: 'Comparison: %{x}<br>vs %{y}<br>Correlation: %{z:.3f}<extra></extra>',
+    colorscale: 'Blues' as unknown as string[][],
+    hovertemplate: 'Comparison: %{x}<br>vs %{y}<br>RMSD: %{z:.3f}<extra></extra>',
   };
 
   const layout = {

@@ -10,7 +10,6 @@ import ClusterMap from '@/components/visualization/compare/ClusterMap';
 import type {
   ComparisonCorrelationData,
   CompareRunStatus,
-  CorrelationMethod,
   ClusterMethod,
   VennData,
 } from '@/types/api';
@@ -32,7 +31,6 @@ interface Props {
 export default function ComparisonCorrelationPanel({ sessionId, comparisons }: Props) {
   const [primaryComparison, setPrimaryComparison] = useState<string>('');
   const [selectedComparisons, setSelectedComparisons] = useState<string[]>([]);
-  const [correlationMethod, setCorrelationMethod] = useState<CorrelationMethod>('pearson');
   const [clusterMethod, setClusterMethod] = useState<ClusterMethod>('pca');
 
   const [status, setStatus] = useState<CompareRunStatus>({ status: 'idle' });
@@ -140,7 +138,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
         primary_comparison: primaryComparison,
         selected_comparisons: selectedComparisons,
         marked_proteins: markedProteins,
-        correlation_method: correlationMethod,
+        correlation_method: 'pearson', // ignored — uses Euclidean distance
         cluster_method: clusterMethod,
       });
       startPolling();
@@ -190,7 +188,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     <div className="space-y-6">
       {/* Controls */}
       <div className="bg-background border border-border rounded-lg p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
               Primary Comparison
@@ -231,19 +229,6 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
                 </label>
               ))}
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Correlation Method
-            </label>
-            <Select
-              options={[
-                { value: 'pearson', label: 'Pearson' },
-                { value: 'spearman', label: 'Spearman' },
-              ]}
-              value={correlationMethod}
-              onChange={(e) => setCorrelationMethod(e.target.value as CorrelationMethod)}
-            />
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
@@ -339,12 +324,13 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
 
           {/* Comparison Correlation Bar Chart */}
           <CorrelationBarChart
-            data={data.comparison_correlations.map((c) => ({
+            data={data.comparison_similarities.map((c) => ({
               label: formatComparisonKey(c.comparison),
-              correlation: c.correlation,
+              correlation: c.similarity,
             }))}
-            title="Comparison Correlations to Primary"
+            title="Comparison Similarities to Primary (RMSD)"
             topN={10}
+            ascending
           />
 
           {/* Cluster Map */}

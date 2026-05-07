@@ -9,7 +9,6 @@ import CorrelationScatter from '@/components/visualization/compare/CorrelationSc
 import type {
   ProteinCorrelationData,
   CompareRunStatus,
-  CorrelationMethod,
   ClusterMethod,
   ProteinListEntry,
   ProteinFCResult,
@@ -30,7 +29,6 @@ interface Props {
 export default function ProteinCorrelationPanel({ sessionId, comparisons }: Props) {
   const [proteins, setProteins] = useState<ProteinListEntry[]>([]);
   const [selectedProtein, setSelectedProtein] = useState<string>('');
-  const [correlationMethod, setCorrelationMethod] = useState<CorrelationMethod>('pearson');
   const [clusterMethod, setClusterMethod] = useState<ClusterMethod>('pca');
   const [colorComparison, setColorComparison] = useState<string>('');
 
@@ -39,10 +37,10 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   const [error, setError] = useState<string | null>(null);
 
   // Scatter click-through
-  const [selectedCorrelated, setSelectedCorrelated] = useState<{
+  const [selectedSimilar, setSelectedSimilar] = useState<{
     accession: string;
     gene_name: string;
-    correlation: number;
+    similarity: number;
     fc: ProteinFCResult[];
   } | null>(null);
 
@@ -133,7 +131,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
       setStatus({ status: 'running' });
       await runProteinCorrelation(sessionId, {
         protein_id: selectedProtein,
-        correlation_method: correlationMethod,
+        correlation_method: 'pearson', // ignored — uses Euclidean distance
         cluster_method: clusterMethod,
         color_comparison: colorComparison,
       });
@@ -144,23 +142,20 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     }
   };
 
-  // Handle click on correlated protein bar chart
-  const handleCorrelatedClick = useCallback((label: string) => {
+  // Handle click on similar protein bar chart
+  const handleSimilarClick = useCallback((label: string) => {
     if (!data) return;
-    // label is "gene_name (accession)" or just "accession"
     const match = label.match(/\(([^)]+)\)$/);
     const accession = match ? match[1] : label;
-    const correlated = data.correlated_proteins.find(
+    const similar = data.similar_proteins.find(
       (c) => c.accession === accession
     );
-    if (!correlated) return;
+    if (!similar) return;
 
-    // Find FC data for this correlated protein — we don't have it yet,
-    // so we'll store what we have and show a placeholder in the scatter
-    setSelectedCorrelated({
-      accession: correlated.accession,
-      gene_name: correlated.gene_name,
-      correlation: correlated.correlation,
+    setSelectedSimilar({
+      accession: similar.accession,
+      gene_name: similar.gene_name,
+      similarity: similar.similarity,
       fc: data.selected_protein_fc,
     });
   }, [data]);
@@ -177,7 +172,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     <div className="space-y-6">
       {/* Controls */}
       <div className="bg-background border border-border rounded-lg p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
               Protein
@@ -188,19 +183,6 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
               onChange={setSelectedProtein}
               placeholder="Select protein..."
               searchPlaceholder="Search proteins..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Correlation Method
-            </label>
-            <Select
-              options={[
-                { value: 'pearson', label: 'Pearson' },
-                { value: 'spearman', label: 'Spearman' },
-              ]}
-              value={correlationMethod}
-              onChange={(e) => setCorrelationMethod(e.target.value as CorrelationMethod)}
             />
           </div>
           <div>
@@ -275,28 +257,29 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div className="lg:col-span-3">
               <CorrelationBarChart
-                data={data.correlated_proteins.map((c) => ({
+                data={data.similar_proteins.map((c) => ({
                   label: c.gene_name ? `${c.gene_name} (${c.accession})` : c.accession,
-                  correlation: c.correlation,
+                  correlation: c.similarity,
                 }))}
-                title="Top/Bottom Correlated Proteins"
+                title="Most / Least Similar Proteins (RMSD)"
                 topN={10}
-                onItemClick={handleCorrelatedClick}
+                ascending
+                onItemClick={handleSimilarClick}
               />
             </div>
             <div className="lg:col-span-1">
-              {selectedCorrelated ? (
+              {selectedSimilar ? (
                 <CorrelationScatter
                   selectedProtein={data.selected_protein_fc}
-                  correlatedProtein={selectedCorrelated.fc}
-                  correlation={selectedCorrelated.correlation}
+                  correlatedProtein={selectedSimilar.fc}
+                  correlation={selectedSimilar.similarity}
                   selectedName={selectedProteinName}
-                  correlatedName={selectedCorrelated.gene_name || selectedCorrelated.accession}
+                  correlatedName={selectedSimilar.gene_name || selectedSimilar.accession}
                 />
               ) : (
                 <div className="bg-background border border-border rounded-lg p-4 flex items-center justify-center min-h-[350px]">
                   <p className="text-text-muted text-sm text-center">
-                    Click a protein in the correlation bar chart to view pairwise scatter
+                    Click a protein in the bar chart to view pairwise scatter
                   </p>
                 </div>
               )}

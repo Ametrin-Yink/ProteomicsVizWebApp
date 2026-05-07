@@ -23,8 +23,8 @@ from app.services.compare_service import (
     _write_status,
     _write_result,
     build_fold_change_matrix,
-    compute_protein_correlations,
-    compute_correlation_matrix,
+    compute_protein_similarities,
+    compute_similarity_matrix,
     compute_venn_data,
     run_cluster,
     load_pvalues_for_protein,
@@ -133,10 +133,8 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
                     "adj_pval": pv.get("adj_pval", 1.0),
                 })
 
-        # Correlated proteins
-        correlated = compute_protein_correlations(
-            matrix, accessions, gene_names, query_idx, req.correlation_method
-        )
+        # Protein similarities (Euclidean distance: lower = more similar)
+        similar = compute_protein_similarities(matrix, accessions, gene_names, query_idx)
 
         # Cluster coordinates for all proteins
         coords, var = run_cluster(matrix, req.cluster_method)
@@ -148,7 +146,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
 
         result = {
             "selected_protein_fc": selected_fc,
-            "correlated_proteins": correlated,
+            "similar_proteins": similar,
             "cluster_coords": cluster_coords,
             "cluster_var_explained": var,
             "color_comparison": req.color_comparison,
@@ -184,8 +182,8 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         # Build full matrix (proteins x all comparisons)
         matrix, accessions, gene_names = build_fold_change_matrix(session_dir, all_comparisons)
 
-        # Similarity matrix: correlation between all comparisons (transpose)
-        sim_matrix = compute_correlation_matrix(matrix.T, req.correlation_method)
+        # Similarity matrix: Euclidean distance between comparisons (columns)
+        sim_matrix = compute_similarity_matrix(matrix.T)
         similarity = {
             "comparisons": all_comparisons,
             "matrix": sim_matrix.tolist(),
@@ -228,15 +226,13 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
             "fold_changes": heatmap_fc.tolist(),
         }
 
-        # Comparison correlations to primary
+        # Comparison distances to primary (lower = more similar)
         primary_idx = all_comparisons.index(req.primary_comparison) if req.primary_comparison in all_comparisons else 0
-        comp_corrs = []
+        comp_dists = []
         for j, comp in enumerate(all_comparisons):
-            if j == primary_idx:
-                comp_corrs.append({"comparison": comp, "correlation": 1.0})
-            else:
-                comp_corrs.append({"comparison": comp, "correlation": float(sim_matrix[primary_idx, j])})
-        comp_corrs.sort(key=lambda x: x["correlation"], reverse=True)
+            d = float(sim_matrix[primary_idx, j]) if not np.isnan(sim_matrix[primary_idx, j]) else float('inf')
+            comp_dists.append({"comparison": comp, "similarity": d})
+        comp_dists.sort(key=lambda x: x["similarity"])
 
         # Cluster coords for comparisons
         coords, _ = run_cluster(matrix.T, req.cluster_method)
@@ -249,7 +245,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         result = {
             "similarity_matrix": similarity,
             "heatmap_data": heatmap_data,
-            "comparison_correlations": comp_corrs,
+            "comparison_similarities": comp_dists,
             "cluster_coords": cluster_coords,
         }
         current_status = _read_status(session_id, compute_type)

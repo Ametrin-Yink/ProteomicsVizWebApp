@@ -132,73 +132,72 @@ def build_fold_change_matrix(
     return matrix, accessions, gene_names
 
 
-def compute_correlation_matrix(matrix: np.ndarray, method: str = "pearson") -> np.ndarray:
+def compute_similarity_matrix(matrix: np.ndarray) -> np.ndarray:
     """
-    Compute pairwise correlation matrix.
-
-    If method is 'pearson', uses np.corrcoef (rows as variables).
-    If method is 'spearman', uses scipy.stats.spearmanr per pair.
-    Returns (n, n) matrix.
+    Compute pairwise Euclidean distance matrix (n x n).
+    Entry (i,j) = RMSD between protein i and protein j.
+    Lower = more similar.
     """
     n = matrix.shape[0]
     if n < 2:
-        return np.array([[1.0]])
-    # Require at least 5 comparisons for meaningful correlation
-    if matrix.shape[1] < 5:
+        return np.array([[0.0]])
+    if matrix.shape[1] < 3:
         return np.full((n, n), np.nan)
 
-    if method == "pearson":
-        corr = np.corrcoef(matrix)
-        return corr
+    dist = np.zeros((n, n))
+    for i in range(n):
+        for j in range(i + 1, n):
+            valid = ~(np.isnan(matrix[i]) | np.isnan(matrix[j]))
+            if valid.sum() < 3:
+                dist[i, j] = dist[j, i] = np.nan
+            else:
+                diff = matrix[i][valid] - matrix[j][valid]
+                d = np.sqrt(np.mean(diff ** 2))
+                dist[i, j] = dist[j, i] = d
+    return dist
 
-    # Spearman: vectorized computation
-    corr, _ = stats.spearmanr(matrix, axis=1)
-    if n == 2:
-        # spearmanr returns scalar for exactly 2 variables
-        corr = np.array([[1.0, corr], [corr, 1.0]])
-    return np.nan_to_num(corr, nan=0.0)
 
-
-def compute_protein_correlations(
+def compute_protein_similarities(
     matrix: np.ndarray,
     accessions: list[str],
     gene_names: list[str],
     query_idx: int,
-    method: str = "pearson",
     top_n: int = 10,
 ) -> list[dict]:
     """
-    Compute correlations of all proteins to a query protein.
-    Returns list sorted by correlation (highest first), including query_idx.
+    Compute fold-change similarity (Euclidean distance) to a query protein.
+    Lower distance = more similar. Returns top_n most similar + top_n most dissimilar.
     """
     n = matrix.shape[0]
-    corrs = []
     query_row = matrix[query_idx]
+    distances = []
 
     for i in range(n):
         if i == query_idx:
-            corrs.append(1.0)
+            distances.append(0.0)
             continue
         valid = ~(np.isnan(query_row) | np.isnan(matrix[i]))
-        if valid.sum() < 5:
-            corrs.append(0.0)
+        if valid.sum() < 3:
+            distances.append(np.inf)
             continue
-        if method == "pearson":
-            r = np.corrcoef(query_row[valid], matrix[i][valid])[0, 1]
-        else:
-            r, _ = stats.spearmanr(query_row[valid], matrix[i][valid])
-        corrs.append(r if not np.isnan(r) else 0.0)
+        diff = query_row[valid] - matrix[i][valid]
+        rmsd = float(np.sqrt(np.mean(diff ** 2)))
+        distances.append(rmsd)
 
     result = [
         {
             "accession": accessions[i],
             "gene_name": gene_names[i],
-            "correlation": float(corrs[i]),
+            "similarity": distances[i],
         }
         for i in range(n)
     ]
-    result.sort(key=lambda x: x["correlation"], reverse=True)
-    return result[:top_n] + result[-top_n:]
+    # Sort by distance ascending (most similar first)
+    result.sort(key=lambda x: x["similarity"])
+    # Return top_n most similar + top_n most dissimilar (excluding query itself at index 0)
+    most_similar = [r for r in result if r["similarity"] != float('inf')][:top_n + 1]  # +1 for self
+    most_dissimilar = [r for r in result if r["similarity"] != float('inf')][-top_n:]
+    return most_similar + most_dissimilar
 
 
 def run_pca(matrix: np.ndarray) -> tuple[np.ndarray, float]:
@@ -254,9 +253,9 @@ def run_cluster(matrix: np.ndarray, method: str = "pca") -> tuple[np.ndarray, Op
 
 
 def compute_hierarchical_order(matrix: np.ndarray) -> list[int]:
-    """Compute hierarchical clustering row order for a fold change matrix."""
-    corr = compute_correlation_matrix(matrix, method="pearson")
-    dist = 1 - np.clip(corr, -1, 1)
+    """Compute hierarchical clustering row order for a fold change matrix using Euclidean distance."""
+    dist = compute_similarity_matrix(matrix)
+    dist = np.nan_to_num(dist, nan=np.nanmax(dist[~np.isnan(dist)]) * 2 if np.any(~np.isnan(dist)) else 1.0)
     np.fill_diagonal(dist, 0)
     condensed = squareform(dist)
     if len(condensed) == 0:

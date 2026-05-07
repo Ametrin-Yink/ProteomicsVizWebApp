@@ -370,10 +370,10 @@ export interface ProteinFCResult {
   adj_pval: number;
 }
 
-export interface CorrelatedProtein {
+export interface SimilarProtein {
   accession: string;
   gene_name: string;
-  correlation: number;
+  similarity: number; // Euclidean distance (RMSD), lower = more similar
 }
 
 export interface ProteinClusterPoint {
@@ -392,7 +392,7 @@ export interface ComparisonClusterPoint {
 
 export interface ProteinCorrelationData {
   selected_protein_fc: ProteinFCResult[];
-  correlated_proteins: CorrelatedProtein[];
+  similar_proteins: SimilarProtein[];
   cluster_coords: ProteinClusterPoint[];
   cluster_var_explained?: number;
 }
@@ -413,7 +413,7 @@ export interface ComparisonCorrelationData {
     comparisons: string[];
     fold_changes: number[][];
   };
-  comparison_correlations: Array<{ comparison: string; correlation: number }>;
+  comparison_similarities: Array<{ comparison: string; similarity: number }>;
   cluster_coords: ComparisonClusterPoint[];
 }
 

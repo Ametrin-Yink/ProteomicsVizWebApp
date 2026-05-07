@@ -14,12 +14,15 @@ interface Props {
   data: CorrelationItem[];
   title: string;
   topN?: number;
+  ascending?: boolean; // true when lower values = better (e.g. distance)
   onItemClick?: (label: string) => void;
 }
 
-export default function CorrelationBarChart({ data, title, topN = 10, onItemClick }: Props) {
+export default function CorrelationBarChart({ data, title, topN = 10, ascending = false, onItemClick }: Props) {
   const { labels, values, colors } = useMemo(() => {
-    const sorted = [...data].sort((a, b) => b.correlation - a.correlation);
+    const sorted = [...data].sort((a, b) =>
+      ascending ? a.correlation - b.correlation : b.correlation - a.correlation
+    );
     const topBottom: CorrelationItem[] = [];
 
     // Take top N and bottom N
@@ -63,7 +66,10 @@ export default function CorrelationBarChart({ data, title, topN = 10, onItemClic
 
   const layout = {
     title: { text: title, font: { size: 16, color: '#111827' } },
-    xaxis: { title: { text: 'Correlation', font: { size: 14 } }, range: [-1.1, 1.1], automargin: true },
+    xaxis: {
+      title: { text: ascending ? 'RMSD' : 'Correlation', font: { size: 14 } },
+      automargin: true,
+    },
     yaxis: { automargin: true },
     height,
     margin: { t: 50, b: 60, l: 10, r: 60 },
