@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-report-title>ProteomicsViz Report</title>
+<script src="assets/plotly.min.js"></script>
+<script src="assets/cytoscape.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F3F4F6; color: #111827; }
+  .tab-bar { display: flex; gap: 4px; padding: 8px 16px; background: #FFFFFF; border-bottom: 1px solid #E5E7EB; position: sticky; top: 0; z-index: 100; }
+  .tab-btn { padding: 8px 16px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: #6B7280; border-radius: 8px; transition: all 0.15s; }
+  .tab-btn.active { background: #EEF2FF; color: #4F46E5; }
+  .tab-btn:hover:not(.active) { background: #F3F4F6; color: #374151; }
+  .tab-content { display: none; padding: 24px; }
+  .tab-content.active { display: block; }
+  .qc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .qc-grid .plot-container { min-height: 400px; }
+  .plot-container { width: 100%; min-height: 500px; background: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 16px; }
+  .table-container { background: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #F9FAFB; padding: 10px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #E5E7EB; cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { background: #EEF2FF; }
+  th .sort-arrow { margin-left: 4px; font-size: 10px; }
+  td { padding: 8px 12px; border-bottom: 1px solid #F3F4F6; }
+  tr:hover td { background: #FAFAFA; }
+  .toolbar { display: flex; gap: 12px; align-items: center; padding: 12px 16px; flex-wrap: wrap; }
+  .toolbar input, .toolbar select { padding: 6px 12px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 13px; }
+  .toolbar button { padding: 6px 14px; background: #4F46E5; color: #FFF; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .toolbar button:hover { background: #4338CA; }
+  .pagination { display: flex; gap: 4px; align-items: center; padding: 8px 16px; font-size: 13px; }
+  .pagination button { padding: 4px 10px; border: 1px solid #D1D5DB; background: #FFF; border-radius: 4px; cursor: pointer; }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .pagination button.active { background: #4F46E5; color: #FFF; border-color: #4F46E5; }
+  #bionet-container { width: 100%; height: 600px; background: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .report-header { padding: 16px 24px; background: #FFFFFF; border-bottom: 1px solid #E5E7EB; }
+  .report-header h1 { font-size: 20px; font-weight: 600; }
+  .report-header .meta { font-size: 13px; color: #6B7280; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="report-header">
+  <h1 data-report-name></h1>
+  <div class="meta">
+    <span data-report-session></span> &middot; <span data-report-date></span>
+  </div>
+</div>
+
+<div class="tab-bar" id="tab-bar"></div>
+
+<div id="tab-content-area"></div>
+
+<script id="report-data" type="application/json">{{REPORT_DATA}}</script>
+
+<script>
+(function() {
+  var dataScript = document.getElementById('report-data');
+  var data = JSON.parse(dataScript.textContent);
+
+  // Set header
+  document.querySelector('[data-report-name]').textContent = data.report.name;
+  document.querySelector('[data-report-session]').textContent = data.report.session_name;
+  document.querySelector('[data-report-date]').textContent = data.report.created_at;
+
+  // Build tabs
+  var tabBar = document.getElementById('tab-bar');
+  var contentArea = document.getElementById('tab-content-area');
+  var tabContents = {};
+
+  data.tabs.forEach(function(tab, idx) {
+    // Tab button
+    var btn = document.createElement('button');
+    btn.className = 'tab-btn' + (idx === 0 ? ' active' : '');
+    btn.textContent = tab.label;
+    btn.onclick = function() { switchTab(tab.id); };
+    tabBar.appendChild(btn);
+
+    // Tab content
+    var div = document.createElement('div');
+    div.className = 'tab-content' + (idx === 0 ? ' active' : '');
+    div.id = 'tab-' + tab.id;
+    contentArea.appendChild(div);
+    tabContents[tab.id] = div;
+  });
+
+  function switchTab(id) {
+    var btns = tabBar.querySelectorAll('.tab-btn');
+    btns.forEach(function(b, i) { b.classList.toggle('active', data.tabs[i].id === id); });
+    Object.keys(tabContents).forEach(function(k) {
+      tabContents[k].classList.toggle('active', k === id);
+    });
+  }
+
+  // Render each tab
+  data.tabs.forEach(function(tab) {
+    renderTab(tab.id, data[tab.id], tabContents[tab.id]);
+  });
+
+  // --- Tab Renderers ---
+
+  function renderTab(id, tabData, container) {
+    if (id === 'volcano') renderVolcano(tabData, container);
+    else if (id === 'qc') renderQC(tabData, container);
+    else if (id === 'gsea') renderGSEA(tabData, container);
+    else if (id === 'compare') renderCompare(tabData, container);
+    else if (id === 'bionet') renderBioNet(tabData, container);
+  }
+
+  function renderVolcano(d, container) {
+    var plotDiv = document.createElement('div');
+    plotDiv.className = 'plot-container';
+    container.appendChild(plotDiv);
+    Plotly.newPlot(plotDiv, d.figureSpec.data, d.figureSpec.layout);
+
+    // Protein table
+    var toolbar = document.createElement('div');
+    toolbar.className = 'toolbar';
+    toolbar.innerHTML = '<input type="text" placeholder="Search..." data-search>' +
+      '<button data-csv>Export CSV</button>' +
+      '<span style="font-size:13px;color:#6B7280" data-count></span>';
+    container.appendChild(toolbar);
+
+    var tableContainer = document.createElement('div');
+    tableContainer.className = 'table-container';
+    container.appendChild(tableContainer);
+
+    renderTable(tableContainer, d.deTable.columns, d.deTable.rows, toolbar);
+  }
+
+  // --- Reusable Table (sort, filter, paginate, CSV export) ---
+  var ROWS_PER_PAGE = 25;
+
+  function renderTable(container, columns, allRows, toolbar) {
+    var sortCol = null;
+    var sortAsc = true;
+    var searchTerm = '';
+    var currentPage = 0;
+
+    function getFilteredSorted() {
+      var rows = allRows.slice();
+      if (searchTerm) {
+        var lower = searchTerm.toLowerCase();
+        rows = rows.filter(function(r) {
+          return columns.some(function(c) { return String(r[c.key] || '').toLowerCase().includes(lower); });
+        });
+      }
+      if (sortCol) {
+        rows.sort(function(a, b) {
+          var va = a[sortCol], vb = b[sortCol];
+          if (va == null) va = '';
+          if (vb == null) vb = '';
+          if (typeof va === 'number' && typeof vb === 'number') return sortAsc ? va - vb : vb - va;
+          return sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+        });
+      }
+      return rows;
+    }
+
+    function render() {
+      var filtered = getFilteredSorted();
+      var totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
+      if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
+      var start = currentPage * ROWS_PER_PAGE;
+      var page = filtered.slice(start, start + ROWS_PER_PAGE);
+
+      var html = '<table><thead><tr>';
+      columns.forEach(function(c) {
+        var arrow = '';
+        if (sortCol === c.key) arrow = ' <span class="sort-arrow">' + (sortAsc ? '&#9650;' : '&#9660;') + '</span>';
+        html += '<th data-col="' + c.key + '">' + c.label + arrow + '</th>';
+      });
+      html += '</tr></thead><tbody>';
+      page.forEach(function(r) {
+        html += '<tr>';
+        columns.forEach(function(c) {
+          var v = r[c.key];
+          if (typeof v === 'number') v = v.toFixed(4);
+          else if (typeof v === 'boolean') v = v ? '&#10003;' : '';
+          html += '<td>' + (v != null ? String(v) : '') + '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+
+      html += '<div class="pagination">';
+      html += '<button ' + (currentPage === 0 ? 'disabled' : '') + ' data-prev>Prev</button>';
+      for (var p = 0; p < totalPages; p++) {
+        html += '<button class="' + (p === currentPage ? 'active' : '') + '" data-page="' + p + '">' + (p + 1) + '</button>';
+      }
+      html += '<button ' + (currentPage >= totalPages - 1 ? 'disabled' : '') + ' data-next>Next</button>';
+      html += '<span style="font-size:13px;color:#6B7280">' + (start + 1) + '-' + Math.min(start + ROWS_PER_PAGE, filtered.length) + ' of ' + filtered.length + '</span>';
+      html += '</div>';
+
+      container.innerHTML = html;
+
+      // Update count
+      if (toolbar) {
+        var countEl = toolbar.querySelector('[data-count]');
+        if (countEl) countEl.textContent = filtered.length + ' proteins';
+      }
+    }
+
+    // Delegated event handlers
+    container.addEventListener('click', function(e) {
+      var target = e.target;
+      if (target.tagName === 'TH') {
+        var col = target.getAttribute('data-col');
+        if (sortCol === col) sortAsc = !sortAsc;
+        else { sortCol = col; sortAsc = true; }
+        currentPage = 0;
+        render();
+      } else if (target.hasAttribute('data-page')) {
+        currentPage = parseInt(target.getAttribute('data-page'));
+        render();
+      } else if (target.hasAttribute('data-prev')) {
+        var prev = currentPage - 1;
+        var filtered = getFilteredSorted();
+        var totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
+        currentPage = Math.max(0, prev);
+        render();
+      } else if (target.hasAttribute('data-next')) {
+        var next = currentPage + 1;
+        var filtered = getFilteredSorted();
+        var totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
+        currentPage = Math.min(totalPages - 1, next);
+        render();
+      }
+    });
+
+    // Search handler
+    if (toolbar) {
+      var searchInput = toolbar.querySelector('[data-search]');
+      if (searchInput) {
+        searchInput.addEventListener('input', function() {
+          searchTerm = this.value;
+          currentPage = 0;
+          render();
+        });
+      }
+      // CSV export
+      var csvBtn = toolbar.querySelector('[data-csv]');
+      if (csvBtn) {
+        csvBtn.addEventListener('click', function() {
+          var filtered = getFilteredSorted();
+          var csv = columns.map(function(c) { return '"' + c.label + '"'; }).join(',') + '\n';
+          filtered.forEach(function(r) {
+            csv += columns.map(function(c) {
+              var v = r[c.key];
+              if (v == null) return '';
+              return '"' + String(v).replace(/"/g, '""') + '"';
+            }).join(',') + '\n';
+          });
+          var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'proteins.csv';
+          a.click();
+        });
+      }
+    }
+
+    render();
+  }
+
+  function renderQC(d, container) {
+    var grid = document.createElement('div');
+    grid.className = 'qc-grid';
+    container.appendChild(grid);
+    Object.keys(d.plots).forEach(function(key) {
+      var div = document.createElement('div');
+      div.className = 'plot-container';
+      grid.appendChild(div);
+      Plotly.newPlot(div, d.plots[key].data, d.plots[key].layout, { responsive: true });
+    });
+  }
+
+  function renderGSEA(d, container) {
+    var sel = document.createElement('select');
+    sel.style.cssText = 'margin-bottom:16px;padding:8px 12px;border:1px solid #D1D5DB;border-radius:6px;font-size:14px;';
+    d.databases.forEach(function(db, i) {
+      var opt = document.createElement('option');
+      opt.value = db;
+      opt.textContent = db;
+      if (i === 0) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    container.appendChild(sel);
+
+    var dbContainers = {};
+    d.databases.forEach(function(db) {
+      var div = document.createElement('div');
+      div.style.display = 'none';
+      container.appendChild(div);
+      dbContainers[db] = div;
+    });
+
+    function showDb(db) {
+      Object.keys(dbContainers).forEach(function(k) { dbContainers[k].style.display = 'none'; });
+      var div = dbContainers[db];
+      div.style.display = 'block';
+      if (!div.hasChildNodes()) {
+        var r = d.results[db];
+
+        var barDiv = document.createElement('div');
+        barDiv.className = 'plot-container';
+        div.appendChild(barDiv);
+        Plotly.newPlot(barDiv, r.barChart.data, r.barChart.layout);
+
+        var heatDiv = document.createElement('div');
+        heatDiv.className = 'plot-container';
+        div.appendChild(heatDiv);
+        if (r.heatmap.data && r.heatmap.data.length) {
+          Plotly.newPlot(heatDiv, r.heatmap.data, r.heatmap.layout);
+        }
+
+        // Pathway table
+        var pToolbar = document.createElement('div');
+        pToolbar.className = 'toolbar';
+        pToolbar.innerHTML = '<input type="text" placeholder="Search pathways..." data-search>' +
+          '<button data-csv>Export CSV</button>';
+        div.appendChild(pToolbar);
+
+        var pTable = document.createElement('div');
+        pTable.className = 'table-container';
+        div.appendChild(pTable);
+        renderTable(pTable, r.pathwayTable.columns, r.pathwayTable.rows, pToolbar);
+      }
+    }
+
+    sel.onchange = function() { showDb(this.value); };
+    showDb(d.databases[0]);
+  }
+
+  function renderCompare(d, container) {
+    var label = document.createElement('p');
+    label.style.cssText = 'font-size:14px;color:#6B7280;margin-bottom:12px;';
+    label.textContent = d.comparisonLabel;
+    container.appendChild(label);
+
+    var div = document.createElement('div');
+    div.className = 'plot-container';
+    div.style.minHeight = '600px';
+    container.appendChild(div);
+    Plotly.newPlot(div, d.heatmapSpec.data, d.heatmapSpec.layout, { responsive: true });
+  }
+
+  function renderBioNet(d, container) {
+    // Search bar + edge type filter toolbar
+    var toolbar = document.createElement('div');
+    toolbar.className = 'toolbar';
+    toolbar.innerHTML = '<input type="text" placeholder="Search proteins..." data-search style="width:250px;">';
+    d.edgeTypes.forEach(function(et) {
+      toolbar.innerHTML += '<label style="font-size:13px;display:flex;align-items:center;gap:4px;">' +
+        '<input type="checkbox" checked data-edge-type="' + et + '"> ' + et + '</label>';
+    });
+    container.appendChild(toolbar);
+
+    var cyDiv = document.createElement('div');
+    cyDiv.id = 'bionet-container';
+    container.appendChild(cyDiv);
+
+    var cy = cytoscape({
+      container: cyDiv,
+      elements: d.cytoscapeElements,
+      style: [
+        { selector: 'node', style: { 'background-color': '#4F46E5', 'label': 'data(label)', 'font-size': '10px', 'text-valign': 'center', 'text-halign': 'center' } },
+        { selector: 'edge', style: { 'width': 2, 'line-color': '#D1D5DB', 'target-arrow-color': '#D1D5DB', 'target-arrow-shape': 'triangle' } },
+      ],
+      layout: { name: 'cose-bilkent', animate: false },
+    });
+
+    // Search
+    toolbar.querySelector('[data-search]').addEventListener('input', function() {
+      var q = this.value.toLowerCase();
+      cy.nodes().forEach(function(n) {
+        var label = String(n.data('label') || '').toLowerCase();
+        n.style('display', q === '' || label.includes(q) ? 'element' : 'none');
+      });
+    });
+
+    // Edge type filter
+    toolbar.querySelectorAll('[data-edge-type]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        var et = this.getAttribute('data-edge-type');
+        cy.edges('[type="' + et + '"]').style('display', this.checked ? 'element' : 'none');
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>
