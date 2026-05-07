@@ -35,6 +35,7 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
       zmin: -1,
       zmax: 1,
       ygap: 1,
+      xgap: 1,
       hovertemplate: 'Protein: %{y}<br>Comparison: %{x}<br>log2 FC: %{z:.2f}<extra></extra>',
     };
 
