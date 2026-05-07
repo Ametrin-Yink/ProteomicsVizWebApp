@@ -43,10 +43,9 @@ export default function VennDiagram({ data }: Props) {
 
     // Overlap rows for table
     const rows = data.overlaps.map((overlap) => {
-      // Pre-compute intersection protein display string using raw keys
       let displayProteins = 'No protein list available';
       if (data.sets && overlap.region.length > 0) {
-        const setList = overlap.region.map((r) => new Set(data.sets?.[r] ?? []));
+        const setList = overlap.region.map((r) => new Set(data.sets[r] ?? []));
         const intersection = [...(setList[0] ?? [])].filter((a) =>
           setList.every((s) => s.has(a))
         );

@@ -136,7 +136,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
         similar = compute_protein_similarities(matrix, accessions, gene_names, comparisons, query_idx)
 
         # Cluster coordinates for all proteins
-        coords, var = run_cluster(matrix, req.cluster_method)
+        coords, variance = run_cluster(matrix, req.cluster_method)
         cluster_coords = [
             {"accession": accessions[i], "gene_name": gene_names[i],
              "x": float(coords[i, 0]), "y": float(coords[i, 1])}
@@ -154,7 +154,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
             "selected_protein_fc": selected_fc,
             "similar_proteins": similar,
             "cluster_coords": cluster_coords,
-            "cluster_var_explained": var,
+            "cluster_var_explained": variance,
             "color_fc_map": color_fc_map,
         }
         current_status = _read_status(session_id, compute_type)
@@ -226,13 +226,11 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
             heatmap_fc = heatmap_fc[top_idx]
             heatmap_proteins = [heatmap_proteins[i] for i in top_idx]
 
-        # Hierarchical clustering on rows (proteins)
         if heatmap_fc.shape[0] > 1:
             row_order = compute_hierarchical_order(heatmap_fc)
             heatmap_fc = heatmap_fc[row_order]
             heatmap_proteins = [heatmap_proteins[i] for i in row_order]
 
-        # Hierarchical clustering on columns (comparisons)
         if heatmap_fc.shape[1] > 1:
             col_order = compute_hierarchical_order(heatmap_fc.T)
             heatmap_fc = heatmap_fc[:, col_order]
@@ -255,7 +253,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         comp_dists.sort(key=lambda x: x["similarity"])
 
         # Cluster coords for comparisons
-        coords, var = run_cluster(matrix.T, req.cluster_method)
+        coords, variance = run_cluster(matrix.T, req.cluster_method)
         cluster_coords = [
             {"comparison": all_comparisons[i],
              "x": float(coords[i, 0]), "y": float(coords[i, 1])}
@@ -267,7 +265,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
             "heatmap_data": heatmap_data,
             "comparison_similarities": comp_dists,
             "cluster_coords": cluster_coords,
-            "cluster_var_explained": var,
+            "cluster_var_explained": variance,
         }
         current_status = _read_status(session_id, compute_type)
         _write_result(session_id, compute_type, result)
