@@ -422,3 +422,56 @@ export interface ProteinListEntry {
   accession: string;
   gene_name: string;
 }
+
+// BioNet types
+export interface BioNetRunRequest {
+  comparison: string;
+  pvalue_cutoff: number;       // NOTE: filters on adjusted p-value (adj.pvalue), not raw p-value
+  logfc_cutoff: number;
+  statement_types: string[];
+  paper_count_cutoff: number;
+  evidence_count_cutoff: number;
+  correlation_cutoff: number | null;
+  sources_filter: string[] | null;
+}
+
+export interface BioNetRunStatus {
+  status: 'idle' | 'running' | 'completed' | 'error';
+  comparison?: string;
+  node_count?: number;
+  edge_count?: number;
+  error?: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface BioNetNode {
+  id: string;         // UniProt accession (e.g. "P05023"), from Protein column
+  logFC: number;
+  pvalue: number;     // NOTE: this is the adjusted p-value (from adj.pvalue)
+  hgncName: string;   // HGNC gene name for display labels
+}
+
+export interface BioNetEdge {
+  source: string;     // UniProt accession of source node
+  target: string;     // UniProt accession of target node
+  interaction: string;
+  evidenceCount: number;
+  paperCount: number;
+  evidenceLink: string;
+  sourceCounts: Record<string, number>;
+}
+
+export interface BioNetSubnetwork {
+  nodes: BioNetNode[];
+  edges: BioNetEdge[];
+}
+
+// INDRA knowledge sources
+export const INDRA_SOURCES = [
+  'reach', 'medscan', 'sparser', 'trips',
+  'rlimsp', 'geneways', 'tees', 'isi',
+  'eidos', 'hume', 'sofia',
+] as const;
+
+export type IndraSource = (typeof INDRA_SOURCES)[number];
