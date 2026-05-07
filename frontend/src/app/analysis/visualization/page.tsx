@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
@@ -211,6 +211,61 @@ function ResultsContent() {
     }));
   }, [data, selectedComparison, filters]);
 
+  // Batch mark: mark significant proteins across multiple comparisons
+  const [batchMarkOpen, setBatchMarkOpen] = useState(false);
+  const [batchMarkComparisons, setBatchMarkComparisons] = useState<Set<string>>(new Set());
+  const [batchMarkLoading, setBatchMarkLoading] = useState(false);
+  const batchMarkRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!batchMarkOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (batchMarkRef.current && !batchMarkRef.current.contains(e.target as Node)) {
+        setBatchMarkOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [batchMarkOpen]);
+
+  const toggleBatchComparison = (value: string) => {
+    setBatchMarkComparisons((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) { next.delete(value); } else { next.add(value); }
+      return next;
+    });
+  };
+
+  const toggleAllBatchComparisons = () => {
+    if (batchMarkComparisons.size === comparisonOptions.length) {
+      setBatchMarkComparisons(new Set());
+    } else {
+      setBatchMarkComparisons(new Set(comparisonOptions.map((c) => c.value)));
+    }
+  };
+
+  const handleBatchMark = async () => {
+    if (batchMarkComparisons.size === 0) return;
+    setBatchMarkLoading(true);
+    setBatchMarkOpen(false);
+    try {
+      const newMarked = { ...markedProteins };
+      for (const comp of batchMarkComparisons) {
+        const results = await getDEResults(sessionId!, {
+          comparison: comp,
+          per_page: 20000,
+        });
+        const significant = results.results
+          .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters))
+          .map((r) => r.master_protein_accessions);
+        newMarked[comp] = new Set(significant);
+      }
+      setMarkedProteins(newMarked);
+    } catch { /* silently fail */ }
+    finally { setBatchMarkLoading(false); }
+  };
+
   // Save markers to backend when they change (debounced)
   useEffect(() => {
     if (!sessionId) return;
@@ -380,6 +435,50 @@ function ResultsContent() {
             <span className="text-secondary font-semibold">{deCounts.down}↓</span>
             )
           </span>
+          <div className="w-px h-4 bg-border" />
+          {/* Batch Mark */}
+          <div className="relative" ref={batchMarkRef}>
+            <button
+              onClick={() => setBatchMarkOpen((v) => !v)}
+              disabled={batchMarkLoading}
+              className="px-3 py-1.5 text-xs font-medium bg-surface hover:bg-border/30 text-text-secondary rounded-lg transition-colors disabled:opacity-50"
+            >
+              {batchMarkLoading ? 'Marking...' : 'Mark Significant in Batch'}
+            </button>
+            {batchMarkOpen && (
+              <div className="absolute top-full mt-1 left-0 w-72 bg-background border border-border rounded-lg shadow-lg z-50 p-3 space-y-2">
+                <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={batchMarkComparisons.size === comparisonOptions.length}
+                    onChange={toggleAllBatchComparisons}
+                    className="rounded border-border"
+                  />
+                  Select All
+                </label>
+                <div className="max-h-48 overflow-y-auto space-y-1 border-t border-border pt-2">
+                  {comparisonOptions.map((comp) => (
+                    <label key={comp.value} className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer hover:text-text-primary">
+                      <input
+                        type="checkbox"
+                        checked={batchMarkComparisons.has(comp.value)}
+                        onChange={() => toggleBatchComparison(comp.value)}
+                        className="rounded border-border"
+                      />
+                      {comp.label}
+                    </label>
+                  ))}
+                </div>
+                <button
+                  onClick={handleBatchMark}
+                  disabled={batchMarkComparisons.size === 0}
+                  className="w-full px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  Mark {batchMarkComparisons.size > 0 ? `${batchMarkComparisons.size} comparison(s)` : ''}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Main Content */}
