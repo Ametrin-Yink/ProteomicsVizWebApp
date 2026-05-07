@@ -7,7 +7,6 @@ import ProteinCorrelationPanel from '@/components/visualization/compare/ProteinC
 import ComparisonCorrelationPanel from '@/components/visualization/compare/ComparisonCorrelationPanel';
 import { getSession, getComparisonCorrelationData } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
-import { registerExportState, unregisterExportState } from '@/config/visualization-modules';
 import { buildCompareExport } from '@/lib/figures/compare-figure';
 
 function CompareContent() {
@@ -32,24 +31,6 @@ function CompareContent() {
       }
     }).catch(() => {});
   }, [sessionId]);
-
-  // Register export state for HTML report builder
-  useEffect(() => {
-    registerExportState('compare', async () => {
-      if (!sessionId) return null;
-      try {
-        const data = await getComparisonCorrelationData(sessionId);
-        if (!data || !data.similarity_matrix) return null;
-        const comparisonLabel = comparisons.length > 0
-          ? comparisons.map(c => c.label).join(', ')
-          : 'Comparison Correlation';
-        return { tabId: 'compare', data: buildCompareExport(data, comparisonLabel) as unknown as Record<string, unknown> };
-      } catch {
-        return null;
-      }
-    });
-    return () => { unregisterExportState('compare'); };
-  }, [sessionId, comparisons]);
 
   if (!sessionId) {
     return (

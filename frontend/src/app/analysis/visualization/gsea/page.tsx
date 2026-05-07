@@ -12,7 +12,6 @@ import { getGSEAData, getSession, runGSEA, getGSEAStatus } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { Check, X, LoaderCircle } from 'lucide-react';
-import { registerExportState, unregisterExportState } from '@/config/visualization-modules';
 import { buildGseaExport } from '@/lib/figures/gsea-figures';
 
 const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
@@ -94,16 +93,6 @@ function GSEAAnalysisContent() {
     fetchData();
     return () => { cancelled = true; };
   }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison]);
-
-  // Register export state for HTML report builder
-  useEffect(() => {
-    registerExportState('gsea', async () => {
-      if (!data) return null;
-      const gseaExport = buildGseaExport({ [selectedDatabase]: data });
-      return { tabId: 'gsea', data: gseaExport as unknown as Record<string, unknown> };
-    });
-    return () => { unregisterExportState('gsea'); };
-  }, [data, selectedDatabase]);
 
   // Fetch session config for comparisons
   useEffect(() => {

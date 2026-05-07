@@ -1,4 +1,4 @@
-import { exportStateRegistry, VISUALIZATION_MODULES, getModuleById, type ExportState } from '@/config/visualization-modules';
+import { VISUALIZATION_MODULES, getModuleById } from '@/config/visualization-modules';
 
 export interface ReportData {
   report: { name: string; session_name: string; created_at: string };
@@ -13,29 +13,25 @@ export class ExportError extends Error {
   }
 }
 
-/** Collect export state from all registered visualization modules. */
+/** Collect export state from all visualization modules. */
 export async function captureAllStates(sessionId: string): Promise<{ data: ReportData; errors: string[] }> {
-  const modules = Array.from(exportStateRegistry.entries());
   const data: Record<string, unknown> = {};
   const tabs: { id: string; label: string }[] = [];
   const errors: string[] = [];
 
-  for (const [id, getState] of modules) {
+  for (const mod of VISUALIZATION_MODULES) {
+    if (!mod.getExportState) continue;
     try {
-      const state = await getState(sessionId);
+      const state = await mod.getExportState(sessionId);
       if (state && state.data) {
         data[state.tabId] = state.data;
-        tabs.push({ id: state.tabId, label: getModuleLabel(state.tabId) });
+        tabs.push({ id: state.tabId, label: mod.label });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      throw new ExportError(`Failed to capture ${getModuleLabel(id)}: ${msg}`, getModuleLabel(id));
+      errors.push(`Failed to capture ${mod.label}: ${msg}`);
     }
   }
-
-  // Sort tabs to match the order in VISUALIZATION_MODULES
-  const order = VISUALIZATION_MODULES.map((m) => m.id);
-  tabs.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 
   return {
     data: {
