@@ -20,6 +20,13 @@ class AnalysisTemplate(str, Enum):
     TIME_SERIES = "time_series_analysis"  # reserved for future
 
 
+class PipelineTool(str, Enum):
+    """Statistical pipelines available within a template."""
+
+    MSQROB2 = "msqrob2"
+    MSSTATS = "msstats"
+
+
 class Organism(str, Enum):
     """Supported organisms."""
 
@@ -72,6 +79,7 @@ class AnalysisConfig(BaseModel):
     """Complete analysis configuration."""
 
     template: AnalysisTemplate = Field(default=AnalysisTemplate.MULTI_CONDITION)
+    pipeline: PipelineTool = Field(default=PipelineTool.MSQROB2)
     treatment: Optional[str] = Field(default="")
     control: Optional[str] = Field(default="")
     organism: Organism = Field(default=Organism.HUMAN)

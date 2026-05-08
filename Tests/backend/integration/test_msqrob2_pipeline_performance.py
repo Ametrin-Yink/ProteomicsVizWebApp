@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import settings
-from app.models.analysis import AnalysisConfig, AnalysisTemplate
+from app.models.analysis import AnalysisConfig, AnalysisTemplate, PipelineTool
 from app.services.msqrob2_wrapper import msqrob2_wrapper
 from app.services.pipeline_engine import PipelineDefinition, PipelineStep, PipelineEngine, StepContext
 from app.services.steps import (
@@ -35,20 +35,20 @@ class TestMsqrob2PipelineStructure:
     def test_eight_steps(self):
         """Pipeline has exactly 8 steps."""
         from app.services.pipeline_registry import PIPELINES
-        pipeline = PIPELINES[AnalysisTemplate.MULTI_CONDITION]
+        pipeline = PIPELINES[PipelineTool.MSQROB2]
         assert len(pipeline.steps) == 8
 
     def test_step_numbers_sequential(self):
         """Steps are numbered 1 through 8."""
         from app.services.pipeline_registry import PIPELINES
-        pipeline = PIPELINES[AnalysisTemplate.MULTI_CONDITION]
+        pipeline = PIPELINES[PipelineTool.MSQROB2]
         numbers = [s.number for s in pipeline.steps]
         assert numbers == list(range(1, 9))
 
     def test_step_6_is_msqrob2(self):
         """Step 6 uses msqrob2 handler."""
         from app.services.pipeline_registry import PIPELINES
-        pipeline = PIPELINES[AnalysisTemplate.MULTI_CONDITION]
+        pipeline = PIPELINES[PipelineTool.MSQROB2]
         step6 = pipeline.steps[5]
         assert step6.number == 6
         assert "msqrob2" in step6.display_name.lower()
@@ -57,7 +57,7 @@ class TestMsqrob2PipelineStructure:
     def test_step_7_is_msqrob2(self):
         """Step 7 uses msqrob2 handler."""
         from app.services.pipeline_registry import PIPELINES
-        pipeline = PIPELINES[AnalysisTemplate.MULTI_CONDITION]
+        pipeline = PIPELINES[PipelineTool.MSQROB2]
         step7 = pipeline.steps[6]
         assert step7.number == 7
         assert step7.handler == step_multi_condition_de
@@ -196,18 +196,18 @@ class TestMSstatsUnaffected:
 
     def test_msstats_pipeline_still_registered(self):
         from app.services.pipeline_registry import PIPELINES
-        assert AnalysisTemplate.MSSTATS in PIPELINES
+        assert PipelineTool.MSSTATS in PIPELINES
 
     def test_msstats_step_6_unchanged(self):
         from app.services.pipeline_registry import PIPELINES
         from app.services.steps import step_msstats_protein_abundance
-        pipeline = PIPELINES[AnalysisTemplate.MSSTATS]
+        pipeline = PIPELINES[PipelineTool.MSSTATS]
         step6 = [s for s in pipeline.steps if s.number == 6][0]
         assert step6.handler == step_msstats_protein_abundance
 
     def test_msstats_step_7_unchanged(self):
         from app.services.pipeline_registry import PIPELINES
         from app.services.steps import step_msstats_group_comparison
-        pipeline = PIPELINES[AnalysisTemplate.MSSTATS]
+        pipeline = PIPELINES[PipelineTool.MSSTATS]
         step7 = [s for s in pipeline.steps if s.number == 7][0]
         assert step7.handler == step_msstats_group_comparison

@@ -6,7 +6,7 @@ import pytest
 
 from app.core.config import settings
 from app.core.exceptions import RScriptError
-from app.models.analysis import AnalysisTemplate
+from app.models.analysis import PipelineTool
 from app.services.msstats_wrapper import MsstatsWrapper
 from app.services.pipeline_engine import PipelineEngine
 from app.services.pipeline_registry import PIPELINES
@@ -16,18 +16,18 @@ class TestMsstatsPipelineSplit:
     """Verify the MSstats pipeline has 8 steps with correct handlers."""
 
     def test_pipeline_has_eight_steps(self):
-        pipeline = PIPELINES[AnalysisTemplate.MSSTATS]
+        pipeline = PIPELINES[PipelineTool.MSSTATS]
         assert len(pipeline.steps) == 8, f"Expected 8 steps, got {len(pipeline.steps)}"
 
     def test_step_6_is_protein_abundance(self):
-        pipeline = PIPELINES[AnalysisTemplate.MSSTATS]
+        pipeline = PIPELINES[PipelineTool.MSSTATS]
         step_6 = pipeline.steps[5]  # 0-indexed
         assert step_6.number == 6
         assert step_6.name == "protein_abundance"
         assert "Protein Abundance" in step_6.display_name
 
     def test_step_7_is_differential_expression(self):
-        pipeline = PIPELINES[AnalysisTemplate.MSSTATS]
+        pipeline = PIPELINES[PipelineTool.MSSTATS]
         step_7 = pipeline.steps[6]  # 0-indexed
         assert step_7.number == 7
         assert step_7.name == "differential_expression"

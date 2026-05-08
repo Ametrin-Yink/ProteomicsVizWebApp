@@ -108,6 +108,7 @@ class Session(BaseModel):
     id: str = Field(..., description="Unique session ID (UUID)")
     name: str = Field(..., min_length=1, description="Session name")
     template: str = Field(default="multi_condition_comparison")
+    pipeline: str = Field(default="msqrob2")
     state: SessionState = Field(default=SessionState.CREATED)
     config: Optional[SessionConfig] = None
     files: SessionFiles = Field(default_factory=SessionFiles)
@@ -141,6 +142,7 @@ class Session(BaseModel):
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "DMSO vs Treatment Analysis",
                 "template": "multi_condition_comparison",
+                "pipeline": "msqrob2",
                 "state": "created",
                 "config": None,
                 "files": {"proteomics": [], "compound": None},
@@ -156,6 +158,7 @@ class SessionCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     template: str = Field(default="multi_condition_comparison")
+    pipeline: str = Field(default="msqrob2")
 
 
 class SessionUpdate(BaseModel):

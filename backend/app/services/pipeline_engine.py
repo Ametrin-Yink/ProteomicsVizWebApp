@@ -196,17 +196,17 @@ class PipelineEngine:
     def __init__(self, registry: dict[str, PipelineDefinition]):
         self._registry = registry
 
-    def get_pipeline(self, template: str) -> PipelineDefinition:
-        if template not in self._registry:
+    def get_pipeline(self, name: str) -> PipelineDefinition:
+        if name not in self._registry:
             raise ProcessingError(
-                message=f"Unknown pipeline template: {template}",
+                message=f"Unknown pipeline: {name}",
                 step=0,
                 recoverable=False,
             )
-        return self._registry[template]
+        return self._registry[name]
 
     async def run(self, ctx: StepContext) -> AnalysisResult:
-        pipeline = self.get_pipeline(ctx.config.template)
+        pipeline = self.get_pipeline(ctx.config.pipeline)
 
         # Initialize state and result
         ctx.state = PipelineState(ctx.session_id)

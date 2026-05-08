@@ -1,6 +1,6 @@
 """Pipeline registry — maps template names to pipeline definitions."""
 
-from app.models.analysis import AnalysisTemplate
+from app.models.analysis import PipelineTool
 from app.services.pipeline_engine import PipelineDefinition, PipelineStep
 from app.services.steps import (
     step_combine_replicates,
@@ -24,7 +24,7 @@ def register(template: str, steps: list[PipelineStep]) -> None:
 
 # Register multi-condition pipeline
 register(
-    AnalysisTemplate.MULTI_CONDITION,
+    PipelineTool.MSQROB2,
     [
         PipelineStep(
             1, "combine_replicates", "Combining Replicates", step_combine_replicates
@@ -62,7 +62,7 @@ register(
 # Step 7: differential expression via MSstats groupComparison
 # Steps 8-9: QC metrics, GSEA
 register(
-    AnalysisTemplate.MSSTATS,
+    PipelineTool.MSSTATS,
     [
         PipelineStep(
             1, "combine_replicates", "Combining Replicates", step_combine_replicates

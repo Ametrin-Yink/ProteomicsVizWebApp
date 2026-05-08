@@ -34,6 +34,7 @@ async def create_session(
         id=str(uuid.uuid4()),
         name=data.name,
         template=data.template,
+        pipeline=data.pipeline,
         state=SessionState.CREATED,
         config=None,
         files=SessionFiles(),
@@ -138,7 +139,7 @@ async def update_session_config(
     session.config = config
     session.state = SessionState.CONFIGURING
     if pipeline in ("msqrob2", "msstats"):
-        session.template = pipeline
+        session.pipeline = pipeline
     await store.update(session)
 
     return session

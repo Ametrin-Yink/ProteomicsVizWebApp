@@ -14,7 +14,7 @@ from app.core.config import MIN_PROTEOMICS_FILES
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
 from app.models.session import ProcessingStatus, SessionState, Session
-from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism
+from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism, PipelineTool
 from app.services.processing_orchestrator import ProcessingOrchestrator
 from app.services.session_manager import session_manager
 
@@ -35,6 +35,27 @@ _cancel_events: dict[str, asyncio.Event] = {}
 
 # Store background task references to prevent GC
 _background_tasks: set[asyncio.Task] = set()
+
+
+def _derive_pipeline(session: Session) -> PipelineTool:
+    """Derive pipeline tool from session, with backward compat for old sessions."""
+    raw = getattr(session, "pipeline", None)
+    if raw in ("msqrob2", "msstats"):
+        return PipelineTool(raw)
+    # Fallback: old sessions only had template
+    if session.template == "msstats":
+        return PipelineTool.MSSTATS
+    return PipelineTool.MSQROB2
+
+
+def _derive_template(template: str) -> AnalysisTemplate:
+    """Derive analysis template from session template string."""
+    if template == "msstats":
+        return AnalysisTemplate.MULTI_CONDITION
+    try:
+        return AnalysisTemplate(template)
+    except ValueError:
+        return AnalysisTemplate.MULTI_CONDITION
 
 
 def _schedule_background_task(coro) -> asyncio.Task:
@@ -473,9 +494,12 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             ]
 
             sc = session.config
+            pipeline = _derive_pipeline(session)
+            template = _derive_template(session.template)
             config_kwargs = {
                 "organism": Organism(sc.organism) if sc.organism else Organism.HUMAN,
-                "template": AnalysisTemplate(session.template),
+                "template": template,
+                "pipeline": pipeline,
             }
 
             for field in _CONFIG_FORWARD_FIELDS:
