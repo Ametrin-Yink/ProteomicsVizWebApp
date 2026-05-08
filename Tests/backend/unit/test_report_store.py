@@ -3,7 +3,6 @@ Unit tests for report_store service (post-redesign).
 """
 
 import json
-import shutil
 from pathlib import Path
 import pytest
 
@@ -18,9 +17,8 @@ def temp_reports_dir(monkeypatch, tmp_path):
     yield tmp_path / "reports"
 
 
-def make_report_files(report_dir: Path, name="Test Report",
-                      session_id="ses_123", session_name="Experiment A"):
-    """Create a minimal valid report on disk (simulating export)."""
+def seed_session_json(report_dir: Path, session_id="ses_123", session_name="Experiment A"):
+    """Write a session.json into the report directory (simulating export copy)."""
     report_dir.mkdir(parents=True, exist_ok=True)
 
     session_json = {
@@ -40,18 +38,9 @@ def make_report_files(report_dir: Path, name="Test Report",
     }
     (report_dir / "session.json").write_text(json.dumps(session_json, indent=2))
 
-    report_json = {
-        "report_id": report_dir.name,
-        "name": name,
-        "session_id": session_id,
-        "session_name": session_name,
-        "created_at": "2026-05-07T00:00:00Z",
-    }
-    (report_dir / "report.json").write_text(json.dumps(report_json, indent=2))
 
-
-def test_create_report_from_session_copy(temp_reports_dir, tmp_path):
-    """create_report now takes metadata dict, not ZIP bytes."""
+def test_create_report_writes_metadata(temp_reports_dir):
+    """create_report writes report.json and returns metadata dict."""
     from app.services.report_store import create_report
 
     meta = create_report(
@@ -133,8 +122,8 @@ def test_patch_report_state_writes_to_session_json(temp_reports_dir):
 
     meta = create_report("R", "ses_src", "Exp")
     report_dir = temp_reports_dir / meta["report_id"]
-    # Simulate export: copy a session.json into the report
-    make_report_files(report_dir, session_id="ses_src")
+    # Simulate export: write a session.json into the report
+    seed_session_json(report_dir, session_id="ses_src")
 
     patch_report_state(meta["report_id"], markers={"comp_a": ["P12345"]})
     session_json = json.loads((report_dir / "session.json").read_text())
@@ -144,9 +133,9 @@ def test_patch_report_state_writes_to_session_json(temp_reports_dir):
 def test_patch_report_state_volcano_filters(temp_reports_dir):
     from app.services.report_store import create_report, patch_report_state
 
-    meta = create_report("R", "ses_src", "Exp")
+    meta = create_report("R", "ses_filter_test", "Exp")
     report_dir = temp_reports_dir / meta["report_id"]
-    make_report_files(report_dir)
+    seed_session_json(report_dir, session_id="ses_filter_test")
 
     new_filters = {"foldChange": 2, "pValue": 0.01, "adjPValue": 0.05, "s0": 0.2}
     patch_report_state(meta["report_id"], volcano_filters=new_filters)
@@ -159,7 +148,7 @@ def test_get_report_session_json(temp_reports_dir):
 
     meta = create_report("R", "ses_src", "Exp")
     report_dir = temp_reports_dir / meta["report_id"]
-    make_report_files(report_dir, session_name="My Experiment")
+    seed_session_json(report_dir, session_name="My Experiment")
 
     session_data = get_report_session(meta["report_id"])
     assert session_data is not None
@@ -172,3 +161,28 @@ def test_get_report_session_json(temp_reports_dir):
 def test_get_report_session_nonexistent(temp_reports_dir):
     from app.services.report_store import get_report_session
     assert get_report_session("rpt_nonexistent") is None
+
+
+def test_get_report_session_missing_file(temp_reports_dir):
+    """get_report_session returns None if session.json doesn't exist."""
+    from app.services.report_store import create_report, get_report_session
+
+    meta = create_report("R", "s1", "E1")
+    # Don't write session.json — report.json exists but no session data
+    session_data = get_report_session(meta["report_id"])
+    assert session_data is None
+
+
+def test_patch_report_state_nonexistent(temp_reports_dir):
+    """patch_report_state returns False for nonexistent report."""
+    from app.services.report_store import patch_report_state
+    assert patch_report_state("rpt_nonexistent", markers={"a": ["P1"]}) is False
+
+
+def test_patch_report_state_missing_session_json(temp_reports_dir):
+    """patch_report_state returns False if session.json doesn't exist."""
+    from app.services.report_store import create_report, patch_report_state
+
+    meta = create_report("R", "s1", "E1")
+    # report.json exists but no session.json was written
+    assert patch_report_state(meta["report_id"], markers={"a": ["P1"]}) is False
