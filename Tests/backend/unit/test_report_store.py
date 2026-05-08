@@ -1,11 +1,8 @@
 """
-Unit tests for report_store service.
+Unit tests for report_store service (post-redesign).
 """
 
-import io
 import json
-import zipfile
-import tempfile
 import shutil
 from pathlib import Path
 import pytest
@@ -16,67 +13,65 @@ def temp_reports_dir(monkeypatch, tmp_path):
     """Redirect reports dir to a temp path."""
     from app.core import config
     monkeypatch.setattr(config.settings, "base_dir", tmp_path)
-    # Also patch the module-level REPORTS_DIR
     import app.services.report_store as store
     monkeypatch.setattr(store, "REPORTS_DIR", tmp_path / "reports")
     yield tmp_path / "reports"
 
 
-def make_test_zip() -> bytes:
-    """Create a minimal valid report ZIP."""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("index.html", "<html><body>Test Report</body></html>")
-        zf.writestr("assets/data.json", '{"test": true}')
-    return buf.getvalue()
+def make_report_files(report_dir: Path, name="Test Report",
+                      session_id="ses_123", session_name="Experiment A"):
+    """Create a minimal valid report on disk (simulating export)."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    session_json = {
+        "id": session_id,
+        "name": session_name,
+        "template": "multi_condition_comparison",
+        "state": "completed",
+        "config": {
+            "experiment_name": session_name,
+            "conditions": ["Treatment", "Control"],
+            "comparisons": [
+                {"group1": {"Condition": "Treatment"}, "group2": {"Condition": "Control"}}
+            ],
+        },
+        "markers": {},
+        "volcano_filters": {"foldChange": 1, "pValue": 0.05, "adjPValue": 1, "s0": 0.1},
+    }
+    (report_dir / "session.json").write_text(json.dumps(session_json, indent=2))
+
+    report_json = {
+        "report_id": report_dir.name,
+        "name": name,
+        "session_id": session_id,
+        "session_name": session_name,
+        "created_at": "2026-05-07T00:00:00Z",
+    }
+    (report_dir / "report.json").write_text(json.dumps(report_json, indent=2))
 
 
-def test_create_report_creates_directory_and_metadata(temp_reports_dir):
-    from app.services.report_store import create_report, get_report_metadata
+def test_create_report_from_session_copy(temp_reports_dir, tmp_path):
+    """create_report now takes metadata dict, not ZIP bytes."""
+    from app.services.report_store import create_report
 
-    zip_data = make_test_zip()
-    meta = create_report("Test Report", "ses_123", "Experiment A", zip_data)
+    meta = create_report(
+        name="My Report",
+        session_id="ses_abc",
+        session_name="Experiment X",
+    )
 
-    assert meta["name"] == "Test Report"
-    assert meta["session_id"] == "ses_123"
+    assert meta["name"] == "My Report"
+    assert meta["session_id"] == "ses_abc"
     assert meta["report_id"].startswith("rpt_")
     assert "created_at" in meta
 
-    # Verify on-disk state
+    # Verify directory and report.json exist
     report_dir = temp_reports_dir / meta["report_id"]
     assert report_dir.is_dir()
-    assert (report_dir / "index.html").exists()
-    assert (report_dir / "assets" / "data.json").exists()
-    assert (report_dir / "export.zip").exists()
     assert (report_dir / "report.json").exists()
 
-    stored = get_report_metadata(meta["report_id"])
-    assert stored == meta
-
-
-def test_create_report_rejects_missing_index_html(temp_reports_dir):
-    from app.services.report_store import create_report
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("other.txt", "no index here")
-    zip_data = buf.getvalue()
-
-    with pytest.raises(ValueError, match="index.html"):
-        create_report("Bad", "ses_x", "Exp", zip_data)
-
-
-def test_create_report_rejects_path_traversal(temp_reports_dir):
-    from app.services.report_store import create_report
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("index.html", "<html></html>")
-        zf.writestr("../../../etc/passwd", "malicious")
-    zip_data = buf.getvalue()
-
-    with pytest.raises(ValueError, match="Unsafe"):
-        create_report("Bad", "ses_x", "Exp", zip_data)
+    stored = json.loads((report_dir / "report.json").read_text())
+    assert stored["name"] == "My Report"
 
 
 def test_list_reports_empty(temp_reports_dir):
@@ -88,26 +83,92 @@ def test_list_reports_sorted(temp_reports_dir):
     from app.services.report_store import create_report, list_reports
     import time
 
-    zip_data = make_test_zip()
-    m1 = create_report("Report 1", "s1", "E1", zip_data)
+    m1 = create_report("A", "s1", "E1")
     time.sleep(0.1)
-    m2 = create_report("Report 2", "s2", "E2", zip_data)
+    m2 = create_report("B", "s2", "E2")
 
     reports = list_reports()
     assert len(reports) == 2
     assert reports[0]["report_id"] == m2["report_id"]  # newest first
 
 
+def test_get_report_dir(temp_reports_dir):
+    from app.services.report_store import create_report, get_report_dir
+
+    meta = create_report("R", "s1", "E1")
+    rd = get_report_dir(meta["report_id"])
+    assert rd is not None
+    assert rd.is_dir()
+
+
+def test_get_report_dir_nonexistent(temp_reports_dir):
+    from app.services.report_store import get_report_dir
+    assert get_report_dir("rpt_nonexistent") is None
+
+
 def test_delete_report(temp_reports_dir):
     from app.services.report_store import create_report, delete_report, get_report_dir
 
-    zip_data = make_test_zip()
-    meta = create_report("R", "s1", "E1", zip_data)
-
+    meta = create_report("R", "s1", "E1")
     assert delete_report(meta["report_id"]) is True
     assert get_report_dir(meta["report_id"]) is None
 
 
-def test_delete_nonexistent_report(temp_reports_dir):
+def test_delete_nonexistent(temp_reports_dir):
     from app.services.report_store import delete_report
     assert delete_report("rpt_nonexistent") is False
+
+
+def test_get_report_metadata(temp_reports_dir):
+    from app.services.report_store import create_report, get_report_metadata
+
+    meta = create_report("R", "s1", "E1")
+    stored = get_report_metadata(meta["report_id"])
+    assert stored == meta
+
+
+def test_patch_report_state_writes_to_session_json(temp_reports_dir):
+    """PATCH visualization-state updates markers in the report's session.json."""
+    from app.services.report_store import create_report, patch_report_state
+
+    meta = create_report("R", "ses_src", "Exp")
+    report_dir = temp_reports_dir / meta["report_id"]
+    # Simulate export: copy a session.json into the report
+    make_report_files(report_dir, session_id="ses_src")
+
+    patch_report_state(meta["report_id"], markers={"comp_a": ["P12345"]})
+    session_json = json.loads((report_dir / "session.json").read_text())
+    assert session_json["markers"] == {"comp_a": ["P12345"]}
+
+
+def test_patch_report_state_volcano_filters(temp_reports_dir):
+    from app.services.report_store import create_report, patch_report_state
+
+    meta = create_report("R", "ses_src", "Exp")
+    report_dir = temp_reports_dir / meta["report_id"]
+    make_report_files(report_dir)
+
+    new_filters = {"foldChange": 2, "pValue": 0.01, "adjPValue": 0.05, "s0": 0.2}
+    patch_report_state(meta["report_id"], volcano_filters=new_filters)
+    session_json = json.loads((report_dir / "session.json").read_text())
+    assert session_json["volcano_filters"] == new_filters
+
+
+def test_get_report_session_json(temp_reports_dir):
+    from app.services.report_store import create_report, get_report_session
+
+    meta = create_report("R", "ses_src", "Exp")
+    report_dir = temp_reports_dir / meta["report_id"]
+    make_report_files(report_dir, session_name="My Experiment")
+
+    session_data = get_report_session(meta["report_id"])
+    assert session_data is not None
+    assert session_data["config"]["experiment_name"] == "My Experiment"
+    assert session_data["config"]["comparisons"] == [
+        {"group1": {"Condition": "Treatment"}, "group2": {"Condition": "Control"}}
+    ]
+
+
+def test_get_report_session_nonexistent(temp_reports_dir):
+    from app.services.report_store import get_report_session
+    assert get_report_session("rpt_nonexistent") is None
