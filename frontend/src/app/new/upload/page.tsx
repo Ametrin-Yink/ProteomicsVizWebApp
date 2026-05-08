@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Loader2, Upload, Database, CheckCircle } from 'lucide-react';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
@@ -73,6 +73,19 @@ function UploadContent() {
 
     restoreSession();
   }, [sessionId, setConfig]);
+
+  // Auto-save config to backend on changes (debounced) so edits survive refresh
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!sessionId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      sessionsApi.updateConfig(sessionId, config).catch(() => {});
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [sessionId, config]);
 
   // Validate session ID
   useEffect(() => {
