@@ -1,24 +1,23 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProteinCorrelationPanel from '@/components/visualization/compare/ProteinCorrelationPanel';
 import ComparisonCorrelationPanel from '@/components/visualization/compare/ComparisonCorrelationPanel';
-import { getDataSource, sessionApiPrefix } from '@/lib/api';
+import { getDataSource } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 
 function CompareContent() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+  const { apiPrefix } = useApi();
 
   const [activeTab, setActiveTab] = useState<'protein' | 'comparison'>('protein');
   const [comparisons, setComparisons] = useState<Array<{ value: string; label: string }>>([]);
   const [comparisonCount, setComparisonCount] = useState(0);
 
   useEffect(() => {
-    if (!sessionId) return;
-    getDataSource(sessionApiPrefix(sessionId)).then((session) => {
+    if (!apiPrefix) return;
+    getDataSource(apiPrefix).then((session) => {
       const comps = session?.config?.comparisons;
       if (comps && comps.length > 0) {
         const list = comps.map((c) => ({
@@ -29,9 +28,9 @@ function CompareContent() {
         setComparisonCount(list.length);
       }
     }).catch(() => {});
-  }, [sessionId]);
+  }, [apiPrefix]);
 
-  if (!sessionId) {
+  if (!apiPrefix) {
     return (
       <div className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
@@ -83,6 +82,8 @@ function CompareContent() {
     </div>
   );
 }
+
+export { CompareContent };
 
 export default function ComparePage() {
   return (

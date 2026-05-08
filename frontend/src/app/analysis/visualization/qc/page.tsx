@@ -1,17 +1,15 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
-import { getQCData, getDataSource, sessionApiPrefix } from '@/lib/api';
+import { getQCData, getDataSource } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 
 function QCContent() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
-  const apiPrefix = sessionApiPrefix(sessionId);
+  const { apiPrefix } = useApi();
 
   const [data, setData] = useState<QCData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,14 +19,14 @@ function QCContent() {
   const [selectedComparison, setSelectedComparison] = useState<string>('');
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!apiPrefix) return;
     async function fetchData() {
       setLoading(true);
       setError(null);
       try {
         const [qcData, session] = await Promise.all([
           getQCData(apiPrefix),
-          getDataSource(sessionApiPrefix(sessionId)),
+          getDataSource(apiPrefix),
         ]);
         setData(qcData);
         if (session?.config) {
@@ -55,9 +53,9 @@ function QCContent() {
     }
 
     fetchData();
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
-  if (!sessionId) {
+  if (!apiPrefix) {
     return (
       <div data-testid="no-session-selected" className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
@@ -186,6 +184,8 @@ function QCContent() {
     </div>
   );
 }
+
+export { QCContent };
 
 export default function QCPage() {
   return (

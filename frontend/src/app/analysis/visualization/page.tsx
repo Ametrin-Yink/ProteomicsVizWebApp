@@ -2,20 +2,19 @@
 
 import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
 import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
-import { getDEResults, getDataSource, updateVisualizationState, sessionApiPrefix } from '@/lib/api';
+import { getDEResults, getDataSource, updateVisualizationState } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 
 
 function ResultsContent() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id') || searchParams.get('session');
+  const { apiPrefix } = useApi();
 
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,11 +45,11 @@ function ResultsContent() {
   // Fetch data on mount and when comparison changes
   useEffect(() => {
     async function fetchData() {
-      if (!sessionId) return;
+      if (!apiPrefix) return;
       setLoading(true);
       setError(null);
       try {
-        const results = await getDEResults(sessionApiPrefix(sessionId), {
+        const results = await getDEResults(apiPrefix, {
           page: 1,
           per_page: 20000,
           comparison: selectedComparison || undefined,
@@ -64,13 +63,13 @@ function ResultsContent() {
     }
 
     fetchData();
-  }, [sessionId, selectedComparison]);
+  }, [apiPrefix, selectedComparison]);
 
   // Fetch session config and restore visualization state
   useEffect(() => {
-    if (!sessionId) return;
+    if (!apiPrefix) return;
     async function fetchSessionConfig() {
-      const session = await getDataSource(sessionApiPrefix(sessionId!));
+      const session = await getDataSource(apiPrefix);
       if (session) {
         const experiment = session.files?.proteomics?.[0]?.experiment ?? '';
         const comparisons = session.config?.comparisons;
@@ -122,7 +121,7 @@ function ResultsContent() {
     }
 
     fetchSessionConfig();
-  }, [sessionId, selectedComparison]);
+  }, [apiPrefix, selectedComparison]);
 
   // Handle protein selection from volcano plot
   const handleSelectProteins = useCallback((proteins: string[]) => {
@@ -253,7 +252,7 @@ function ResultsContent() {
     try {
       const newMarked = { ...markedProteins };
       for (const comp of batchMarkComparisons) {
-        const results = await getDEResults(sessionApiPrefix(sessionId!), {
+        const results = await getDEResults(apiPrefix, {
           comparison: comp,
           per_page: 20000,
         });
@@ -269,33 +268,33 @@ function ResultsContent() {
 
   // Save markers to backend when they change (debounced)
   useEffect(() => {
-    if (!sessionId) return;
+    if (!apiPrefix) return;
     const markersObj: Record<string, string[]> = {};
     for (const [comp, set] of Object.entries(markedProteins)) {
       if (set.size > 0) markersObj[comp] = Array.from(set);
     }
     const timer = setTimeout(async () => {
       try {
-        await updateVisualizationState(sessionApiPrefix(sessionId), { markers: markersObj });
+        await updateVisualizationState(apiPrefix, { markers: markersObj });
       } catch {
         // Silently fail
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [markedProteins, sessionId]);
+  }, [markedProteins, apiPrefix]);
 
   // Save filters to backend when they change (debounced)
   useEffect(() => {
-    if (!sessionId) return;
+    if (!apiPrefix) return;
     const timer = setTimeout(async () => {
       try {
-        await updateVisualizationState(sessionApiPrefix(sessionId), { volcano_filters: filters });
+        await updateVisualizationState(apiPrefix, { volcano_filters: filters });
       } catch {
         // Silently fail — filters are still in local state
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [filters, sessionId]);
+  }, [filters, apiPrefix]);
 
   const comparisonLabel = useMemo(() => {
     if (selectedComparison) {
@@ -351,7 +350,7 @@ function ResultsContent() {
     );
   }
 
-  if (!sessionId) {
+  if (!apiPrefix) {
     return (
       <div data-testid="no-session-selected" className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
@@ -541,6 +540,8 @@ function ResultsContent() {
     </div>
   );
 }
+
+export { ResultsContent };
 
 export default function ResultsPage() {
   return (

@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import GSEADashboard from '@/components/visualization/GSEADashboard';
 import PathwayTable from '@/components/visualization/PathwayTable';
 import GSEAPlot from '@/components/visualization/GSEAPlot';
 import type { GSEAData, GSEAResult, GSEADatabase, GSEARunStatus } from '@/types/api';
 import { GSEADatabaseLabels } from '@/types/api';
-import { getGSEAData, getDataSource, sessionApiPrefix, runGSEA, getGSEAStatus } from '@/lib/api';
+import { getGSEAData, getDataSource, runGSEA, getGSEAStatus } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { Check, X, LoaderCircle } from 'lucide-react';
@@ -16,9 +16,7 @@ import { Check, X, LoaderCircle } from 'lucide-react';
 const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
 
 function GSEAAnalysisContent() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
-  const apiPrefix = sessionApiPrefix(sessionId);
+  const { apiPrefix } = useApi();
 
   const [selectedDatabase, setSelectedDatabase] = useState<GSEADatabase>('go_bp');
   const [data, setData] = useState<GSEAData | null>(null);
@@ -58,7 +56,7 @@ function GSEAAnalysisContent() {
   }, [search]);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!apiPrefix) return;
     let cancelled = false;
     async function fetchData() {
       setLoading(true);
@@ -92,12 +90,12 @@ function GSEAAnalysisContent() {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison, apiPrefix]);
+  }, [selectedDatabase, apiPrefix, page, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison]);
 
   // Fetch session config for comparisons
   useEffect(() => {
-    if (!sessionId) return;
-    getDataSource(sessionApiPrefix(sessionId)).then(session => {
+    if (!apiPrefix) return;
+    getDataSource(apiPrefix).then(session => {
       if (session?.config) {
         setSessionConfig({ comparisons: session.config.comparisons });
         const comps = session.config.comparisons;
@@ -107,7 +105,7 @@ function GSEAAnalysisContent() {
         }
       }
     }).catch(() => {});
-  }, [sessionId]);
+  }, [apiPrefix]);
 
   // Poll GSEA run status — only depends on sessionId to avoid stale closures.
   // Uses a ref to always access the latest filter params for the completion data fetch.
@@ -115,7 +113,7 @@ function GSEAAnalysisContent() {
   fetchParamsRef.current = { selectedDatabase, pageSize, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison };
 
   const pollStatus = useCallback(async () => {
-    if (!sessionId) return;
+    if (!apiPrefix) return;
     try {
       const status = await getGSEAStatus(apiPrefix);
       if (lastStatusRef.current?.status === status.status) {
@@ -149,7 +147,7 @@ function GSEAAnalysisContent() {
     } catch {
       // Silently ignore polling errors
     }
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;
@@ -159,7 +157,7 @@ function GSEAAnalysisContent() {
 
   // Check GSEA status on mount — resume polling if run in progress, load if completed
   useEffect(() => {
-    if (!sessionId) return;
+    if (!apiPrefix) return;
     let cancelled = false;
     getGSEAStatus(apiPrefix).then(async (status) => {
       if (cancelled) return;
@@ -183,7 +181,7 @@ function GSEAAnalysisContent() {
     return () => { cancelled = true; };
     // Only run on mount / session change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [apiPrefix]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -212,7 +210,7 @@ function GSEAAnalysisContent() {
     }
   };
 
-  if (!sessionId) {
+  if (!apiPrefix) {
     return (
       <div data-testid="no-session-selected" className="flex-1 bg-surface flex items-center justify-center">
         <div className="text-center text-text-secondary">
@@ -448,6 +446,8 @@ function GSEAAnalysisContent() {
     </div>
   );
 }
+
+export { GSEAAnalysisContent };
 
 export default function GSEAAnalysisPage() {
   return (
