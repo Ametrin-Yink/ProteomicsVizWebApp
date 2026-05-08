@@ -532,7 +532,6 @@ function ResultsContent() {
             ) : (
               <ProteinInfo
                 protein={selectedProteins.size === 1 ? selectedProteinData : null}
-                sessionId={sessionId}
                 filters={filters}
                 comparison={selectedComparison || undefined}
               />

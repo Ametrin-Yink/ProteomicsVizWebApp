@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import type { DEResult, ProteinAbundance, PeptideAbundanceData, VolcanoFilters } from '@/types/api';
 import { formatNumber, formatPValue, getSignificanceLabel, getVolcanoPointColor, parseDelimited } from '@/lib/utils';
 import { getProteinAbundance, getPeptideAbundance } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 import { ProteinAbundancePlot, PeptideAbundancePlot } from './AbundancePlot';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProteinInfoSkeleton } from '@/components/ui/Loading';
@@ -11,7 +12,6 @@ import { Microscope } from 'lucide-react';
 
 interface ProteinInfoProps {
   protein: DEResult | null;
-  sessionId: string;
   isLoading?: boolean;
   filters?: VolcanoFilters;
   comparison?: string;
@@ -46,7 +46,8 @@ function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
   return { accessions, geneNames: paddedGeneNames };
 }
 
-export default function ProteinInfo({ protein, sessionId, isLoading, filters, comparison }: ProteinInfoProps) {
+export default function ProteinInfo({ protein, isLoading, filters, comparison }: ProteinInfoProps) {
+  const { apiPrefix } = useApi();
   const [proteinAbundance, setProteinAbundance] = useState<ProteinAbundance | null>(null);
   const [peptideAbundance, setPeptideAbundance] = useState<PeptideAbundanceData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,8 +68,8 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters, co
       setError(null);
       try {
         const [proteinData, peptideData] = await Promise.all([
-          getProteinAbundance(sessionId, protein.master_protein_accessions, comparison),
-          getPeptideAbundance(sessionId, protein.master_protein_accessions, comparison),
+          getProteinAbundance(apiPrefix, protein.master_protein_accessions, comparison),
+          getPeptideAbundance(apiPrefix, protein.master_protein_accessions, comparison),
         ]);
         setProteinAbundance(proteinData);
         setPeptideAbundance(peptideData);
@@ -80,7 +81,7 @@ export default function ProteinInfo({ protein, sessionId, isLoading, filters, co
     }
 
     fetchAbundanceData();
-  }, [protein, sessionId, comparison]);
+  }, [protein, comparison]);
 
   // Gene names are padded to match accessions by parseProteinInfo,
   // so no UniProt API fetch is needed here.
