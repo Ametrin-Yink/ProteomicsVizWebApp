@@ -60,13 +60,15 @@ export default function ProteinInfo({ protein, isLoading, filters, comparison }:
       return;
     }
 
+    const accession = protein.master_protein_accessions;
+
     async function fetchAbundanceData() {
       setLoading(true);
       setError(null);
       try {
         const [proteinData, peptideData] = await Promise.all([
-          getProteinAbundance(apiPrefix, protein.master_protein_accessions, comparison),
-          getPeptideAbundance(apiPrefix, protein.master_protein_accessions, comparison),
+          getProteinAbundance(apiPrefix, accession, comparison),
+          getPeptideAbundance(apiPrefix, accession, comparison),
         ]);
         setProteinAbundance(proteinData);
         setPeptideAbundance(peptideData);

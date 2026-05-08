@@ -512,25 +512,9 @@ export const organismsApi = {
 };
 
 /**
- * Export API — HTML report generation
+ * Export API — report management
  */
 export const exportApi = {
-  /** Upload a ZIP for weblink generation */
-  uploadWeblink: async (
-    sessionId: string,
-    zipBlob: Blob,
-    name: string,
-  ): Promise<{ report_id: string; name: string; weblink: string; download_url: string; created_at: string }> => {
-    const formData = new FormData();
-    formData.append('zip', zipBlob, 'report.zip');
-    formData.append('name', name);
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/export/weblink`), {
-      method: 'POST',
-      body: formData,
-    });
-    return handleResponse<{ report_id: string; name: string; weblink: string; download_url: string; created_at: string }>(response);
-  },
-
   /** List all reports across sessions */
   listAll: async (): Promise<{ reports: Array<{ report_id: string; name: string; session_id: string; session_name: string; created_at: string }> }> => {
     const response = await fetch(apiUrl('/reports'));
