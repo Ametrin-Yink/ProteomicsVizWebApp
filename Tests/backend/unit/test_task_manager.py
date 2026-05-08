@@ -190,9 +190,14 @@ async def test_get_status_and_queue_position():
     task_b = asyncio.create_task(
         tm.submit("sess-1", TaskKind.COMPUTE, dummy, label="waiter")
     )
-    await asyncio.sleep(0.15)
 
-    status = tm.get_status("sess-1")
+    # Wait for task_a to reach "running" (may take a few event loop cycles)
+    for _ in range(10):
+        await asyncio.sleep(0.05)
+        status = tm.get_status("sess-1")
+        if any(t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"]):
+            break
+
     assert len(status["tasks"]) >= 1
     assert any(t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"])
 
