@@ -11,7 +11,6 @@ import { getDEResults, getDataSource, updateVisualizationState, sessionApiPrefix
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
-import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
 
 
 function ResultsContent() {

@@ -12,7 +12,6 @@ import { getGSEAData, getDataSource, sessionApiPrefix, runGSEA, getGSEAStatus } 
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { Check, X, LoaderCircle } from 'lucide-react';
-import { buildGseaExport } from '@/lib/figures/gsea-figures';
 
 const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
 

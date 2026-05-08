@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   ChartScatter,
   Activity,
@@ -982,12 +983,12 @@ export default function ReportViewerPage() {
           <AlertCircle className="w-10 h-10 text-error mx-auto mb-3" />
           <h2 className="text-lg font-semibold text-error mb-2">Error Loading Report</h2>
           <p className="text-sm text-error/80 mb-4">{error || 'Report not found'}</p>
-          <a
+          <Link
             href="/reports"
             className="inline-flex items-center px-4 py-2 bg-surface text-text-primary rounded-lg hover:bg-border transition-colors text-sm"
           >
             Back to Reports
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -1006,12 +1007,12 @@ export default function ReportViewerPage() {
                 {new Date(reportMeta.report.created_at).toLocaleDateString()}
               </p>
             </div>
-            <a
+            <Link
               href="/reports"
               className="text-sm text-text-secondary hover:text-text-primary transition-colors"
             >
               &larr; All Reports
-            </a>
+            </Link>
           </div>
         </div>
 
