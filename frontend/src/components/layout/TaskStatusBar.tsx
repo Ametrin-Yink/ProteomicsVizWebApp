@@ -66,7 +66,7 @@ export function TaskStatusBar() {
     (t) => t.status === "running" || t.status === "queued"
   );
 
-  if (activeTasks.length === 0) return null;
+  const hasActive = activeTasks.length > 0;
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
@@ -74,7 +74,7 @@ export function TaskStatusBar() {
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 min-w-[320px] max-w-[420px]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-              Tasks ({activeTasks.length})
+              {hasActive ? `Tasks (${activeTasks.length})` : "Tasks"}
             </h3>
             <button
               onClick={() => setExpanded(false)}
@@ -83,39 +83,47 @@ export function TaskStatusBar() {
               ✕
             </button>
           </div>
-          {activeTasks.map((task, i) => (
-            <div
-              key={`${task.kind}-${task.started_at}-${i}`}
-              className="mb-2 last:mb-0 p-2 bg-gray-50 dark:bg-gray-700/40 rounded"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate max-w-[200px]">
-                  {task.label || task.kind}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded ${STATUS_STYLE[task.status] || "bg-red-100 text-red-700"}`}>
-                  {statusLabel(task)}
-                </span>
-              </div>
-              {task.progress && task.status === "running" && (
-                <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
-                  <div
-                    className="bg-blue-500 h-1.5 rounded-full transition-all"
-                    style={{ width: `${progressPct(task)}%` }}
-                  />
+          {hasActive ? (
+            <>
+              {activeTasks.map((task, i) => (
+                <div
+                  key={`${task.kind}-${task.started_at}-${i}`}
+                  className="mb-2 last:mb-0 p-2 bg-gray-50 dark:bg-gray-700/40 rounded"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate max-w-[200px]">
+                      {task.label || task.kind}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${STATUS_STYLE[task.status] || "bg-red-100 text-red-700"}`}>
+                      {statusLabel(task)}
+                    </span>
+                  </div>
+                  {task.progress && task.status === "running" && (
+                    <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className="bg-blue-500 h-1.5 rounded-full transition-all"
+                        style={{ width: `${progressPct(task)}%` }}
+                      />
+                    </div>
+                  )}
+                  {task.error && (
+                    <p className="text-xs text-red-500 mt-1 truncate">{task.error}</p>
+                  )}
                 </div>
+              ))}
+              {activeTasks.some((t) => t.status === "running") && (
+                <button
+                  onClick={handleCancel}
+                  className="mt-3 w-full text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-3 py-1"
+                >
+                  Cancel All
+                </button>
               )}
-              {task.error && (
-                <p className="text-xs text-red-500 mt-1 truncate">{task.error}</p>
-              )}
-            </div>
-          ))}
-          {activeTasks.some((t) => t.status === "running") && (
-            <button
-              onClick={handleCancel}
-              className="mt-3 w-full text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-3 py-1"
-            >
-              Cancel All
-            </button>
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              No active tasks. Trigger GSEA or compare analysis to see status here.
+            </p>
           )}
         </div>
       ) : (
