@@ -1,9 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { X, Loader2, Link, Download, Copy, CheckCircle } from 'lucide-react';
-import { captureAllStates, buildZipBlob, downloadZip, ExportError } from '@/lib/html-report-builder';
-import { exportApi } from '@/lib/api-client';
+import { X, Loader2, Link, Copy, CheckCircle } from 'lucide-react';
 
 interface ExportModalProps {
   sessionId: string;
@@ -13,48 +11,38 @@ interface ExportModalProps {
 
 type ModalState = 'input' | 'generating' | 'weblink-ready' | 'error';
 
-function extractErrorMessage(err: unknown): string {
-  if (err instanceof ExportError) return err.message;
-  if (err instanceof Error) return err.message;
-  return 'Unknown error';
-}
-
 export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProps) {
   const [name, setName] = useState(sessionName ? `${sessionName} Report` : '');
   const [state, setState] = useState<ModalState>('input');
-  const [progressMsg, setProgressMsg] = useState('');
   const [resultUrl, setResultUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const handleGenerate = useCallback(async (mode: 'weblink' | 'zip') => {
+  const handleGenerate = useCallback(async () => {
     if (!name.trim()) return;
     setState('generating');
     setErrorMsg('');
 
     try {
-      setProgressMsg('Capturing visualizations...');
-      const { data } = await captureAllStates(sessionId);
+      const response = await fetch(`/api/sessions/${sessionId}/reports/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
 
-      setProgressMsg(mode === 'zip' ? 'Assembling ZIP...' : 'Assembling archive...');
-      const zipBlob = await buildZipBlob(data, name.trim(), sessionName);
-
-      if (mode === 'zip') {
-        setProgressMsg('Downloading...');
-        downloadZip(zipBlob, name.trim());
-        onClose();
-      } else {
-        setProgressMsg('Uploading to server...');
-        const result = await exportApi.uploadWeblink(sessionId, zipBlob, name.trim());
-        setResultUrl(`${window.location.origin}${result.weblink}`);
-        setState('weblink-ready');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error?.message || `HTTP ${response.status}`);
       }
+
+      const result = await response.json();
+      setResultUrl(`${window.location.origin}${result.weblink}`);
+      setState('weblink-ready');
     } catch (err) {
-      const msg = extractErrorMessage(err);
-      setErrorMsg(msg);
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to generate report');
       setState('error');
     }
-  }, [name, sessionId, sessionName, onClose]);
+  }, [name, sessionId]);
 
   const copyUrl = useCallback(async () => {
     try { await navigator.clipboard.writeText(resultUrl); setCopied(true); } catch {}
@@ -81,31 +69,21 @@ export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProp
                 className="w-full px-3 py-2 border border-border rounded-lg mb-6 focus:outline-none focus:ring-2 focus:ring-primary"
                 autoFocus
               />
-              <div className="flex gap-3">
-                <button
-                  data-testid="generate-weblink-btn"
-                  disabled={!name.trim()}
-                  onClick={() => handleGenerate('weblink')}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Link className="w-4 h-4" /> Generate Weblink
-                </button>
-                <button
-                  data-testid="download-zip-btn"
-                  disabled={!name.trim()}
-                  onClick={() => handleGenerate('zip')}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-surface text-text-primary rounded-lg hover:bg-border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Download className="w-4 h-4" /> Download ZIP
-                </button>
-              </div>
+              <button
+                data-testid="generate-report-link-btn"
+                disabled={!name.trim()}
+                onClick={handleGenerate}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Link className="w-4 h-4" /> Generate Report Link
+              </button>
             </>
           )}
 
           {state === 'generating' && (
             <div className="flex flex-col items-center gap-4 py-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-text-secondary">{progressMsg}</p>
+              <p className="text-text-secondary">Generating report...</p>
             </div>
           )}
 
