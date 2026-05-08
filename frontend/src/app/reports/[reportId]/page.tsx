@@ -12,8 +12,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { ApiProvider, useApi } from '@/lib/api-context';
-import { reportApiPrefix, getDataSource, getDEResults, getQCData, getGSEAData, getGSEAPlotData, getGSEAHeatmapData, updateVisualizationState, getBioNetSubnetwork, getComparisonCorrelationData, getProteinCorrelationData, computeVennData } from '@/lib/api';
-import { formatComparisonKeyWrapped, formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
+import { reportApiPrefix, getDataSource, getDEResults, getQCData, getGSEAData, updateVisualizationState, getBioNetSubnetwork, getComparisonCorrelationData, getProteinCorrelationData, computeVennData } from '@/lib/api';
+import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 
 // Shared visualization components
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
@@ -42,7 +42,6 @@ import type {
   ComparisonCorrelationData,
   ProteinCorrelationData,
   VennData,
-  ProteinListEntry,
 } from '@/types/api';
 import { GSEADatabaseLabels } from '@/types/api';
 import { SearchableSelect } from '@/components/ui/Select';
@@ -133,12 +132,16 @@ function VolcanoTab() {
           }
 
           // Restore markers
-          if (session.markers && typeof session.markers === 'object') {
+          if (session.markers && typeof session.markers === 'object' && !Array.isArray(session.markers)) {
             const restored: Record<string, Set<string>> = {};
-            for (const [comp, accessions] of Object.entries(session.markers as Record<string, string[]>)) {
-              restored[comp] = new Set(accessions);
+            for (const [comp, accessions] of Object.entries(session.markers)) {
+              restored[comp] = new Set(accessions as string[]);
             }
             setMarkedProteins(restored);
+          } else if (Array.isArray(session.markers) && session.markers.length > 0) {
+            // Migrate old flat format
+            const compKey = selectedComparison || 'default';
+            setMarkedProteins({ [compKey]: new Set(session.markers) });
           }
 
           // Restore filters
@@ -750,13 +753,26 @@ function CompareTab() {
             </p>
           </div>
           {comparisonData.similarity_matrix && (
-            <SimilarityMatrix data={comparisonData.similarity_matrix} />
+            <SimilarityMatrix
+              comparisons={comparisonData.similarity_matrix.comparisons}
+              matrix={comparisonData.similarity_matrix.matrix}
+            />
           )}
-          {comparisonData.heatmap && (
-            <ComparisonHeatmap data={comparisonData.heatmap} />
+          {comparisonData.heatmap_data && (
+            <ComparisonHeatmap
+              proteins={comparisonData.heatmap_data.proteins}
+              comparisons={comparisonData.heatmap_data.comparisons}
+              foldChanges={comparisonData.heatmap_data.fold_changes}
+            />
           )}
-          {comparisonData.bar_chart && (
-            <CorrelationBarChart data={comparisonData.bar_chart} />
+          {comparisonData.comparison_similarities && comparisonData.comparison_similarities.length > 0 && (
+            <CorrelationBarChart
+              data={comparisonData.comparison_similarities.map((s) => ({
+                label: s.comparison,
+                correlation: s.similarity,
+              }))}
+              title="Comparison Similarities"
+            />
           )}
         </div>
       )}
@@ -775,10 +791,15 @@ function CompareTab() {
               Correlation patterns across proteins
             </p>
           </div>
-          {proteinData.bar_chart && (
-            <CorrelationBarChart data={proteinData.bar_chart} />
+          {proteinData.similar_proteins && proteinData.similar_proteins.length > 0 && (
+            <CorrelationBarChart
+              data={proteinData.similar_proteins.map((s) => ({
+                label: s.gene_name || s.accession,
+                correlation: s.similarity,
+              }))}
+              title="Similar Proteins"
+            />
           )}
-          {proteinData.cluster_map && <CorrelationBarChart data={proteinData.cluster_map} />}
         </div>
       )}
 
@@ -913,7 +934,7 @@ function BioNetTab() {
       edges={subnetwork.edges}
       pvalueCutoff={0.05}
       logfcCutoff={0.5}
-      keyTargets={subnetwork.key_targets || []}
+      keyTargets={[]}
     />
   );
 }
