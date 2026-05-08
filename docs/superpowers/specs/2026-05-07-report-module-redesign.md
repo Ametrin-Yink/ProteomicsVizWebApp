@@ -196,24 +196,52 @@ No manual lists to update. No risk of silent breakage.
 
 ## Frontend Changes
 
-### Shared Components
+### Component API Strategy
 
-All presentational components under `components/visualization/` are used by
-both the visualization page and the report viewer. No changes needed.
-New components placed there are automatically available to both.
+Several shared components (`ProteinInfo`, `GSEAPlot`, `ComparisonCorrelationPanel`,
+`ProteinCorrelationPanel`) currently take `sessionId` as a prop and hardcode
+session-scoped API calls internally. For the report viewer, these must call
+report-scoped endpoints instead.
+
+**Solution: React Context for API prefix.** A single context provides the API
+base path. The visualization page sets it to `/api/sessions/{sid}`; the report
+viewer sets it to `/api/reports/{rid}`. Components read from context instead
+of accepting `sessionId`.
+
+```
+ApiProvider              ← new context component
+├── Visualization page   ← <ApiProvider value="/api/sessions/{sid}">
+│   └── ProteinInfo      ← reads apiPrefix from context
+│   └── GSEAPlot         ← reads apiPrefix from context
+│   └── ComparePanels    ← reads apiPrefix from context
+│
+├── Report viewer page   ← <ApiProvider value="/api/reports/{rid}">
+│   └── ProteinInfo      ← same component, calls report endpoints now
+│   └── GSEAPlot         ← same component, calls report endpoints now
+│   └── ComparePanels    ← same component, calls report endpoints now
+```
+
+The affected components are refactored once to use the context. After that,
+adding a new visualization feature that makes API calls just uses the context
+— it automatically works for both session and report.
+
+### Presentational Components (already pure, no changes)
+
+- `VolcanoPlot`, `ProteinTable`, `FilterPanel`
+- `QCPlots`, `GSEADashboard`, `PathwayTable`
+- `BioNetNetwork`, `AbundancePlot`
 
 ### Report Viewer Page ([reportId]/page.tsx)
 
-Structure mirrors the visualization page with these differences:
-- Gets `reportId` from URL params instead of `sessionId`
-- Fetches metadata from `GET /api/reports/{rid}` (returns report.json + session.json)
-- Calls report-scoped API endpoints (`/api/reports/{rid}/...`)
+Complete rewrite. The current page has its own inline component implementations
+(VolcanoTab, QCTab, GSEATab, etc.) that render from pre-computed Plotly figure
+specs. Replaced by a thin shell that:
+- Gets `reportId` from URL params
+- Fetches metadata from `GET /api/reports/{rid}` (report.json + session.json)
+- Wraps content in `<ApiProvider value="/api/reports/{rid}">`
+- Renders tabs using the same components as the visualization page
 - No session sidebar or session manager
 - Report header (name, date, original session name) instead of session nav
-
-API calls use the same fetch/transform pattern as the current API client,
-just with report-prefixed URLs. No parallel function library needed — the
-page constructs URLs from the report ID directly.
 
 ### ExportModal
 
