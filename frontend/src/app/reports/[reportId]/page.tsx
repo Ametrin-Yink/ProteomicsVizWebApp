@@ -1975,7 +1975,7 @@ export default function ReportViewerPage() {
 
   return (
     <ApiProvider apiPrefix={apiPrefix}>
-      <div className="min-h-screen bg-surface flex flex-col">
+      <div className="h-screen bg-surface flex flex-col">
         {/* Header */}
         <div className="bg-background border-b border-border px-6 py-3">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -2023,7 +2023,7 @@ export default function ReportViewerPage() {
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full">
+        <div className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full overflow-y-auto">
           {activeTab === 'volcano' && <VolcanoTab />}
           {activeTab === 'qc' && <QCTab />}
           {activeTab === 'gsea' && <GSEATab />}
