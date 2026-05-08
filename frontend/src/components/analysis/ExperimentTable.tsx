@@ -352,33 +352,46 @@ export const ExperimentTable: React.FC = () => {
         if (filenameIdx === -1) { addToast('warning', 'CSV must have a "filename" column'); return; }
         const colNames = headers.filter((h) => h !== 'filename');
 
-        const current = { ...(config.metadata_columns || {}) };
         const uploadedFilenames = new Set(uploadedFiles.map((f) => f.filename));
-        let merged = 0;
 
         // Infer condition column from position in our export format:
         // colNames = ['experiment', <conditionCol>, ...customColumns, 'replicate']
         const csvConditionCol = colNames.length > 1 && colNames[1] !== 'replicate' ? colNames[1] : null;
+        const expIdx = headers.indexOf('experiment');
+        const condIdx = csvConditionCol ? headers.indexOf(csvConditionCol) : -1;
 
+        // Collect imported rows
+        const imported: Record<string, Record<string, string>> = {};
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i]);
           const fn = values[filenameIdx];
           if (!fn || !uploadedFilenames.has(fn)) continue;
-          // Build entry from scratch so removed/changed columns don't linger
           const entry: Record<string, string> = {};
           colNames.forEach((col) => {
             const colIdx = headers.indexOf(col);
             if (colIdx >= 0) entry[col] = values[colIdx] || '';
           });
-          current[fn] = entry;
-          merged++;
+          imported[fn] = entry;
         }
-        const configUpdate: Partial<typeof config> = { metadata_columns: current };
-        if (csvConditionCol && csvConditionCol !== conditionCol) {
-          configUpdate.condition_column = csvConditionCol;
-        }
-        setConfig(configUpdate);
-        addToast('success', `Merged metadata for ${merged} file(s)`);
+
+        // Atomically update metadata_columns, condition_column, and ParsedFilename
+        useAnalysisStore.setState((state) => {
+          if (!state.config.metadata_columns) state.config.metadata_columns = {};
+          Object.assign(state.config.metadata_columns, imported);
+          if (csvConditionCol && csvConditionCol !== (state.config.condition_column || 'condition')) {
+            state.config.condition_column = csvConditionCol;
+          }
+          // Sync ParsedFilename so the table shows imported values
+          Object.entries(imported).forEach(([fn, entry]) => {
+            const pf = state.uploadedFiles.find((f) => f.filename === fn);
+            if (pf) {
+              if (expIdx >= 0 && entry.experiment) pf.experiment = entry.experiment;
+              if (condIdx >= 0 && csvConditionCol) pf.condition = entry[csvConditionCol] || pf.condition;
+            }
+          });
+        });
+
+        addToast('success', `Merged metadata for ${Object.keys(imported).length} file(s)`);
       } catch (err) {
         addToast('error', `Failed to parse CSV: ${err instanceof Error ? err.message : String(err)}`);
       }
