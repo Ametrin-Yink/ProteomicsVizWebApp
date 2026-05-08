@@ -225,6 +225,9 @@ sessions/
 backend/sessions/
 *.session
 
+# Reports (runtime generated)
+backend/reports/
+
 # Uploaded files (user data)
 uploads/
 backend/uploads/

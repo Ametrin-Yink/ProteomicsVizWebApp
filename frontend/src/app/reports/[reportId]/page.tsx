@@ -958,7 +958,16 @@ export default function ReportViewerPage() {
     if (!reportId) return;
     fetch(`/api/reports/${encodeURIComponent(reportId)}`)
       .then(r => { if (!r.ok) throw new Error('Report not found'); return r.json(); })
-      .then(setReportMeta)
+      .then(data => {
+        // Backend returns { _report, ...sessionFields } — extract report metadata
+        setReportMeta({
+          report: {
+            name: data._report?.name || '',
+            session_name: data._report?.session_name || '',
+            created_at: data._report?.created_at || '',
+          },
+        });
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [reportId]);

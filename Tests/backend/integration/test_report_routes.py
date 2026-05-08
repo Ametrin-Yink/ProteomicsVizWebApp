@@ -114,8 +114,8 @@ async def test_generate_and_view_report(client):
     response = await client.get(f"/api/reports/{report_id}")
     assert response.status_code == 200
     meta = response.json()
-    assert meta["report"]["name"] == "Integration Test Report"
-    assert "session" in meta
+    assert meta["_report"]["name"] == "Integration Test Report"
+    assert "config" in meta  # session fields at top level
 
     # GET results
     response = await client.get(f"/api/reports/{report_id}/results")

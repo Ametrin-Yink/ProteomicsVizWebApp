@@ -128,11 +128,19 @@ async def get_reports():
 
 @global_router.get("/reports/{report_id}")
 async def get_report_meta(report_id: str):
-    """Return report metadata and the embedded session.json."""
+    """Return report metadata and session data in a shape compatible with
+    getDataSource on the frontend (config, markers, etc. at top level)."""
     _get_report_dir_or_404(report_id)
+    meta = get_report_metadata(report_id) or {}
+    session = get_report_session(report_id) or {}
     return {
-        "report": get_report_metadata(report_id) or {},
-        "session": get_report_session(report_id) or {},
+        "_report": meta,
+        "id": report_id,
+        "name": meta.get("session_name") or session.get("name", ""),
+        "config": session.get("config"),
+        "files": session.get("files"),
+        "markers": session.get("markers"),
+        "volcano_filters": session.get("volcano_filters"),
     }
 
 
