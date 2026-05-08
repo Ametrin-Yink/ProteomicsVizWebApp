@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import {
   ChartScatter,
   Activity,
@@ -11,836 +10,935 @@ import {
   ChartNetwork,
   Loader2,
   AlertCircle,
-  Search,
-  Download,
-  X,
-  ChevronUp,
-  ChevronDown,
-  ChevronsUpDown,
 } from 'lucide-react';
-import cytoscape, { type Core } from 'cytoscape';
-import coseBilkent from 'cytoscape-cose-bilkent';
+import { ApiProvider, useApi } from '@/lib/api-context';
+import { reportApiPrefix, getDataSource, getDEResults, getQCData, getGSEAData, getGSEAPlotData, getGSEAHeatmapData, updateVisualizationState, getBioNetSubnetwork, getComparisonCorrelationData, getProteinCorrelationData, computeVennData } from '@/lib/api';
+import { formatComparisonKeyWrapped, formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 
-cytoscape.use(coseBilkent);
+// Shared visualization components
+import VolcanoPlot from '@/components/visualization/VolcanoPlot';
+import ProteinInfo from '@/components/visualization/ProteinInfo';
+import ProteinTable from '@/components/visualization/ProteinTable';
+import { FilterPanel } from '@/components/visualization/FilterPanel';
+import QCPlots from '@/components/visualization/QCPlots';
+import GSEADashboard from '@/components/visualization/GSEADashboard';
+import GSEAPlot from '@/components/visualization/GSEAPlot';
+import PathwayTable from '@/components/visualization/PathwayTable';
+import BioNetNetwork from '@/components/visualization/BioNetNetwork';
+import SimilarityMatrix from '@/components/visualization/compare/SimilarityMatrix';
+import VennDiagram from '@/components/visualization/compare/VennDiagram';
+import ComparisonHeatmap from '@/components/visualization/compare/ComparisonHeatmap';
+import CorrelationBarChart from '@/components/visualization/compare/CorrelationBarChart';
 
-// ─── Dynamic Plotly import ────────────────────────────────────────────────
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+import type {
+  DEResult,
+  DEResultsData,
+  VolcanoFilters,
+  QCData,
+  GSEAData,
+  GSEADatabase,
+  GSEAResult,
+  BioNetSubnetwork,
+  ComparisonCorrelationData,
+  ProteinCorrelationData,
+  VennData,
+  ProteinListEntry,
+} from '@/types/api';
+import { GSEADatabaseLabels } from '@/types/api';
+import { SearchableSelect } from '@/components/ui/Select';
 
-// ─── Types ────────────────────────────────────────────────────────────────
+// ─── Tab definitions ────────────────────────────────────────────────────────
 
-interface ReportMeta {
-  name: string;
-  session_name: string;
-  created_at: string;
-}
+const TABS = [
+  { id: 'volcano', label: 'Volcano Plot', icon: ChartScatter },
+  { id: 'qc', label: 'QC Plots', icon: Activity },
+  { id: 'gsea', label: 'GSEA Analysis', icon: Spline },
+  { id: 'compare', label: 'Compare', icon: GitCompare },
+  { id: 'bionet', label: 'BioNet', icon: ChartNetwork },
+] as const;
 
-interface TabDef {
-  id: string;
-  label: string;
-}
+type TabId = (typeof TABS)[number]['id'];
 
-interface ReportData {
-  report: ReportMeta;
-  tabs: TabDef[];
-  [tabId: string]: unknown;
-}
+// ─── Database constants ─────────────────────────────────────────────────────
 
-interface VolcanoExport {
-  figureSpec: { data: unknown[]; layout: Record<string, unknown> };
-  deTable: { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] };
-  markedProteins: string[];
-  comparisonLabel: string;
-}
+const GSEA_DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
 
-interface QcFigureEntry {
-  data: unknown[];
-  layout: Record<string, unknown>;
-}
+// ─── Tab: Volcano ───────────────────────────────────────────────────────────
 
-interface QcExport {
-  plots: Record<string, QcFigureEntry | null>;
-}
+function VolcanoTab() {
+  const { apiPrefix } = useApi();
 
-interface GseaDatabaseExport {
-  barChart: { data: unknown[]; layout: Record<string, unknown> };
-  heatmap: { data: unknown[]; layout: Record<string, unknown> };
-  pathwayTable: { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] };
-}
+  const [data, setData] = useState<DEResultsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<{
+    treatment?: string; control?: string; experiment: string;
+    comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
+  } | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState<string>('');
+  const comparisonInitialized = useRef(false);
 
-interface GseaExport {
-  databases: string[];
-  results: Record<string, GseaDatabaseExport>;
-}
+  const [filters, setFilters] = useState<VolcanoFilters>({
+    foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1,
+  });
 
-interface CompareExport {
-  similarityMatrixSpec: { data: unknown[]; layout: Record<string, unknown> } | null;
-  heatmapSpec: { data: unknown[]; layout: Record<string, unknown> } | null;
-  comparisonLabel: string;
-}
+  const [selectedProteins, setSelectedProteins] = useState<Set<string>>(new Set());
+  const [selectedProteinData, setSelectedProteinData] = useState<DEResult | null>(null);
+  const [markedProteins, setMarkedProteins] = useState<Record<string, Set<string>>>({});
 
-interface BioNetExport {
-  cytoscapeElements: {
-    nodes: cytoscape.ElementDefinition[];
-    edges: cytoscape.ElementDefinition[];
-  };
-  edgeTypes: string[];
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────
-
-const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  volcano: ChartScatter,
-  qc: Activity,
-  gsea: Spline,
-  compare: GitCompare,
-  bionet: ChartNetwork,
-};
-
-const EDGE_COLORS: Record<string, string> = {
-  Activation: '#22c55e',
-  Inhibition: '#ef4444',
-  IncreaseAmount: '#f97316',
-  DecreaseAmount: '#3b82f6',
-  Complex: '#8b5cf6',
-  Binding: '#8b5cf6',
-  Phosphorylation: '#eab308',
-  Dephosphorylation: '#f59e0b',
-  Ubiquitination: '#ec4899',
-  Deubiquitination: '#f472b6',
-  Acetylation: '#06b6d4',
-  Sumoylation: '#14b8a6',
-  Methylation: '#6366f1',
-  Demethylation: '#818cf8',
-  Hydroxylation: '#84cc16',
-  Palmitoylation: '#a1a1aa',
-  Myristoylation: '#a1a1aa',
-  Farnesylation: '#a1a1aa',
-  Geranylgeranylation: '#a1a1aa',
-  GtpActivation: '#22c55e',
-  GapActivation: '#ef4444',
-  GefActivation: '#22c55e',
-  Cleavage: '#ef4444',
-  Degradation: '#ef4444',
-  Translocation: '#a855f7',
-  Transactivation: '#22c55e',
-  SelfInteraction: '#d4d4d8',
-  ActiveForm: '#22c55e',
-  InactiveForm: '#ef4444',
-};
-
-function resolveEdgeColor(interaction: string): string {
-  for (const [type, color] of Object.entries(EDGE_COLORS)) {
-    if (interaction.includes(type)) return color;
-  }
-  return '#9ca3af';
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function downloadCsv(rows: Record<string, unknown>[], columns: { key: string; label: string }[], filename: string): void {
-  const header = columns.map((c) => JSON.stringify(c.label)).join(',');
-  const body = rows
-    .map((row) => columns.map((c) => JSON.stringify(String(row[c.key] ?? ''))).join(','))
-    .join('\n');
-  const blob = new Blob(['﻿' + header + '\n' + body], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename.replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// ─── DataTable Component ──────────────────────────────────────────────────
-
-interface DataTableColumn {
-  key: string;
-  label: string;
-}
-
-interface DataTableProps {
-  columns: DataTableColumn[];
-  rows: Record<string, unknown>[];
-  pageSize?: number;
-  searchable?: boolean;
-  filename?: string;
-}
-
-function DataTable({ columns, rows, pageSize = 25, searchable = true, filename = 'export' }: DataTableProps) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [filter, setFilter] = useState('');
-  const [page, setPage] = useState(0);
-
-  // Reset page when filter changes
-  useEffect(() => { setPage(0); }, [filter]);
-
-  const handleSort = (key: string) => {
-    if (sortKey === key) {
-      if (sortDir === 'asc') setSortDir('desc');
-      else if (sortDir === 'desc') { setSortKey(null); setSortDir('asc'); }
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  };
-
-  const filtered = useMemo(() => {
-    if (!filter.trim()) return rows;
-    const q = filter.toLowerCase();
-    return rows.filter((row) =>
-      columns.some((col) => String(row[col.key] ?? '').toLowerCase().includes(q)),
-    );
-  }, [rows, filter, columns]);
-
-  const sorted = useMemo(() => {
-    if (!sortKey) return filtered;
-    return [...filtered].sort((a, b) => {
-      const va = a[sortKey];
-      const vb = b[sortKey];
-      if (va == null) return 1;
-      if (vb == null) return -1;
-      let cmp = 0;
-      if (typeof va === 'number' && typeof vb === 'number') {
-        cmp = va - vb;
-      } else {
-        cmp = String(va).localeCompare(String(vb));
+  // Fetch DE results
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const results = await getDEResults(apiPrefix, {
+          page: 1, per_page: 20000,
+          comparison: selectedComparison || undefined,
+        });
+        setData(results);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load results');
+      } finally {
+        setLoading(false);
       }
-      return sortDir === 'asc' ? cmp : -cmp;
+    }
+    fetchData();
+  }, [apiPrefix, selectedComparison]);
+
+  // Fetch session config
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const session = await getDataSource(apiPrefix);
+        if (session) {
+          const experiment = session.files?.proteomics?.[0]?.experiment ?? '';
+          const comparisons = session.config?.comparisons;
+          const cfg = {
+            treatment: session.config?.treatment ?? '',
+            control: session.config?.control ?? '',
+            experiment,
+            comparisons,
+          };
+          setSessionConfig(cfg);
+
+          if (!comparisonInitialized.current) {
+            if (comparisons && comparisons.length > 0) {
+              const first = comparisons[0];
+              setSelectedComparison(`${formatGroup(first.group1)}_vs_${formatGroup(first.group2)}`);
+            } else if (cfg.treatment && cfg.control) {
+              setSelectedComparison('');
+            }
+            comparisonInitialized.current = true;
+          }
+
+          // Restore markers
+          if (session.markers && typeof session.markers === 'object') {
+            const restored: Record<string, Set<string>> = {};
+            for (const [comp, accessions] of Object.entries(session.markers as Record<string, string[]>)) {
+              restored[comp] = new Set(accessions);
+            }
+            setMarkedProteins(restored);
+          }
+
+          // Restore filters
+          if (session.volcano_filters) {
+            setFilters(session.volcano_filters);
+          }
+        }
+      } catch { /* silently fail */ }
+    }
+    fetchConfig();
+  }, [apiPrefix]);
+
+  const comparisonOptions = useMemo(() => {
+    if (!sessionConfig?.comparisons) return [];
+    return sessionConfig.comparisons.map((c) => ({
+      value: `${formatGroup(c.group1)}_vs_${formatGroup(c.group2)}`,
+      label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
+    }));
+  }, [sessionConfig?.comparisons]);
+
+  const comparisonLabel = useMemo(() => {
+    if (selectedComparison) return selectedComparison.replace(/_vs_/g, ' vs ');
+    if (sessionConfig?.treatment && sessionConfig?.control) {
+      return `${sessionConfig.treatment} vs ${sessionConfig.control}`;
+    }
+    return undefined;
+  }, [selectedComparison, sessionConfig]);
+
+  const deCounts = useMemo(() => {
+    if (!data) return { total: 0, up: 0, down: 0 };
+    const significant = data.results.filter(
+      (r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters)
+    );
+    return {
+      total: significant.length,
+      up: significant.filter((r) => r.log_fc > 0).length,
+      down: significant.filter((r) => r.log_fc < 0).length,
+    };
+  }, [data, filters]);
+
+  const handleSelectProteins = useCallback((proteins: string[]) => {
+    setSelectedProteins(new Set(proteins));
+    if (proteins.length > 0 && data) {
+      const clickedProtein = proteins[0];
+      const protein = data.results.find((r) =>
+        r.master_protein_accessions === clickedProtein ||
+        parseDelimited(r.master_protein_accessions).includes(clickedProtein) ||
+        parseDelimited(clickedProtein).some(p => r.master_protein_accessions.includes(p))
+      );
+      if (protein) setSelectedProteinData(protein);
+    }
+  }, [data]);
+
+  const handleSelectProteinFromTable = useCallback((protein: DEResult) => {
+    setSelectedProteinData(protein);
+    setSelectedProteins(new Set([protein.master_protein_accessions]));
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedProteins(new Set());
+    setSelectedProteinData(null);
+  }, []);
+
+  const handleToggleMark = useCallback((protein: DEResult) => {
+    const compKey = selectedComparison || comparisonOptions[0]?.value || '';
+    if (!compKey) return;
+    setMarkedProteins((prev) => {
+      const next = { ...prev };
+      if (!next[compKey]) next[compKey] = new Set<string>();
+      const compSet = new Set(next[compKey]);
+      if (compSet.has(protein.master_protein_accessions)) {
+        compSet.delete(protein.master_protein_accessions);
+      } else {
+        compSet.add(protein.master_protein_accessions);
+      }
+      next[compKey] = compSet;
+      return next;
     });
-  }, [filtered, sortKey, sortDir]);
+  }, [selectedComparison, comparisonOptions]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const paged = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const handleClearAllMarks = useCallback(() => {
+    const compKey = selectedComparison || comparisonOptions[0]?.value || '';
+    if (!compKey) return;
+    setMarkedProteins((prev) => {
+      const next = { ...prev };
+      delete next[compKey];
+      return next;
+    });
+  }, [selectedComparison, comparisonOptions]);
 
-  return (
-    <div className="bg-background rounded-lg border border-border overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between p-3 border-b border-border">
-        {searchable ? (
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-            <input
-              type="text"
-              placeholder="Filter..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-surface"
-            />
-          </div>
-        ) : (
-          <div />
-        )}
-        <button
-          onClick={() => downloadCsv(sorted, columns, filename)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-surface hover:bg-border rounded-lg transition-colors"
-        >
-          <Download className="w-3.5 h-3.5" /> CSV
-        </button>
-      </div>
+  const handleMarkAllSignificant = useCallback(() => {
+    if (!data) return;
+    const compKey = selectedComparison || comparisonOptions[0]?.value || '';
+    if (!compKey) return;
+    const significant = data.results
+      .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters))
+      .map((r) => r.master_protein_accessions);
+    setMarkedProteins((prev) => ({
+      ...prev,
+      [compKey]: new Set(significant),
+    }));
+  }, [data, selectedComparison, comparisonOptions, filters]);
 
-      {/* Table */}
-      <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface sticky top-0">
-            <tr>
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => handleSort(col.key)}
-                  className="text-left px-4 py-2.5 font-medium text-text-secondary cursor-pointer hover:text-text-primary whitespace-nowrap select-none"
-                >
-                  <div className="flex items-center gap-1">
-                    {col.label}
-                    {sortKey === col.key ? (
-                      sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />
-                    ) : (
-                      <ChevronsUpDown className="w-3.5 h-3.5 opacity-40" />
-                    )}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {paged.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-text-muted">
-                  No matching rows
-                </td>
-              </tr>
-            ) : (
-              paged.map((row, i) => (
-                <tr key={i} className="border-t border-border hover:bg-surface/50 transition-colors">
-                  {columns.map((col) => (
-                    <td key={col.key} className="px-4 py-2 text-text-primary whitespace-nowrap">
-                      {formatCellValue(row[col.key])}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+  // Save markers debounced
+  useEffect(() => {
+    const markersObj: Record<string, string[]> = {};
+    for (const [comp, set] of Object.entries(markedProteins)) {
+      if (set.size > 0) markersObj[comp] = Array.from(set);
+    }
+    const timer = setTimeout(async () => {
+      try { await updateVisualizationState(apiPrefix, { markers: markersObj }); } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [markedProteins, apiPrefix]);
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-border text-sm text-text-secondary">
-        <span>
-          {sorted.length} result{sorted.length !== 1 ? 's' : ''}
-          {filter.trim() && filtered.length !== sorted.length
-            ? ` (${filtered.length} shown)`
-            : ''}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={safePage === 0}
-            className="px-2 py-1 rounded hover:bg-surface disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            Prev
-          </button>
-          <span className="text-xs">
-            {safePage + 1} / {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={safePage >= totalPages - 1}
-            className="px-2 py-1 rounded hover:bg-surface disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            Next
-          </button>
+  // Save filters debounced
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try { await updateVisualizationState(apiPrefix, { volcano_filters: filters }); } catch {}
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [filters, apiPrefix]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="mt-3 text-text-secondary text-sm">Loading volcano data...</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function formatCellValue(val: unknown): string {
-  if (val == null) return '';
-  if (typeof val === 'number') {
-    if (Math.abs(val) < 0.01 || Math.abs(val) > 10000) return val.toExponential(2);
-    return val.toFixed(4);
+    );
   }
-  return String(val);
-}
 
-// ─── Tab: Volcano ─────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <div className="bg-error/5 border border-error/20 rounded-lg p-5">
+        <p className="text-error">{error}</p>
+      </div>
+    );
+  }
 
-function VolcanoTab({ data: raw }: { data: unknown }) {
-  const volcanoData = raw as VolcanoExport | undefined;
-  if (!volcanoData?.figureSpec) {
-    return <EmptyTab message="No volcano plot data available" />;
+  if (!data) {
+    return (
+      <div className="text-center py-16 text-text-secondary">
+        <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <p>No differential expression data available</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Comparison Label */}
-      <div className="flex items-center gap-2 text-text-secondary">
-        <span className="font-semibold text-text-primary">Comparison:</span>
-        <span>{volcanoData.comparisonLabel || 'Treatment vs Control'}</span>
+    <div data-testid="report-volcano-container">
+      {/* Info Bar */}
+      <div className="flex items-center gap-3 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3 flex-wrap">
+        <span className="font-semibold text-text-primary">{sessionConfig?.experiment || 'Report Results'}</span>
+        <div className="w-px h-4 bg-border" />
+        {comparisonOptions.length > 0 ? (
+          <SearchableSelect
+            options={comparisonOptions}
+            value={selectedComparison}
+            onChange={setSelectedComparison}
+            placeholder="Select comparison..."
+            searchPlaceholder="Filter comparisons..."
+            className="min-w-[280px]"
+          />
+        ) : (
+          <span className="text-text-secondary">
+            {sessionConfig
+              ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
+              : 'Treatment vs Control'}
+          </span>
+        )}
+        <div className="w-px h-4 bg-border" />
+        <span className="text-text-secondary">{data.total_proteins?.toLocaleString() || 0} proteins</span>
+        <div className="w-px h-4 bg-border" />
+        <span className="text-text-secondary">
+          {deCounts.total} DE (
+          <span className="text-primary font-semibold">{deCounts.up}↑</span>
+          {' '}
+          <span className="text-secondary font-semibold">{deCounts.down}↓</span>
+          )
+        </span>
       </div>
 
-      {/* Volcano Plot */}
-      <div className="bg-background rounded-lg border border-border p-4">
-        <Plot
-          data={volcanoData.figureSpec.data}
-          layout={{ ...volcanoData.figureSpec.layout, autosize: true }}
-          style={{ width: '100%', height: 500 }}
-          useResizeHandler
-          config={{ responsive: true, displayModeBar: false, staticPlot: false }}
-        />
-      </div>
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <VolcanoPlot
+            data={data.results}
+            filters={filters}
+            selectedProteins={selectedProteins}
+            markedProteins={markedProteins[selectedComparison || comparisonOptions[0]?.value || ''] ?? new Set()}
+            onSelectProteins={handleSelectProteins}
+            onClearSelection={clearSelection}
+            comparisonLabel={comparisonLabel}
+          />
 
-      {/* DE Table */}
-      {volcanoData.deTable?.columns?.length && volcanoData.deTable?.rows?.length ? (
-        <div>
-          <h3 className="text-base font-semibold mb-3">Differentially Expressed Proteins</h3>
-          <DataTable
-            columns={volcanoData.deTable.columns}
-            rows={volcanoData.deTable.rows}
-            filename={`de_proteins_${volcanoData.comparisonLabel?.replace(/[^a-zA-Z0-9]/g, '_') || 'export'}`}
+          <FilterPanel
+            foldChange={filters.foldChange}
+            pValue={filters.pValue}
+            adjPValue={filters.adjPValue}
+            s0={filters.s0}
+            onChange={(newFilters) => setFilters(newFilters)}
+            onReset={() => setFilters({ foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 })}
+          />
+
+          <ProteinTable
+            data={data.results}
+            selectedProteins={selectedProteins}
+            onSelectProtein={handleSelectProteinFromTable}
+            filters={filters}
+            sessionConfig={sessionConfig}
+            markedProteins={markedProteins[selectedComparison || comparisonOptions[0]?.value || ''] ?? new Set()}
+            onToggleMark={handleToggleMark}
+            onClearAllMarks={handleClearAllMarks}
+            onMarkAllSignificant={handleMarkAllSignificant}
+            comparisonLabel={comparisonLabel}
           />
         </div>
-      ) : null}
+
+        <div className="lg:col-span-1">
+          {selectedProteins.size > 1 ? (
+            <div className="bg-background rounded-lg border border-border p-6">
+              <div className="text-center text-text-secondary py-8">
+                <p className="text-lg font-medium">Multiple Proteins Selected</p>
+                <p className="text-sm mt-2">{selectedProteins.size} proteins selected.</p>
+                <p className="text-sm text-text-muted mt-1">
+                  Select a single protein to view detailed information.
+                </p>
+                <button onClick={clearSelection} className="mt-4 px-4 py-2 bg-surface hover:bg-border/30 text-text-secondary rounded-lg text-sm font-medium transition-colors">
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ProteinInfo
+              protein={selectedProteins.size === 1 ? selectedProteinData : null}
+              filters={filters}
+              comparison={selectedComparison || undefined}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── Tab: QC ──────────────────────────────────────────────────────────────
+// ─── Tab: QC ────────────────────────────────────────────────────────────────
 
-const QC_PLOT_LABELS: Record<string, string> = {
-  pca: 'PCA Analysis',
-  pvalue: 'P-value Distribution',
-  psmCv: 'PSM CV by Condition',
-  proteinCv: 'Protein CV by Condition',
-  psmIntensity: 'PSM Intensity Distribution',
-  proteinIntensity: 'Protein Intensity Distribution',
-  completeness: 'Protein Data Completeness by Sample',
-  psmCompleteness: 'PSM Data Completeness by Sample',
-};
+function QCTab() {
+  const { apiPrefix } = useApi();
+  const [data, setData] = useState<QCData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState('');
+  const [comparisonOptions, setComparisonOptions] = useState<Array<{ value: string; label: string }>>([]);
 
-function QCTab({ data: raw }: { data: unknown }) {
-  const qcData = raw as QcExport | undefined;
-  const plotEntries = Object.entries(qcData?.plots ?? {}).filter(
-    ([, v]) => v !== null && v !== undefined,
-  ) as [string, QcFigureEntry][];
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [qcData, session] = await Promise.all([
+          getQCData(apiPrefix),
+          getDataSource(apiPrefix).catch(() => null),
+        ]);
+        setData(qcData);
 
-  if (plotEntries.length === 0) {
-    return <EmptyTab message="No QC plot data available" />;
+        if (session?.config?.comparisons) {
+          const opts = session.config.comparisons.map((c) => ({
+            value: `${formatGroup(c.group1)}_vs_${formatGroup(c.group2)}`,
+            label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
+          }));
+          setComparisonOptions(opts);
+          if (opts.length > 0 && !selectedComparison) {
+            setSelectedComparison(opts[0].value);
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load QC data');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [apiPrefix]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+      </div>
+    );
   }
+
+  if (error) {
+    return (
+      <div className="bg-error/5 border border-error/20 rounded-lg p-5">
+        <p className="text-error">{error}</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="text-center py-16 text-text-secondary">
+        <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <p>No QC data available</p>
+      </div>
+    );
+  }
+
+  return (
+    <QCPlots
+      data={data}
+      selectedComparison={selectedComparison}
+      onComparisonChange={setSelectedComparison}
+      comparisonOptions={comparisonOptions}
+    />
+  );
+}
+
+// ─── Tab: GSEA ──────────────────────────────────────────────────────────────
+
+function GSEATab() {
+  const { apiPrefix } = useApi();
+  const [selectedDatabase, setSelectedDatabase] = useState<GSEADatabase>('go_bp');
+  const [data, setData] = useState<GSEAData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState('');
+  const [comparisonOptions, setComparisonOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [selectedPathway, setSelectedPathway] = useState<GSEAResult | null>(null);
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('nes');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [significantOnly, setSignificantOnly] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [totalResults, setTotalResults] = useState(0);
+  const pageSize = 50;
+
+  // Debounce search
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); };
+  }, [search]);
+
+  // Fetch data
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchData() {
+      setLoading(true);
+      setSelectedPathway(null);
+      try {
+        const gseaData = await getGSEAData(apiPrefix, selectedDatabase, {
+          page, per_page: pageSize,
+          sort_by: sortBy, sort_order: sortOrder,
+          significant_only: significantOnly,
+          search: debouncedSearch,
+          comparison: selectedComparison || undefined,
+        });
+        if (!cancelled) {
+          setData(gseaData);
+          setTotalResults(gseaData.total || 0);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load GSEA data');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchData();
+    return () => { cancelled = true; };
+  }, [apiPrefix, selectedDatabase, page, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison]);
+
+  // Fetch comparisons
+  useEffect(() => {
+    getDataSource(apiPrefix).then(session => {
+      if (session?.config?.comparisons) {
+        const opts = session.config.comparisons.map((c) => ({
+          value: `${formatGroup(c.group1)}_vs_${formatGroup(c.group2)}`,
+          label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
+        }));
+        setComparisonOptions(opts);
+        if (opts.length > 0 && !selectedComparison) {
+          setSelectedComparison(opts[0].value);
+        }
+      }
+    }).catch(() => {});
+  }, [apiPrefix]);
 
   return (
     <div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {plotEntries.map(([key, spec]) => (
-          <div key={key} className="bg-background rounded-lg border border-border p-3">
-            <Plot
-              data={spec.data}
-              layout={{ ...spec.layout, autosize: true }}
-              style={{ width: '100%', height: 380 }}
-              useResizeHandler
-              config={{ responsive: true, displayModeBar: false, staticPlot: false }}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+      {/* Comparison Selector */}
+      {comparisonOptions.length > 0 && (
+        <div className="bg-background rounded-lg border border-border p-4 mb-4">
+          <label className="block text-sm font-medium text-text-primary mb-3">Select Comparison</label>
+          <SearchableSelect
+            options={comparisonOptions}
+            value={selectedComparison}
+            onChange={setSelectedComparison}
+            placeholder="Select comparison..."
+            searchPlaceholder="Filter comparisons..."
+          />
+        </div>
+      )}
 
-// ─── Tab: GSEA ────────────────────────────────────────────────────────────
-
-function GSEATab({ data: raw }: { data: unknown }) {
-  const gseaData = raw as GseaExport | undefined;
-
-  const [selectedDb, setSelectedDb] = useState<string>('');
-
-  const databases = gseaData?.databases ?? [];
-  const dbResults = gseaData?.results ?? {};
-
-  // Auto-select first database
-  useEffect(() => {
-    if (!selectedDb && databases.length > 0) {
-      setSelectedDb(databases[0]);
-    }
-  }, [databases, selectedDb]);
-
-  const activeDb = selectedDb && dbResults[selectedDb] ? dbResults[selectedDb] : null;
-
-  if (!databases.length) {
-    return <EmptyTab message="No GSEA data available" />;
-  }
-
-  return (
-    <div className="space-y-6">
       {/* Database Selector */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-text-secondary">Database:</label>
-        <div className="flex gap-2">
-          {databases.map((db) => (
+      <div className="bg-background rounded-lg border border-border p-4 mb-6">
+        <label className="block text-sm font-medium text-text-primary mb-3">Select Database</label>
+        <div className="flex flex-wrap gap-2">
+          {GSEA_DATABASES.map((db) => (
             <button
               key={db}
-              onClick={() => setSelectedDb(db)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                selectedDb === db
-                  ? 'bg-primary/10 text-primary border border-primary/20'
-                  : 'bg-surface text-text-secondary hover:text-text-primary border border-border'
+              onClick={() => setSelectedDatabase(db)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedDatabase === db
+                  ? 'bg-primary text-white'
+                  : 'bg-surface text-text-secondary hover:bg-border/30'
               }`}
             >
-              {db}
+              {GSEADatabaseLabels[db]}
             </button>
           ))}
         </div>
       </div>
 
-      {activeDb && (
-        <>
-          {/* Bar Chart + Heatmap in 2-col grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-background rounded-lg border border-border p-3">
-              <Plot
-                data={activeDb.barChart.data}
-                layout={{ ...activeDb.barChart.layout, autosize: true }}
-                style={{ width: '100%', height: 400 }}
-                useResizeHandler
-                config={{ responsive: true, displayModeBar: false, staticPlot: false }}
-              />
-            </div>
-            <div className="bg-background rounded-lg border border-border p-3">
-              <Plot
-                data={activeDb.heatmap.data}
-                layout={{ ...activeDb.heatmap.layout, autosize: true }}
-                style={{ width: '100%', height: 400 }}
-                useResizeHandler
-                config={{ responsive: true, displayModeBar: false, staticPlot: false }}
-              />
-            </div>
-          </div>
+      {/* Content */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+        </div>
+      )}
 
-          {/* Pathway Table */}
-          {activeDb.pathwayTable?.columns?.length ? (
-            <div>
-              <h3 className="text-base font-semibold mb-3">Pathway Results</h3>
-              <DataTable
-                columns={activeDb.pathwayTable.columns}
-                rows={activeDb.pathwayTable.rows}
-                pageSize={20}
-                filename={`gsea_${selectedDb}_pathways`}
-              />
-            </div>
-          ) : null}
-        </>
+      {error && (
+        <div className="bg-error/5 border border-error/20 rounded-lg p-5">
+          <p className="text-error">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && data && (
+        <div className="space-y-6">
+          <GSEADashboard
+            data={data}
+            selectedPathway={selectedPathway}
+            onSelectPathway={setSelectedPathway}
+          />
+
+          {selectedPathway && (
+            <GSEAPlot
+              pathway={selectedPathway}
+              database={selectedDatabase}
+              comparison={selectedComparison || undefined}
+              onPathwayUpdated={setSelectedPathway}
+            />
+          )}
+
+          <PathwayTable
+            data={data.results ?? []}
+            selectedPathway={selectedPathway}
+            onSelectPathway={setSelectedPathway}
+            totalResults={totalResults}
+            currentPage={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSortChange={(key, order) => { setSortBy(key); setSortOrder(order); setPage(1); }}
+            significantOnly={significantOnly}
+            onSignificantOnlyChange={(val) => { setSignificantOnly(val); setPage(1); }}
+            search={search}
+            onSearchChange={(val) => { setSearch(val); setPage(1); }}
+          />
+        </div>
+      )}
+
+      {!loading && !error && !data && (
+        <div className="text-center py-16 text-text-secondary">
+          <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>No GSEA data available. Run GSEA analysis first.</p>
+        </div>
       )}
     </div>
   );
 }
 
-// ─── Tab: Compare ─────────────────────────────────────────────────────────
+// ─── Tab: Compare ───────────────────────────────────────────────────────────
 
-function CompareTab({ data: raw }: { data: unknown }) {
-  const compareData = raw as CompareExport | undefined;
-
-  if (!compareData?.similarityMatrixSpec && !compareData?.heatmapSpec) {
-    return <EmptyTab message="No comparison data available" />;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-text-secondary">
-        <span className="font-semibold text-text-primary">Comparisons:</span>
-        <span>{compareData.comparisonLabel || 'N/A'}</span>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {compareData.similarityMatrixSpec && (
-          <div className="bg-background rounded-lg border border-border p-3">
-            <Plot
-              data={compareData.similarityMatrixSpec.data}
-              layout={{ ...compareData.similarityMatrixSpec.layout, autosize: true }}
-              style={{ width: '100%', height: Math.max(400, (compareData.similarityMatrixSpec.layout as Record<string, unknown>).height as number || 400) }}
-              useResizeHandler
-              config={{ responsive: true, displayModeBar: false, staticPlot: false }}
-            />
-          </div>
-        )}
-        {compareData.heatmapSpec && (
-          <div className="bg-background rounded-lg border border-border p-3">
-            <Plot
-              data={compareData.heatmapSpec.data}
-              layout={{ ...compareData.heatmapSpec.layout, autosize: true }}
-              style={{ width: '100%', height: Math.max(400, (compareData.heatmapSpec.layout as Record<string, unknown>).height as number || 400) }}
-              useResizeHandler
-              config={{ responsive: true, displayModeBar: false, staticPlot: false }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Tab: BioNet ──────────────────────────────────────────────────────────
-
-function BioNetTab({ data: raw }: { data: unknown }) {
-  const bionetData = raw as BioNetExport | undefined;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cyRef = useRef<Core | null>(null);
-  const [search, setSearch] = useState('');
-  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
-
-  const elements = bionetData?.cytoscapeElements;
-  const edgeTypes = bionetData?.edgeTypes ?? [];
-
-  // Toggle a hidden edge type
-  const toggleType = useCallback((type: string) => {
-    setHiddenTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
-  }, []);
-
-  // Reset hidden types
-  const clearFilters = useCallback(() => {
-    setHiddenTypes(new Set());
-    setSearch('');
-  }, []);
-
-  // Initialize / update Cytoscape
-  useEffect(() => {
-    if (!containerRef.current || !elements) return;
-
-    if (cyRef.current) {
-      cyRef.current.destroy();
-      cyRef.current = null;
-    }
-
-    const allNodes = elements.nodes;
-    const allEdges = elements.edges;
-
-    // Filter edges by hidden types
-    const visibleEdges = allEdges.filter((e) => {
-      const interaction = e.data.interaction as string;
-      if (!interaction) return true;
-      for (const hidden of hiddenTypes) {
-        if (interaction.includes(hidden)) return false;
-      }
-      return true;
-    });
-
-    // Get visible node IDs
-    const visibleNodeIds = new Set<string>();
-    visibleEdges.forEach((e) => {
-      visibleNodeIds.add(e.data.source as string);
-      visibleNodeIds.add(e.data.target as string);
-    });
-    // Always include nodes that might not have edges but exist
-    allNodes.forEach((n) => {
-      visibleNodeIds.add(n.data.id as string);
-    });
-
-    // Filter nodes by search
-    const finalNodes = allNodes.filter((n) => {
-      if (!search.trim()) return visibleNodeIds.has(n.data.id as string);
-      const label = String((n.data.label ?? n.data.id ?? '')).toLowerCase();
-      const id = String(n.data.id ?? '').toLowerCase();
-      const q = search.toLowerCase();
-      return label.includes(q) || id.includes(q);
-    });
-
-    const finalNodeIds = new Set(finalNodes.map((n) => n.data.id as string));
-    const finalEdges = visibleEdges.filter(
-      (e) => finalNodeIds.has(e.data.source as string) && finalNodeIds.has(e.data.target as string),
-    );
-
-    if (finalNodes.length === 0) {
-      return;
-    }
-
-    const cy = cytoscape({
-      container: containerRef.current,
-      elements: [...finalNodes, ...finalEdges],
-      style: [
-        {
-          selector: 'node',
-          style: {
-            label: 'data(label)',
-            width: 40,
-            height: 40,
-            'background-color': '#3B82F6',
-            color: '#1e293b',
-            'font-size': '11px',
-            'text-valign': 'bottom',
-            'text-halign': 'center',
-            'padding-top': '6px',
-          } as cytoscape.CssStyleDeclaration,
-        },
-        {
-          selector: 'edge',
-          style: {
-            width: 2,
-            'line-color': (ele: cytoscape.EdgeSingular) => resolveEdgeColor(String(ele.data('interaction') ?? '')),
-            'target-arrow-color': '#6B7280',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'arrow-scale': 1.2,
-          } as cytoscape.CssStyleDeclaration,
-        },
-        {
-          selector: 'node[isKeyTarget]',
-          style: {
-            'border-width': 3,
-            'border-color': '#F59E0B',
-          } as cytoscape.CssStyleDeclaration,
-        },
-        {
-          selector: 'node[significant][!upregulated]',
-          style: {
-            'background-color': '#22c55e',
-          } as cytoscape.CssStyleDeclaration,
-        },
-        {
-          selector: 'node[significant][upregulated]',
-          style: {
-            'background-color': '#ef4444',
-          } as cytoscape.CssStyleDeclaration,
-        },
-        {
-          selector: 'node[!significant]',
-          style: {
-            'background-color': '#9ca3af',
-          } as cytoscape.CssStyleDeclaration,
-        },
-        {
-          selector: 'edge:selected',
-          style: {
-            width: 3,
-            'line-color': '#F59E0B',
-          } as cytoscape.CssStyleDeclaration,
-        },
-      ],
-      layout: {
-        name: 'cose-bilkent',
-        animate: false,
-        nodeRepulsion: () => 10000,
-        idealEdgeLength: () => 120,
-        gravity: 0.25,
-        numIter: 1000,
-      } as cytoscape.LayoutOptions,
-    });
-
-    cyRef.current = cy;
-
-    return () => {
-      cy.destroy();
-      cyRef.current = null;
-    };
-  }, [elements, hiddenTypes, search]);
-
-  if (!elements) {
-    return <EmptyTab message="No BioNet data available" />;
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap bg-background border border-border rounded-lg p-3">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            placeholder="Search proteins..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-surface"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Edge type filters */}
-        {edgeTypes.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-text-muted font-medium">Edge types:</span>
-            {edgeTypes.map((type) => {
-              const hidden = hiddenTypes.has(type);
-              return (
-                <button
-                  key={type}
-                  onClick={() => toggleType(type)}
-                  className={`px-2 py-0.5 text-xs rounded-md border transition-colors ${
-                    hidden
-                      ? 'border-border bg-surface text-text-muted line-through opacity-50'
-                      : 'border-border/60 bg-surface text-text-secondary hover:bg-border/30'
-                  }`}
-                  style={hidden ? undefined : { borderColor: resolveEdgeColor(type) + '66', color: resolveEdgeColor(type) }}
-                >
-                  {type}
-                </button>
-              );
-            })}
-            {(hiddenTypes.size > 0 || search) && (
-              <button
-                onClick={clearFilters}
-                className="px-2 py-0.5 text-xs text-error hover:bg-error/5 rounded-md transition-colors"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Cytoscape Container */}
-      <div
-        ref={containerRef}
-        className="bg-background rounded-lg border border-border"
-        style={{ height: '600px', width: '100%' }}
-      />
-    </div>
-  );
-}
-
-// ─── Empty State ──────────────────────────────────────────────────────────
-
-function EmptyTab({ message }: { message: string }) {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <div className="text-center text-text-secondary">
-        <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
-        <p className="text-base">{message}</p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────
-
-export default function ReportViewerPage() {
-  const params = useParams();
-  const reportId = params.reportId as string;
-
-  const [data, setData] = useState<ReportData | null>(null);
+function CompareTab() {
+  const { apiPrefix } = useApi();
+  const [comparisonData, setComparisonData] = useState<ComparisonCorrelationData | null>(null);
+  const [proteinData, setProteinData] = useState<ProteinCorrelationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('');
+  const [activeSubTab, setActiveSubTab] = useState<'comparison' | 'protein' | 'venn'>('comparison');
+  const [comparisons, setComparisons] = useState<Array<{ value: string; label: string }>>([]);
+  const [vennData, setVennData] = useState<VennData | null>(null);
+  const [vennLoading, setVennLoading] = useState(false);
+  const [vennError, setVennError] = useState<string | null>(null);
 
-  // Fetch report data on mount
+  // Fetch compare data
   useEffect(() => {
-    if (!reportId) return;
-
     async function fetchData() {
       setLoading(true);
       setError(null);
       try {
-        // Fetch the data.json from the report assets
-        const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}/assets/data.json`);
-        if (!res.ok) {
-          if (res.status === 404) throw new Error('Report not found');
-          throw new Error(`Failed to load report (${res.status})`);
+        const [session] = await Promise.all([
+          getDataSource(apiPrefix).catch(() => null),
+        ]);
+        if (session?.config?.comparisons) {
+          const opts = session.config.comparisons.map((c) => ({
+            value: `${formatGroup(c.group1)}_vs_${formatGroup(c.group2)}`,
+            label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
+          }));
+          setComparisons(opts);
         }
-        const json: ReportData = await res.json();
 
-        if (!json.tabs || !Array.isArray(json.tabs) || json.tabs.length === 0) {
-          throw new Error('Report contains no visualization tabs');
-        }
-
-        setData(json);
-        setActiveTab(json.tabs[0].id);
+        // Try to fetch existing correlation data
+        const [compData, protData] = await Promise.all([
+          getComparisonCorrelationData(apiPrefix).catch(() => null),
+          getProteinCorrelationData(apiPrefix).catch(() => null),
+        ]);
+        if (compData) setComparisonData(compData);
+        if (protData) setProteinData(protData);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load report');
+        setError(err instanceof Error ? err.message : 'Failed to load comparison data');
       } finally {
         setLoading(false);
       }
     }
-
     fetchData();
+  }, [apiPrefix]);
+
+  // Venn computation
+  const [vennSelectedComparisons, setVennSelectedComparisons] = useState<string[]>([]);
+  const handleComputeVenn = useCallback(async () => {
+    if (vennSelectedComparisons.length < 2) return;
+    setVennLoading(true);
+    setVennError(null);
+    try {
+      const result = await computeVennData(apiPrefix, {
+        comparisons: vennSelectedComparisons,
+        pvalue_threshold: 0.05,
+        logfc_threshold: 1,
+      });
+      setVennData(result);
+    } catch (err) {
+      setVennError(err instanceof Error ? err.message : 'Venn computation failed');
+    } finally {
+      setVennLoading(false);
+    }
+  }, [apiPrefix, vennSelectedComparisons]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-error/5 border border-error/20 rounded-lg p-5">
+        <p className="text-error">{error}</p>
+      </div>
+    );
+  }
+
+  if (!comparisonData && !proteinData) {
+    return (
+      <div className="text-center py-16 text-text-secondary">
+        <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <p>No comparison data available in this report.</p>
+        <p className="text-sm mt-2 text-text-muted">Run the Compare analysis in the visualization page to generate data for this section.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Sub-tab selector */}
+      <div className="flex items-center gap-1 mb-6 bg-background border border-border rounded-lg p-1 w-fit">
+        {(['comparison', 'protein', 'venn'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveSubTab(tab)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
+              activeSubTab === tab
+                ? 'bg-primary/10 text-primary'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            {tab === 'comparison' ? 'Comparison Correlation' : tab === 'protein' ? 'Protein Correlation' : 'Venn Diagram'}
+          </button>
+        ))}
+      </div>
+
+      {activeSubTab === 'comparison' && comparisonData && (
+        <div className="space-y-6">
+          <div className="bg-background rounded-lg border border-border p-4">
+            <h3 className="text-base font-semibold mb-2">Comparison Correlation</h3>
+            <p className="text-sm text-text-muted mb-4">
+              Correlation between DE results across different comparisons
+            </p>
+          </div>
+          {comparisonData.similarity_matrix && (
+            <SimilarityMatrix data={comparisonData.similarity_matrix} />
+          )}
+          {comparisonData.heatmap && (
+            <ComparisonHeatmap data={comparisonData.heatmap} />
+          )}
+          {comparisonData.bar_chart && (
+            <CorrelationBarChart data={comparisonData.bar_chart} />
+          )}
+        </div>
+      )}
+
+      {activeSubTab === 'comparison' && !comparisonData && (
+        <div className="text-center py-8 text-text-secondary">
+          <p>No comparison correlation data available.</p>
+        </div>
+      )}
+
+      {activeSubTab === 'protein' && proteinData && (
+        <div className="space-y-6">
+          <div className="bg-background rounded-lg border border-border p-4">
+            <h3 className="text-base font-semibold mb-2">Protein Correlation</h3>
+            <p className="text-sm text-text-muted mb-4">
+              Correlation patterns across proteins
+            </p>
+          </div>
+          {proteinData.bar_chart && (
+            <CorrelationBarChart data={proteinData.bar_chart} />
+          )}
+          {proteinData.cluster_map && <CorrelationBarChart data={proteinData.cluster_map} />}
+        </div>
+      )}
+
+      {activeSubTab === 'protein' && !proteinData && (
+        <div className="text-center py-8 text-text-secondary">
+          <p>No protein correlation data available.</p>
+        </div>
+      )}
+
+      {activeSubTab === 'venn' && (
+        <div className="space-y-6">
+          <div className="bg-background rounded-lg border border-border p-4">
+            <h3 className="text-base font-semibold mb-2">Venn Diagram</h3>
+            <p className="text-sm text-text-muted mb-4">
+              Compare DE proteins across different comparisons
+            </p>
+            {comparisons.length > 0 && (
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-text-primary">Select comparisons (min 2):</label>
+                <div className="flex flex-wrap gap-2">
+                  {comparisons.map((comp) => {
+                    const selected = vennSelectedComparisons.includes(comp.value);
+                    return (
+                      <button
+                        key={comp.value}
+                        onClick={() => {
+                          setVennSelectedComparisons((prev) =>
+                            selected ? prev.filter((v) => v !== comp.value) : [...prev, comp.value]
+                          );
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                          selected
+                            ? 'bg-primary/10 text-primary border border-primary/20'
+                            : 'bg-surface text-text-secondary border border-border hover:bg-border/30'
+                        }`}
+                      >
+                        {comp.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {vennSelectedComparisons.length >= 2 && (
+                  <button
+                    onClick={handleComputeVenn}
+                    disabled={vennLoading}
+                    className="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    {vennLoading ? 'Computing...' : 'Compute Venn Diagram'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {vennLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          )}
+
+          {vennError && (
+            <div className="bg-error/5 border border-error/20 rounded-lg p-4">
+              <p className="text-sm text-error">{vennError}</p>
+            </div>
+          )}
+
+          {vennData && !vennLoading && (
+            <div className="bg-background rounded-lg border border-border p-4">
+              <VennDiagram data={vennData} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: BioNet ────────────────────────────────────────────────────────────
+
+function BioNetTab() {
+  const { apiPrefix } = useApi();
+  const [subnetwork, setSubnetwork] = useState<BioNetSubnetwork | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getBioNetSubnetwork(apiPrefix);
+        setSubnetwork(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load BioNet data');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [apiPrefix]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-16 text-text-secondary">
+        <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <p>No BioNet data available in this report.</p>
+        <p className="text-sm mt-2 text-text-muted">{error}</p>
+      </div>
+    );
+  }
+
+  if (!subnetwork || !subnetwork.nodes || !subnetwork.edges) {
+    return (
+      <div className="text-center py-16 text-text-secondary">
+        <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <p>No BioNet data available.</p>
+      </div>
+    );
+  }
+
+  return (
+    <BioNetNetwork
+      nodes={subnetwork.nodes}
+      edges={subnetwork.edges}
+      pvalueCutoff={0.05}
+      logfcCutoff={0.5}
+      keyTargets={subnetwork.key_targets || []}
+    />
+  );
+}
+
+// ─── Main Page ──────────────────────────────────────────────────────────────
+
+export default function ReportViewerPage() {
+  const params = useParams();
+  const reportId = params.reportId as string;
+  const apiPrefix = reportApiPrefix(reportId);
+
+  const [reportMeta, setReportMeta] = useState<{
+    report: { name: string; session_name: string; created_at: string };
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>('volcano');
+
+  useEffect(() => {
+    if (!reportId) return;
+    fetch(`/api/reports/${encodeURIComponent(reportId)}`)
+      .then(r => { if (!r.ok) throw new Error('Report not found'); return r.json(); })
+      .then(setReportMeta)
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
   }, [reportId]);
 
   // ── Loading state ──
@@ -856,13 +954,13 @@ export default function ReportViewerPage() {
   }
 
   // ── Error state ──
-  if (error) {
+  if (error || !reportMeta) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="bg-error/5 border border-error/20 rounded-lg p-6 max-w-md text-center">
           <AlertCircle className="w-10 h-10 text-error mx-auto mb-3" />
           <h2 className="text-lg font-semibold text-error mb-2">Error Loading Report</h2>
-          <p className="text-sm text-error/80 mb-4">{error}</p>
+          <p className="text-sm text-error/80 mb-4">{error || 'Report not found'}</p>
           <a
             href="/reports"
             className="inline-flex items-center px-4 py-2 bg-surface text-text-primary rounded-lg hover:bg-border transition-colors text-sm"
@@ -874,85 +972,64 @@ export default function ReportViewerPage() {
     );
   }
 
-  // ── Empty state ──
-  if (!data || !data.tabs?.length) {
-    return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-center text-text-secondary">
-          <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="text-lg">This report has no content</p>
-          <a
-            href="/reports"
-            className="inline-flex items-center px-4 py-2 mt-4 bg-surface text-text-primary rounded-lg hover:bg-border transition-colors text-sm"
-          >
-            Back to Reports
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  const activeTabData = activeTab ? (data as Record<string, unknown>)[activeTab] : undefined;
-
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
-      {/* Header */}
-      <div className="bg-background border-b border-border px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">{data.report.name}</h1>
-            <p className="text-xs text-text-muted">
-              {data.report.session_name} &middot; {formatDate(data.report.created_at)}
-            </p>
+    <ApiProvider apiPrefix={apiPrefix}>
+      <div className="min-h-screen bg-surface flex flex-col">
+        {/* Header */}
+        <div className="bg-background border-b border-border px-6 py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold">{reportMeta.report.name}</h1>
+              <p className="text-xs text-text-muted">
+                {reportMeta.report.session_name} &middot;{' '}
+                {new Date(reportMeta.report.created_at).toLocaleDateString()}
+              </p>
+            </div>
+            <a
+              href="/reports"
+              className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+            >
+              &larr; All Reports
+            </a>
           </div>
-          <a
-            href="/reports"
-            className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-          >
-            &larr; All Reports
-          </a>
         </div>
-      </div>
 
-      {/* Tab Bar (matches visualization layout Navigation style) */}
-      <div className="bg-background border-b border-border sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center py-2">
-            <div className="flex items-center gap-1">
-              {data.tabs.map((tab) => {
-                const Icon = TAB_ICONS[tab.id] || ChartScatter;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-primary/5 text-primary'
-                        : 'text-text-secondary hover:bg-surface hover:text-text-primary'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
+        {/* Tab Bar */}
+        <div className="bg-background border-b border-border sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="flex items-center py-2">
+              <div className="flex items-center gap-1">
+                {TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeTab === tab.id
+                          ? 'bg-primary/5 text-primary'
+                          : 'text-text-secondary hover:bg-surface hover:text-text-primary'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full">
-        {activeTab === 'volcano' && <VolcanoTab data={activeTabData} />}
-        {activeTab === 'qc' && <QCTab data={activeTabData} />}
-        {activeTab === 'gsea' && <GSEATab data={activeTabData} />}
-        {activeTab === 'compare' && <CompareTab data={activeTabData} />}
-        {activeTab === 'bionet' && <BioNetTab data={activeTabData} />}
-        {activeTab && !['volcano', 'qc', 'gsea', 'compare', 'bionet'].includes(activeTab) && (
-          <EmptyTab message={`Unknown tab: ${activeTab}`} />
-        )}
+        {/* Tab Content */}
+        <div className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full">
+          {activeTab === 'volcano' && <VolcanoTab />}
+          {activeTab === 'qc' && <QCTab />}
+          {activeTab === 'gsea' && <GSEATab />}
+          {activeTab === 'compare' && <CompareTab />}
+          {activeTab === 'bionet' && <BioNetTab />}
+        </div>
       </div>
-    </div>
+    </ApiProvider>
   );
 }
