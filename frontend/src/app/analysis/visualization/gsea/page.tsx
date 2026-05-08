@@ -417,7 +417,7 @@ function GSEAAnalysisContent() {
             {/* Pathway Details and Plot */}
             {selectedPathway && (
               <div className="w-full">
-                <GSEAPlot pathway={selectedPathway} sessionId={sessionId} database={selectedDatabase} comparison={selectedComparison || undefined} onPathwayUpdated={setSelectedPathway} />
+                <GSEAPlot pathway={selectedPathway} database={selectedDatabase} comparison={selectedComparison || undefined} onPathwayUpdated={setSelectedPathway} />
               </div>
             )}
 

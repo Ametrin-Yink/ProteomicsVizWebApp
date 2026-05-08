@@ -4,18 +4,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import type { GSEAResult, GSEAPlotData, GSEAHeatmapData, GSEADatabase } from '@/types/api';
 import { getGSEAPlotData, getGSEAHeatmapData } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface GSEAPlotProps {
   pathway: GSEAResult | null;
-  sessionId: string;
   database: GSEADatabase;
   comparison?: string;
   onPathwayUpdated?: (pathway: GSEAResult) => void;
 }
 
-export default function GSEAPlot({ pathway, sessionId, database, comparison, onPathwayUpdated }: GSEAPlotProps) {
+export default function GSEAPlot({ pathway, database, comparison, onPathwayUpdated }: GSEAPlotProps) {
+  const { apiPrefix } = useApi();
   const [plotData, setPlotData] = useState<GSEAPlotData | null>(null);
   const [heatmapData, setHeatmapData] = useState<GSEAHeatmapData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ export default function GSEAPlot({ pathway, sessionId, database, comparison, onP
 
   // Fetch plot and heatmap data when pathway changes
   useEffect(() => {
-    if (!pathway || !sessionId || !database) {
+    if (!pathway || !apiPrefix || !database) {
       setPlotData(null);
       setHeatmapData(null);
       return;
@@ -39,8 +40,8 @@ export default function GSEAPlot({ pathway, sessionId, database, comparison, onP
       setError(null);
       try {
         const [plot, heatmap] = await Promise.all([
-          getGSEAPlotData(sessionId, database, currentPathway.term, comparison),
-          getGSEAHeatmapData(sessionId, database, currentPathway.term, comparison),
+          getGSEAPlotData(apiPrefix, database, currentPathway.term, comparison),
+          getGSEAHeatmapData(apiPrefix, database, currentPathway.term, comparison),
         ]);
         if (!cancelled) {
           setPlotData(plot);
@@ -66,7 +67,7 @@ export default function GSEAPlot({ pathway, sessionId, database, comparison, onP
 
     fetchData();
     return () => { cancelled = true; };
-  }, [pathway, sessionId, database, comparison, onPathwayUpdated]);
+  }, [pathway, apiPrefix, database, comparison, onPathwayUpdated]);
 
   // Generate Plotly traces from fetched data
   const renderData = useMemo(() => {
