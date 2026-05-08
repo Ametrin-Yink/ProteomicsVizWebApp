@@ -29,6 +29,7 @@ from app.services.compare_service import (
     load_pvalues_for_protein,
     compute_hierarchical_order,
 )
+from app.services.task_manager import task_manager, TaskKind, TaskCancelledError
 
 logger = logging.getLogger("proteomics")
 
@@ -42,15 +43,6 @@ def _schedule_background_task(coro) -> asyncio.Task:
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task
-
-# Per-session locks to prevent concurrent compute runs on shared files
-_session_locks: dict[str, asyncio.Lock] = {}
-
-def _get_session_lock(session_id: str) -> asyncio.Lock:
-    if session_id not in _session_locks:
-        _session_locks[session_id] = asyncio.Lock()
-    return _session_locks[session_id]
-
 
 # ── Request/Response models ──
 
@@ -302,17 +294,33 @@ async def trigger_protein_correlation(
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    lock = _get_session_lock(session_id)
-    async with lock:
-        status = _read_status(session_id, "protein-correlation")
-        if status.get("status") == "running":
-            raise HTTPException(status_code=409, detail="Computation already in progress")
-        _write_status(session_id, "protein-correlation", {
-            "status": "running",
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        })
-    _schedule_background_task(asyncio.to_thread(_run_protein_correlation, session_id, req))
+
+    existing = task_manager.has_active_task(session_id, TaskKind.COMPUTE)
+    if existing:
+        raise HTTPException(status_code=409, detail="Computation already in progress")
+
+    _schedule_background_task(
+        _run_protein_correlation_task(session_id, req)
+    )
     return {"status": "running"}
+
+
+async def _run_protein_correlation_task(session_id: str, req: ProteinCorrelationRequest):
+    """Run protein correlation through TaskManager."""
+    try:
+        await task_manager.submit(
+            session_id,
+            TaskKind.COMPUTE,
+            _run_protein_correlation,
+            session_id,
+            req,
+            label=f"Protein: {req.protein_id}",
+            timeout_seconds=10 * 60,
+        )
+    except TaskCancelledError:
+        logger.info(f"Protein correlation cancelled for {session_id}")
+    except Exception:
+        logger.exception("Protein correlation failed")
 
 
 @router.get("/{session_id}/compare/protein-correlation/status")
@@ -352,17 +360,32 @@ async def trigger_comparison_correlation(
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    lock = _get_session_lock(session_id)
-    async with lock:
-        status = _read_status(session_id, "comparison-correlation")
-        if status.get("status") == "running":
-            raise HTTPException(status_code=409, detail="Computation already in progress")
-        _write_status(session_id, "comparison-correlation", {
-            "status": "running",
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        })
-    _schedule_background_task(asyncio.to_thread(_run_comparison_correlation, session_id, req))
+
+    existing = task_manager.has_active_task(session_id, TaskKind.COMPUTE)
+    if existing:
+        raise HTTPException(status_code=409, detail="Computation already in progress")
+
+    _schedule_background_task(
+        _run_comparison_correlation_task(session_id, req)
+    )
     return {"status": "running"}
+
+
+async def _run_comparison_correlation_task(session_id: str, req: ComparisonCorrelationRequest):
+    try:
+        await task_manager.submit(
+            session_id,
+            TaskKind.COMPUTE,
+            _run_comparison_correlation,
+            session_id,
+            req,
+            label=f"Compare: {req.primary_comparison}",
+            timeout_seconds=10 * 60,
+        )
+    except TaskCancelledError:
+        logger.info(f"Comparison correlation cancelled for {session_id}")
+    except Exception:
+        logger.exception("Comparison correlation failed")
 
 
 @router.get("/{session_id}/compare/comparison-correlation/status")
@@ -425,18 +448,22 @@ async def trigger_venn(
     req: VennRequest,
     store: SessionStore = Depends(get_session_store),
 ):
-    """Compute Venn diagram data for 2-3 comparisons (synchronous, fast)."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     if len(req.comparisons) < 2 or len(req.comparisons) > 3:
         raise HTTPException(status_code=400, detail="Venn requires 2 or 3 comparisons")
     session_dir = str(settings.sessions_dir / session_id)
-    result = await asyncio.to_thread(
+
+    result = await task_manager.submit(
+        session_id,
+        TaskKind.COMPUTE,
         compute_venn_data,
         session_dir,
         req.comparisons,
         req.pvalue_threshold,
         req.logfc_threshold,
+        label=f"Venn: {'+'.join(req.comparisons)}",
+        timeout_seconds=5 * 60,
     )
     return result

@@ -1,22 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useApi } from "@/hooks/useApi";
-
-interface TaskInfo {
-  kind: string;
-  label: string;
-  status: "queued" | "running" | "completed" | "error" | "cancelled";
-  started_at: string | null;
-  completed_at: string | null;
-  error: string | null;
-  progress: { completed: number; total: number } | null;
-  queue_position: number | null;
-}
-
-interface TaskStatus {
-  tasks: TaskInfo[];
-}
+import { useState, useEffect, useCallback, useRef } from "react";
+import { getTaskStatus, cancelTasks, type TaskStatus, type TaskInfo } from "@/lib/api";
 
 function getCurrentSessionId(): string | null {
   if (typeof window === "undefined") return null;
@@ -24,21 +9,41 @@ function getCurrentSessionId(): string | null {
   return match ? match[1] : null;
 }
 
+const STATUS_STYLE: Record<string, string> = {
+  running: "bg-blue-100 text-blue-700",
+  queued: "bg-yellow-100 text-yellow-700",
+};
+
+function statusLabel(task: TaskInfo): string {
+  if (task.status === "running") return "Running";
+  if (task.status === "queued") return `Queued #${task.queue_position || "?"}`;
+  return task.status;
+}
+
+function progressPct(task: TaskInfo): number {
+  if (!task.progress || task.progress.total <= 0) return 0;
+  return (task.progress.completed / task.progress.total) * 100;
+}
+
 export function TaskStatusBar() {
-  const api = useApi();
   const [status, setStatus] = useState<TaskStatus>({ tasks: [] });
   const [expanded, setExpanded] = useState(false);
+  const lastPayload = useRef("");
 
   const fetchStatus = useCallback(async () => {
     try {
       const sessionId = getCurrentSessionId();
       if (!sessionId) return;
-      const res = await api.get<TaskStatus>(`/sessions/${sessionId}/tasks`);
-      setStatus(res.data);
+      const data = await getTaskStatus(sessionId);
+      const payload = JSON.stringify(data);
+      if (payload !== lastPayload.current) {
+        lastPayload.current = payload;
+        setStatus(data);
+      }
     } catch {
       // silently ignore fetch errors
     }
-  }, [api]);
+  }, []);
 
   useEffect(() => {
     fetchStatus();
@@ -50,7 +55,7 @@ export function TaskStatusBar() {
     try {
       const sessionId = getCurrentSessionId();
       if (!sessionId) return;
-      await api.post(`/sessions/${sessionId}/tasks/cancel`);
+      await cancelTasks(sessionId);
       fetchStatus();
     } catch {
       // silently ignore
@@ -87,29 +92,15 @@ export function TaskStatusBar() {
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate max-w-[200px]">
                   {task.label || task.kind}
                 </span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded ${
-                    task.status === "running"
-                      ? "bg-blue-100 text-blue-700"
-                      : task.status === "queued"
-                      ? "bg-yellow-100 text-yellow-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {task.status === "running"
-                    ? "Running"
-                    : task.status === "queued"
-                    ? `Queued #${task.queue_position || "?"}`
-                    : task.status}
+                <span className={`text-xs px-2 py-0.5 rounded ${STATUS_STYLE[task.status] || "bg-red-100 text-red-700"}`}>
+                  {statusLabel(task)}
                 </span>
               </div>
               {task.progress && task.status === "running" && (
                 <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
                   <div
                     className="bg-blue-500 h-1.5 rounded-full transition-all"
-                    style={{
-                      width: `${(task.progress.completed / task.progress.total) * 100}%`,
-                    }}
+                    style={{ width: `${progressPct(task)}%` }}
                   />
                 </div>
               )}

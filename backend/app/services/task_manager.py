@@ -234,8 +234,14 @@ class TaskManager:
                 finally:
                     timer.cancel()
                     self._timeout_timers.pop(task_id, None)
-                    self._session_active[session_id] = None
                     self._active_tasks.pop(task_id, None)
+                    # Drop session entries when no active tasks remain
+                    if self.get_active_count(session_id) == 0:
+                        self._session_active.pop(session_id, None)
+                        self._session_locks.pop(session_id, None)
+                        self._cancel_events.pop(session_id, None)
+                    else:
+                        self._session_active[session_id] = None
                     self._write_task_status(session_id)
                     self._wake_next(kind)
 
@@ -289,6 +295,14 @@ class TaskManager:
         """Number of active (queued + running) tasks for a session."""
         return sum(1 for info in self._active_tasks.values()
                    if info.session_id == session_id and info.status in ("queued", "running"))
+
+    def has_active_task(self, session_id: str, kind: TaskKind) -> bool:
+        """True if session has a queued or running task of the given kind."""
+        return any(
+            info.kind == kind and info.status in ("queued", "running")
+            for info in self._active_tasks.values()
+            if info.session_id == session_id
+        )
 
     # ── Internal helpers ──
 

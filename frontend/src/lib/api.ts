@@ -445,6 +445,31 @@ export function sessionApiPrefix(sessionId: string): string {
   return `/api/sessions/${sessionId}`;
 }
 
+// ── Task Status API ──
+
+export interface TaskInfo {
+  kind: string;
+  label: string;
+  status: "queued" | "running" | "completed" | "error" | "cancelled";
+  started_at: string | null;
+  completed_at: string | null;
+  error: string | null;
+  progress: { completed: number; total: number } | null;
+  queue_position: number | null;
+}
+
+export interface TaskStatus {
+  tasks: TaskInfo[];
+}
+
+export async function getTaskStatus(sessionId: string): Promise<TaskStatus> {
+  return fetchApi<TaskStatus>(`/api/sessions/${sessionId}/tasks`);
+}
+
+export async function cancelTasks(sessionId: string): Promise<{ cancelled: boolean; status: string }> {
+  return fetchApi(`/api/sessions/${sessionId}/tasks/cancel`, { method: "POST" });
+}
+
 export function reportApiPrefix(reportId: string): string {
   return `/api/reports/${reportId}`;
 }

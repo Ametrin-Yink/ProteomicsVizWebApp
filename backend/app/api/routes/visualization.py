@@ -24,7 +24,7 @@ from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.gsea_service import gsea_service
-from app.services.task_manager import task_manager
+from app.services.task_manager import task_manager, TaskKind, TaskCancelledError, TaskTimeoutError
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
 
@@ -1076,7 +1076,6 @@ async def get_gsea_run_status(
         )
 
     # Read from TaskManager in-memory state (primary)
-    from app.services.task_manager import TaskKind
     tasks = [
         info for info in task_manager._active_tasks.values()
         if info.session_id == session_id and info.kind == TaskKind.GSEA
@@ -1146,7 +1145,7 @@ async def _background_gsea_run(
     gsea_output_dir: Path,
 ) -> None:
     """Background GSEA run dispatched through TaskManager."""
-    from app.services.task_manager import TaskKind, TaskCancelledError, TaskTimeoutError
+
 
     comparison = request.comparison
     gsea_output_dir.mkdir(parents=True, exist_ok=True)
@@ -1219,12 +1218,7 @@ async def run_gsea_on_demand(
         )
 
     # Check if GSEA is already running for this session
-    from app.services.task_manager import TaskKind
-    gsea_running = any(
-        info.kind == TaskKind.GSEA and info.status in ("queued", "running")
-        for info in task_manager._active_tasks.values()
-        if info.session_id == session_id
-    )
+    gsea_running = task_manager.has_active_task(session_id, TaskKind.GSEA)
     if gsea_running:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1340,7 +1334,7 @@ async def _background_bionet_run(
     de_file: Path,
 ) -> None:
     """Background BioNet run dispatched through TaskManager."""
-    from app.services.task_manager import TaskKind, TaskCancelledError, TaskTimeoutError
+
     from app.services.bionet_service import bionet_service
     import pandas as pd
 
@@ -1409,12 +1403,7 @@ async def run_bionet_on_demand(
         )
 
     # Check if BioNet already running for this session
-    from app.services.task_manager import TaskKind
-    bionet_active = any(
-        info.kind == TaskKind.BIONET and info.status in ("queued", "running")
-        for info in task_manager._active_tasks.values()
-        if info.session_id == session_id
-    )
+    bionet_active = task_manager.has_active_task(session_id, TaskKind.BIONET)
     if bionet_active:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
