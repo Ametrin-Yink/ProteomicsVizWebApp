@@ -7,7 +7,7 @@ and various analysis results.
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,7 +17,6 @@ class AnalysisTemplate(str, Enum):
 
     MULTI_CONDITION = "multi_condition_comparison"
     MSSTATS = "msstats"
-    TIME_SERIES = "time_series_analysis"  # reserved for future
 
 
 class PipelineTool(str, Enum):
@@ -34,19 +33,6 @@ class Organism(str, Enum):
     MOUSE = "mouse"
     RAT = "rat"
     YEAST = "yeast"
-
-
-class ProcessingStep(str, Enum):
-    """Processing pipeline steps."""
-
-    COMBINE_REPLICATES = "combine_replicates"
-    GENERATE_UNIQUE_PSM = "generate_unique_psm"
-    REMOVE_RAZOR = "remove_razor"
-    REMOVE_LOW_QUALITY = "remove_low_quality"
-    FILTER = "filter"
-    PROTEIN_ABUNDANCE = "protein_abundance"
-    DIFFERENTIAL_EXPRESSION = "differential_expression"
-    QC_METRICS = "qc_metrics"
 
 
 STEP_NAMES: dict[int, str] = {
@@ -104,13 +90,30 @@ class AnalysisConfig(BaseModel):
     msstats_remove50missing: bool = Field(default=False)
 
     # MSstats advanced parameters (new in 4.16.1)
-    msstats_n_top_feature: int = Field(default=3, description="Number of top features when featureSubset='topN'")
-    msstats_min_feature_count: int = Field(default=2, description="Minimum features per protein for summarization")
-    msstats_remove_uninformative_feature_outlier: bool = Field(default=False, description="Remove outlier features during feature selection")
-    msstats_equal_feature_var: bool = Field(default=True, description="Assume equal feature variances (linear summary method only)")
-    msstats_name_standards: Optional[str] = Field(default=None, description="Comma-separated standard protein names for GLOBALSTANDARDS normalization")
-    msstats_save_fitted_models: bool = Field(default=True, description="Save fitted linear models in groupComparison output")
-    msstats_n_cores: Optional[int] = Field(default=None, description="Number of CPU cores for parallel R processing. None = auto-calibrate.")
+    msstats_n_top_feature: int = Field(
+        default=3, description="Number of top features when featureSubset='topN'"
+    )
+    msstats_min_feature_count: int = Field(
+        default=2, description="Minimum features per protein for summarization"
+    )
+    msstats_remove_uninformative_feature_outlier: bool = Field(
+        default=False, description="Remove outlier features during feature selection"
+    )
+    msstats_equal_feature_var: bool = Field(
+        default=True,
+        description="Assume equal feature variances (linear summary method only)",
+    )
+    msstats_name_standards: Optional[str] = Field(
+        default=None,
+        description="Comma-separated standard protein names for GLOBALSTANDARDS normalization",
+    )
+    msstats_save_fitted_models: bool = Field(
+        default=True, description="Save fitted linear models in groupComparison output"
+    )
+    msstats_n_cores: Optional[int] = Field(
+        default=None,
+        description="Number of CPU cores for parallel R processing. None = auto-calibrate.",
+    )
 
     # msqrob2-specific parameters
     msqrob2_normalization: str = Field(
@@ -142,51 +145,21 @@ class AnalysisConfig(BaseModel):
         description="Multiple testing correction: BH, bonferroni, holm, BY, fdr",
     )
     msqrob2_min_peptides: int = Field(
-        default=1, ge=1, le=10,
+        default=1,
+        ge=1,
+        le=10,
         description="Minimum peptides per protein for aggregation",
     )
     msqrob2_n_cores: Optional[int] = Field(
-        default=None, ge=1,
+        default=None,
+        ge=1,
         description="Number of CPU cores for parallel msqrob2 processing. None = auto-calibrate.",
     )
 
     # Covariate columns (selected metadata columns used as model covariates)
-    covariate_columns: Optional[list[str]] = Field(default=None, description="Metadata column names to use as covariates")
-
-class VolcanoPlotPoint(BaseModel):
-    """Single point for volcano plot."""
-
-    protein_id: str
-    gene_name: Optional[str]
-    log_fc: float
-    neg_log_pval: float
-    significant: bool
-    regulation: str  # "up", "down", "not_significant"
-
-
-class VolcanoPlotData(BaseModel):
-    """Data for volcano plot visualization."""
-
-    points: list[VolcanoPlotPoint]
-    thresholds: dict[str, float]
-    summary: dict[str, int]
-
-
-class HeatmapData(BaseModel):
-    """Data for heatmap visualization."""
-
-    proteins: list[str]
-    samples: list[str]
-    values: list[list[float]]  # 2D array
-    row_labels: list[str]  # Gene names or protein IDs
-    col_labels: list[str]  # Sample names
-
-
-class BoxPlotData(BaseModel):
-    """Data for box plot."""
-
-    categories: list[str]
-    data: list[dict[str, Any]]  # Box plot statistics per category
+    covariate_columns: Optional[list[str]] = Field(
+        default=None, description="Metadata column names to use as covariates"
+    )
 
 
 class DatabaseType(str, Enum):
@@ -241,20 +214,3 @@ class ProcessingProgress(BaseModel):
     message: Optional[str] = None
     overall_progress: int = Field(..., ge=0, le=100)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class ReportRequest(BaseModel):
-    """Report generation request configuration."""
-    include_qc: bool = True
-    include_gsea: bool = True
-    include_volcano: bool = True
-
-
-class ReportStatus(BaseModel):
-    """Report generation status."""
-    report_id: str = ""
-    status: str = "generating"  # generating, completed, failed
-    progress: int = 0
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    download_url: Optional[str] = None

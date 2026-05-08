@@ -499,30 +499,3 @@ class DataProcessor:
         logger.info(f"Saved processed data to {output_path}")
 
         return df
-
-
-def process_psm_files(
-    file_paths: List[Path],
-    output_path: Path,
-    remove_razor: bool = False,
-    strict_filtering: bool = False,
-    fasta_db: Optional[Dict[str, str]] = None,
-) -> pd.DataFrame:
-    """Convenience function to process PSM files through Steps 1-5.
-
-    Args:
-        file_paths: List of PSM CSV file paths
-        output_path: Path to save output TSV file
-        remove_razor: Whether to remove razor peptides
-        strict_filtering: Whether to use strict filtering
-        fasta_db: Optional FASTA database for razor removal
-
-    Returns:
-        Processed DataFrame
-    """
-    config = ProcessingConfig(
-        remove_razor=remove_razor, strict_filtering=strict_filtering, fasta_db=fasta_db
-    )
-
-    processor = DataProcessor(config)
-    return processor.process(file_paths, output_path)

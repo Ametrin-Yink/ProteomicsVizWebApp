@@ -9,7 +9,7 @@ This module provides various services for the proteomics analysis pipeline:
 """
 
 from app.services.compound_service import compound_service, CompoundService
-from app.services.data_processor import DataProcessor, process_psm_files
+from app.services.data_processor import DataProcessor
 from app.services.qc_calculator import QCCalculator
 from app.services.session_manager import session_manager, SessionManager
 
@@ -17,7 +17,6 @@ __all__ = [
     "compound_service",
     "CompoundService",
     "DataProcessor",
-    "process_psm_files",
     "QCCalculator",
     "session_manager",
     "SessionManager",

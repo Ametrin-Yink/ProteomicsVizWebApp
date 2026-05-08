@@ -17,7 +17,6 @@ from fastapi.responses import JSONResponse
 from app.api.routes import (
     sessions,
     upload,
-    analysis,
     processing,
     visualization,
     reports,
@@ -87,7 +86,6 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    pass
 
 
 # Initialize FastAPI app
@@ -121,7 +119,9 @@ async def app_exception_handler(request, exc: AppException):
         },
     )
     # Add CORS headers to exception responses
-    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = (
+        settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    )
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -137,7 +137,9 @@ async def http_exception_handler(request, exc: HTTPException):
         content={"detail": exc.detail},
     )
     # Add CORS headers to exception responses
-    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = (
+        settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    )
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -159,7 +161,9 @@ async def generic_exception_handler(request, exc: Exception):
             }
         },
     )
-    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = (
+        settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    )
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -184,7 +188,9 @@ async def handle_cors_preflight(path: str):
     from fastapi.responses import Response
 
     response = Response()
-    response.headers["Access-Control-Allow-Origin"] = settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = (
+        settings.cors_origins[0] if settings.cors_origins else "http://localhost:3000"
+    )
     response.headers["Access-Control-Allow-Methods"] = (
         "GET, POST, PUT, DELETE, OPTIONS, PATCH"
     )
@@ -199,7 +205,6 @@ async def handle_cors_preflight(path: str):
 # Processing router has /{session_id}/process which must match before sessions router's /{session_id}
 app.include_router(processing.router, prefix="/api/sessions", tags=["processing"])
 app.include_router(upload.router, prefix="/api/sessions", tags=["upload"])
-app.include_router(analysis.router, prefix="/api/sessions", tags=["analysis"])
 app.include_router(visualization.router, prefix="/api/sessions", tags=["visualization"])
 # Reports: session-scoped weblink upload + global report serving
 app.include_router(reports.router, prefix="/api/sessions", tags=["reports"])

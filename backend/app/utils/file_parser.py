@@ -270,32 +270,6 @@ def validate_psm_columns(df: pd.DataFrame, filename: str) -> None:
         )
 
 
-def parse_psm_csv(file_path: Path) -> pd.DataFrame:
-    """
-    Parse a PSM CSV file and validate its contents.
-
-    Args:
-        file_path: Path to the CSV file
-
-    Returns:
-        DataFrame with validated data
-
-    Raises:
-        InvalidFileFormatError: If file is invalid
-    """
-    try:
-        df = pd.read_csv(file_path)
-    except Exception as e:
-        raise InvalidFileFormatError(
-            message=f"Failed to read CSV file: {file_path.name}",
-            details={"filename": file_path.name, "error": str(e)},
-        )
-
-    validate_psm_columns(df, file_path.name)
-
-    return df
-
-
 def extract_columns_from_csv(file_path: Path) -> list[str]:
     """
     Extract column names from a CSV file without loading all data.
@@ -361,23 +335,6 @@ def get_file_size(file_path: Path) -> int:
         File size in bytes
     """
     return file_path.stat().st_size
-
-
-def format_file_size(size_bytes: int) -> str:
-    """
-    Format file size in human-readable format.
-
-    Args:
-        size_bytes: Size in bytes
-
-    Returns:
-        Human-readable size string
-    """
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB"
 
 
 def sanitize_filename(filename: str) -> str:

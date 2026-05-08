@@ -201,14 +201,6 @@ export const COLORSCALE_PVAL: unknown[][] = [
   [0, '#00ADEF'], [0.26, '#94a3b8'], [1, '#E73564'],
 ];
 
-export const COLORSCALE_BLUE_WHITE_RED: unknown[][] = [
-  [0, '#3b82f6'], [0.5, '#ffffff'], [1, '#ef4444'],
-];
-
-export const COLORSCALE_CYAN_CORAL: unknown[][] = [
-  [0, '#06b6d4'], [0.25, '#9ca3af'], [0.5, '#ff6b6b'], [1, '#dc2626'],
-];
-
 // Get color based on significance (supports both rectangular and S0 hyperbolic cutoffs)
 export function getVolcanoPointColor(
   logFC: number,

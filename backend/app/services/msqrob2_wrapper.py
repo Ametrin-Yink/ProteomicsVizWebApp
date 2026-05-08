@@ -35,9 +35,7 @@ class Msqrob2Wrapper(BaseRWrapper):
     # Abstract method implementations
     # ------------------------------------------------------------------
 
-    def _build_data_process_config(
-        self, config: AnalysisConfig, n_cores: int
-    ) -> dict:
+    def _build_data_process_config(self, config: AnalysisConfig, n_cores: int) -> dict:
         return {
             "normalization": config.msqrob2_normalization,
             "imputation": config.msqrob2_imputation,
@@ -46,9 +44,7 @@ class Msqrob2Wrapper(BaseRWrapper):
             "numberOfCores": n_cores,
         }
 
-    def _build_gc_config(
-        self, config: AnalysisConfig, n_cores: int, **extra
-    ) -> dict:
+    def _build_gc_config(self, config: AnalysisConfig, n_cores: int, **extra) -> dict:
         return {
             "model": config.msqrob2_model,
             "robust": config.msqrob2_robust,

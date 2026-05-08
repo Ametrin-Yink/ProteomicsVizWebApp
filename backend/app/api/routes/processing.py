@@ -78,7 +78,8 @@ async def get_processing_status(
         steps=[],
         queue_position=queue_position,
         queue_length=sum(
-            1 for info in task_manager._active_tasks.values()
+            1
+            for info in task_manager._active_tasks.values()
             if info.kind == TaskKind.PIPELINE and info.status in ("queued", "running")
         ),
     )
@@ -286,17 +287,29 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         # Define all config fields to forward from SessionConfig to AnalysisConfig
         _CONFIG_FORWARD_FIELDS = [
             # Core
-            "treatment", "control", "remove_razor", "strict_filtering",
+            "treatment",
+            "control",
+            "remove_razor",
+            "strict_filtering",
             # Shared advanced
-            "pvalue_threshold", "logfc_threshold", "min_peptides_per_protein",
+            "pvalue_threshold",
+            "logfc_threshold",
+            "min_peptides_per_protein",
             # MSstats basic (existing)
-            "msstats_normalization", "msstats_feature_selection",
-            "msstats_summary_method", "msstats_impute", "msstats_log_base",
-            "msstats_censored_int", "msstats_max_quantile", "msstats_remove50missing",
+            "msstats_normalization",
+            "msstats_feature_selection",
+            "msstats_summary_method",
+            "msstats_impute",
+            "msstats_log_base",
+            "msstats_censored_int",
+            "msstats_max_quantile",
+            "msstats_remove50missing",
             # MSstats advanced (new)
-            "msstats_n_top_feature", "msstats_min_feature_count",
+            "msstats_n_top_feature",
+            "msstats_min_feature_count",
             "msstats_remove_uninformative_feature_outlier",
-            "msstats_equal_feature_var", "msstats_name_standards",
+            "msstats_equal_feature_var",
+            "msstats_name_standards",
             "msstats_save_fitted_models",
             "msstats_n_cores",
             # Multi-condition
@@ -355,9 +368,11 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             orchestrator.set_cancel_event(cancel_event)
 
         def _run_pipeline():
-            return asyncio.run(orchestrator.process_session(
-                config=config, websocket_callback=websocket_callback
-            ))
+            return asyncio.run(
+                orchestrator.process_session(
+                    config=config, websocket_callback=websocket_callback
+                )
+            )
 
         result = await task_manager.submit(
             session_id,

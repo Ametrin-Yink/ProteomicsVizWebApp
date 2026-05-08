@@ -11,34 +11,15 @@ from typing import Optional, Dict, List
 
 from fastapi import WebSocket
 
-from app.core.exceptions import (
-    SessionNotFoundError,
-    ValidationError,
-    InvalidFileFormatError,
-)
 from app.db.session_store import SessionStore, session_store
 from app.models.session import (
     Session,
     SessionCreate,
     SessionUpdate,
     SessionConfig,
-    SessionFiles,
     SessionState,
-    ProteomicsFileInfo,
-    FileInfo,
 )
-from app.utils.file_parser import (
-    parse_psm_filename,
-    extract_columns_from_csv,
-    get_file_size,
-    parse_compound_csv,
-)
-from app.utils.validators import (
-    validate_session_name,
-    validate_csv_extension,
-    validate_psm_filename_pattern,
-    validate_file_size,
-)
+from app.utils.validators import validate_session_name
 from app.utils.helpers import generate_uuid
 
 logger = logging.getLogger("proteomics")
@@ -179,156 +160,6 @@ class SessionManager:
 
         logger.info(f"Session deleted: {session_id}", extra={"session_id": session_id})
 
-    async def add_proteomics_file(
-        self, session_id: str, file_path: Path
-    ) -> ProteomicsFileInfo:
-        """
-        Add a proteomics file to a session.
-
-        Args:
-            session_id: Session ID
-            file_path: Path to uploaded file
-
-        Returns:
-            File info object
-        """
-        session = await self.store.get(session_id)
-
-        # Validate file
-        filename = file_path.name
-        validate_csv_extension(filename)
-        validate_psm_filename_pattern(filename)
-
-        file_size = get_file_size(file_path)
-        validate_file_size(file_size, filename)
-
-        # Parse filename
-        parsed = parse_psm_filename(filename)
-
-        # Extract columns
-        columns = extract_columns_from_csv(file_path)
-
-        # Create file info
-        file_info = ProteomicsFileInfo(
-            filename=filename,
-            size=file_size,
-            columns=columns,
-            experiment=parsed.experiment,
-            condition=parsed.condition,
-            replicate=parsed.replicate,
-        )
-
-        # Add to session
-        if session.files is None:
-            session.files = SessionFiles()
-
-        session.files.proteomics.append(file_info)
-        await self.store.update(session)
-
-        logger.info(
-            f"Proteomics file added: {filename}",
-            extra={
-                "session_id": session_id,
-                "filename": filename,
-                "condition": parsed.condition,
-                "replicate": parsed.replicate,
-            },
-        )
-
-        return file_info
-
-    async def add_compound_file(self, session_id: str, file_path: Path) -> FileInfo:
-        """
-        Add a compound file to a session.
-
-        Args:
-            session_id: Session ID
-            file_path: Path to uploaded file
-
-        Returns:
-            File info object
-        """
-        session = await self.store.get(session_id)
-
-        # Validate file
-        filename = file_path.name
-        validate_csv_extension(filename)
-
-        file_size = get_file_size(file_path)
-        validate_file_size(file_size, filename)
-
-        # Try to parse compound CSV
-        try:
-            parse_compound_csv(file_path)
-        except InvalidFileFormatError:
-            raise
-
-        # Extract columns
-        columns = extract_columns_from_csv(file_path)
-
-        # Create file info
-        file_info = FileInfo(filename=filename, size=file_size, columns=columns)
-
-        # Add to session
-        if session.files is None:
-            session.files = SessionFiles()
-
-        session.files.compound = file_info
-        await self.store.update(session)
-
-        logger.info(
-            f"Compound file added: {filename}",
-            extra={"session_id": session_id, "filename": filename},
-        )
-
-        return file_info
-
-    async def remove_proteomics_file(self, session_id: str, filename: str) -> Session:
-        """
-        Remove a proteomics file from a session.
-
-        Args:
-            session_id: Session ID
-            filename: Filename to remove
-
-        Returns:
-            Updated session
-        """
-        session = await self.store.get(session_id)
-
-        if session.files and session.files.proteomics:
-            session.files.proteomics = [
-                f for f in session.files.proteomics if f.filename != filename
-            ]
-            await self.store.update(session)
-
-        logger.info(
-            f"Proteomics file removed: {filename}",
-            extra={"session_id": session_id, "filename": filename},
-        )
-
-        return session
-
-    async def remove_compound_file(self, session_id: str) -> Session:
-        """
-        Remove the compound file from a session.
-
-        Args:
-            session_id: Session ID
-
-        Returns:
-            Updated session
-        """
-        session = await self.store.get(session_id)
-
-        if session.files:
-            session.files.compound = None
-            await self.store.update(session)
-
-        logger.info("Compound file removed", extra={"session_id": session_id})
-
-        return session
-
     async def update_session_state(
         self, session_id: str, state: SessionState, error_message: Optional[str] = None
     ) -> Session:
@@ -380,89 +211,6 @@ class SessionManager:
             Path to data directory
         """
         return self.store.get_session_data_dir(session_id)
-
-    async def is_session_ready_for_processing(self, session_id: str) -> bool:
-        """
-        Check if session is ready for processing.
-
-        Requirements:
-        - Has configuration
-        - Has at least 2 proteomics files
-        - Has at least 2 conditions
-        - Has at least 1 replicate per condition
-
-        Args:
-            session_id: Session ID
-
-        Returns:
-            True if session is ready
-        """
-        try:
-            await self.validate_session_for_processing(session_id)
-            return True
-        except (SessionNotFoundError, ValidationError):
-            return False
-
-    async def validate_session_for_processing(self, session_id: str) -> None:
-        """
-        Validate session is ready for processing.
-
-        Args:
-            session_id: Session ID
-
-        Raises:
-            ValidationError: If session is not ready
-        """
-        session = await self.store.get(session_id)
-
-        if not session.config:
-            raise ValidationError(
-                message="Session configuration is required",
-                details={"session_id": session_id},
-            )
-
-        if not session.files or not session.files.proteomics:
-            raise ValidationError(
-                message="At least one proteomics file is required",
-                details={"session_id": session_id},
-            )
-
-        if len(session.files.proteomics) < 2:
-            raise ValidationError(
-                message="At least 2 proteomics files are required",
-                details={
-                    "session_id": session_id,
-                    "file_count": len(session.files.proteomics),
-                },
-            )
-
-        conditions = set(f.condition for f in session.files.proteomics)
-
-        if len(conditions) < 2:
-            raise ValidationError(
-                message="At least 2 different conditions are required",
-                details={"session_id": session_id, "conditions": list(conditions)},
-            )
-
-        if session.config.treatment not in conditions:
-            raise ValidationError(
-                message=f"Treatment condition '{session.config.treatment}' not found in files",
-                details={
-                    "session_id": session_id,
-                    "treatment": session.config.treatment,
-                    "available_conditions": list(conditions),
-                },
-            )
-
-        if session.config.control not in conditions:
-            raise ValidationError(
-                message=f"Control condition '{session.config.control}' not found in files",
-                details={
-                    "session_id": session_id,
-                    "control": session.config.control,
-                    "available_conditions": list(conditions),
-                },
-            )
 
     async def scan_existing_sessions(self) -> None:
         """

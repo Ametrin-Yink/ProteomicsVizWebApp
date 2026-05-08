@@ -63,7 +63,8 @@ class BioNetService:
             # 4. Resolve script path
             script = (
                 Path(__file__).resolve().parent.parent.parent
-                / "scripts" / "bionet_network.R"
+                / "scripts"
+                / "bionet_network.R"
             )
 
             # 5. Run R script

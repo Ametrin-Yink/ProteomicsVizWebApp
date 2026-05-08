@@ -92,9 +92,7 @@ class MsstatsWrapper(BaseRWrapper):
     # Abstract method implementations
     # ------------------------------------------------------------------
 
-    def _build_data_process_config(
-        self, config: AnalysisConfig, n_cores: int
-    ) -> dict:
+    def _build_data_process_config(self, config: AnalysisConfig, n_cores: int) -> dict:
         return {
             "normalization": config.msstats_normalization,
             "logTrans": config.msstats_log_base,
@@ -109,13 +107,13 @@ class MsstatsWrapper(BaseRWrapper):
             "remove_uninformative_feature_outlier": config.msstats_remove_uninformative_feature_outlier,
             "equalFeatureVar": config.msstats_equal_feature_var,
             "nameStandards": config.msstats_name_standards,
-            "min_peptides": config.min_peptides_per_protein if config.min_peptides_per_protein else 1,
+            "min_peptides": config.min_peptides_per_protein
+            if config.min_peptides_per_protein
+            else 1,
             "numberOfCores": n_cores,
         }
 
-    def _build_gc_config(
-        self, config: AnalysisConfig, n_cores: int, **extra
-    ) -> dict:
+    def _build_gc_config(self, config: AnalysisConfig, n_cores: int, **extra) -> dict:
         return {
             "log_base": extra.get("log_base", 2),
             "save_fitted_models": extra.get("save_fitted_models", True),
@@ -125,6 +123,7 @@ class MsstatsWrapper(BaseRWrapper):
     def _build_cmd_extras(self, **extra) -> list[str]:
         covariates = extra.get("covariates")
         import json
+
         return [json.dumps(covariates or {})]
 
     async def group_comparison_batched(

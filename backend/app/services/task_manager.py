@@ -10,12 +10,10 @@ import logging
 import os
 import threading
 import time
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, Callable
 
 from app.core.config import settings
@@ -28,7 +26,6 @@ class TaskKind(Enum):
     GSEA = "gsea"
     BIONET = "bionet"
     COMPUTE = "compute"
-    LIGHT = "light"
 
 
 class TaskCancelledError(Exception):
@@ -76,14 +73,20 @@ class TaskManager:
 
         self._pools: dict[TaskKind, ThreadPoolExecutor] = {
             TaskKind.GSEA: ThreadPoolExecutor(max_workers=3, thread_name_prefix="gsea"),
-            TaskKind.COMPUTE: ThreadPoolExecutor(max_workers=2, thread_name_prefix="compute"),
-            TaskKind.BIONET: ThreadPoolExecutor(max_workers=2, thread_name_prefix="bionet"),
-            TaskKind.PIPELINE: ThreadPoolExecutor(max_workers=2, thread_name_prefix="pipeline"),
+            TaskKind.COMPUTE: ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="compute"
+            ),
+            TaskKind.BIONET: ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="bionet"
+            ),
+            TaskKind.PIPELINE: ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="pipeline"
+            ),
         }
 
         # Per-type FIFO queues: each holds (session_id, asyncio.Event, TaskInfo)
         self._queues: dict[TaskKind, list[tuple[str, asyncio.Event, TaskInfo]]] = {
-            kind: [] for kind in TaskKind if kind != TaskKind.LIGHT
+            kind: [] for kind in TaskKind
         }
 
         # Per-session locks: one heavy task per session at a time
@@ -117,14 +120,9 @@ class TaskManager:
     ) -> Any:
         """Submit a computation task.
 
-        LIGHT tasks bypass all queuing/locking and run immediately on the
-        default executor. Heavy tasks enter a per-type FIFO queue and
-        acquire the per-session lock + global CPU semaphore before running.
+        Tasks enter a per-type FIFO queue and acquire the per-session
+        lock + global CPU semaphore before running.
         """
-        if kind == TaskKind.LIGHT:
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(None, fn, *args)
-
         task_id = f"{session_id}:{kind.value}:{time.monotonic_ns()}"
         info = TaskInfo(
             task_id=task_id,
@@ -160,7 +158,9 @@ class TaskManager:
                 raise TaskCancelledError(f"Task {task_id} cancelled while queued")
 
             # Check if we're at head of queue
-            head_session, head_event, head_info = queue[0] if queue else (None, None, None)
+            head_session, head_event, head_info = (
+                queue[0] if queue else (None, None, None)
+            )
             if head_session == session_id and head_info.task_id == task_id:
                 if self._session_active.get(session_id) is None:
                     break
@@ -172,7 +172,9 @@ class TaskManager:
             ready_event.clear()
 
             try:
-                idx = next(i for i, (_, _, qi) in enumerate(queue) if qi.task_id == task_id)
+                idx = next(
+                    i for i, (_, _, qi) in enumerate(queue) if qi.task_id == task_id
+                )
                 info.queue_position = idx + 1
             except StopIteration:
                 pass
@@ -204,7 +206,9 @@ class TaskManager:
                 self._active_tasks[task_id] = info
                 self._write_task_status(session_id)
 
-                effective_timeout = timeout_seconds or DEFAULT_TIMEOUTS.get(kind, 30 * 60)
+                effective_timeout = timeout_seconds or DEFAULT_TIMEOUTS.get(
+                    kind, 30 * 60
+                )
                 if timeout_event is None:
                     timeout_event = threading.Event()
                 timer = threading.Timer(effective_timeout, timeout_event.set)
@@ -257,7 +261,9 @@ class TaskManager:
             to_remove = [qi.task_id for (sid, _, qi) in queue if sid == session_id]
             for task_id in to_remove:
                 self._active_tasks.pop(task_id, None)
-            self._queues[kind] = [(sid, ev, qi) for (sid, ev, qi) in queue if sid != session_id]
+            self._queues[kind] = [
+                (sid, ev, qi) for (sid, ev, qi) in queue if sid != session_id
+            ]
             if to_remove:
                 cancelled = True
                 self._wake_next(kind)
@@ -267,7 +273,11 @@ class TaskManager:
 
     def get_status(self, session_id: str) -> dict:
         """Return all task states for a session (from in-memory state)."""
-        tasks = [info for info in self._active_tasks.values() if info.session_id == session_id]
+        tasks = [
+            info
+            for info in self._active_tasks.values()
+            if info.session_id == session_id
+        ]
         return {
             "tasks": [
                 {
@@ -293,8 +303,11 @@ class TaskManager:
 
     def get_active_count(self, session_id: str) -> int:
         """Number of active (queued + running) tasks for a session."""
-        return sum(1 for info in self._active_tasks.values()
-                   if info.session_id == session_id and info.status in ("queued", "running"))
+        return sum(
+            1
+            for info in self._active_tasks.values()
+            if info.session_id == session_id and info.status in ("queued", "running")
+        )
 
     def has_active_task(self, session_id: str, kind: TaskKind) -> bool:
         """True if session has a queued or running task of the given kind."""
@@ -313,7 +326,9 @@ class TaskManager:
 
     def _dequeue(self, kind: TaskKind, session_id: str, task_id: str) -> None:
         queue = self._queues[kind]
-        self._queues[kind] = [(sid, ev, qi) for (sid, ev, qi) in queue if qi.task_id != task_id]
+        self._queues[kind] = [
+            (sid, ev, qi) for (sid, ev, qi) in queue if qi.task_id != task_id
+        ]
         self._wake_next(kind)
 
     def _wake_next(self, kind: TaskKind) -> None:
@@ -358,7 +373,9 @@ class TaskManager:
                         encoding="utf-8",
                     )
             except Exception:
-                logger.exception(f"Failed to recover stale tasks for {session_dir.name}")
+                logger.exception(
+                    f"Failed to recover stale tasks for {session_dir.name}"
+                )
 
 
 # Singleton

@@ -24,7 +24,12 @@ from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.gsea_service import gsea_service
-from app.services.task_manager import task_manager, TaskKind, TaskCancelledError, TaskTimeoutError
+from app.services.task_manager import (
+    task_manager,
+    TaskKind,
+    TaskCancelledError,
+    TaskTimeoutError,
+)
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
 
@@ -79,12 +84,10 @@ def _get_pathway_genes(database: str, term: str) -> set[str]:
 router = APIRouter()
 logger = logging.getLogger("proteomics")
 
+
 # In-memory LRU cache for visualization results
 # Cache is keyed by session_id and file path, max 50 entries per type
 # Results are cached per session since files are immutable once written
-_cache_hits = {"hits": 0, "misses": 0}
-
-
 def _cache_key(session_id: str, *args) -> str:
     """Generate a cache key from session_id and additional args."""
     return f"{session_id}:{':'.join(str(a) for a in args)}"
@@ -117,9 +120,7 @@ class FileCache:
 
     def get(self, key: str) -> Any:
         if key in self._cache:
-            _cache_hits["hits"] += 1
             return self._cache[key][1]
-        _cache_hits["misses"] += 1
         return None
 
     def set(self, key: str, value: Any) -> None:
@@ -287,10 +288,9 @@ async def load_diff_expression_results(
                     psm_df = None
 
                 if psm_df is not None:
-                    psm_counts = (
-                        psm_df.groupby("Master_Protein_Accessions")["Unique_PSM"]
-                        .nunique()
-                    )
+                    psm_counts = psm_df.groupby("Master_Protein_Accessions")[
+                        "Unique_PSM"
+                    ].nunique()
                     for r in results:
                         acc = r["master_protein_accessions"]
                         if acc in psm_counts.index:
@@ -351,22 +351,6 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
 
         # Merge with defaults to ensure all fields exist
         result = {**default_result, **data}
-
-        # Handle legacy format: cv_variance -> psm_cv
-        if "cv_variance" in data and not result.get("psm_cv"):
-            result["psm_cv"] = data["cv_variance"]
-
-        # MAJ-006: Filter out PSM_Count from PCA samples (legacy cached data)
-        if "pca" in result and result["pca"]:
-            pca = result["pca"]
-            if "samples" in pca and "PSM_Count" in pca["samples"]:
-                # Find index of PSM_Count
-                psm_count_idx = pca["samples"].index("PSM_Count")
-                # Remove from all PCA arrays
-                pca["samples"].pop(psm_count_idx)
-                pca["pc1"].pop(psm_count_idx)
-                pca["pc2"].pop(psm_count_idx)
-                pca["conditions"].pop(psm_count_idx)
 
         # MAJ-005: Correct total_psms if it was calculated as total rows instead of unique PSMs
         # The bug showed ~49,000 (total rows) instead of ~4,600 (unique PSMs)
@@ -571,7 +555,9 @@ async def get_results(
 @router.get("/{session_id}/qc/plots")
 async def get_qc_plots(
     session_id: str,
-    comparison: str = Query("", description="Comparison label for per-comparison p-value distribution"),
+    comparison: str = Query(
+        "", description="Comparison label for per-comparison p-value distribution"
+    ),
     store: SessionStore = Depends(get_session_store),
 ):
     """Get QC plot data."""
@@ -642,9 +628,13 @@ async def get_gsea_plot_data(
     # Load slim GSEA results to get lead_genes and pathway metadata.
     # When comparison is specified, try comparison-specific path first
     # (on-demand GSEA), then fall back to base results dir (pipeline GSEA).
-    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
+    gsea_data = await asyncio.to_thread(
+        load_gsea_results, results_dir, database, session_id
+    )
     if not gsea_data.get("results") and comparison:
-        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, session_id)
+        gsea_data = await asyncio.to_thread(
+            load_gsea_results, base_results_dir, database, session_id
+        )
     results = gsea_data.get("results", [])
 
     # Find the specific pathway
@@ -664,7 +654,9 @@ async def get_gsea_plot_data(
     # For pipeline GSEA: results/gsea/<db>/
     # For on-demand GSEA: results/gsea/<comparison>/<db>/ (results_dir already
     # includes gsea/<comparison> from above, so just append database)
-    gsea_dir = results_dir / "gsea" / database if not comparison else results_dir / database
+    gsea_dir = (
+        results_dir / "gsea" / database if not comparison else results_dir / database
+    )
 
     ranked_genes = []
     ranked_metrics = []
@@ -831,9 +823,13 @@ async def get_gsea_heatmap_data(
     # Load slim GSEA results to get lead_genes.
     # When comparison is specified, try comparison-specific path first
     # (on-demand GSEA), then fall back to base results dir (pipeline GSEA).
-    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
+    gsea_data = await asyncio.to_thread(
+        load_gsea_results, results_dir, database, session_id
+    )
     if not gsea_data.get("results") and comparison:
-        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, session_id)
+        gsea_data = await asyncio.to_thread(
+            load_gsea_results, base_results_dir, database, session_id
+        )
     results = gsea_data.get("results", [])
 
     # Find the specific pathway
@@ -984,9 +980,10 @@ class GseaRunRequest(BaseModel):
 
 # --- BioNet Models ---
 
+
 class BioNetRunRequest(BaseModel):
     comparison: str
-    pvalue_cutoff: float = 0.05       # NOTE: filters on adj.pvalue (adjusted p-value)
+    pvalue_cutoff: float = 0.05  # NOTE: filters on adj.pvalue (adjusted p-value)
     logfc_cutoff: float = 0.5
     statement_types: list[str] = ["IncreaseAmount", "DecreaseAmount"]
     paper_count_cutoff: int = 1
@@ -995,30 +992,9 @@ class BioNetRunRequest(BaseModel):
     sources_filter: list[str] | None = None
 
 
-class BioNetNode(BaseModel):
-    id: str            # UniProt accession
-    logFC: float
-    pvalue: float      # adjusted p-value (from adj.pvalue column)
-    hgncName: str
-
-
-class BioNetEdge(BaseModel):
-    source: str
-    target: str
-    interaction: str
-    evidenceCount: int
-    paperCount: int
-    evidenceLink: str
-    sourceCounts: dict[str, int]
-
-
-class BioNetSubnetwork(BaseModel):
-    nodes: list[BioNetNode]
-    edges: list[BioNetEdge]
-
-
 # Strong references to prevent background task GC
 _background_tasks: set[asyncio.Task] = set()
+
 
 def _gsea_status_path(session_id: str) -> Path:
     return settings.sessions_dir / session_id / "gsea_run_status.json"
@@ -1077,23 +1053,28 @@ async def get_gsea_run_status(
 
     # Read from TaskManager in-memory state (primary)
     tasks = [
-        info for info in task_manager._active_tasks.values()
+        info
+        for info in task_manager._active_tasks.values()
         if info.session_id == session_id and info.kind == TaskKind.GSEA
     ]
     if tasks:
         t = tasks[0]
         databases_val = {}
         if t.progress:
-            databases_val = {"completed": t.progress.get("completed", 0),
-                           "total": t.progress.get("total", 0)}
-        return create_response({
-            "status": t.status,
-            "started_at": t.started_at,
-            "error": t.error,
-            "comparison": t.label.replace("GSEA: ", ""),
-            "databases": databases_val,
-            "queue_position": t.queue_position,
-        })
+            databases_val = {
+                "completed": t.progress.get("completed", 0),
+                "total": t.progress.get("total", 0),
+            }
+        return create_response(
+            {
+                "status": t.status,
+                "started_at": t.started_at,
+                "error": t.error,
+                "comparison": t.label.replace("GSEA: ", ""),
+                "databases": databases_val,
+                "queue_position": t.queue_position,
+            }
+        )
 
     # Fallback: read from old status file for pre-migration state
     status_data = _read_gsea_status(session_id)
@@ -1145,7 +1126,6 @@ async def _background_gsea_run(
     gsea_output_dir: Path,
 ) -> None:
     """Background GSEA run dispatched through TaskManager."""
-
 
     comparison = request.comparison
     gsea_output_dir.mkdir(parents=True, exist_ok=True)
@@ -1289,9 +1269,13 @@ async def get_gsea_results(
     # Load GSEA results (cached in memory after first load).
     # When comparison is specified, try comparison-specific path first
     # (on-demand GSEA), then fall back to base results dir (pipeline GSEA).
-    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, session_id)
+    gsea_data = await asyncio.to_thread(
+        load_gsea_results, results_dir, database, session_id
+    )
     if not gsea_data.get("results") and comparison:
-        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, session_id)
+        gsea_data = await asyncio.to_thread(
+            load_gsea_results, base_results_dir, database, session_id
+        )
 
     results = gsea_data.pop("results")
 

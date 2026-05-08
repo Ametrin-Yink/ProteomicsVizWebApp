@@ -36,11 +36,19 @@ async def step_msstats_protein_abundance(ctx: StepContext) -> None:
         if rds_mtime > psm_mtime:
             logger.info(
                 "RDS checkpoint found (newer than input), skipping dataProcess",
-                extra={"rds": str(rds_output), "rds_mtime": rds_mtime, "psm_mtime": psm_mtime},
+                extra={
+                    "rds": str(rds_output),
+                    "rds_mtime": rds_mtime,
+                    "psm_mtime": psm_mtime,
+                },
             )
-            ctx.state.add_log("info", "Checkpoint found — skipping protein abundance", step=6)
+            ctx.state.add_log(
+                "info", "Checkpoint found — skipping protein abundance", step=6
+            )
             if protein_output.exists():
-                protein_df = await asyncio.to_thread(pd.read_csv, protein_output, sep="\t")
+                protein_df = await asyncio.to_thread(
+                    pd.read_csv, protein_output, sep="\t"
+                )
                 ctx.result.total_proteins = len(protein_df)
             ctx.result.protein_abundances_path = str(protein_output)
             ctx.step_outputs[6] = protein_output
@@ -86,7 +94,9 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
         else:
             raise ValueError("No comparisons specified for multi-condition analysis")
 
-    logger.info(f"Step 7 (MSstats groupComparison): Running {len(comparisons)} comparisons")
+    logger.info(
+        f"Step 7 (MSstats groupComparison): Running {len(comparisons)} comparisons"
+    )
 
     # Only pass covariates when explicitly selected by the user.
     # An empty list means "no covariates"; None means "not configured".

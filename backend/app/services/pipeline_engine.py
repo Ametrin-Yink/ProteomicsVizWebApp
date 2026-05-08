@@ -245,7 +245,12 @@ class PipelineEngine:
                     except Exception as retry_e:
                         ctx.state.mark_failed(step.number, str(retry_e))
                         await self._send_progress(
-                            ctx, step.number, "failed", 0, str(retry_e), len(pipeline.steps)
+                            ctx,
+                            step.number,
+                            "failed",
+                            0,
+                            str(retry_e),
+                            len(pipeline.steps),
                         )
                         raise
                 else:
@@ -300,6 +305,7 @@ class PipelineEngine:
         if isinstance(error, subprocess.TimeoutExpired):
             return True
         from app.core.exceptions import RScriptError
+
         if isinstance(error, RScriptError):
             msg = str(error).lower()
             return "timed out" in msg or "timeout" in msg

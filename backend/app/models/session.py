@@ -78,6 +78,7 @@ class SessionConfig(BaseModel):
     # Covariate columns (selected metadata columns to use as model covariates)
     covariate_columns: Optional[list[str]] = Field(default=None)
 
+
 class FileInfo(BaseModel):
     """File metadata model."""
 

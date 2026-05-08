@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     app_name: str = Field(
         default="Proteomics Visualization API", description="Application name"
     )
-    app_version: str = Field(default="1.0.0", description="Application version (sync with git tags on release)")
+    app_version: str = Field(
+        default="1.0.0",
+        description="Application version (sync with git tags on release)",
+    )
     debug: bool = Field(default=False, description="Debug mode")
 
     # Server settings
@@ -110,17 +113,23 @@ class Settings(BaseSettings):
 
     # --- MSstats Step 7 batching ---
     msstats_batch_size: int = Field(
-        default=10, ge=1, le=50,
+        default=10,
+        ge=1,
+        le=50,
         description="Comparisons per R subprocess batch for Step 7",
     )
 
     msstats_max_workers: int = Field(
-        default=min((os.cpu_count() or 4) // 2, 32), ge=1, le=64,
+        default=min((os.cpu_count() or 4) // 2, 32),
+        ge=1,
+        le=64,
         description="Max concurrent R subprocesses for Step 7 batching",
     )
 
     msstats_n_cores_cap: int = Field(
-        default=32, ge=1, le=64,
+        default=32,
+        ge=1,
+        le=64,
         description="Max BiocParallel cores per R subprocess",
     )
 
@@ -136,17 +145,6 @@ class Settings(BaseSettings):
         description="Timeout for msqrob2 groupComparison (differential expression) in seconds",
         ge=30,
         le=14400,
-    )
-
-    # WebSocket settings
-    websocket_ping_interval: int = Field(
-        default=20,
-        description="WebSocket ping interval in seconds",
-    )
-
-    websocket_ping_timeout: int = Field(
-        default=20,
-        description="WebSocket ping timeout in seconds",
     )
 
     # Performance optimization settings

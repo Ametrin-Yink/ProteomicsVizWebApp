@@ -206,11 +206,6 @@ function ProcessingContent() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [statusCollapsed, setStatusCollapsed] = useState(false);
 
-  // Debug log
-  // useEffect(() => {
-  //   console.log('[processing-page] render:', { sessionId, isQueued, queuePosition, queueLength, isComplete, isConnected });
-  // });
-
   const {
     logs,
     isConnected,
@@ -543,8 +538,6 @@ function ProcessingContent() {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                {/* Connection status - hidden as per user request */}
-              {/* <ConnectionStatus isConnected={isConnected} /> */}
                 {!isComplete && !isCancelled && !error && !isQueued && (
                   <button
                     data-testid="cancel-processing-btn"

@@ -21,7 +21,6 @@ def test_task_kind_enum():
     assert TaskKind.GSEA.value == "gsea"
     assert TaskKind.BIONET.value == "bionet"
     assert TaskKind.COMPUTE.value == "compute"
-    assert TaskKind.LIGHT.value == "light"
 
 
 def test_task_manager_creates_pools():
@@ -30,7 +29,6 @@ def test_task_manager_creates_pools():
     assert tm._pools[TaskKind.COMPUTE]._max_workers == 2
     assert tm._pools[TaskKind.BIONET]._max_workers == 2
     assert tm._pools[TaskKind.PIPELINE]._max_workers == 2
-    assert TaskKind.LIGHT not in tm._pools
 
 
 def test_task_manager_semaphore_size():
@@ -39,21 +37,6 @@ def test_task_manager_semaphore_size():
     n_cores = os.cpu_count() or 4
     expected = max(1, n_cores // 2)
     assert tm._cpu_sem._value == expected
-
-
-@pytest.mark.asyncio
-async def test_submit_light_task_runs_immediately():
-    tm = TaskManager()
-    results = []
-
-    def fast_fn(x):
-        results.append(x)
-        return x * 2
-
-    result = await tm.submit("sess-1", TaskKind.LIGHT, fast_fn, 21, label="test")
-    assert result == 42
-    assert results == [21]
-    assert tm.get_active_count("sess-1") == 0
 
 
 @pytest.mark.asyncio

@@ -44,15 +44,30 @@ def _load_de_file(session_dir: str, comparison: str) -> Optional[pd.DataFrame]:
     # Filter out rows with NaN/Inf in logFC or pval
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(subset=["log_fc", "pval"])
+    # NaN adj_pval is treated as non-significant (1.0) so it doesn't silently drop rows
+    if "adj_pval" in df.columns:
+        df["adj_pval"] = df["adj_pval"].fillna(1.0)
     return df
 
 
 def _status_path(session_id: str, compute_type: str) -> Path:
-    return settings.sessions_dir / session_id / "results" / "compare" / f"{compute_type}_status.json"
+    return (
+        settings.sessions_dir
+        / session_id
+        / "results"
+        / "compare"
+        / f"{compute_type}_status.json"
+    )
 
 
 def _result_path(session_id: str, compute_type: str) -> Path:
-    return settings.sessions_dir / session_id / "results" / "compare" / f"{compute_type}_result.json"
+    return (
+        settings.sessions_dir
+        / session_id
+        / "results"
+        / "compare"
+        / f"{compute_type}_result.json"
+    )
 
 
 def _read_status(session_id: str, compute_type: str) -> dict:
@@ -90,7 +105,9 @@ def load_pvalues_for_protein(
         if df is None:
             continue
         # Match protein_id against accessions (handles multi-ID like "P00367; P49448")
-        match = df[df["accession"].str.contains(re.escape(protein_id), na=False, regex=True)]
+        match = df[
+            df["accession"].str.contains(re.escape(protein_id), na=False, regex=True)
+        ]
         if len(match) > 0:
             result[comp] = {
                 "pval": float(match.iloc[0]["pval"]),
@@ -151,7 +168,7 @@ def compute_similarity_matrix(matrix: np.ndarray) -> np.ndarray:
                 dist[i, j] = dist[j, i] = np.nan
             else:
                 diff = matrix[i][valid] - matrix[j][valid]
-                d = np.sqrt(np.mean(diff ** 2))
+                d = np.sqrt(np.mean(diff**2))
                 dist[i, j] = dist[j, i] = d
     return dist
 
@@ -182,24 +199,32 @@ def compute_protein_similarities(
             distances.append(np.inf)
             continue
         diff = query_row[valid] - matrix[i][valid]
-        rmsd = float(np.sqrt(np.mean(diff ** 2)))
+        rmsd = float(np.sqrt(np.mean(diff**2)))
         distances.append(rmsd)
 
     # Build light entries, sort, then enrich only the top/bottom N with fold_changes
     result = [
-        {"idx": i, "accession": accessions[i], "gene_name": gene_names[i], "similarity": distances[i]}
+        {
+            "idx": i,
+            "accession": accessions[i],
+            "gene_name": gene_names[i],
+            "similarity": distances[i],
+        }
         for i in range(n)
     ]
     result.sort(key=lambda x: x["similarity"])
-    result = [r for r in result if r["similarity"] != float('inf')]
-    most_similar = result[:top_n + 1]
+    result = [r for r in result if r["similarity"] != float("inf")]
+    most_similar = result[: top_n + 1]
     most_dissimilar = result[-top_n:] if len(result) > top_n + 1 else []
     candidates = most_similar + most_dissimilar
 
     for entry in candidates:
         i = entry.pop("idx")
         entry["fold_changes"] = [
-            {"comparison": comp, "log_fc": float(matrix[i, j]) if not np.isnan(matrix[i, j]) else None}
+            {
+                "comparison": comp,
+                "log_fc": float(matrix[i, j]) if not np.isnan(matrix[i, j]) else None,
+            }
             for j, comp in enumerate(comparisons)
         ]
 
@@ -222,6 +247,7 @@ def run_umap(matrix: np.ndarray, random_state: int = 42) -> np.ndarray:
     """Run UMAP. Falls back to PCA if umap-learn not installed."""
     try:
         import umap
+
         col_means = np.nanmean(matrix, axis=0)
         imputed = np.where(np.isnan(matrix), col_means, matrix)
         scaler = StandardScaler()
@@ -238,16 +264,23 @@ def run_umap(matrix: np.ndarray, random_state: int = 42) -> np.ndarray:
 def run_tsne(matrix: np.ndarray, random_state: int = 42) -> np.ndarray:
     """Run t-SNE."""
     from sklearn.manifold import TSNE
+
     col_means = np.nanmean(matrix, axis=0)
     imputed = np.where(np.isnan(matrix), col_means, matrix)
     scaler = StandardScaler()
     scaled = scaler.fit_transform(imputed)
-    tsne = TSNE(n_components=2, random_state=random_state, perplexity=min(30, scaled.shape[0] - 1))
+    tsne = TSNE(
+        n_components=2,
+        random_state=random_state,
+        perplexity=min(30, scaled.shape[0] - 1),
+    )
     coords = tsne.fit_transform(scaled)
     return coords
 
 
-def run_cluster(matrix: np.ndarray, method: str = "pca") -> tuple[np.ndarray, Optional[list[float]]]:
+def run_cluster(
+    matrix: np.ndarray, method: str = "pca"
+) -> tuple[np.ndarray, Optional[list[float]]]:
     """Dispatch to PCA/UMAP/tSNE. Returns coords and per-component variance (PCA only)."""
     if method == "umap":
         return run_umap(matrix), None
@@ -261,7 +294,10 @@ def run_cluster(matrix: np.ndarray, method: str = "pca") -> tuple[np.ndarray, Op
 def compute_hierarchical_order(matrix: np.ndarray) -> list[int]:
     """Compute hierarchical clustering row order for a fold change matrix using Euclidean distance."""
     dist = compute_similarity_matrix(matrix)
-    dist = np.nan_to_num(dist, nan=np.nanmax(dist[~np.isnan(dist)]) * 2 if np.any(~np.isnan(dist)) else 1.0)
+    dist = np.nan_to_num(
+        dist,
+        nan=np.nanmax(dist[~np.isnan(dist)]) * 2 if np.any(~np.isnan(dist)) else 1.0,
+    )
     np.fill_diagonal(dist, 0)
     condensed = squareform(dist)
     if len(condensed) == 0:
@@ -288,7 +324,8 @@ def compute_venn_data(
             continue
         de_data[comp] = df
         sig = df[
-            (df["adj_pval"] < pvalue_threshold) & (df["log_fc"].abs() > logfc_threshold)
+            (df["adj_pval"] < pvalue_threshold)
+            & (df["log_fc"].abs() >= logfc_threshold)
         ]
         sets[comp] = set(sig["accession"].tolist())
 
@@ -301,7 +338,9 @@ def compute_venn_data(
                 protein_details[acc] = {"gene_name": row.get("gene_name", "")}
             protein_details[acc][comp] = {
                 "log_fc": float(row["log_fc"]) if not pd.isna(row["log_fc"]) else None,
-                "adj_pval": float(row["adj_pval"]) if not pd.isna(row.get("adj_pval")) else None,
+                "adj_pval": float(row["adj_pval"])
+                if not pd.isna(row.get("adj_pval"))
+                else None,
                 "pval": float(row["pval"]) if not pd.isna(row["pval"]) else None,
             }
 
@@ -332,12 +371,14 @@ def compute_venn_data(
                 entry[f"log_fc_{comp}"] = comp_data.get("log_fc")
                 entry[f"adj_pval_{comp}"] = comp_data.get("adj_pval")
             details.append(entry)
-        overlap_list.append({
-            "region": region,
-            "count": len(accs),
-            "label": key,
-            "details": details,
-        })
+        overlap_list.append(
+            {
+                "region": region,
+                "count": len(accs),
+                "label": key,
+                "details": details,
+            }
+        )
 
     return {
         "sets": {c: sorted(list(s)) for c, s in sets.items()},

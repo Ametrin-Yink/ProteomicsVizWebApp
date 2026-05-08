@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Literal
+from typing import Literal
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
@@ -38,13 +38,16 @@ router = APIRouter()
 # Keep strong references to background tasks to prevent GC
 _background_tasks: set[asyncio.Task] = set()
 
+
 def _schedule_background_task(coro) -> asyncio.Task:
     task = asyncio.create_task(coro)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task
 
+
 # ── Request/Response models ──
+
 
 class ProteinCorrelationRequest(BaseModel):
     protein_id: str
@@ -65,15 +68,6 @@ class VennRequest(BaseModel):
     logfc_threshold: float = 1.0
 
 
-class RunStatusResponse(BaseModel):
-    status: Literal["idle", "running", "completed", "error"]
-    error: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-
-
-
-
 def _get_comparisons_from_session(session_id: str) -> list[str]:
     """Discover all comparisons from DE result files in the session."""
     results_dir = settings.sessions_dir / session_id / "results"
@@ -91,13 +85,16 @@ def _get_comparisons_from_session(session_id: str) -> list[str]:
 
 # ── Background Tasks (sync functions, run via asyncio.to_thread) ──
 
+
 def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
     """Background task: compute protein correlation analysis."""
     compute_type = "protein-correlation"
     session_dir = str(settings.sessions_dir / session_id)
     try:
         comparisons = _get_comparisons_from_session(session_id)
-        matrix, accessions, gene_names = build_fold_change_matrix(session_dir, comparisons)
+        matrix, accessions, gene_names = build_fold_change_matrix(
+            session_dir, comparisons
+        )
 
         query_idx = None
         for i, acc in enumerate(accessions):
@@ -116,28 +113,42 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
             val = matrix[query_idx, j]
             if not np.isnan(val):
                 pv = pvals.get(comp, {})
-                selected_fc.append({
-                    "comparison": comp,
-                    "log_fc": float(val),
-                    "pval": pv.get("pval", 1.0),
-                    "adj_pval": pv.get("adj_pval", 1.0),
-                })
+                selected_fc.append(
+                    {
+                        "comparison": comp,
+                        "log_fc": float(val),
+                        "pval": pv.get("pval", 1.0),
+                        "adj_pval": pv.get("adj_pval", 1.0),
+                    }
+                )
 
         # Protein similarities (Euclidean distance: lower = more similar)
-        similar = compute_protein_similarities(matrix, accessions, gene_names, comparisons, query_idx)
+        similar = compute_protein_similarities(
+            matrix, accessions, gene_names, comparisons, query_idx
+        )
 
         # Cluster coordinates for all proteins
         coords, variance = run_cluster(matrix, req.cluster_method)
         cluster_coords = [
-            {"accession": accessions[i], "gene_name": gene_names[i],
-             "x": float(coords[i, 0]), "y": float(coords[i, 1])}
+            {
+                "accession": accessions[i],
+                "gene_name": gene_names[i],
+                "x": float(coords[i, 0]),
+                "y": float(coords[i, 1]),
+            }
             for i in range(len(accessions))
         ]
 
         # Build fold-change map for the color-by comparison
-        color_comp_idx = comparisons.index(req.color_comparison) if req.color_comparison in comparisons else 0
+        color_comp_idx = (
+            comparisons.index(req.color_comparison)
+            if req.color_comparison in comparisons
+            else 0
+        )
         color_fc_map = {
-            accessions[i]: float(matrix[i, color_comp_idx]) if not np.isnan(matrix[i, color_comp_idx]) else 0.0
+            accessions[i]: float(matrix[i, color_comp_idx])
+            if not np.isnan(matrix[i, color_comp_idx])
+            else 0.0
             for i in range(len(accessions))
         }
 
@@ -150,20 +161,28 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
         }
         current_status = _read_status(session_id, compute_type)
         _write_result(session_id, compute_type, result)
-        _write_status(session_id, compute_type, {
-            "status": "completed",
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _write_status(
+            session_id,
+            compute_type,
+            {
+                "status": "completed",
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
     except Exception as e:
         logger.exception(f"Protein correlation compute failed: {e}")
         current_status = _read_status(session_id, compute_type)
-        _write_status(session_id, compute_type, {
-            "status": "error",
-            "error": str(e),
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _write_status(
+            session_id,
+            compute_type,
+            {
+                "status": "error",
+                "error": str(e),
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
 
 def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationRequest):
@@ -177,7 +196,9 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
             raise ValueError("No valid selected comparisons found")
 
         # Build full matrix (proteins x all comparisons)
-        matrix, accessions, gene_names = build_fold_change_matrix(session_dir, all_comparisons)
+        matrix, accessions, gene_names = build_fold_change_matrix(
+            session_dir, all_comparisons
+        )
 
         # Similarity matrix: Euclidean distance between comparisons (columns)
         sim_matrix = compute_similarity_matrix(matrix.T)
@@ -193,6 +214,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         # Fall back to proteins significant in at least one selected comparison
         if not marked_set:
             from app.services.compare_service import _load_de_file
+
             for comp in selected:
                 df = _load_de_file(session_dir, comp)
                 if df is not None:
@@ -200,7 +222,9 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
                     marked_set.update(sig["accession"].tolist())
             # If still empty (no DE files), fall back to top 100 by max FC
             if not marked_set:
-                sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
+                sel_indices = [
+                    all_comparisons.index(c) for c in selected if c in all_comparisons
+                ]
                 sel_matrix_for_fallback = matrix[:, sel_indices]
                 max_fc = np.nanmax(np.abs(sel_matrix_for_fallback), axis=1)
                 top_100 = np.argsort(max_fc)[-100:]
@@ -211,7 +235,9 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         marked_list = sorted(marked_set)
         acc_to_idx = {acc: i for i, acc in enumerate(accessions)}
         row_indices = [acc_to_idx[acc] for acc in marked_list if acc in acc_to_idx]
-        sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
+        sel_indices = [
+            all_comparisons.index(c) for c in selected if c in all_comparisons
+        ]
         heatmap_fc = matrix[np.array(row_indices)][:, sel_indices]
         heatmap_proteins = [
             {"accession": accessions[i], "gene_name": gene_names[i]}
@@ -243,18 +269,29 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         }
 
         # Comparison distances to primary (lower = more similar)
-        primary_idx = all_comparisons.index(req.primary_comparison) if req.primary_comparison in all_comparisons else 0
+        primary_idx = (
+            all_comparisons.index(req.primary_comparison)
+            if req.primary_comparison in all_comparisons
+            else 0
+        )
         comp_dists = []
         for j, comp in enumerate(all_comparisons):
-            d = float(sim_matrix[primary_idx, j]) if not np.isnan(sim_matrix[primary_idx, j]) else float('inf')
+            d = (
+                float(sim_matrix[primary_idx, j])
+                if not np.isnan(sim_matrix[primary_idx, j])
+                else float("inf")
+            )
             comp_dists.append({"comparison": comp, "similarity": d})
         comp_dists.sort(key=lambda x: x["similarity"])
 
         # Cluster coords for comparisons
         coords, variance = run_cluster(matrix.T, req.cluster_method)
         cluster_coords = [
-            {"comparison": all_comparisons[i],
-             "x": float(coords[i, 0]), "y": float(coords[i, 1])}
+            {
+                "comparison": all_comparisons[i],
+                "x": float(coords[i, 0]),
+                "y": float(coords[i, 1]),
+            }
             for i in range(len(all_comparisons))
         ]
 
@@ -267,23 +304,32 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         }
         current_status = _read_status(session_id, compute_type)
         _write_result(session_id, compute_type, result)
-        _write_status(session_id, compute_type, {
-            "status": "completed",
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _write_status(
+            session_id,
+            compute_type,
+            {
+                "status": "completed",
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
     except Exception as e:
         logger.exception(f"Comparison correlation compute failed: {e}")
         current_status = _read_status(session_id, compute_type)
-        _write_status(session_id, compute_type, {
-            "status": "error",
-            "error": str(e),
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _write_status(
+            session_id,
+            compute_type,
+            {
+                "status": "error",
+                "error": str(e),
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
 
 # ── Protein Correlation Endpoints ──
+
 
 @router.post("/{session_id}/compare/protein-correlation")
 async def trigger_protein_correlation(
@@ -299,13 +345,13 @@ async def trigger_protein_correlation(
     if existing:
         raise HTTPException(status_code=409, detail="Computation already in progress")
 
-    _schedule_background_task(
-        _run_protein_correlation_task(session_id, req)
-    )
+    _schedule_background_task(_run_protein_correlation_task(session_id, req))
     return {"status": "running"}
 
 
-async def _run_protein_correlation_task(session_id: str, req: ProteinCorrelationRequest):
+async def _run_protein_correlation_task(
+    session_id: str, req: ProteinCorrelationRequest
+):
     """Run protein correlation through TaskManager."""
     try:
         await task_manager.submit(
@@ -344,12 +390,15 @@ async def get_protein_correlation_data(
         raise HTTPException(status_code=404, detail="Session not found")
     rp = _result_path(session_id, "protein-correlation")
     if not rp.exists():
-        raise HTTPException(status_code=404, detail="No results found — run protein correlation first")
+        raise HTTPException(
+            status_code=404, detail="No results found — run protein correlation first"
+        )
     with open(rp, "r") as f:
         return json.load(f)
 
 
 # ── Comparison Correlation Endpoints ──
+
 
 @router.post("/{session_id}/compare/comparison-correlation")
 async def trigger_comparison_correlation(
@@ -365,13 +414,13 @@ async def trigger_comparison_correlation(
     if existing:
         raise HTTPException(status_code=409, detail="Computation already in progress")
 
-    _schedule_background_task(
-        _run_comparison_correlation_task(session_id, req)
-    )
+    _schedule_background_task(_run_comparison_correlation_task(session_id, req))
     return {"status": "running"}
 
 
-async def _run_comparison_correlation_task(session_id: str, req: ComparisonCorrelationRequest):
+async def _run_comparison_correlation_task(
+    session_id: str, req: ComparisonCorrelationRequest
+):
     try:
         await task_manager.submit(
             session_id,
@@ -409,12 +458,16 @@ async def get_comparison_correlation_data(
         raise HTTPException(status_code=404, detail="Session not found")
     rp = _result_path(session_id, "comparison-correlation")
     if not rp.exists():
-        raise HTTPException(status_code=404, detail="No results found — run comparison correlation first")
+        raise HTTPException(
+            status_code=404,
+            detail="No results found — run comparison correlation first",
+        )
     with open(rp, "r") as f:
         return json.load(f)
 
 
 # ── Protein List Endpoint ──
+
 
 @router.get("/{session_id}/compare/proteins")
 async def list_proteins(
@@ -431,7 +484,9 @@ async def list_proteins(
 
     def _load():
         session_dir = str(settings.sessions_dir / session_id)
-        matrix, accessions, gene_names = build_fold_change_matrix(session_dir, comparisons)
+        matrix, accessions, gene_names = build_fold_change_matrix(
+            session_dir, comparisons
+        )
         return [
             {"accession": acc, "gene_name": gn}
             for acc, gn in zip(accessions, gene_names)
@@ -441,6 +496,7 @@ async def list_proteins(
 
 
 # ── Venn Diagram Endpoints ──
+
 
 @router.post("/{session_id}/compare/venn")
 async def trigger_venn(

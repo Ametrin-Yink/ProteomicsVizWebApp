@@ -34,13 +34,14 @@ from app.services.report_generator import generate_report
 
 logger = logging.getLogger("proteomics")
 
-router = APIRouter()          # Session-scoped:  mounted at /api/sessions
-global_router = APIRouter()   # Global:          mounted at /api
+router = APIRouter()  # Session-scoped:  mounted at /api/sessions
+global_router = APIRouter()  # Global:          mounted at /api
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_report_dir_or_404(report_id: str) -> Path:
     """Return the report directory or raise 404."""
@@ -83,6 +84,7 @@ def _build_sample_filter_from_session(
 # Session-scoped:  POST /api/sessions/{session_id}/reports/generate
 # ---------------------------------------------------------------------------
 
+
 @router.post("/{session_id}/reports/generate")
 async def generate_report_endpoint(session_id: str, request: Request):
     """Generate a self-contained report from a completed session."""
@@ -121,6 +123,7 @@ async def generate_report_endpoint(session_id: str, request: Request):
 # Global list / get / delete
 # ---------------------------------------------------------------------------
 
+
 @global_router.get("/reports")
 async def get_reports():
     """List all reports."""
@@ -155,7 +158,9 @@ async def rename_report(report_id: str, request: Request):
     report_dir = _get_report_dir_or_404(report_id)
     meta = get_report_metadata(report_id) or {}
     meta["name"] = name
-    (report_dir / "report.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    (report_dir / "report.json").write_text(
+        json.dumps(meta, indent=2), encoding="utf-8"
+    )
     return {"message": "Renamed", "name": name}
 
 
@@ -170,6 +175,7 @@ async def delete_report_endpoint(report_id: str):
 # ---------------------------------------------------------------------------
 # Differential expression results
 # ---------------------------------------------------------------------------
+
 
 @global_router.get("/reports/{report_id}/results")
 async def get_report_results(
@@ -186,7 +192,10 @@ async def get_report_results(
     report_dir = _get_report_dir_or_404(report_id)
     results_dir = report_dir / "results"
 
-    from app.api.routes.visualization import create_response, load_diff_expression_results
+    from app.api.routes.visualization import (
+        create_response,
+        load_diff_expression_results,
+    )
 
     all_results = await load_diff_expression_results(results_dir, report_id, comparison)
 
@@ -209,22 +218,35 @@ async def get_report_results(
     start = (page - 1) * page_size
     end = start + page_size
 
-    return create_response({
-        "results": all_results[start:end],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size if total else 0,
-        "total_proteins": total,
-        "significant_proteins": sum(1 for r in all_results if r.get("significant", False)),
-        "upregulated": sum(1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) > 0),
-        "downregulated": sum(1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) < 0),
-    })
+    return create_response(
+        {
+            "results": all_results[start:end],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size if total else 0,
+            "total_proteins": total,
+            "significant_proteins": sum(
+                1 for r in all_results if r.get("significant", False)
+            ),
+            "upregulated": sum(
+                1
+                for r in all_results
+                if r.get("significant", False) and r.get("log_fc", 0) > 0
+            ),
+            "downregulated": sum(
+                1
+                for r in all_results
+                if r.get("significant", False) and r.get("log_fc", 0) < 0
+            ),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # QC plots
 # ---------------------------------------------------------------------------
+
 
 @global_router.get("/reports/{report_id}/qc/plots")
 async def get_report_qc_plots(report_id: str):
@@ -241,6 +263,7 @@ async def get_report_qc_plots(report_id: str):
 # ---------------------------------------------------------------------------
 # GSEA -- status / run / data / plot / heatmap
 # ---------------------------------------------------------------------------
+
 
 @global_router.get("/reports/{report_id}/gsea/status")
 async def get_report_gsea_status(report_id: str):
@@ -299,6 +322,7 @@ async def _report_background_gsea_run(
     await _report_write_gsea_status(report_dir, status_data)
 
     try:
+
         async def on_db_done(db_name: str, success: bool) -> None:
             status_data["databases"][db_name] = "completed" if success else "error"
             await _report_write_gsea_status(report_dir, status_data)
@@ -343,7 +367,9 @@ async def run_report_gsea(report_id: str, request: Request):
     permutations = int(body.get("permutations", 1000))
 
     if not comparison or not databases:
-        raise HTTPException(status_code=400, detail="comparison and databases are required")
+        raise HTTPException(
+            status_code=400, detail="comparison and databases are required"
+        )
 
     results_dir = report_dir / "results"
     de_file = results_dir / f"Diff_Expression_{comparison}.tsv"
@@ -398,9 +424,15 @@ async def get_report_gsea_results(
     """Get paginated GSEA results for a database."""
     report_dir = _get_report_dir_or_404(report_id)
     base_results_dir = report_dir / "results"
-    results_dir = base_results_dir / "gsea" / comparison if comparison else base_results_dir
+    results_dir = (
+        base_results_dir / "gsea" / comparison if comparison else base_results_dir
+    )
 
-    from app.api.routes.visualization import create_response, load_gsea_results, VALID_GSEA_DATABASES
+    from app.api.routes.visualization import (
+        create_response,
+        load_gsea_results,
+        VALID_GSEA_DATABASES,
+    )
 
     if database not in VALID_GSEA_DATABASES:
         raise HTTPException(
@@ -408,9 +440,13 @@ async def get_report_gsea_results(
             detail=f"Invalid GSEA database: {database}",
         )
 
-    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, report_id)
+    gsea_data = await asyncio.to_thread(
+        load_gsea_results, results_dir, database, report_id
+    )
     if not gsea_data.get("results") and comparison:
-        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, report_id)
+        gsea_data = await asyncio.to_thread(
+            load_gsea_results, base_results_dir, database, report_id
+        )
 
     results = gsea_data.pop("results")
 
@@ -451,29 +487,45 @@ async def get_report_gsea_plot(
     """Get GSEA enrichment plot data for a specific pathway."""
     report_dir = _get_report_dir_or_404(report_id)
     base_results_dir = report_dir / "results"
-    results_dir = base_results_dir / "gsea" / comparison if comparison else base_results_dir
+    results_dir = (
+        base_results_dir / "gsea" / comparison if comparison else base_results_dir
+    )
 
-    from app.api.routes.visualization import create_response, load_gsea_results, VALID_GSEA_DATABASES
+    from app.api.routes.visualization import (
+        create_response,
+        load_gsea_results,
+        VALID_GSEA_DATABASES,
+    )
 
     if database not in VALID_GSEA_DATABASES:
-        raise HTTPException(status_code=400, detail=f"Invalid GSEA database: {database}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid GSEA database: {database}"
+        )
 
-    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, report_id)
+    gsea_data = await asyncio.to_thread(
+        load_gsea_results, results_dir, database, report_id
+    )
     if not gsea_data.get("results") and comparison:
-        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, report_id)
+        gsea_data = await asyncio.to_thread(
+            load_gsea_results, base_results_dir, database, report_id
+        )
 
     pathway = next(
         (r for r in gsea_data.get("results", []) if r.get("term") == term),
         None,
     )
     if pathway is None:
-        raise HTTPException(status_code=404, detail=f"Pathway '{term}' not found in {database}")
+        raise HTTPException(
+            status_code=404, detail=f"Pathway '{term}' not found in {database}"
+        )
 
-    return create_response({
-        "term": term,
-        "es": pathway.get("es", 0),
-        "nes": pathway.get("nes", 0),
-    })
+    return create_response(
+        {
+            "term": term,
+            "es": pathway.get("es", 0),
+            "nes": pathway.get("nes", 0),
+        }
+    )
 
 
 @global_router.get("/reports/{report_id}/gsea/{database}/heatmap")
@@ -486,7 +538,9 @@ async def get_report_gsea_heatmap(
     """Get GSEA heatmap data (z-scores for leading-edge genes)."""
     report_dir = _get_report_dir_or_404(report_id)
     base_results_dir = report_dir / "results"
-    results_dir = base_results_dir / "gsea" / comparison if comparison else base_results_dir
+    results_dir = (
+        base_results_dir / "gsea" / comparison if comparison else base_results_dir
+    )
 
     from app.api.routes.visualization import (
         create_response,
@@ -496,18 +550,26 @@ async def get_report_gsea_heatmap(
     )
 
     if database not in VALID_GSEA_DATABASES:
-        raise HTTPException(status_code=400, detail=f"Invalid GSEA database: {database}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid GSEA database: {database}"
+        )
 
-    gsea_data = await asyncio.to_thread(load_gsea_results, results_dir, database, report_id)
+    gsea_data = await asyncio.to_thread(
+        load_gsea_results, results_dir, database, report_id
+    )
     if not gsea_data.get("results") and comparison:
-        gsea_data = await asyncio.to_thread(load_gsea_results, base_results_dir, database, report_id)
+        gsea_data = await asyncio.to_thread(
+            load_gsea_results, base_results_dir, database, report_id
+        )
 
     pathway = next(
         (r for r in gsea_data.get("results", []) if r.get("term") == term),
         None,
     )
     if pathway is None:
-        raise HTTPException(status_code=404, detail=f"Pathway '{term}' not found in {database}")
+        raise HTTPException(
+            status_code=404, detail=f"Pathway '{term}' not found in {database}"
+        )
 
     lead_genes = pathway.get("lead_genes", [])
     if not lead_genes:
@@ -535,6 +597,7 @@ async def get_report_gsea_heatmap(
 # BioNet -- run / status / subnetwork
 # ---------------------------------------------------------------------------
 
+
 async def _report_background_bionet_run(
     report_dir: Path,
     request_body: dict,
@@ -554,7 +617,9 @@ async def _report_background_bionet_run(
     }
     status_file = bionet_dir / "bionet_status.json"
     await asyncio.to_thread(
-        lambda: status_file.write_text(json.dumps(status_data, indent=2, default=str), encoding="utf-8")
+        lambda: status_file.write_text(
+            json.dumps(status_data, indent=2, default=str), encoding="utf-8"
+        )
     )
 
     try:
@@ -570,6 +635,7 @@ async def _report_background_bionet_run(
         )
 
         import pandas as pd
+
         nodes_df = pd.read_csv(nodes_csv)
         edges_df = pd.read_csv(edges_csv)
         subnetwork = {
@@ -578,7 +644,9 @@ async def _report_background_bionet_run(
         }
         subnetwork_path = bionet_dir / "bionet_subnetwork.json"
         await asyncio.to_thread(
-            lambda: subnetwork_path.write_text(json.dumps(subnetwork, indent=2, default=str), encoding="utf-8")
+            lambda: subnetwork_path.write_text(
+                json.dumps(subnetwork, indent=2, default=str), encoding="utf-8"
+            )
         )
 
         status_data["status"] = "completed"
@@ -586,14 +654,18 @@ async def _report_background_bionet_run(
         status_data["edge_count"] = edge_count
         status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
         await asyncio.to_thread(
-            lambda: status_file.write_text(json.dumps(status_data, indent=2, default=str), encoding="utf-8")
+            lambda: status_file.write_text(
+                json.dumps(status_data, indent=2, default=str), encoding="utf-8"
+            )
         )
     except Exception as e:
         logger.error(f"Report BioNet background run failed: {e}")
         status_data["status"] = "error"
         status_data["error"] = str(e)
         await asyncio.to_thread(
-            lambda: status_file.write_text(json.dumps(status_data, indent=2, default=str), encoding="utf-8")
+            lambda: status_file.write_text(
+                json.dumps(status_data, indent=2, default=str), encoding="utf-8"
+            )
         )
     finally:
         lock.release()
@@ -669,6 +741,7 @@ async def get_report_bionet_subnetwork(report_id: str):
 # Protein abundance / peptide
 # ---------------------------------------------------------------------------
 
+
 @global_router.get("/reports/{report_id}/protein/{protein_id}/abundance")
 async def get_report_protein_abundance(
     report_id: str,
@@ -736,14 +809,18 @@ def _report_compare_read_status(report_dir: Path, compute_type: str) -> dict:
         return json.load(f)
 
 
-def _report_compare_write_status(report_dir: Path, compute_type: str, data: dict) -> None:
+def _report_compare_write_status(
+    report_dir: Path, compute_type: str, data: dict
+) -> None:
     sp = _report_compare_status_path(report_dir, compute_type)
     sp.parent.mkdir(parents=True, exist_ok=True)
     with open(sp, "w", encoding="utf-8") as f:
         json.dump(data, f)
 
 
-def _report_compare_write_result(report_dir: Path, compute_type: str, data: dict) -> None:
+def _report_compare_write_result(
+    report_dir: Path, compute_type: str, data: dict
+) -> None:
     rp = _report_compare_result_path(report_dir, compute_type)
     rp.parent.mkdir(parents=True, exist_ok=True)
     with open(rp, "w", encoding="utf-8") as f:
@@ -777,7 +854,9 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
     report_dir_str = str(report_dir)
     try:
         comparisons = _get_report_comparisons_from_dir(report_dir)
-        matrix, accessions, gene_names = build_fold_change_matrix(report_dir_str, comparisons)
+        matrix, accessions, gene_names = build_fold_change_matrix(
+            report_dir_str, comparisons
+        )
 
         protein_id = body.get("protein_id", "")
         query_idx = None
@@ -796,27 +875,41 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
             val = matrix[query_idx, j]
             if not np.isnan(val):
                 pv = pvals.get(comp, {})
-                selected_fc.append({
-                    "comparison": comp,
-                    "log_fc": float(val),
-                    "pval": pv.get("pval", 1.0),
-                    "adj_pval": pv.get("adj_pval", 1.0),
-                })
+                selected_fc.append(
+                    {
+                        "comparison": comp,
+                        "log_fc": float(val),
+                        "pval": pv.get("pval", 1.0),
+                        "adj_pval": pv.get("adj_pval", 1.0),
+                    }
+                )
 
-        similar = compute_protein_similarities(matrix, accessions, gene_names, comparisons, query_idx)
+        similar = compute_protein_similarities(
+            matrix, accessions, gene_names, comparisons, query_idx
+        )
 
         cluster_method = body.get("cluster_method", "pca")
         coords, variance = run_cluster(matrix, cluster_method)
         cluster_coords = [
-            {"accession": accessions[i], "gene_name": gene_names[i],
-             "x": float(coords[i, 0]), "y": float(coords[i, 1])}
+            {
+                "accession": accessions[i],
+                "gene_name": gene_names[i],
+                "x": float(coords[i, 0]),
+                "y": float(coords[i, 1]),
+            }
             for i in range(len(accessions))
         ]
 
         color_comparison = body.get("color_comparison", "")
-        color_comp_idx = comparisons.index(color_comparison) if color_comparison in comparisons else 0
+        color_comp_idx = (
+            comparisons.index(color_comparison)
+            if color_comparison in comparisons
+            else 0
+        )
         color_fc_map = {
-            accessions[i]: float(matrix[i, color_comp_idx]) if not np.isnan(matrix[i, color_comp_idx]) else 0.0
+            accessions[i]: float(matrix[i, color_comp_idx])
+            if not np.isnan(matrix[i, color_comp_idx])
+            else 0.0
             for i in range(len(accessions))
         }
 
@@ -829,20 +922,28 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
         }
         current_status = _report_compare_read_status(report_dir, compute_type)
         _report_compare_write_result(report_dir, compute_type, result)
-        _report_compare_write_status(report_dir, compute_type, {
-            "status": "completed",
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _report_compare_write_status(
+            report_dir,
+            compute_type,
+            {
+                "status": "completed",
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
     except Exception as e:
         logger.exception(f"Report protein correlation compute failed: {e}")
         current_status = _report_compare_read_status(report_dir, compute_type)
-        _report_compare_write_status(report_dir, compute_type, {
-            "status": "error",
-            "error": str(e),
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _report_compare_write_status(
+            report_dir,
+            compute_type,
+            {
+                "status": "error",
+                "error": str(e),
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
 
 def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
@@ -860,11 +961,15 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
     report_dir_str = str(report_dir)
     try:
         all_comparisons = _get_report_comparisons_from_dir(report_dir)
-        selected = [c for c in body.get("selected_comparisons", []) if c in all_comparisons]
+        selected = [
+            c for c in body.get("selected_comparisons", []) if c in all_comparisons
+        ]
         if not selected:
             raise ValueError("No valid selected comparisons found")
 
-        matrix, accessions, gene_names = build_fold_change_matrix(report_dir_str, all_comparisons)
+        matrix, accessions, gene_names = build_fold_change_matrix(
+            report_dir_str, all_comparisons
+        )
 
         sim_matrix = compute_similarity_matrix(matrix.T)
         similarity = {
@@ -884,7 +989,9 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
                     sig = df[(df["adj_pval"] < 0.05) & (df["log_fc"].abs() >= 1)]
                     marked_set.update(sig["accession"].tolist())
             if not marked_set:
-                sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
+                sel_indices = [
+                    all_comparisons.index(c) for c in selected if c in all_comparisons
+                ]
                 sel_matrix_for_fallback = matrix[:, sel_indices]
                 max_fc = np.nanmax(np.abs(sel_matrix_for_fallback), axis=1)
                 top_100 = np.argsort(max_fc)[-100:]
@@ -895,7 +1002,9 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
         marked_list = sorted(marked_set)
         acc_to_idx = {acc: i for i, acc in enumerate(accessions)}
         row_indices = [acc_to_idx[acc] for acc in marked_list if acc in acc_to_idx]
-        sel_indices = [all_comparisons.index(c) for c in selected if c in all_comparisons]
+        sel_indices = [
+            all_comparisons.index(c) for c in selected if c in all_comparisons
+        ]
         heatmap_fc = matrix[np.array(row_indices)][:, sel_indices]
         heatmap_proteins = [
             {"accession": accessions[i], "gene_name": gene_names[i]}
@@ -926,18 +1035,29 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
         }
 
         primary_comparison = body.get("primary_comparison", "")
-        primary_idx = all_comparisons.index(primary_comparison) if primary_comparison in all_comparisons else 0
+        primary_idx = (
+            all_comparisons.index(primary_comparison)
+            if primary_comparison in all_comparisons
+            else 0
+        )
         comp_dists = []
         for j, comp in enumerate(all_comparisons):
-            d = float(sim_matrix[primary_idx, j]) if not np.isnan(sim_matrix[primary_idx, j]) else float('inf')
+            d = (
+                float(sim_matrix[primary_idx, j])
+                if not np.isnan(sim_matrix[primary_idx, j])
+                else float("inf")
+            )
             comp_dists.append({"comparison": comp, "similarity": d})
         comp_dists.sort(key=lambda x: x["similarity"])
 
         cluster_method = body.get("cluster_method", "pca")
         coords, variance = run_cluster(matrix.T, cluster_method)
         cluster_coords = [
-            {"comparison": all_comparisons[i],
-             "x": float(coords[i, 0]), "y": float(coords[i, 1])}
+            {
+                "comparison": all_comparisons[i],
+                "x": float(coords[i, 0]),
+                "y": float(coords[i, 1]),
+            }
             for i in range(len(all_comparisons))
         ]
 
@@ -950,20 +1070,28 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
         }
         current_status = _report_compare_read_status(report_dir, compute_type)
         _report_compare_write_result(report_dir, compute_type, result)
-        _report_compare_write_status(report_dir, compute_type, {
-            "status": "completed",
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _report_compare_write_status(
+            report_dir,
+            compute_type,
+            {
+                "status": "completed",
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
     except Exception as e:
         logger.exception(f"Report comparison correlation compute failed: {e}")
         current_status = _report_compare_read_status(report_dir, compute_type)
-        _report_compare_write_status(report_dir, compute_type, {
-            "status": "error",
-            "error": str(e),
-            "started_at": current_status.get("started_at"),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _report_compare_write_status(
+            report_dir,
+            compute_type,
+            {
+                "status": "error",
+                "error": str(e),
+                "started_at": current_status.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
 
 async def _schedule_report_background(coro) -> asyncio.Task:
@@ -990,11 +1118,17 @@ async def run_report_protein_correlation(report_id: str, request: Request):
     async with lock:
         status = _report_compare_read_status(report_dir, "protein-correlation")
         if status.get("status") == "running":
-            raise HTTPException(status_code=409, detail="Computation already in progress")
-        _report_compare_write_status(report_dir, "protein-correlation", {
-            "status": "running",
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        })
+            raise HTTPException(
+                status_code=409, detail="Computation already in progress"
+            )
+        _report_compare_write_status(
+            report_dir,
+            "protein-correlation",
+            {
+                "status": "running",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
     await _schedule_report_background(
         asyncio.to_thread(_run_report_protein_correlation, report_dir, body)
@@ -1015,7 +1149,9 @@ async def get_report_protein_correlation_results(report_id: str):
     report_dir = _get_report_dir_or_404(report_id)
     rp = _report_compare_result_path(report_dir, "protein-correlation")
     if not rp.exists():
-        raise HTTPException(status_code=404, detail="No protein correlation results available")
+        raise HTTPException(
+            status_code=404, detail="No protein correlation results available"
+        )
     return json.loads(rp.read_text(encoding="utf-8"))
 
 
@@ -1036,11 +1172,17 @@ async def run_report_comparison_correlation(report_id: str, request: Request):
     async with lock:
         status = _report_compare_read_status(report_dir, "comparison-correlation")
         if status.get("status") == "running":
-            raise HTTPException(status_code=409, detail="Computation already in progress")
-        _report_compare_write_status(report_dir, "comparison-correlation", {
-            "status": "running",
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        })
+            raise HTTPException(
+                status_code=409, detail="Computation already in progress"
+            )
+        _report_compare_write_status(
+            report_dir,
+            "comparison-correlation",
+            {
+                "status": "running",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
     await _schedule_report_background(
         asyncio.to_thread(_run_report_comparison_correlation, report_dir, body)
@@ -1061,7 +1203,9 @@ async def get_report_comparison_correlation_results(report_id: str):
     report_dir = _get_report_dir_or_404(report_id)
     rp = _report_compare_result_path(report_dir, "comparison-correlation")
     if not rp.exists():
-        raise HTTPException(status_code=404, detail="No comparison correlation results available")
+        raise HTTPException(
+            status_code=404, detail="No comparison correlation results available"
+        )
     return json.loads(rp.read_text(encoding="utf-8"))
 
 
@@ -1116,6 +1260,7 @@ async def get_report_compare_proteins(report_id: str):
 # Visualization state
 # ---------------------------------------------------------------------------
 
+
 @global_router.patch("/reports/{report_id}/visualization-state")
 async def patch_report_visualization_state(report_id: str, request: Request):
     """Update markers and/or volcano filters in the report's session.json."""
@@ -1123,7 +1268,9 @@ async def patch_report_visualization_state(report_id: str, request: Request):
     markers = body.get("markers")
     volcano_filters = body.get("volcano_filters")
 
-    if not patch_report_state(report_id, markers=markers, volcano_filters=volcano_filters):
+    if not patch_report_state(
+        report_id, markers=markers, volcano_filters=volcano_filters
+    ):
         raise HTTPException(status_code=404, detail="Report not found")
 
     return {"message": "Visualization state updated"}

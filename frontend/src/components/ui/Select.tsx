@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Select Component
  * 
  * Dropdown select with label and error handling.
@@ -297,6 +297,8 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     </div>
   );
 };
+
+// Searchable single-select with filter input
 
 // Searchable single-select with filter input
 export interface SearchableSelectProps {

@@ -44,7 +44,12 @@ class SessionStore:
     def _get_session_dir(self, session_id: str) -> Path:
         """Get session directory path. Validates session_id as UUID to prevent path traversal."""
         import re
-        if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', session_id, re.IGNORECASE):
+
+        if not re.match(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            session_id,
+            re.IGNORECASE,
+        ):
             raise ValueError(f"Invalid session ID format: {session_id}")
         return self.sessions_dir / session_id
 

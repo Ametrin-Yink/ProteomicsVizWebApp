@@ -4,7 +4,6 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { useShallow } from 'zustand/react/shallow';
 import type { Toast } from '@/types';
 import { generateId } from '@/lib/utils';
 
@@ -170,31 +169,3 @@ export const useUIStore = create<UIState>()(
   }))
 );
 
-/**
- * Helper function to show toast from anywhere
- */
-export const showToast = (
-  type: Toast['type'],
-  message: string,
-  duration?: number
-): void => {
-  const { addToast } = useUIStore.getState();
-  addToast(type, message, duration);
-};
-
-/**
- * Selector hooks with shallow equality to prevent unnecessary re-renders
- */
-export const useSidebar = () => useUIStore(useShallow((state) => state.sidebar));
-
-export const useLoading = () => useUIStore(
-  useShallow((state) => state.isUploadModalOpen || state.isConfigModalOpen)
-);
-
-export const useActiveModal = () => useUIStore(
-  useShallow((state) => ({
-    isUploadModalOpen: state.isUploadModalOpen,
-    isConfigModalOpen: state.isConfigModalOpen,
-    isHelpModalOpen: state.isHelpModalOpen,
-  }))
-);

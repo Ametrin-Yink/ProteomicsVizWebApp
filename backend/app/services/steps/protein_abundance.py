@@ -35,11 +35,19 @@ async def step_protein_abundance_msqrob2(ctx: StepContext) -> None:
         if rds_mtime > psm_mtime:
             logger.info(
                 "RDS checkpoint found (newer than input), skipping data_process",
-                extra={"rds": str(rds_output), "rds_mtime": rds_mtime, "psm_mtime": psm_mtime},
+                extra={
+                    "rds": str(rds_output),
+                    "rds_mtime": rds_mtime,
+                    "psm_mtime": psm_mtime,
+                },
             )
-            ctx.state.add_log("info", "Checkpoint found — skipping protein abundance", step=6)
+            ctx.state.add_log(
+                "info", "Checkpoint found — skipping protein abundance", step=6
+            )
             if protein_output.exists():
-                protein_df = await asyncio.to_thread(pd.read_csv, protein_output, sep="\t")
+                protein_df = await asyncio.to_thread(
+                    pd.read_csv, protein_output, sep="\t"
+                )
                 ctx.result.total_proteins = len(protein_df)
             ctx.result.protein_abundances_path = str(protein_output)
             ctx.step_outputs[6] = protein_output

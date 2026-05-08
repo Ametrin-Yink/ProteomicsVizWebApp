@@ -27,10 +27,6 @@ class QCCalculator:
     Implements step 8 of the pipeline: QC metrics calculation.
     """
 
-    def __init__(self):
-        """Initialize QC calculator."""
-        pass
-
     async def calculate_all_metrics(
         self,
         protein_abundances_path: Path,
@@ -72,9 +68,14 @@ class QCCalculator:
                 path, comp_df = result
                 label = path.stem.replace("Diff_Expression_", "")
                 try:
-                    pvalue_distributions[label] = self._calculate_pvalue_distribution(comp_df)
+                    pvalue_distributions[label] = self._calculate_pvalue_distribution(
+                        comp_df
+                    )
                 except Exception:
-                    logger.warning(f"Could not compute p-value distribution for {path.name}", exc_info=True)
+                    logger.warning(
+                        f"Could not compute p-value distribution for {path.name}",
+                        exc_info=True,
+                    )
 
         psm_df = None
         if psm_abundances_path and psm_abundances_path.exists():
@@ -130,7 +131,9 @@ class QCCalculator:
 
         qc_data = QCData(
             pca=pca_result,
-            pvalue_distribution=next(iter(pvalue_distributions.values())) if pvalue_distributions else PValueDistribution(bins=[], counts=[]),
+            pvalue_distribution=next(iter(pvalue_distributions.values()))
+            if pvalue_distributions
+            else PValueDistribution(bins=[], counts=[]),
             pvalue_distributions=pvalue_distributions if pvalue_distributions else None,
             psm_cv=psm_cv,
             protein_cv=protein_cv,
@@ -511,7 +514,9 @@ class QCCalculator:
                 if len(valid) > 0:
                     cond_str = str(condition)
                     rep_key = f"replicate_{replicate}"
-                    result["psm_boxplot"].setdefault(cond_str, {})[rep_key] = valid.tolist()
+                    result["psm_boxplot"].setdefault(cond_str, {})[rep_key] = (
+                        valid.tolist()
+                    )
 
         # Protein intensities — raw boxplot values per sample
         id_cols = [

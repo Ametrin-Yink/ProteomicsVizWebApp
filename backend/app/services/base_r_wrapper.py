@@ -162,8 +162,11 @@ class BaseRWrapper(ABC):
         if explicit is not None:
             if explicit == 1:
                 logger.info("n_cores=1 explicitly set, skipping calibration")
-                await _safe_log(log_callback, "info",
-                               "Single-core mode: skipping parallel calibration")
+                await _safe_log(
+                    log_callback,
+                    "info",
+                    "Single-core mode: skipping parallel calibration",
+                )
             return explicit
 
         if self._optimal_ncores is not None:
@@ -193,7 +196,8 @@ class BaseRWrapper(ABC):
             if entry and isinstance(entry.get("n_cores"), int):
                 logger.info(
                     "Loaded calibration from disk: n_cores=%d (from %s)",
-                    entry["n_cores"], entry.get("timestamp", "unknown"),
+                    entry["n_cores"],
+                    entry.get("timestamp", "unknown"),
                 )
                 return entry["n_cores"]
         except Exception as e:
@@ -203,6 +207,7 @@ class BaseRWrapper(ABC):
     def _save_calibration_to_disk(self, n_cores: int) -> None:
         """Persist calibration result to disk for future restarts."""
         import time
+
         path = self._calibration_cache_path
         path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -235,8 +240,11 @@ class BaseRWrapper(ABC):
             return cached
 
         logger.info("Calibrating optimal SnowParam worker count...")
-        await _safe_log(log_callback, "info",
-                       "Calibrating optimal CPU core count for parallel processing...")
+        await _safe_log(
+            log_callback,
+            "info",
+            "Calibrating optimal CPU core count for parallel processing...",
+        )
 
         candidate_counts = [1, 4, 8, 16, 32]
         best_n = 4
@@ -256,10 +264,15 @@ class BaseRWrapper(ABC):
         self._optimal_ncores = best_n
         self._save_calibration_to_disk(best_n)
         logger.info(
-            "Calibration complete: optimal n_cores=%d (%.1fs)", best_n, best_time,
+            "Calibration complete: optimal n_cores=%d (%.1fs)",
+            best_n,
+            best_time,
         )
-        await _safe_log(log_callback, "info",
-                       f"Optimal core count: {best_n} (completed in {best_time:.0f}s)")
+        await _safe_log(
+            log_callback,
+            "info",
+            f"Optimal core count: {best_n} (completed in {best_time:.0f}s)",
+        )
         return best_n
 
     async def _benchmark_ncores(
@@ -283,6 +296,7 @@ class BaseRWrapper(ABC):
             slice_df = self._calibration_slice_df
         except AttributeError:
             import pandas as pd
+
             df = pd.read_parquet(input_file)
             self._calibration_slice_df = df.head(100000)
             slice_df = self._calibration_slice_df
@@ -290,7 +304,8 @@ class BaseRWrapper(ABC):
         slice_df.to_parquet(slice_file)
 
         bench_config = self._build_data_process_config(
-            config or AnalysisConfig(), n_cores,
+            config or AnalysisConfig(),
+            n_cores,
         )
         # Override to use fast defaults during calibration
         bench_config["min_peptides"] = 1
@@ -298,8 +313,13 @@ class BaseRWrapper(ABC):
         script_path = self.scripts_dir / self._benchmark_script_name
         config_json = json.dumps(bench_config)
         cmd = [
-            self.r_executable, str(script_path),
-            str(slice_file), str(out_file), str(rds_file), "", config_json,
+            self.r_executable,
+            str(script_path),
+            str(slice_file),
+            str(out_file),
+            str(rds_file),
+            "",
+            config_json,
         ]
 
         try:
@@ -315,7 +335,9 @@ class BaseRWrapper(ABC):
     # ------------------------------------------------------------------
 
     async def _run_r_script(
-        self, cmd: list[str], script_path: Path,
+        self,
+        cmd: list[str],
+        script_path: Path,
         log_callback: Optional[callable] = None,
         timeout: int | None = None,
     ) -> None:
@@ -342,8 +364,9 @@ class BaseRWrapper(ABC):
         stdout_lines: list[str] = []
         stderr_lines: list[str] = []
 
-        def stream_output(pipe, lines_list, log_prefix, log_level="info",
-                          log_cb=None, event_loop=None):
+        def stream_output(
+            pipe, lines_list, log_prefix, log_level="info", log_cb=None, event_loop=None
+        ):
             try:
                 for line in iter(pipe.readline, ""):
                     if not line:
@@ -354,7 +377,8 @@ class BaseRWrapper(ABC):
                     if log_cb and event_loop:
                         try:
                             asyncio.run_coroutine_threadsafe(
-                                log_cb(log_level, line), event_loop,
+                                log_cb(log_level, line),
+                                event_loop,
                             )
                         except Exception:
                             pass
@@ -388,7 +412,8 @@ class BaseRWrapper(ABC):
                 if log_callback and loop:
                     try:
                         asyncio.run_coroutine_threadsafe(
-                            log_callback("info", msg), loop,
+                            log_callback("info", msg),
+                            loop,
                         )
                     except Exception:
                         pass
@@ -455,9 +480,7 @@ class BaseRWrapper(ABC):
         total_cores = os.cpu_count() or 4
 
         if n_total <= batch_size:
-            logger.info(
-                "Batch mode: %d items, single batch (no parallelism)", n_total
-            )
+            logger.info("Batch mode: %d items, single batch (no parallelism)", n_total)
             n_cores_per = max(1, min(total_cores, n_cores_cap))
             cmd, timeout = build_batch_cmd(items, 0, n_cores_per)
             await self._run_r_script(
@@ -478,11 +501,16 @@ class BaseRWrapper(ABC):
 
         logger.info(
             "Batch mode: %d items -> %d batches (size=%d), %d concurrent, %d cores/process",
-            n_total, n_batches, batch_size, effective_workers, n_cores_per,
+            n_total,
+            n_batches,
+            batch_size,
+            effective_workers,
+            n_cores_per,
         )
         if log_callback:
             await _safe_log(
-                log_callback, "info",
+                log_callback,
+                "info",
                 f"Splitting {n_total} items into {n_batches} batches "
                 f"({n_cores_per} cores each, {effective_workers} concurrent)",
             )
@@ -499,7 +527,12 @@ class BaseRWrapper(ABC):
                 futures = []
                 for idx, batch_items in enumerate(batches):
                     fut = loop.run_in_executor(
-                        executor, _execute_batch, batch_items, idx, n_cores_per, build_batch_cmd,
+                        executor,
+                        _execute_batch,
+                        batch_items,
+                        idx,
+                        n_cores_per,
+                        build_batch_cmd,
                     )
                     futures.append((idx, fut))
 
@@ -529,7 +562,8 @@ class BaseRWrapper(ABC):
         except asyncio.CancelledError:
             logger.warning(
                 "run_batched cancelled - %d/%d batches may have partial results",
-                len([f for _, f in futures if f.done()]), n_batches,
+                len([f for _, f in futures if f.done()]),
+                n_batches,
             )
             raise
 
@@ -575,7 +609,10 @@ class BaseRWrapper(ABC):
 
         logger.info(
             "Memory estimate: %d rows x %d cols x %d workers = %.0fM cells",
-            n_rows, n_cols, worker_multiplier, estimated_cells / 1e6,
+            n_rows,
+            n_cols,
+            worker_multiplier,
+            estimated_cells / 1e6,
         )
 
         if estimated_cells > CELL_THRESHOLD:
@@ -585,7 +622,8 @@ class BaseRWrapper(ABC):
                 estimated_cells / 1e6,
             )
             await _safe_log(
-                log_callback, "warning",
+                log_callback,
+                "warning",
                 "Dataset is large — falling back to single-core to avoid "
                 "memory exhaustion",
             )
@@ -597,6 +635,7 @@ class BaseRWrapper(ABC):
         """Get (n_rows, n_cols) without loading the full dataset."""
         if path.suffix == ".parquet":
             import pyarrow.parquet as pq
+
             pf = pq.ParquetFile(path)
             n_rows = pf.metadata.num_rows
             n_cols = len(pf.schema_arrow.names)
@@ -624,6 +663,7 @@ class BaseRWrapper(ABC):
             }
 
         try:
+
             def run_verify():
                 return subprocess.run(
                     [self.r_executable, str(script_path)],
@@ -685,11 +725,16 @@ class BaseRWrapper(ABC):
 
         # Resolve n_cores then check memory headroom
         n_cores = await self._resolve_n_cores(
-            cfg, self._n_cores_config_attr, input_file, log_callback,
+            cfg,
+            self._n_cores_config_attr,
+            input_file,
+            log_callback,
         )
         if n_cores > 1:
             n_cores = await self._check_memory_headroom(
-                input_file, n_cores, log_callback,
+                input_file,
+                n_cores,
+                log_callback,
             )
 
         r_config = self._build_data_process_config(cfg, n_cores)
@@ -711,8 +756,9 @@ class BaseRWrapper(ABC):
             effective_timeout = (
                 timeout if timeout is not None else self._dp_timeout
             ) * timeout_multiplier
-            await self._run_r_script(cmd, script_path, log_callback,
-                                     timeout=effective_timeout)
+            await self._run_r_script(
+                cmd, script_path, log_callback, timeout=effective_timeout
+            )
 
             logger.info(
                 "Step 6 complete: Protein abundance calculated",
@@ -723,13 +769,14 @@ class BaseRWrapper(ABC):
         except subprocess.TimeoutExpired:
             raise RScriptError(
                 message=f"Protein abundance calculation timed out after "
-                        f"{effective_timeout}s",
+                f"{effective_timeout}s",
                 details={"timeout": effective_timeout},
             )
         except RScriptError:
             raise
         except Exception as e:
             import traceback
+
             raise RScriptError(
                 message=f"Protein abundance calculation failed: {e}",
                 details={"error": str(e), "traceback": traceback.format_exc()},
@@ -767,11 +814,16 @@ class BaseRWrapper(ABC):
 
         # Resolve n_cores
         n_cores = await self._resolve_n_cores(
-            cfg, self._n_cores_config_attr, rds_file, log_callback,
+            cfg,
+            self._n_cores_config_attr,
+            rds_file,
+            log_callback,
         )
         if n_cores > 1:
             n_cores = await self._check_memory_headroom(
-                rds_file, n_cores, log_callback,
+                rds_file,
+                n_cores,
+                log_callback,
             )
 
         gc_config = self._build_gc_config(cfg, n_cores, **extra)
@@ -796,8 +848,9 @@ class BaseRWrapper(ABC):
             effective_timeout = (
                 timeout if timeout is not None else self._gc_timeout
             ) * timeout_multiplier
-            await self._run_r_script(cmd, script_path, log_callback,
-                                     timeout=effective_timeout)
+            await self._run_r_script(
+                cmd, script_path, log_callback, timeout=effective_timeout
+            )
 
             logger.info(
                 "Step 7 (multi) complete: DE calculated",
@@ -814,6 +867,7 @@ class BaseRWrapper(ABC):
             raise
         except Exception as e:
             import traceback
+
             raise RScriptError(
                 message=f"DE analysis failed: {e}",
                 details={"error": str(e), "traceback": traceback.format_exc()},
