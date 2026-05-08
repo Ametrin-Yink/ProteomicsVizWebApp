@@ -167,43 +167,68 @@ async def test_timeout_event_fires():
 
 
 @pytest.mark.asyncio
-async def test_get_status_and_queue_position():
+async def test_get_status_shows_running_task():
+    """get_status returns running tasks for a session."""
     tm = TaskManager()
-    blocking_started = threading.Event()
-    blocking_done = threading.Event()
+    done = threading.Event()
 
-    def blocking_fn():
-        blocking_started.set()
-        blocking_done.wait(timeout=5)
+    def slow_fn():
+        done.wait(timeout=5)
         return "ok"
 
-    task_a = asyncio.create_task(
-        tm.submit("sess-1", TaskKind.COMPUTE, blocking_fn, label="blocker")
-    )
-    await asyncio.sleep(0)  # Let event loop start the coroutine
-    assert blocking_started.wait(timeout=2)
-
-    def dummy():
-        return "dummy"
-
-    # Submit to same session — per-session lock forces the second task to queue
-    task_b = asyncio.create_task(
-        tm.submit("sess-1", TaskKind.COMPUTE, dummy, label="waiter")
+    task = asyncio.create_task(
+        tm.submit("sess-1", TaskKind.COMPUTE, slow_fn, label="test-task")
     )
 
-    # Wait for task_a to reach "running" (may take a few event loop cycles)
-    for _ in range(10):
-        await asyncio.sleep(0.05)
+    # Yield to event loop until the task transitions to "running".
+    # asyncio.sleep(0) yields control without a real delay.
+    for _ in range(100):
+        await asyncio.sleep(0)
         status = tm.get_status("sess-1")
         if any(t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"]):
             break
 
-    assert len(status["tasks"]) >= 1
-    assert any(t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"])
+    tasks = tm.get_status("sess-1")["tasks"]
+    assert any(t["kind"] == "compute" and t["status"] == "running" for t in tasks), \
+        f"Expected running task, got: {tasks}"
+
+    done.set()
+    await task
+
+
+@pytest.mark.asyncio
+async def test_queue_position_for_blocked_session():
+    """Same-session tasks queue behind each other via per-session lock."""
+    tm = TaskManager()
+
+    # Submit a slow task to hold the per-session lock
+    done = threading.Event()
+
+    def slow_fn():
+        done.wait(timeout=5)
+        return "ok"
+
+    task_a = asyncio.create_task(
+        tm.submit("sess-1", TaskKind.COMPUTE, slow_fn, label="blocker")
+    )
+
+    # Yield enough cycles for task_a to reach the semaphore/executor and
+    # hold the per-session lock. We don't block the event loop with a
+    # synchronous wait — just yield repeatedly.
+    for _ in range(50):
+        await asyncio.sleep(0)
+
+    # Submit to same session — per-session lock keeps this queued
+    task_b = asyncio.create_task(
+        tm.submit("sess-1", TaskKind.COMPUTE, lambda: "dummy", label="waiter")
+    )
+    # Yield to let task_b enter the queue
+    for _ in range(20):
+        await asyncio.sleep(0)
 
     pos = tm.get_queue_position("sess-1", TaskKind.COMPUTE)
-    assert pos is not None
+    assert pos is not None, f"Expected task_b to be queued, got pos=None"
     assert pos >= 1
 
-    blocking_done.set()
+    done.set()
     await asyncio.gather(task_a, task_b, return_exceptions=True)
