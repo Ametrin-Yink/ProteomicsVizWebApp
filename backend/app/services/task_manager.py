@@ -137,7 +137,9 @@ class TaskManager:
 
         if cancel_event is None:
             cancel_event = asyncio.Event()
-        self._cancel_events[session_id] = cancel_event
+            self._cancel_events.setdefault(session_id, cancel_event)
+        else:
+            self._cancel_events[session_id] = cancel_event
 
         # Compute queue position
         queue = self._queues[kind]
@@ -160,8 +162,7 @@ class TaskManager:
             # Check if we're at head of queue
             head_session, head_event, head_info = queue[0] if queue else (None, None, None)
             if head_session == session_id and head_info.task_id == task_id:
-                # Only one task per kind runs at a time (per-type serialization)
-                if kind not in self._session_active.values():
+                if self._session_active.get(session_id) is None:
                     break
 
             try:
@@ -317,11 +318,8 @@ class TaskManager:
                 json.dumps(tasks_data, indent=2, default=str),
                 encoding="utf-8",
             )
-        except BaseException:
-            try:
-                logger.exception(f"Failed to write task_status for {session_id}")
-            except BaseException:
-                pass
+        except Exception:
+            logger.exception(f"Failed to write task_status for {session_id}")
 
     def _recover_stale_tasks(self) -> None:
         """On startup, mark any running/queued tasks as error: server_restarted."""

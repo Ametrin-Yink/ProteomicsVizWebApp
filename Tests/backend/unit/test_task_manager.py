@@ -186,16 +186,17 @@ async def test_get_status_and_queue_position():
     def dummy():
         return "dummy"
 
+    # Submit to same session — per-session lock forces the second task to queue
     task_b = asyncio.create_task(
-        tm.submit("sess-2", TaskKind.COMPUTE, dummy, label="waiter")
+        tm.submit("sess-1", TaskKind.COMPUTE, dummy, label="waiter")
     )
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.15)
 
     status = tm.get_status("sess-1")
     assert len(status["tasks"]) >= 1
     assert any(t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"])
 
-    pos = tm.get_queue_position("sess-2", TaskKind.COMPUTE)
+    pos = tm.get_queue_position("sess-1", TaskKind.COMPUTE)
     assert pos is not None
     assert pos >= 1
 
