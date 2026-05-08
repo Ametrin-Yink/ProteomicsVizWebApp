@@ -55,6 +55,12 @@ function UploadContent() {
             if (typeof cfg.remove_razor === 'boolean') updates.remove_razor = cfg.remove_razor;
             if (typeof cfg.strict_filtering === 'boolean') updates.strict_filtering = cfg.strict_filtering;
             if (cfg.pipeline === 'msqrob2' || cfg.pipeline === 'msstats') updates.pipeline = cfg.pipeline;
+            if (typeof cfg.condition_column === 'string') updates.condition_column = cfg.condition_column;
+            if (cfg.metadata_columns && typeof cfg.metadata_columns === 'object') {
+              updates.metadata_columns = cfg.metadata_columns as Record<string, Record<string, string>>;
+            }
+            if (Array.isArray(cfg.comparisons)) updates.comparisons = cfg.comparisons as typeof config.comparisons;
+            if (Array.isArray(cfg.covariate_columns)) updates.covariate_columns = cfg.covariate_columns as string[];
             if (Object.keys(updates).length > 0) {
               setConfig(updates);
             }

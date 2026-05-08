@@ -120,14 +120,17 @@ export const useAnalysisStore = create<AnalysisState>()(
         if (!exists) {
           state.uploadedFiles.push(file);
           state.selectedFiles.add(file.filename);
-          // Initialize metadata_columns for this file so addColumn works immediately
+          // Initialize metadata_columns for this file so addColumn works immediately.
+          // Only create if not already present (e.g. from a prior session restore).
           if (!state.config.metadata_columns) state.config.metadata_columns = {};
-          const condCol = state.config.condition_column || 'condition';
-          state.config.metadata_columns[file.filename] = {
-            experiment: file.experiment,
-            [condCol]: file.condition,
-            replicate: String(file.replicate),
-          };
+          if (!state.config.metadata_columns[file.filename]) {
+            const condCol = state.config.condition_column || 'condition';
+            state.config.metadata_columns[file.filename] = {
+              experiment: file.experiment,
+              [condCol]: file.condition,
+              replicate: String(file.replicate),
+            };
+          }
         }
       });
     },
