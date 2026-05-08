@@ -510,11 +510,17 @@ if (length(zero_var_ids) > 0) {
 }
 
 # Closure captures invariant context; signature reduced to (idx)
+# NOTE: fit is NOT captured in the closure to avoid S4 serialization issues
+# with SnowParam. Instead it is saved to a temp RDS and loaded by each worker.
+fit_rds <- file.path(output_dir, ".msqrob2_fit.rds")
+saveRDS(fit, fit_rds)
+on.exit(try(unlink(fit_rds), silent = TRUE), add = TRUE)
+
 process_one_comparison <- local({
     # Capture invariant state from enclosing scope
     .contrasts      <- contrast_list
     .labels         <- comparison_labels
-    .fit            <- fit
+    .fit_rds        <- fit_rds
     .coef_names     <- coef_names
     .gene_names     <- gene_names
     .psm_counts     <- psm_counts
@@ -529,6 +535,9 @@ process_one_comparison <- local({
                          "df.residual", "df_total")
 
     function(idx) {
+        # Load model from RDS inside worker to avoid S4 serialization issues
+        .fit <- readRDS(.fit_rds)
+
         contrast_vec <- .contrasts[[idx]]
         label <- .labels[idx]
 
