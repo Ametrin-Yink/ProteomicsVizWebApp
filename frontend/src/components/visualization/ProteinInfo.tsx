@@ -52,18 +52,15 @@ export default function ProteinInfo({ protein, isLoading, filters, comparison }:
   const [peptideAbundance, setPeptideAbundance] = useState<PeptideAbundanceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fetchedGeneNames, setFetchedGeneNames] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!protein) {
       setProteinAbundance(null);
       setPeptideAbundance(null);
-      setFetchedGeneNames(new Map());
       return;
     }
 
     async function fetchAbundanceData() {
-      if (!protein) return;
       setLoading(true);
       setError(null);
       try {
@@ -102,18 +99,10 @@ export default function ProteinInfo({ protein, isLoading, filters, comparison }:
 
   const { accessions, geneNames: originalGeneNames } = parseProteinInfo(protein);
 
-  // Combine original gene names with fetched ones
   const geneNames = accessions.map((acc, index) => {
-    // First use the gene name from the data
     if (index < originalGeneNames.length && originalGeneNames[index] !== '-') {
       return originalGeneNames[index];
     }
-    // Then check fetched gene names
-    const fetched = fetchedGeneNames.get(acc);
-    if (fetched) {
-      return fetched;
-    }
-    // Finally fallback to '-'
     return '-';
   });
 
@@ -144,14 +133,6 @@ export default function ProteinInfo({ protein, isLoading, filters, comparison }:
             ))}
           </div>
         </div>
-
-        {/* Gene Names - REMOVED as per user request */}
-        {/*
-        <div data-testid="gene-name" className="flex justify-between items-center py-2 border-b border-border">
-          <span className="text-sm text-text-muted">Gene Name(s)</span>
-          <span className="text-sm font-medium text-text-primary">{geneNames.join(', ') || '-'}</span>
-        </div>
-        */}
 
         <div className="flex justify-between items-center py-2 border-b border-border">
           <span className="text-sm text-text-muted">Fold Change</span>

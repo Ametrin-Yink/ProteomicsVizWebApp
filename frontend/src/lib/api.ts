@@ -148,11 +148,6 @@ export async function getGSEAData(
   return fetchApi<GSEAData>(`${apiPrefix}/gsea/${database}${query ? `?${query}` : ''}`);
 }
 
-// Encode term for URL query parameter
-function encodeTerm(term: string): string {
-  return encodeURIComponent(term);
-}
-
 // GSEA Plot Data (on-demand)
 export async function getGSEAPlotData(
   apiPrefix: string,
@@ -161,7 +156,7 @@ export async function getGSEAPlotData(
   comparison?: string
 ): Promise<GSEAPlotData> {
   const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
-  return fetchApi<GSEAPlotData>(`${apiPrefix}/gsea/${database}/plot?term=${encodeTerm(term)}${compParam}`);
+  return fetchApi<GSEAPlotData>(`${apiPrefix}/gsea/${database}/plot?term=${encodeURIComponent(term)}${compParam}`);
 }
 
 // GSEA Heatmap Data (on-demand)
@@ -172,7 +167,7 @@ export async function getGSEAHeatmapData(
   comparison?: string
 ): Promise<GSEAHeatmapData> {
   const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
-  return fetchApi<GSEAHeatmapData>(`${apiPrefix}/gsea/${database}/heatmap?term=${encodeTerm(term)}${compParam}`);
+  return fetchApi<GSEAHeatmapData>(`${apiPrefix}/gsea/${database}/heatmap?term=${encodeURIComponent(term)}${compParam}`);
 }
 
 // GSEA On-Demand Run
