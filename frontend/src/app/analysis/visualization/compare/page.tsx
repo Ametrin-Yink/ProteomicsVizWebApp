@@ -75,9 +75,9 @@ function CompareContent() {
         </div>
 
         {activeTab === 'protein' ? (
-          <ProteinCorrelationPanel sessionId={sessionId} comparisons={comparisons} />
+          <ProteinCorrelationPanel comparisons={comparisons} />
         ) : (
-          <ComparisonCorrelationPanel sessionId={sessionId} comparisons={comparisons} />
+          <ComparisonCorrelationPanel comparisons={comparisons} />
         )}
       </div>
     </div>

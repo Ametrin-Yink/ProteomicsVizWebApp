@@ -20,18 +20,17 @@ import {
   getComparisonCorrelationData,
   computeVennData,
   getDataSource,
-  sessionApiPrefix,
 } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
 import { formatComparisonKeyWrapped } from '@/lib/utils';
 
 interface Props {
-  sessionId: string;
   comparisons: Array<{ value: string; label: string }>;
 }
 
-export default function ComparisonCorrelationPanel({ sessionId, comparisons }: Props) {
-  const apiPrefix = sessionApiPrefix(sessionId);
+export default function ComparisonCorrelationPanel({ comparisons }: Props) {
+  const { apiPrefix } = useApi();
   const [primaryComparison, setPrimaryComparison] = useState<string>('');
   const effectivePrimary = primaryComparison || comparisons[0]?.value || '';
   const [selectedComparisons, setSelectedComparisons] = useState<string[]>([]);
@@ -66,7 +65,6 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   const [markedProteins, setMarkedProteins] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
-    if (!sessionId) return;
     getDataSource(apiPrefix).then((session) => {
       const markers = session.markers;
       if (markers && typeof markers === 'object' && !Array.isArray(markers)) {
@@ -80,20 +78,18 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
         setVennThresholds(session.volcano_filters);
       }
     }).catch(() => {});
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
-    if (!sessionId) return;
     getComparisonCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
   const availableVennComparisons = useMemo(() => {
     return comparisons.filter((_, i) => i < 10);
   }, [comparisons]);
 
   const pollStatus = useCallback(async () => {
-    if (!sessionId) return;
     try {
       const newStatus = await getComparisonCorrelationStatus(apiPrefix);
       setStatus(newStatus);
@@ -114,7 +110,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     } catch {
       // Silently ignore polling errors
     }
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;

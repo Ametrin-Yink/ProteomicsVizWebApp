@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { ApiProvider, useApi } from '@/lib/api-context';
-import { reportApiPrefix, getDataSource, getDEResults, getQCData, getGSEAData, updateVisualizationState, getBioNetSubnetwork, getComparisonCorrelationData, getProteinCorrelationData, computeVennData, runGSEA, getGSEAStatus, runProteinCorrelation, getProteinCorrelationStatus, runComparisonCorrelation, getComparisonCorrelationStatus, runBioNet, getBioNetStatus, listProteins } from '@/lib/api';
+import { reportApiPrefix, getDataSource, getDEResults, getQCData, getGSEAData, updateVisualizationState, getBioNetSubnetwork, runGSEA, getGSEAStatus, runBioNet, getBioNetStatus } from '@/lib/api';
 import { formatGroup, formatComparisonKeyWrapped, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 
 // Shared visualization components
@@ -29,13 +29,8 @@ import GSEADashboard from '@/components/visualization/GSEADashboard';
 import GSEAPlot from '@/components/visualization/GSEAPlot';
 import PathwayTable from '@/components/visualization/PathwayTable';
 import BioNetNetwork from '@/components/visualization/BioNetNetwork';
-import SimilarityMatrix from '@/components/visualization/compare/SimilarityMatrix';
-import VennDiagram from '@/components/visualization/compare/VennDiagram';
-import ComparisonHeatmap from '@/components/visualization/compare/ComparisonHeatmap';
-import CorrelationBarChart from '@/components/visualization/compare/CorrelationBarChart';
-import ClusterMap from '@/components/visualization/compare/ClusterMap';
-import FoldChangeBarChart from '@/components/visualization/compare/FoldChangeBarChart';
-import CorrelationScatter from '@/components/visualization/compare/CorrelationScatter';
+import ComparisonCorrelationPanel from '@/components/visualization/compare/ComparisonCorrelationPanel';
+import ProteinCorrelationPanel from '@/components/visualization/compare/ProteinCorrelationPanel';
 
 import type {
   DEResult,
@@ -46,9 +41,6 @@ import type {
   GSEADatabase,
   GSEAResult,
   BioNetSubnetwork,
-  ComparisonCorrelationData,
-  ProteinCorrelationData,
-  VennData,
 } from '@/types/api';
 import {
   GSEADatabaseLabels,
@@ -57,11 +49,7 @@ import {
 } from '@/types/api';
 import type {
   GSEARunStatus,
-  CompareRunStatus,
-  ClusterMethod,
   BioNetRunStatus,
-  ProteinListEntry,
-  ProteinFCResult,
 } from '@/types/api';
 import { SearchableSelect, Select } from '@/components/ui/Select';
 
@@ -950,598 +938,55 @@ function GSEATab() {
 
 function CompareTab() {
   const { apiPrefix } = useApi();
-  const [comparisonData, setComparisonData] = useState<ComparisonCorrelationData | null>(null);
-  const [proteinData, setProteinData] = useState<ProteinCorrelationData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'comparison' | 'protein' | 'venn'>('comparison');
   const [comparisons, setComparisons] = useState<Array<{ value: string; label: string }>>([]);
-  const [vennData, setVennData] = useState<VennData | null>(null);
-  const [vennLoading, setVennLoading] = useState(false);
-  const [vennError, setVennError] = useState<string | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'protein' | 'comparison'>('protein');
 
-  // Protein correlation state
-  const [proteins, setProteins] = useState<ProteinListEntry[]>([]);
-  const [selectedProtein, setSelectedProtein] = useState<string>('');
-  const [proteinClusterMethod, setProteinClusterMethod] = useState<ClusterMethod>('pca');
-  const [proteinColorComparison, setProteinColorComparison] = useState<string>('');
-  const [proteinStatus, setProteinStatus] = useState<CompareRunStatus>({ status: 'idle' });
-  const [proteinRunError, setProteinRunError] = useState<string | null>(null);
-  const proteinPollRef = useRef<NodeJS.Timeout | null>(null);
-  const isProteinRunning = proteinStatus.status === 'running';
-  const effectiveColorComparison = proteinColorComparison || comparisons[0]?.value || '';
-  const [selectedSimilar, setSelectedSimilar] = useState<{
-    accession: string; gene_name: string; similarity: number; fc: ProteinFCResult[];
-  } | null>(null);
-
-  // Comparison correlation state
-  const [primaryComparison, setPrimaryComparison] = useState<string>('');
-  const effectivePrimary = primaryComparison || comparisons[0]?.value || '';
-  const [selectedComparisons, setSelectedComparisons] = useState<string[]>([]);
-  const [compClusterMethod, setCompClusterMethod] = useState<ClusterMethod>('pca');
-  const [compStatus, setCompStatus] = useState<CompareRunStatus>({ status: 'idle' });
-  const [compRunError, setCompRunError] = useState<string | null>(null);
-  const compPollRef = useRef<NodeJS.Timeout | null>(null);
-  const isCompRunning = compStatus.status === 'running';
-  const comparisonsInitialized = useRef(false);
-
-  // Fetch compare data
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const session = await getDataSource(apiPrefix).catch(() => null);
-        if (session?.config?.comparisons) {
-          const opts = session.config.comparisons.map((c) => ({
-            value: `${formatGroup(c.group1)}_vs_${formatGroup(c.group2)}`,
-            label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
-          }));
-          setComparisons(opts);
-        }
-
-        // Try to fetch existing correlation data
-        const [compData, protData] = await Promise.all([
-          getComparisonCorrelationData(apiPrefix).catch(() => null),
-          getProteinCorrelationData(apiPrefix).catch(() => null),
-        ]);
-        if (compData) setComparisonData(compData);
-        if (protData) setProteinData(protData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load comparison data');
-      } finally {
-        setLoading(false);
+    getDataSource(apiPrefix).then(session => {
+      if (session?.config?.comparisons) {
+        setComparisons(session.config.comparisons.map((c: { group1: Record<string, string>; group2: Record<string, string> }) => ({
+          value: `${formatGroup(c.group1)}_vs_${formatGroup(c.group2)}`,
+          label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
+        })));
       }
-    }
-    fetchData();
-  }, [apiPrefix]);
-
-  // Load proteins for selector
-  useEffect(() => {
-    listProteins(apiPrefix).then(setProteins).catch(() => {});
-  }, [apiPrefix]);
-
-  // Auto-select comparisons on init
-  useEffect(() => {
-    if (!comparisonsInitialized.current && comparisons.length > 0) {
-      setSelectedComparisons(comparisons.slice(0, 9).map((c) => c.value));
-      comparisonsInitialized.current = true;
-    }
-  }, [comparisons]);
-
-  // Protein correlation polling
-  const pollProteinStatus = useCallback(async () => {
-    try {
-      const newStatus = await getProteinCorrelationStatus(apiPrefix);
-      setProteinStatus(newStatus);
-      if (newStatus.status === 'completed') {
-        if (proteinPollRef.current) { clearInterval(proteinPollRef.current); proteinPollRef.current = null; }
-        const result = await getProteinCorrelationData(apiPrefix);
-        setProteinData(result);
-        setSelectedSimilar(null);
-      } else if (newStatus.status === 'error') {
-        if (proteinPollRef.current) { clearInterval(proteinPollRef.current); proteinPollRef.current = null; }
-        setProteinRunError(newStatus.error || 'Protein correlation analysis failed');
-      }
-    } catch { /* silently ignore */ }
-  }, [apiPrefix]);
-
-  const startProteinPolling = useCallback(() => {
-    if (proteinPollRef.current) return;
-    pollProteinStatus();
-    proteinPollRef.current = setInterval(pollProteinStatus, 2000);
-  }, [pollProteinStatus]);
-
-  // Comparison correlation polling
-  const pollCompStatus = useCallback(async () => {
-    try {
-      const newStatus = await getComparisonCorrelationStatus(apiPrefix);
-      setCompStatus(newStatus);
-      if (newStatus.status === 'completed') {
-        if (compPollRef.current) { clearInterval(compPollRef.current); compPollRef.current = null; }
-        const result = await getComparisonCorrelationData(apiPrefix);
-        setComparisonData(result);
-      } else if (newStatus.status === 'error') {
-        if (compPollRef.current) { clearInterval(compPollRef.current); compPollRef.current = null; }
-        setCompRunError(newStatus.error || 'Comparison correlation analysis failed');
-      }
-    } catch { /* silently ignore */ }
-  }, [apiPrefix]);
-
-  const startCompPolling = useCallback(() => {
-    if (compPollRef.current) return;
-    pollCompStatus();
-    compPollRef.current = setInterval(pollCompStatus, 2000);
-  }, [pollCompStatus]);
-
-  // Check status on mount
-  useEffect(() => {
-    getProteinCorrelationStatus(apiPrefix).then((s) => {
-      setProteinStatus(s);
-      if (s.status === 'running') startProteinPolling();
     }).catch(() => {});
-    getComparisonCorrelationStatus(apiPrefix).then((s) => {
-      setCompStatus(s);
-      if (s.status === 'running') startCompPolling();
-    }).catch(() => {});
-  }, [apiPrefix]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiPrefix]);
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (proteinPollRef.current) clearInterval(proteinPollRef.current);
-      if (compPollRef.current) clearInterval(compPollRef.current);
-    };
-  }, []);
-
-  // Protein correlation handlers
-  const handleRunProteinCorrelation = async () => {
-    if (!selectedProtein || !effectiveColorComparison) return;
-    setProteinRunError(null);
-    setSelectedSimilar(null);
-    try {
-      setProteinStatus({ status: 'running' });
-      await runProteinCorrelation(apiPrefix, {
-        protein_id: selectedProtein,
-        cluster_method: proteinClusterMethod,
-        color_comparison: effectiveColorComparison,
-      });
-      startProteinPolling();
-    } catch (err) {
-      setProteinStatus({ status: 'error' });
-      setProteinRunError(err instanceof Error ? err.message : 'Failed to start protein correlation');
-    }
-  };
-
-  // Comparison correlation handlers
-  const handleRunComparisonCorrelation = async () => {
-    if (!effectivePrimary || selectedComparisons.length === 0) return;
-    setCompRunError(null);
-    try {
-      setCompStatus({ status: 'running' });
-      const markersForApi: Record<string, string[]> = {};
-      for (const [comp, setVal] of Object.entries(markedProteins)) {
-        markersForApi[comp] = Array.from(setVal);
-      }
-      await runComparisonCorrelation(apiPrefix, {
-        primary_comparison: effectivePrimary,
-        selected_comparisons: selectedComparisons,
-        marked_proteins: markersForApi,
-        cluster_method: compClusterMethod,
-      });
-      startCompPolling();
-    } catch (err) {
-      setCompStatus({ status: 'error' });
-      setCompRunError(err instanceof Error ? err.message : 'Failed to start comparison correlation');
-    }
-  };
-
-  // Venn computation
-  const [vennSelectedComparisons, setVennSelectedComparisons] = useState<string[]>([]);
-  const handleComputeVenn = useCallback(async () => {
-    if (vennSelectedComparisons.length < 2) return;
-    setVennLoading(true);
-    setVennError(null);
-    try {
-      const result = await computeVennData(apiPrefix, {
-        comparisons: vennSelectedComparisons,
-        pvalue_threshold: 0.05,
-        logfc_threshold: 1,
-      });
-      setVennData(result);
-    } catch (err) {
-      setVennError(err instanceof Error ? err.message : 'Venn computation failed');
-    } finally {
-      setVennLoading(false);
-    }
-  }, [apiPrefix, vennSelectedComparisons]);
-
-  // Similar protein click handler
-  const handleSimilarClick = useCallback((label: string) => {
-    if (!proteinData) return;
-    const similar = proteinData.similar_proteins.find(
-      (c) => c.gene_name === label || c.accession === label
-    );
-    if (!similar) return;
-    const fcData = similar.fold_changes?.filter((f) => f.log_fc != null) ?? proteinData.selected_protein_fc;
-    setSelectedSimilar({
-      accession: similar.accession,
-      gene_name: similar.gene_name,
-      similarity: similar.similarity,
-      fc: fcData as ProteinFCResult[],
-    });
-  }, [proteinData]);
-
-  // Protein options for selector
-  const proteinOptions = useMemo(() => {
-    return proteins.map((p) => ({
-      value: p.accession,
-      label: p.gene_name ? `${p.gene_name} (${p.accession})` : p.accession,
-    }));
-  }, [proteins]);
-
-  const selectedProteinName = useMemo(() => {
-    const p = proteins.find((p) => p.accession === selectedProtein);
-    return p?.gene_name || selectedProtein;
-  }, [proteins, selectedProtein]);
-
-  if (loading) {
+  if (!comparisons.length) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-error/5 border border-error/20 rounded-lg p-5">
-        <p className="text-error">{error}</p>
+      <div className="text-center py-16 text-text-secondary">
+        <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+        <p>No comparisons available in this report.</p>
       </div>
     );
   }
 
   return (
     <div>
-      {/* Sub-tab selector */}
-      <div className="flex items-center gap-1 mb-6 bg-background border border-border rounded-lg p-1 w-fit">
-        {(['comparison', 'protein', 'venn'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveSubTab(tab)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
-              activeSubTab === tab
-                ? 'bg-primary/10 text-primary'
-                : 'text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            {tab === 'comparison' ? 'Comparison Correlation' : tab === 'protein' ? 'Protein Correlation' : 'Venn Diagram'}
-          </button>
-        ))}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setActiveSubTab('protein')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeSubTab === 'protein' ? 'bg-primary/10 text-primary' : 'text-text-secondary hover:bg-surface hover:text-text-primary'
+          }`}
+        >
+          Protein Correlation
+        </button>
+        <button
+          onClick={() => setActiveSubTab('comparison')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeSubTab === 'comparison' ? 'bg-primary/10 text-primary' : 'text-text-secondary hover:bg-surface hover:text-text-primary'
+          }`}
+        >
+          Comparison Correlation
+        </button>
       </div>
 
-      {/* ── Protein Correlation Tab ── */}
-      {activeSubTab === 'protein' && (
-        <div className="space-y-6">
-          {/* Controls */}
-          <div className="bg-background border border-border rounded-lg p-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">Protein</label>
-                <SearchableSelect
-                  options={proteinOptions}
-                  value={selectedProtein}
-                  onChange={setSelectedProtein}
-                  placeholder="Select protein..."
-                  searchPlaceholder="Search proteins..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">Cluster Method</label>
-                <Select
-                  options={[
-                    { value: 'pca', label: 'PCA' },
-                    { value: 'umap', label: 'UMAP' },
-                    { value: 'tsne', label: 'tSNE' },
-                  ]}
-                  value={proteinClusterMethod}
-                  onChange={(e) => setProteinClusterMethod(e.target.value as ClusterMethod)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">Cluster Color By</label>
-                <Select
-                  options={comparisons}
-                  value={effectiveColorComparison}
-                  onChange={(e) => setProteinColorComparison(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={handleRunProteinCorrelation}
-                  disabled={isProteinRunning || !selectedProtein || !effectiveColorComparison}
-                  className="w-full px-4 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                >
-                  {isProteinRunning ? 'Running...' : 'Run Analysis'}
-                </button>
-              </div>
-            </div>
-            {proteinRunError && (
-              <div className="mt-3 flex items-center gap-2 text-sm text-error">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{proteinRunError}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Running indicator */}
-          {isProteinRunning && (
-            <div className="bg-background border border-border rounded-lg p-4 flex items-center gap-3">
-              <LoaderCircle className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-sm text-text-primary">Computing protein correlations...</span>
-            </div>
-          )}
-
-          {/* Results */}
-          {proteinData && !isProteinRunning && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <FoldChangeBarChart
-                  data={proteinData.selected_protein_fc}
-                  proteinName={selectedProteinName}
-                />
-                <ClusterMap
-                  mode="protein"
-                  points={proteinData.cluster_coords}
-                  selectedKey={selectedProtein}
-                  colorBy={proteinData.color_fc_map}
-                  varExplained={proteinData.cluster_var_explained}
-                  title={`${proteinClusterMethod.toUpperCase()} — Proteins`}
-                />
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-3">
-                  <CorrelationBarChart
-                    data={proteinData.similar_proteins.map((c) => ({
-                      label: c.gene_name || c.accession,
-                      correlation: c.similarity,
-                    }))}
-                    title="Most / Least Similar Proteins (RMSD)"
-                    topN={10}
-                    ascending
-                    onItemClick={handleSimilarClick}
-                  />
-                </div>
-                <div className="lg:col-span-1">
-                  {selectedSimilar ? (
-                    <CorrelationScatter
-                      selectedProtein={proteinData.selected_protein_fc}
-                      correlatedProtein={selectedSimilar.fc}
-                      correlation={selectedSimilar.similarity}
-                      selectedName={selectedProteinName}
-                      correlatedName={selectedSimilar.gene_name || selectedSimilar.accession}
-                    />
-                  ) : (
-                    <div className="bg-background border border-border rounded-lg p-4 flex items-center justify-center min-h-[350px]">
-                      <p className="text-text-muted text-sm text-center">
-                        Click a protein in the bar chart to view pairwise scatter
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!proteinData && !isProteinRunning && (
-            <div className="bg-background border border-border rounded-lg p-12 text-center">
-              <p className="text-text-muted">Select a protein and configure options above, then click Run Analysis</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Comparison Correlation Tab ── */}
-      {activeSubTab === 'comparison' && (
-        <div className="space-y-6">
-          {/* Controls */}
-          <div className="bg-background border border-border rounded-lg p-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">Primary Comparison</label>
-                <SearchableSelect
-                  options={comparisons}
-                  value={effectivePrimary}
-                  onChange={setPrimaryComparison}
-                  placeholder="Select primary..."
-                  searchPlaceholder="Filter comparisons..."
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-text-primary mb-1.5">Additional Comparisons (up to 9)</label>
-                <div className="max-h-32 overflow-y-auto border border-border rounded-lg p-2 space-y-1">
-                  {comparisons.map((comp) => (
-                    <label key={comp.value} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer hover:text-text-primary">
-                      <input
-                        type="checkbox"
-                        checked={selectedComparisons.includes(comp.value)}
-                        disabled={!selectedComparisons.includes(comp.value) && selectedComparisons.length >= 9}
-                        onChange={() => {
-                          if (selectedComparisons.includes(comp.value)) {
-                            setSelectedComparisons((prev) => prev.filter((v) => v !== comp.value));
-                          } else if (selectedComparisons.length < 9) {
-                            setSelectedComparisons((prev) => [...prev, comp.value]);
-                          }
-                        }}
-                        className="rounded border-border text-primary focus:ring-primary"
-                      />
-                      <span className="truncate">{comp.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">Cluster Method</label>
-                <Select
-                  options={[
-                    { value: 'pca', label: 'PCA' },
-                    { value: 'umap', label: 'UMAP' },
-                    { value: 'tsne', label: 'tSNE' },
-                  ]}
-                  value={compClusterMethod}
-                  onChange={(e) => setCompClusterMethod(e.target.value as ClusterMethod)}
-                />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-3">
-              <button
-                onClick={handleRunComparisonCorrelation}
-                disabled={isCompRunning || !effectivePrimary || selectedComparisons.length === 0}
-                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-              >
-                {isCompRunning ? 'Running...' : 'Run Analysis'}
-              </button>
-            </div>
-            {compRunError && (
-              <div className="mt-3 flex items-center gap-2 text-sm text-error">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{compRunError}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Running indicator */}
-          {isCompRunning && (
-            <div className="bg-background border border-border rounded-lg p-4 flex items-center gap-3">
-              <LoaderCircle className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-sm text-text-primary">Computing comparison correlations...</span>
-            </div>
-          )}
-
-          {/* Results */}
-          {comparisonData && !isCompRunning && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div className="lg:col-span-3">
-                  <SimilarityMatrix
-                    comparisons={comparisonData.similarity_matrix.comparisons}
-                    matrix={comparisonData.similarity_matrix.matrix}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <CorrelationBarChart
-                    data={comparisonData.comparison_similarities.map((c) => ({
-                      label: formatComparisonKeyWrapped(c.comparison),
-                      correlation: c.similarity,
-                    }))}
-                    title="Most / Least Similar Comparisons (RMSD)"
-                    topN={10}
-                    ascending
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ClusterMap
-                  mode="comparison"
-                  points={comparisonData.cluster_coords}
-                  selectedKey={effectivePrimary}
-                  title={`${compClusterMethod.toUpperCase()} — Comparisons`}
-                  varExplained={comparisonData.cluster_var_explained}
-                />
-                <div>
-                  {comparisonData.heatmap_data?.proteins?.length > 0 ? (
-                    <ComparisonHeatmap
-                      proteins={comparisonData.heatmap_data.proteins}
-                      comparisons={comparisonData.heatmap_data.comparisons}
-                      foldChanges={comparisonData.heatmap_data.fold_changes}
-                    />
-                  ) : (
-                    <div className="bg-background border border-border rounded-lg p-6 text-center text-text-muted">
-                      No heatmap data available
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!comparisonData && !isCompRunning && (
-            <div className="bg-background border border-border rounded-lg p-12 text-center">
-              <p className="text-text-muted">Select a primary comparison and additional comparisons, then click Run Analysis</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Venn Diagram Tab ── */}
-      {activeSubTab === 'venn' && (
-        <div className="space-y-6">
-          <div className="bg-background rounded-lg border border-border p-4">
-            <h3 className="text-base font-semibold mb-2">Venn Diagram</h3>
-            <p className="text-sm text-text-muted mb-4">
-              Compare DE proteins across different comparisons
-            </p>
-            {comparisons.length > 0 && (
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-text-primary">Select comparisons (min 2):</label>
-                <div className="flex flex-wrap gap-2">
-                  {comparisons.map((comp) => {
-                    const selected = vennSelectedComparisons.includes(comp.value);
-                    return (
-                      <button
-                        key={comp.value}
-                        onClick={() => {
-                          setVennSelectedComparisons((prev) =>
-                            selected ? prev.filter((v) => v !== comp.value) : [...prev, comp.value]
-                          );
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                          selected
-                            ? 'bg-primary/10 text-primary border border-primary/20'
-                            : 'bg-surface text-text-secondary border border-border hover:bg-border/30'
-                        }`}
-                      >
-                        {comp.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {vennSelectedComparisons.length >= 2 && (
-                  <button
-                    onClick={handleComputeVenn}
-                    disabled={vennLoading}
-                    className="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  >
-                    {vennLoading ? 'Computing...' : 'Compute Venn Diagram'}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {vennLoading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
-          )}
-
-          {vennError && (
-            <div className="bg-error/5 border border-error/20 rounded-lg p-4">
-              <p className="text-sm text-error">{vennError}</p>
-            </div>
-          )}
-
-          {vennData && !vennLoading && (
-            <div className="bg-background rounded-lg border border-border p-4">
-              <VennDiagram data={vennData} />
-            </div>
-          )}
-        </div>
-      )}
+      {activeSubTab === 'protein' && <ProteinCorrelationPanel comparisons={comparisons} />}
+      {activeSubTab === 'comparison' && <ComparisonCorrelationPanel comparisons={comparisons} />}
     </div>
   );
 }
-
 // ─── Tab: BioNet ────────────────────────────────────────────────────────────
 
 function BioNetTab() {
@@ -1879,7 +1324,7 @@ function BioNetTab() {
       )}
 
       {/* Network */}
-      {(runStatus?.status === 'completed' || subnetwork) && subnetwork?.nodes?.length > 0 && (
+      {subnetwork && subnetwork.nodes && subnetwork.nodes.length > 0 && (
         <div className="bg-background rounded-lg border border-border p-4">
           <div className="flex items-center justify-between mb-3">
             <div>

@@ -18,17 +18,16 @@ import {
   runProteinCorrelation,
   getProteinCorrelationStatus,
   getProteinCorrelationData,
-  sessionApiPrefix,
 } from '@/lib/api';
+import { useApi } from '@/lib/api-context';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
 
 interface Props {
-  sessionId: string;
   comparisons: Array<{ value: string; label: string }>;
 }
 
-export default function ProteinCorrelationPanel({ sessionId, comparisons }: Props) {
-  const apiPrefix = sessionApiPrefix(sessionId);
+export default function ProteinCorrelationPanel({ comparisons }: Props) {
+  const { apiPrefix } = useApi();
   const [proteins, setProteins] = useState<ProteinListEntry[]>([]);
   const [selectedProtein, setSelectedProtein] = useState<string>('');
   const [clusterMethod, setClusterMethod] = useState<ClusterMethod>('pca');
@@ -53,17 +52,15 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
 
   // Load available proteins on mount
   useEffect(() => {
-    if (!sessionId) return;
     listProteins(apiPrefix).then((list) => {
       setProteins(list);
     }).catch(() => {});
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
-    if (!sessionId) return;
     getProteinCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
   const proteinOptions = useMemo(() => {
     return proteins.map((p) => ({
@@ -78,7 +75,6 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   }, [proteins, selectedProtein]);
 
   const pollStatus = useCallback(async () => {
-    if (!sessionId) return;
     try {
       const newStatus = await getProteinCorrelationStatus(apiPrefix);
       setStatus(newStatus);
@@ -100,7 +96,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     } catch {
       // Silently ignore polling errors
     }
-  }, [sessionId, apiPrefix]);
+  }, [apiPrefix]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;
