@@ -24,7 +24,6 @@ logger = logging.getLogger("proteomics")
 # Enrichr API base URL
 ENRICHR_API_URL = "https://maayanlab.cloud/Enrichr/geneSetLibrary"
 
-
 def _validate_and_repair_gmt_cache() -> None:
     """Validate cached GMT files exist and are non-empty.
 

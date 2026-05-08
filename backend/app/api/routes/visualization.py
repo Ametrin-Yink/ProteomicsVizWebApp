@@ -24,6 +24,7 @@ from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.gsea_service import gsea_service
+from app.services.task_manager import task_manager
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
 
@@ -1019,13 +1020,6 @@ class BioNetSubnetwork(BaseModel):
 # Strong references to prevent background task GC
 _background_tasks: set[asyncio.Task] = set()
 
-# Per-session locks for preventing concurrent GSEA runs
-_gsea_run_locks: dict[str, asyncio.Lock] = {}
-
-# Per-session locks for serializing status file writes
-_gsea_write_locks: dict[str, asyncio.Lock] = {}
-
-
 def _gsea_status_path(session_id: str) -> Path:
     return settings.sessions_dir / session_id / "gsea_run_status.json"
 
@@ -1041,10 +1035,7 @@ def _read_gsea_status(session_id: str) -> dict | None:
 
 async def _write_gsea_status(session_id: str, data: dict) -> None:
     path = _gsea_status_path(session_id)
-    if session_id not in _gsea_write_locks:
-        _gsea_write_locks[session_id] = asyncio.Lock()
-    async with _gsea_write_locks[session_id]:
-        await asyncio.to_thread(_write_json_file, path, data)
+    await asyncio.to_thread(_write_json_file, path, data)
 
 
 # --- BioNet helpers ---
@@ -1089,6 +1080,9 @@ def _write_json_file(path: Path, data: dict) -> None:
         json.dump(data, f, indent=2, default=str)
 
 
+GSEA_STALE_TIMEOUT_MINUTES = 30
+
+
 @router.get("/{session_id}/gsea/status")
 async def get_gsea_run_status(
     session_id: str,
@@ -1101,9 +1095,43 @@ async def get_gsea_run_status(
             detail=f"Session {session_id} not found",
         )
 
+    # Read from TaskManager in-memory state (primary)
+    from app.services.task_manager import TaskKind
+    tasks = [
+        info for info in task_manager._active_tasks.values()
+        if info.session_id == session_id and info.kind == TaskKind.GSEA
+    ]
+    if tasks:
+        t = tasks[0]
+        databases_val = {}
+        if t.progress:
+            databases_val = {"completed": t.progress.get("completed", 0),
+                           "total": t.progress.get("total", 0)}
+        return create_response({
+            "status": t.status,
+            "started_at": t.started_at,
+            "error": t.error,
+            "comparison": t.label.replace("GSEA: ", ""),
+            "databases": databases_val,
+            "queue_position": t.queue_position,
+        })
+
+    # Fallback: read from old status file for pre-migration state
     status_data = _read_gsea_status(session_id)
     if status_data is None:
         return create_response({"status": "idle"})
+
+    # Mark stale if running for too long (defense-in-depth)
+    if status_data.get("status") == "running" and status_data.get("started_at"):
+        try:
+            started = datetime.fromisoformat(status_data["started_at"])
+            elapsed = datetime.now(timezone.utc) - started
+            if elapsed.total_seconds() > GSEA_STALE_TIMEOUT_MINUTES * 60:
+                status_data["status"] = "error"
+                status_data["error"] = "Server restarted during processing"
+                await _write_gsea_status(session_id, status_data)
+        except (ValueError, TypeError):
+            pass
 
     return create_response(status_data)
 
@@ -1115,53 +1143,57 @@ async def _background_gsea_run(
     de_file: Path,
     protein_file: Path,
     gsea_output_dir: Path,
-    lock: asyncio.Lock,
 ) -> None:
-    status_data = {
-        "status": "running",
-        "comparison": request.comparison,
-        "databases": {db: "running" for db in request.databases},
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "error": None,
-    }
+    """Background GSEA run dispatched through TaskManager."""
+    from app.services.task_manager import TaskKind, TaskCancelledError, TaskTimeoutError
+
+    comparison = request.comparison
     gsea_output_dir.mkdir(parents=True, exist_ok=True)
-    _gsea_status_path(session_id).parent.mkdir(parents=True, exist_ok=True)
-    await _write_gsea_status(session_id, status_data)
+    progress = {"completed": 0, "total": len(request.databases)}
 
-    try:
-        async def on_db_done(db_name: str, success: bool) -> None:
-            status_data["databases"][db_name] = "completed" if success else "error"
-            await _write_gsea_status(session_id, status_data)
+    async def on_db_done(db_name: str, success: bool) -> None:
+        if success:
+            progress["completed"] += 1
 
-        gsea_results = await gsea_service.run_gsea_for_comparison(
-            diff_expression_path=de_file,
-            comparison_name=request.comparison,
-            output_dir=gsea_output_dir,
-            databases=request.databases,
-            protein_abundance_path=protein_file if protein_file.exists() else None,
-            min_size=request.min_size,
-            max_size=request.max_size,
-            permutations=request.permutations,
-            on_db_complete=on_db_done,
+    # Run the async gseapy work in a dedicated thread via TaskManager.
+    # gseapy's prerank releases the GIL (compiled .pyd), so threads work well.
+    def _run_gsea_sync():
+        return asyncio.run(
+            gsea_service.run_gsea_for_comparison(
+                diff_expression_path=de_file,
+                comparison_name=comparison,
+                output_dir=gsea_output_dir,
+                databases=request.databases,
+                protein_abundance_path=protein_file if protein_file.exists() else None,
+                min_size=request.min_size,
+                max_size=request.max_size,
+                permutations=request.permutations,
+                on_db_complete=on_db_done,
+            )
         )
 
-        status_data["status"] = "completed"
-        await _write_gsea_status(session_id, status_data)
+    label = f"GSEA: {comparison}"
+
+    try:
+        gsea_results = await task_manager.submit(
+            session_id,
+            TaskKind.GSEA,
+            _run_gsea_sync,
+            label=label,
+            timeout_seconds=30 * 60,
+        )
 
         results_file = gsea_output_dir / "GSEA_Results.json"
         await asyncio.to_thread(gsea_service.save_results, gsea_results, results_file)
-
         with _cache_lock:
             _gsea_file_cache.invalidate(str(results_file))
 
+    except TaskCancelledError:
+        logger.info(f"GSEA cancelled for {session_id}/{comparison}")
+    except TaskTimeoutError:
+        logger.error(f"GSEA timed out for {session_id}/{comparison}")
     except Exception as e:
         logger.error(f"Background GSEA failed: {e}")
-        status_data["status"] = "error"
-        status_data["error"] = str(e)
-        await _write_gsea_status(session_id, status_data)
-    finally:
-        lock.release()
-        _gsea_run_locks.pop(session_id, None)
 
 
 @router.post("/{session_id}/gsea/run")
@@ -1185,20 +1217,21 @@ async def run_gsea_on_demand(
             detail=f"Differential expression file not found: {de_file.name}",
         )
 
-    protein_file = results_dir / "Protein_Abundances.tsv"
-    gsea_output_dir = results_dir / "gsea" / request.comparison
-
-    if session_id not in _gsea_run_locks:
-        _gsea_run_locks[session_id] = asyncio.Lock()
-
-    run_lock = _gsea_run_locks[session_id]
-    if run_lock.locked():
+    # Check if GSEA is already running for this session
+    from app.services.task_manager import TaskKind
+    gsea_running = any(
+        info.kind == TaskKind.GSEA and info.status in ("queued", "running")
+        for info in task_manager._active_tasks.values()
+        if info.session_id == session_id
+    )
+    if gsea_running:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A GSEA run is already in progress for this session",
         )
 
-    await run_lock.acquire()
+    protein_file = results_dir / "Protein_Abundances.tsv"
+    gsea_output_dir = results_dir / "gsea" / request.comparison
 
     task = asyncio.create_task(
         _background_gsea_run(
@@ -1208,7 +1241,6 @@ async def run_gsea_on_demand(
             de_file=de_file,
             protein_file=protein_file,
             gsea_output_dir=gsea_output_dir,
-            lock=run_lock,
         )
     )
     _background_tasks.add(task)
