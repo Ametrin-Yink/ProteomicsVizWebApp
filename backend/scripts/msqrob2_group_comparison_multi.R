@@ -362,6 +362,7 @@ filtered_ids <- rownames(protein_matrix)
 cat("\n=== Step 6: Building design matrix ===\n")
 
 design <- model.matrix(~ 0 + condition, data = col_data)
+model_coef_names <- colnames(design)  # e.g. conditionINCB224525_24h
 colnames(design) <- levels(col_data$condition)
 
 cat("Design matrix (", nrow(design), " rows x ", ncol(design), " columns):\n", sep = "")
@@ -425,9 +426,26 @@ cat("\n=== Step 8: Processing comparisons ===\n")
 flush.console()
 
 coef_names <- colnames(coef(fit))
+# msqrobLm may not expose coefficient names via colnames(coef()).
+# Fall back to raw model.matrix column names (saved before renaming).
+if (is.null(coef_names) || length(coef_names) == 0) {
+    coef_names <- model_coef_names
+}
+cat("Coefficient names:", paste(coef_names, collapse = ", "), "\n")
 cat("Processing", length(comparisons), "comparisons with",
     if (inherits(BPPARAM, "SnowParam")) paste0(n_cores, " parallel workers") else "serial processing", "\n")
 flush.console()
+
+# Build mapping from condition value to coefficient name.
+# Handles both "condition<level>" (R default) and plain "<level>" naming styles.
+cond_to_coef <- character()
+for (cond in unique_conditions) {
+    # Match coefficient name ending with the condition value (anchored)
+    hits <- which(grepl(paste0(cond, "$"), coef_names, perl = TRUE))
+    if (length(hits) == 1) {
+        cond_to_coef[cond] <- coef_names[hits]
+    }
+}
 
 # Build contrast vectors for all comparisons (serial — lightweight)
 contrast_list <- vector("list", length(comparisons))
@@ -440,10 +458,16 @@ for (i in seq_along(comparisons)) {
 
     contrast_vec <- setNames(rep(0, length(coef_names)), coef_names)
     for (val in g1_values) {
-        if (val %in% coef_names) contrast_vec[val] <- contrast_vec[val] + 1
+        coef_name <- cond_to_coef[val]
+        if (!is.na(coef_name) && nzchar(coef_name)) {
+            contrast_vec[coef_name] <- contrast_vec[coef_name] + 1
+        }
     }
     for (val in g2_values) {
-        if (val %in% coef_names) contrast_vec[val] <- contrast_vec[val] - 1
+        coef_name <- cond_to_coef[val]
+        if (!is.na(coef_name) && nzchar(coef_name)) {
+            contrast_vec[coef_name] <- contrast_vec[coef_name] - 1
+        }
     }
 
     if (all(contrast_vec == 0)) {
