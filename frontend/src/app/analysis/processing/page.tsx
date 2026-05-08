@@ -134,7 +134,7 @@ const CompletionDisplay: React.FC<{
           Processing Complete!
         </h3>
         <p className="text-success mb-4">
-          All 9 steps have been completed successfully.
+          All 8 steps have been completed successfully.
           {duration && (
             <span className="flex items-center gap-1 mt-1">
               <Clock className="w-4 h-4" />

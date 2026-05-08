@@ -26,7 +26,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 // Metadata
 export const metadata: Metadata = {
   title: 'ProteomicsViz - Proteomics Analysis Platform',
-  description: 'Analyze and visualize proteomics data with our powerful 9-step processing pipeline.',
+  description: 'Analyze and visualize proteomics data with our powerful 8-step processing pipeline.',
   keywords: ['proteomics', 'bioinformatics', 'data analysis', 'visualization'],
 };
 

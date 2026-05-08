@@ -16,7 +16,7 @@ export type SessionStatus =
   | 'error'
   | 'cancelled';
 
-// Processing step in the 9-step pipeline
+// Processing step in the 8-step pipeline
 export type ProcessingStep =
   | 'combine_replicates'
   | 'generate_unique_psm'
@@ -26,7 +26,6 @@ export type ProcessingStep =
   | 'protein_abundance'
   | 'differential_expression'
   | 'qc_metrics'
-  | 'gsea_analysis'
   | null;
 
 // Analysis configuration for a session

@@ -9,7 +9,7 @@ import { FlaskConical, Upload, Settings, BarChart3, FileDown, Cpu, Layers } from
 const steps = [
   { icon: '1', title: 'Create a Session', desc: 'From the welcome page, create a new analysis session and give it a name.' },
   { icon: '2', title: 'Upload Data', desc: 'Upload PSM CSV files named as PSM_ExperimentName_Condition_ReplicateNumber.csv. Minimum 3 replicates per condition.' },
-  { icon: '3', title: 'Configure & Process', desc: 'Set analysis parameters and start the 9-step pipeline. Progress is shown in real time.' },
+  { icon: '3', title: 'Configure & Process', desc: 'Set analysis parameters and start the 8-step pipeline. Progress is shown in real time.' },
   { icon: '4', title: 'View Results', desc: 'Explore interactive volcano plots, QC plots, and GSEA enrichment analysis.' },
   { icon: '5', title: 'Export', desc: 'Download results as CSV or export interactive HTML reports.' },
 ];
@@ -19,7 +19,6 @@ const pipelineSteps = [
   { range: '6', desc: 'Protein abundance aggregation', tech: 'R/msqrob2' },
   { range: '7', desc: 'Differential expression analysis', tech: 'R/msqrob2' },
   { range: '8', desc: 'QC metrics (PCA, CV, distributions)', tech: 'Python/sklearn' },
-  { range: '9', desc: 'Gene Set Enrichment Analysis', tech: 'Python/gseapy' },
 ];
 
 export default function AboutPage() {

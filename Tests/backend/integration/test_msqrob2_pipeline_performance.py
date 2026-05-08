@@ -25,7 +25,6 @@ from app.services.steps import (
     step_protein_abundance_msqrob2,
     step_multi_condition_de,
     step_qc_metrics,
-    step_gsea_analysis,
 )
 
 

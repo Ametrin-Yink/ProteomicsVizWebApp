@@ -60,7 +60,7 @@ register(
 # Steps 1-5: Python pre-processing (shared with msqrob2 pipeline)
 # Step 6: protein abundance via MSstats dataProcess
 # Step 7: differential expression via MSstats groupComparison
-# Steps 8-9: QC metrics, GSEA
+# Step 8: QC metrics
 register(
     PipelineTool.MSSTATS,
     [

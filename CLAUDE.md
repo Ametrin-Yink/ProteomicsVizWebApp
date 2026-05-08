@@ -1,15 +1,15 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. Read this throughly before starting your works.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. Read this thoroughly before starting your work.
 
 ## Project Overview
 
 Proteomics Visualization Web App - A full-stack scientific data analysis platform with a Next.js frontend, FastAPI backend, and R-based bioinformatics pipeline.
 
 **Tech Stack:**
-- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js
-- Backend: FastAPI, Python 3.12+, Pydantic, asyncio
-- Analysis: R 4.5+, msqrob2, QFeatures, limma, MSstats, gseapy
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js, Cytoscape.js, Radix UI
+- Backend: FastAPI, Python 3.12+, Pydantic, asyncio, scipy, scikit-learn
+- Analysis: R 4.5+, msqrob2, QFeatures, limma, MSstats, MSstatsBioNet, gseapy
 
 ## Quick Start (Dev)
 
@@ -80,13 +80,18 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 ```
 
 **Key Modules:**
-- `app/api/routes/` - 7 route modules (sessions, upload, analysis, processing, visualization, reports, compounds)
-- `app/services/pipeline_engine.py` - Plugin-based step execution engine
-- `app/services/pipeline_registry.py` - Pipeline template definitions (maps AnalysisTemplate to steps)
-- `app/services/steps/` - Individual step handlers (one file per pipeline step)
-- `app/services/` - Business logic including msqrob2_wrapper, msstats_wrapper, data_processor, gsea_service
+- `app/api/routes/` - 8 route modules (sessions, upload, analysis, processing, visualization, reports, compounds, compare)
+- `app/services/pipeline_engine.py` - Plugin-based step execution engine with PipelineState tracking
+- `app/services/pipeline_registry.py` - Pipeline definitions for both msqrob2 and MSstats tools
+- `app/services/steps/` - Individual step handlers (10 handlers + helpers, one per pipeline step)
+- `app/services/base_r_wrapper.py` - Template Method base class for R subprocess wrappers (shared by msqrob2/msstats)
+- `app/services/task_manager.py` - Thread-pool-isolated background computation with queuing (TaskKind: PIPELINE, GSEA, BIONET, COMPUTE, LIGHT)
+- `app/services/session_manager.py` - Centralized session lifecycle and scanning
+- `app/services/bionet_service.py` - INDRA subnetwork analysis via MSstatsBioNet
+- `app/services/compare_service.py` - On-demand protein/comparison correlation (PCA, UMAP, t-SNE, clustering)
+- `app/services/gsea_cache_service.py` - GSEA result caching keyed by input data hash
 - `app/db/session_store.py` - JSON-based session persistence
-- `app/models/` - Pydantic models (AnalysisTemplate enum, AnalysisConfig, Session)
+- `app/models/` - Pydantic models: analysis.py (PipelineTool, AnalysisConfig), data.py (PSM, DE results), session.py (Session, SessionState)
 - `scripts/` - R scripts called via subprocess (see Pipeline section below)
 
 **Critical Pattern - R Integration via Subprocess:**
@@ -106,11 +111,11 @@ content = await asyncio.to_thread(read_file, file_path)
 
 **State Management (Zustand with Immer):**
 ```
-stores/
-├── sessionStore.ts     # Session data (persisted)
-├── ui-store.ts                # UI state
-├── analysis-store.ts          # Analysis state
-├── processing-store.ts # Real-time processing status
+frontend/src/stores/
+├── sessionStore.ts        # Session data (persisted)
+├── ui-store.ts            # UI state
+├── analysis-store.ts      # Analysis state
+├── processing-store.ts    # Real-time processing status + WebSocket + queue tracking
 ```
 
 **Pattern - Store Usage:**
@@ -121,9 +126,14 @@ const state = useSessionStore();  // BAD - causes re-renders
 
 ### Processing Pipeline
 
-The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step handlers registered via `pipeline_registry.py`. The active template is `MULTI_CONDITION` (`"multi_condition_comparison"`); `TIME_SERIES` is reserved for future use.
+The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step handlers registered via `pipeline_registry.py`. Two statistical pipelines are available, selected via `PipelineTool` (not `AnalysisTemplate`):
 
-**9 Steps (msqrob2-based):**
+- **msqrob2** (default): R/msqrob2 + QFeatures for protein abundance and DE
+- **MSstats**: R/MSstats for protein abundance and DE
+
+Both share steps 1-5 (Python preprocessing). GSEA and BioNet are on-demand, triggered from visualization routes — not pipeline steps. The `TIME_SERIES` template is reserved for future use.
+
+**8 Pipeline Steps:**
 
 | Step | Name | Tool |
 |------|------|------|
@@ -132,19 +142,24 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 | 3 | Remove Razor Peptides | Python (DataProcessor, conditional) |
 | 4 | Remove Low Quality | Python (DataProcessor) |
 | 5 | Filter by Criteria | Python (DataProcessor) |
-| 6 | Protein Abundance | R/msqrob2 (`msqrob2_data_process.R`) |
-| 7 | Differential Expression (multi-condition) | R/msqrob2 (`msqrob2_group_comparison_multi.R`) |
+| 6 | Protein Abundance | R (msqrob2 or MSstats) |
+| 7 | Differential Expression | R (msqrob2 or MSstats) |
 | 8 | QC Metrics | Python (QCCalculator) |
-| 9 | GSEA Analysis | Python/gseapy (GO, KEGG, Reactome) |
+
+**On-Demand Analysis (triggered from visualization, not pipeline steps):**
+- **GSEA**: Gene set enrichment via `visualization.py` POST endpoint, cached by `gsea_cache_service.py`
+- **BioNet**: INDRA subnetwork analysis via `bionet_service.py` + `bionet_network.R`
+- **Compare**: Protein/comparison correlation (PCA, UMAP, t-SNE, clustering) via `compare_service.py`
 
 **R Scripts Reference:**
 
 | Script | Step | Purpose |
 |--------|------|---------|
-| `msqrob2_data_process.R` | 6 | Peptide-to-protein aggregation via msqrob2 |
+| `msqrob2_data_process.R` | 6 | Peptide-to-protein aggregation via msqrob2/QFeatures |
 | `msqrob2_group_comparison_multi.R` | 7 | Multi-condition DE with N conditions, M contrasts |
-| `msstats_data_process.R` | (alt 6) | MSstats protein abundance (not wired into pipeline) |
-| `msstats_group_comparison_multi.R` | (alt 7) | MSstats group comparison (not wired into pipeline) |
+| `msstats_data_process.R` | 6 | MSstats protein abundance (MSstats pipeline) |
+| `msstats_group_comparison_multi.R` | 7 | MSstats group comparison (MSstats pipeline) |
+| `bionet_network.R` | on-demand | INDRA subnetwork analysis via MSstatsBioNet |
 | `install_r_packages.R` | setup | Installs Bioconductor packages |
 | `verify_r_packages.R` | setup | Verifies msqrob2/QFeatures/limma are installed |
 | `verify_msstats.R` | setup | Verifies MSstats/MSstatsConvert are installed |
@@ -175,7 +190,7 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 
 ### R Integration
 - **NEVER use rpy2** - Always use subprocess
-- **Required packages:** msqrob2, QFeatures, limma, MSstats
+- **Required packages:** msqrob2, QFeatures, limma, MSstats, MSstatsBioNet
 - **Handle encoding:** UTF-8 with latin-1 fallback for R output
 - **R script receives args positionally:** Check argument count in R with `length(args)`
 
@@ -199,19 +214,29 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 
 ## API Contract
 
-**Base URL:** `http://localhost:8000/api/sessions`
+**Base URL:** `http://localhost:8000/api/sessions` (all below prefixed with this unless noted)
 
-**Endpoints (all prefixed with `/api/sessions`):**
-- Sessions: `POST /`, `GET /`, `GET /{id}`, `PUT /{id}`, `PUT /{id}/config`, `DELETE /{id}`
-- Upload: `POST /{id}/upload/proteomics`, `POST /{id}/upload/compound`, `DELETE /{id}/files/{type}/{filename}`
-- Processing: `POST /{id}/process`, `GET /{id}/processing/status`, `GET /{id}/processing/logs`, `POST /{id}/processing/retry`
-- Analysis: `POST /{id}/analysis/start` (deprecated, redirects to `/process`), `POST /{id}/analysis/cancel`
-- Results: `GET /{id}/results`, `GET /{id}/qc/plots`, `GET /{id}/gsea/{db}`, `GET /{id}/gsea/{db}/plot`, `GET /{id}/gsea/{db}/heatmap`
-- Protein: `GET /{id}/protein/{protein_id}/abundance`, `GET /{id}/protein/{protein_id}/peptide`
-- Reports: `POST /{id}/reports/generate`, `GET /{id}/reports`, `GET /{id}/reports/{rid}/download`, `DELETE /{id}/reports/{rid}`
-- Compounds: `GET /{id}/compounds`, `GET /{id}/compounds/{condition}`, `GET /{id}/compounds/{condition}/image`, `GET /{id}/compounds/{condition}/properties`, `POST /{id}/compounds/validate`
-- WebSocket: `WS /ws/sessions/{id}`
-- Organisms: `GET /api/organisms`
+**Sessions:** `POST /` `GET /` `GET /{id}` `PUT /{id}` `DELETE /{id}` `PUT /{id}/config` `POST /{id}/config` `PATCH /{id}/visualization-state`
+
+**Upload:** `POST /{id}/upload/proteomics` `POST /{id}/upload/compound` `DELETE /{id}/files/{type}/{filename}`
+
+**Processing:** `POST /{id}/process` `POST /{id}/cancel` `GET /{id}/status` `GET /{id}/logs` `POST /{id}/retry`
+
+**Results/Visualization:** `GET /{id}/results` `GET /{id}/qc/plots` `GET /{id}/protein/{protein_id}/abundance` `GET /{id}/protein/{protein_id}/peptide`
+
+**GSEA (on-demand):** `POST /{id}/gsea/run` `GET /{id}/gsea/status` `GET /{id}/gsea/{db}` `GET /{id}/gsea/{db}/plot` `GET /{id}/gsea/{db}/heatmap`
+
+**BioNet (on-demand):** `POST /{id}/bionet/run` `GET /{id}/bionet/status` `GET /{id}/bionet/subnetwork`
+
+**Compare:** `POST /{id}/compare/protein` `POST /{id}/compare/matrix` `POST /{id}/compare/venn` `GET /{id}/compare/status` `GET /{id}/compare/result` `DELETE /{id}/compare/result`
+
+**Reports:** `POST /{id}/reports/generate` `GET /{id}/reports` `GET /{id}/reports/{rid}/download` `DELETE /{id}/reports/{rid}`
+
+**Compounds:** `GET /{id}/compounds` `GET /{id}/compounds/{condition}` `GET /{id}/compounds/{condition}/image` `GET /{id}/compounds/{condition}/properties` `POST /{id}/compounds/validate`
+
+**Tasks:** `GET /{id}/tasks` `POST /{id}/tasks/cancel`
+
+**Other:** `WS /ws/sessions/{id}` `GET /api/organisms` `POST /{id}/analysis/start` (deprecated→`/process`)
 
 ## Session Storage
 
@@ -221,18 +246,27 @@ Sessions persisted to `backend/sessions/{session_id}/`:
 - `uploads/` - User uploaded files
 - `results/` - Generated analysis outputs
 
-**Session State Lifecycle:** `created -> configuring -> processing -> completed/error`
+**Session State Lifecycle:** `created -> configuring -> queued -> processing -> completed/error/cancelled`
 
 ## Key Files Reference
 
 - `backend/app/main.py` - FastAPI application, route mounting, lifespan handlers
 - `backend/app/core/config.py` - Settings (pydantic-settings: R paths, timeouts, caching)
-- `backend/app/services/pipeline_engine.py` - Pipeline step execution engine
-- `backend/app/services/pipeline_registry.py` - Template-to-step mapping
+- `backend/app/services/pipeline_engine.py` - Pipeline step execution engine with PipelineState
+- `backend/app/services/pipeline_registry.py` - Pipeline definitions for msqrob2 and MSstats tools
 - `backend/app/services/processing_orchestrator.py` - Pipeline orchestration (adapts engine to session lifecycle)
-- `backend/app/models/analysis.py` - AnalysisTemplate enum, AnalysisConfig, pipeline models
-- `backend/scripts/msqrob2_data_process.R` - Step 6 (protein abundance)
-- `backend/scripts/msqrob2_group_comparison_multi.R` - Step 7 (multi-condition DE)
+- `backend/app/services/task_manager.py` - Background computation isolation with thread pools and queuing
+- `backend/app/services/session_manager.py` - Centralized session lifecycle and scanning
+- `backend/app/services/base_r_wrapper.py` - Template Method base for R subprocess wrappers
+- `backend/app/services/gsea_service.py` - On-demand GSEA analysis with caching (not a pipeline step)
+- `backend/app/services/compare_service.py` - On-demand protein/comparison correlation analysis
+- `backend/app/services/bionet_service.py` - INDRA subnetwork analysis via MSstatsBioNet
+- `backend/app/models/analysis.py` - PipelineTool enum, AnalysisConfig (msqrob2 + MSstats params)
+- `backend/app/models/session.py` - Session, SessionState (includes QUEUED, CANCELLED)
+- `backend/app/models/data.py` - PSMData, ProteinAbundance, DifferentialExpressionResult, QC metrics
+- `backend/scripts/msqrob2_data_process.R` - Step 6 (protein abundance via msqrob2)
+- `backend/scripts/msqrob2_group_comparison_multi.R` - Step 7 (multi-condition DE via msqrob2)
+- `backend/scripts/bionet_network.R` - INDRA subnetwork analysis
 - `frontend/next.config.ts` - Frontend config, API proxy to `http://127.0.0.1:8000`
 - `AGENTS/` - 9 developer guides covering overview, red lines, coding standards, API contract, state management, error handling, testing, pipeline, and lessons learned
 - `docs/api/openapi.yaml` - API specification

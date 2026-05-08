@@ -128,6 +128,45 @@ paths:
         '200':
           description: QC plot data
 
+  /sessions/{sessionId}/processing/status:
+    get:
+      summary: Get processing status and queue position
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Processing status
+
+  /sessions/{sessionId}/processing/logs:
+    get:
+      summary: Get processing logs
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Processing log entries
+
+  /sessions/{sessionId}/processing/retry:
+    post:
+      summary: Retry failed pipeline step
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Retry started
+
   /sessions/{sessionId}/gsea/{database}:
     get:
       summary: Get GSEA results
@@ -147,6 +186,90 @@ paths:
         '200':
           description: GSEA results
 
+  /sessions/{sessionId}/gsea/run:
+    post:
+      summary: Run GSEA on-demand for a comparison
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comparison:
+                  type: string
+                databases:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '202':
+          description: GSEA started
+
+  /sessions/{sessionId}/compare/protein:
+    post:
+      summary: Protein correlation analysis (PCA, UMAP, t-SNE)
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Analysis started
+
+  /sessions/{sessionId}/compare/matrix:
+    post:
+      summary: Similarity matrix clustering
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Analysis started
+
+  /sessions/{sessionId}/compare/status:
+    get:
+      summary: Get compare task status
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task status
+
+  /sessions/{sessionId}/compare/result:
+    get:
+      summary: Get compare task result
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task result
+
+  /organisms:
+    get:
+      summary: List supported organisms
+      responses:
+        '200':
+          description: List of organisms
+
 components:
   schemas:
     SessionCreate:
@@ -159,6 +282,10 @@ components:
           type: string
         template:
           type: string
+        pipeline:
+          type: string
+          enum: [msqrob2, msstats]
+          default: msqrob2
 
     Session:
       type: object
@@ -169,9 +296,12 @@ components:
           type: string
         template:
           type: string
+        pipeline:
+          type: string
+          enum: [msqrob2, msstats]
         state:
           type: string
-          enum: [created, configuring, processing, completed, error]
+          enum: [created, configuring, queued, processing, completed, error, cancelled]
         config:
           $ref: '#/components/schemas/SessionConfig'
         created_at:
@@ -194,3 +324,16 @@ components:
           type: boolean
         strict_filtering:
           type: boolean
+        comparisons:
+          type: array
+          items:
+            type: object
+            properties:
+              group1:
+                type: object
+              group2:
+                type: object
+        msqrob2_normalization:
+          type: string
+        msstats_normalization:
+          type: string

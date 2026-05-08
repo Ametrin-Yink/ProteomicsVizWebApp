@@ -1,5 +1,5 @@
 """
-GSEA analysis service (Step 9).
+GSEA analysis service (on-demand, triggered from visualization routes).
 
 Performs Gene Set Enrichment Analysis using gseapy.
 """
@@ -61,7 +61,7 @@ class GSEAService:
     """
     GSEA analysis service.
 
-    Implements step 9 of the pipeline: GSEA analysis on multiple databases.
+    On-demand GSEA analysis on multiple databases, triggered from visualization routes.
     """
 
     def __init__(self):
@@ -87,7 +87,7 @@ class GSEAService:
         Returns:
             Dictionary mapping database name to GSEAResults
         """
-        logger.info("Step 9: Running GSEA analysis (parallel with caching)")
+        logger.info("Running GSEA analysis (parallel with caching)")
 
         # Validate and repair GMT cache before running analysis
         _validate_and_repair_gmt_cache()
@@ -201,7 +201,7 @@ class GSEAService:
 
         total_pathways = sum(r.significant_pathways for r in results.values())
         logger.info(
-            f"Step 9 complete: GSEA analysis finished, {total_pathways} total significant pathways"
+            f"GSEA analysis finished, {total_pathways} total significant pathways"
         )
 
         return results

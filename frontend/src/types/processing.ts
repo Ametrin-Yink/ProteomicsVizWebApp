@@ -125,7 +125,7 @@ export interface StartProcessingResponse {
   message: string;
 }
 
-// Step definitions for the 9-step pipeline
+// Step definitions for the 8-step pipeline (GSEA is on-demand, not a pipeline step)
 export const PROCESSING_STEPS: Omit<ProcessingStepDef, 'status' | 'progress' | 'message'>[] = [
   {
     id: 1,
@@ -182,12 +182,5 @@ export const PROCESSING_STEPS: Omit<ProcessingStepDef, 'status' | 'progress' | '
     description: 'Compute quality control metrics and PCA',
     package: 'Python',
     function: 'sklearn.decomposition.PCA',
-  },
-  {
-    id: 9,
-    name: 'Perform GSEA Analysis',
-    description: 'Run Gene Set Enrichment Analysis using gseapy',
-    package: 'Python/gseapy',
-    function: 'gp.prerank()',
   },
 ];

@@ -47,7 +47,6 @@ class ProcessingStep(str, Enum):
     PROTEIN_ABUNDANCE = "protein_abundance"
     DIFFERENTIAL_EXPRESSION = "differential_expression"
     QC_METRICS = "qc_metrics"
-    GSEA = "gsea"
 
 
 STEP_NAMES: dict[int, str] = {
@@ -59,7 +58,6 @@ STEP_NAMES: dict[int, str] = {
     6: "protein_abundance",
     7: "differential_expression",
     8: "qc_metrics",
-    9: "gsea",
 }
 
 STEP_DISPLAY_NAMES: dict[int, str] = {
@@ -71,7 +69,6 @@ STEP_DISPLAY_NAMES: dict[int, str] = {
     6: "Protein Abundance",
     7: "Differential Expression",
     8: "QC Metrics",
-    9: "GSEA Analysis",
 }
 
 

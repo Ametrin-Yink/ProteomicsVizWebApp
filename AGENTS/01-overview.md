@@ -6,10 +6,10 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS v4, Zustand (5 stores with Immer), Plotly.js |
-| Backend | FastAPI, Python 3.12, Pydantic v2, asyncio |
-| Analysis | R 4.5+, msqrob2, QFeatures, limma, MSstats (Bioconductor) |
-| GSEA | gseapy |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS v4, Zustand (4 stores with Immer), Plotly.js, Cytoscape.js, Radix UI |
+| Backend | FastAPI, Python 3.12, Pydantic v2, asyncio, scipy, scikit-learn |
+| Analysis | R 4.5+, msqrob2, QFeatures, limma, MSstats, MSstatsBioNet (Bioconductor) |
+| GSEA | gseapy (on-demand, not a pipeline step) |
 | Testing | pytest (backend), Playwright (E2E) |
 
 ## Project Structure
@@ -18,13 +18,13 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 ProteomicsVizWebApp/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routes/        # 7 route modules
+│   │   ├── api/routes/        # 8 route modules (sessions, upload, analysis, processing, visualization, reports, compounds, compare)
 │   │   ├── core/              # config, exceptions
 │   │   ├── db/                # JSON session store
 │   │   ├── models/            # Pydantic models
 │   │   ├── schemas/           # Request/response schemas
-│   │   ├── services/          # Business logic (pipeline engine, wrappers, services)
-│   │   │   └── steps/          # Individual pipeline step handlers
+│   │   ├── services/          # Business logic (pipeline engine, task manager, R wrappers, compare, bionet, GSEA)
+│   │   │   └── steps/          # Individual pipeline step handlers (10 files + helpers)
 │   │   └── utils/             # validators, file_parser, helpers
 │   └── scripts/               # R scripts (msqrob2_data_process.R, msqrob2_group_comparison_multi.R, MSstats, install/verify)
 ├── frontend/

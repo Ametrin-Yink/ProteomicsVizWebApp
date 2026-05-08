@@ -24,12 +24,20 @@ Base URL: `http://localhost:8000/api/sessions`
 | PUT | `/api/sessions/{id}/config` | Update config |
 | DELETE | `/api/sessions/{id}` | Delete session |
 | POST | `/api/sessions/{id}/upload/proteomics` | Upload PSM files |
-| GET | `/api/sessions/{id}/status` | Get processing status |
+| GET | `/api/sessions/{id}/processing/status` | Get processing status + queue position |
 | POST | `/api/sessions/{id}/process` | Start pipeline |
+| GET | `/api/sessions/{id}/processing/logs` | Get processing logs |
+| POST | `/api/sessions/{id}/processing/retry` | Retry failed step |
 | GET | `/api/sessions/{id}/results` | Get DE results |
 | GET | `/api/sessions/{id}/qc/plots` | Get QC data |
 | GET | `/api/sessions/{id}/gsea/{database}` | Get GSEA results |
-| WS | `/ws/sessions/{id}` | Real-time updates |
+| POST | `/api/sessions/{id}/gsea/run` | Run GSEA on-demand per comparison |
+| POST | `/api/sessions/{id}/compare/protein` | Protein correlation analysis |
+| POST | `/api/sessions/{id}/compare/matrix` | Similarity matrix clustering |
+| GET | `/api/sessions/{id}/compare/status` | Compare task status |
+| GET | `/api/sessions/{id}/compare/result` | Compare task results |
+| GET | `/api/organisms` | List supported organisms |
+| WS | `/ws/sessions/{id}` | Real-time pipeline updates |
 
 ## Key Types
 
@@ -38,18 +46,23 @@ interface Session {
   id: string;
   name: string;
   template: string;
-  state: 'created' | 'configuring' | 'processing' | 'completed' | 'error';
+  pipeline: 'msqrob2' | 'msstats';
+  state: 'created' | 'configuring' | 'queued' | 'processing' | 'completed' | 'error' | 'cancelled';
   config?: SessionConfig;
   files?: { proteomics: string[]; compound?: string };
   created_at: string;
 }
 
 interface SessionConfig {
-  treatment: string;
-  control: string;
-  organism: string;
+  treatment?: string;
+  control?: string;
+  organism?: string;
   remove_razor: boolean;
   strict_filtering: boolean;
+  comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
+  // MSstats and msqrob2 parameters (normalization, imputation, aggregation, etc.)
+  msstats_normalization?: string;
+  msqrob2_normalization?: string;
 }
 ```
 
