@@ -364,11 +364,13 @@ export const ExperimentTable: React.FC = () => {
           const values = parseCSVLine(lines[i]);
           const fn = values[filenameIdx];
           if (!fn || !uploadedFilenames.has(fn)) continue;
-          current[fn] = { ...(current[fn] || {}) };
+          // Build entry from scratch so removed/changed columns don't linger
+          const entry: Record<string, string> = {};
           colNames.forEach((col) => {
             const colIdx = headers.indexOf(col);
-            if (colIdx >= 0) current[fn][col] = values[colIdx] || '';
+            if (colIdx >= 0) entry[col] = values[colIdx] || '';
           });
+          current[fn] = entry;
           merged++;
         }
         const configUpdate: Partial<typeof config> = { metadata_columns: current };
