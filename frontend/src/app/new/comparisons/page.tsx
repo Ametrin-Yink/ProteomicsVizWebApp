@@ -155,8 +155,6 @@ function ComparisonsContent() {
     }
 
     setComparisons(prev => [...prev, { group1: g1, group2: g2 }]);
-    setGroup1Cards([]);
-    setGroup2Cards([]);
   };
 
   const removeComparison = (index: number) => {
@@ -266,7 +264,14 @@ function ComparisonsContent() {
               onDragOver={handleDragOver}
               onDrop={(e) => handleDropOnZone(e, 'group1')}
             >
-              <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wider">Group A</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group A</p>
+                {group1Cards.length > 0 && (
+                  <button onClick={() => setGroup1Cards([])} className="text-xs text-text-muted hover:text-error transition-colors">
+                    Clear all
+                  </button>
+                )}
+              </div>
               {group1Cards.length === 0 ? (
                 <p className="text-xs text-text-muted italic">Drop condition cards here</p>
               ) : (
@@ -293,7 +298,14 @@ function ComparisonsContent() {
               onDragOver={handleDragOver}
               onDrop={(e) => handleDropOnZone(e, 'group2')}
             >
-              <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wider">Group B</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group B</p>
+                {group2Cards.length > 0 && (
+                  <button onClick={() => setGroup2Cards([])} className="text-xs text-text-muted hover:text-error transition-colors">
+                    Clear all
+                  </button>
+                )}
+              </div>
               {group2Cards.length === 0 ? (
                 <p className="text-xs text-text-muted italic">Drop condition cards here</p>
               ) : (
