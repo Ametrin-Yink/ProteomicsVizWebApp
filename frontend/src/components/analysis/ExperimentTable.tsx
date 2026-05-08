@@ -314,7 +314,7 @@ export const ExperimentTable: React.FC = () => {
   // --- CSV Import/Export ---
   const handleExportCSV = () => {
     if (uploadedFiles.length === 0) return;
-    const allCols = ['experiment', conditionCol, 'replicate', ...customColumns];
+    const allCols = ['experiment', conditionCol, ...customColumns, 'replicate'];
     const header = ['filename', ...allCols].join(',');
     const rows = uploadedFiles.map((file) => {
       const meta = config.metadata_columns?.[file.filename] || {};
@@ -344,7 +344,7 @@ export const ExperimentTable: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const text = evt.target?.result as string;
+        const text = (evt.target?.result as string).replace(/\r/g, '');
         const lines = text.split('\n').filter((l) => l.trim());
         if (lines.length < 2) { addToast('warning', 'CSV must have a header and at least one data row'); return; }
         const headers = parseCSVLine(lines[0]);
@@ -357,7 +357,7 @@ export const ExperimentTable: React.FC = () => {
         let merged = 0;
 
         // Infer condition column from position in our export format:
-        // colNames = ['experiment', <conditionCol>, 'replicate', ...customColumns]
+        // colNames = ['experiment', <conditionCol>, ...customColumns, 'replicate']
         const csvConditionCol = colNames.length > 1 && colNames[1] !== 'replicate' ? colNames[1] : null;
 
         for (let i = 1; i < lines.length; i++) {
@@ -377,8 +377,8 @@ export const ExperimentTable: React.FC = () => {
         }
         setConfig(configUpdate);
         addToast('success', `Merged metadata for ${merged} file(s)`);
-      } catch {
-        addToast('error', 'Failed to parse CSV file');
+      } catch (err) {
+        addToast('error', `Failed to parse CSV: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
     reader.readAsText(file);
