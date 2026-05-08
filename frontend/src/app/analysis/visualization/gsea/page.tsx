@@ -92,7 +92,7 @@ function GSEAAnalysisContent() {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison]);
+  }, [selectedDatabase, sessionId, page, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison, apiPrefix]);
 
   // Fetch session config for comparisons
   useEffect(() => {
@@ -149,7 +149,7 @@ function GSEAAnalysisContent() {
     } catch {
       // Silently ignore polling errors
     }
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;

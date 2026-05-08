@@ -7,7 +7,6 @@ import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
 import { getQCData, getDataSource, sessionApiPrefix } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
-import { buildQcExport } from '@/lib/figures/qc-figures';
 
 function QCContent() {
   const searchParams = useSearchParams();
@@ -56,7 +55,7 @@ function QCContent() {
     }
 
     fetchData();
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   if (!sessionId) {
     return (

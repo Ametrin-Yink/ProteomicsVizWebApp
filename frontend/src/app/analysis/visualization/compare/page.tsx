@@ -5,9 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProteinCorrelationPanel from '@/components/visualization/compare/ProteinCorrelationPanel';
 import ComparisonCorrelationPanel from '@/components/visualization/compare/ComparisonCorrelationPanel';
-import { getDataSource, sessionApiPrefix, getComparisonCorrelationData } from '@/lib/api';
+import { getDataSource, sessionApiPrefix } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
-import { buildCompareExport } from '@/lib/figures/compare-figure';
 
 function CompareContent() {
   const searchParams = useSearchParams();

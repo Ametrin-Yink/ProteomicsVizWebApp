@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { VolcanoFilters, GSEADatabase } from '@/types/api';
+import type { VolcanoFilters, GSEADatabase, GSEAData } from '@/types/api';
 import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
 import { getDEResults, getQCData, getDataSource, getGSEAStatus, getGSEAData, getComparisonCorrelationData, getBioNetSubnetwork, sessionApiPrefix } from '@/lib/api';
 import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
@@ -108,10 +108,10 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
         try { const data = await getGSEAData(sessionApiPrefix(sessionId), db, { per_page: 10000 }); return data.results?.length ? { db, data } : null; }
         catch { return null; }
       }));
-      const gseaData: Record<string, unknown> = {};
+      const gseaData: Record<string, GSEAData> = {};
       for (const r of results) { if (r) gseaData[r.db] = r.data; }
       if (Object.keys(gseaData).length === 0) return null;
-      const exportData = buildGseaExport(gseaData as Record<string, any>);
+      const exportData = buildGseaExport(gseaData);
       return { tabId: 'gsea', data: exportData as unknown as Record<string, unknown> };
     },
   },

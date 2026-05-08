@@ -10,7 +10,6 @@ import { getBioNetStatus, getBioNetSubnetwork, runBioNet, getDataSource, session
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { LoaderCircle } from 'lucide-react';
-import { buildBioNetExport } from '@/lib/figures/bionet-graph';
 
 const DEFAULT_SOURCES = [...INDRA_SOURCES];
 const DEFAULT_STATEMENT_TYPES = [...INDRA_STATEMENT_TYPES];
@@ -103,7 +102,7 @@ function BioNetContent() {
     } catch {
       // silently ignore polling errors
     }
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;

@@ -57,13 +57,13 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     listProteins(apiPrefix).then((list) => {
       setProteins(list);
     }).catch(() => {});
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
     if (!sessionId) return;
     getProteinCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   const proteinOptions = useMemo(() => {
     return proteins.map((p) => ({
@@ -100,7 +100,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     } catch {
       // Silently ignore polling errors
     }
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;

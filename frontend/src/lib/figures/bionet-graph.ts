@@ -59,7 +59,7 @@ export function buildBioNetExport(
   keyTargets: string[],
   pvalueCutoff: number,
   logfcCutoff: number,
-  runComparison?: string,
+  _runComparison?: string,
 ): BioNetExport {
   const keyTargetSet = new Set(keyTargets);
 

@@ -80,13 +80,13 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
         setVennThresholds(session.volcano_filters);
       }
     }).catch(() => {});
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
     if (!sessionId) return;
     getComparisonCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   const availableVennComparisons = useMemo(() => {
     return comparisons.filter((_, i) => i < 10);
@@ -114,7 +114,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     } catch {
       // Silently ignore polling errors
     }
-  }, [sessionId]);
+  }, [sessionId, apiPrefix]);
 
   const startPolling = useCallback(() => {
     if (pollIntervalRef.current) return;

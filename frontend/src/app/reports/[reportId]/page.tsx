@@ -153,7 +153,7 @@ function VolcanoTab() {
       } catch { /* silently fail */ }
     }
     fetchConfig();
-  }, [apiPrefix]);
+  }, [apiPrefix, selectedComparison]);
 
   const comparisonOptions = useMemo(() => {
     if (!sessionConfig?.comparisons) return [];
@@ -429,7 +429,7 @@ function QCTab() {
       }
     }
     fetchData();
-  }, [apiPrefix]);
+  }, [apiPrefix, selectedComparison]);
 
   if (loading) {
     return (
@@ -536,7 +536,7 @@ function GSEATab() {
         }
       }
     }).catch(() => {});
-  }, [apiPrefix]);
+  }, [apiPrefix, selectedComparison]);
 
   return (
     <div>

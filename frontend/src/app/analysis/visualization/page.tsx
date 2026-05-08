@@ -157,6 +157,18 @@ function ResultsContent() {
     setSelectedProteinData(null);
   }, []);
 
+  const comparisonOptions = useMemo(() => {
+    if (!sessionConfig?.comparisons) return [];
+    return sessionConfig.comparisons.map((c) => {
+      const g1 = formatGroup(c.group1);
+      const g2 = formatGroup(c.group2);
+      return {
+        value: `${g1}_vs_${g2}`,
+        label: `${g1} vs ${g2}`,
+      };
+    });
+  }, [sessionConfig?.comparisons]);
+
   // Handle marker toggle from table
   const handleToggleMark = useCallback((protein: DEResult) => {
     const compKey = selectedComparison || comparisonOptions[0]?.value || '';
@@ -173,7 +185,7 @@ function ResultsContent() {
       next[compKey] = compSet;
       return next;
     });
-  }, [selectedComparison]);
+  }, [selectedComparison, comparisonOptions]);
 
   // Clear all markers
   const handleClearAllMarks = useCallback(() => {
@@ -184,7 +196,7 @@ function ResultsContent() {
       delete next[compKey];
       return next;
     });
-  }, [selectedComparison]);
+  }, [selectedComparison, comparisonOptions]);
 
   // Mark all proteins significant per current filters
   const handleMarkAllSignificant = useCallback(() => {
@@ -198,7 +210,7 @@ function ResultsContent() {
       ...prev,
       [compKey]: new Set(significant),
     }));
-  }, [data, selectedComparison, filters]);
+  }, [data, selectedComparison, filters, comparisonOptions]);
 
   // Batch mark: mark significant proteins across multiple comparisons
   const [batchMarkOpen, setBatchMarkOpen] = useState(false);
@@ -284,18 +296,6 @@ function ResultsContent() {
     }, 500);
     return () => clearTimeout(timer);
   }, [filters, sessionId]);
-
-  const comparisonOptions = useMemo(() => {
-    if (!sessionConfig?.comparisons) return [];
-    return sessionConfig.comparisons.map((c) => {
-      const g1 = formatGroup(c.group1);
-      const g2 = formatGroup(c.group2);
-      return {
-        value: `${g1}_vs_${g2}`,
-        label: `${g1} vs ${g2}`,
-      };
-    });
-  }, [sessionConfig?.comparisons]);
 
   const comparisonLabel = useMemo(() => {
     if (selectedComparison) {
