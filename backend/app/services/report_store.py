@@ -56,7 +56,7 @@ def list_reports() -> list[dict]:
         return []
 
     reports = []
-    for report_dir in sorted(rd.iterdir(), key=lambda p: p.name, reverse=True):
+    for report_dir in rd.iterdir():
         if not report_dir.is_dir():
             continue
         meta_path = report_dir / "report.json"
@@ -96,7 +96,11 @@ def get_report_session(report_id: str) -> Optional[dict]:
     session_path = report_dir / "session.json"
     if not session_path.exists():
         return None
-    return json.loads(session_path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(session_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        logger.warning(f"Corrupt session.json in report: {report_id}")
+        return None
 
 
 def patch_report_state(
@@ -105,13 +109,19 @@ def patch_report_state(
     volcano_filters: Optional[dict] = None,
 ) -> bool:
     """Update markers and/or volcano_filters in the report's session.json."""
+    if markers is None and volcano_filters is None:
+        return False
     report_dir = get_report_dir(report_id)
     if not report_dir:
         return False
     session_path = report_dir / "session.json"
     if not session_path.exists():
         return False
-    session_data = json.loads(session_path.read_text(encoding="utf-8"))
+    try:
+        session_data = json.loads(session_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        logger.warning(f"Corrupt session.json in report: {report_id}")
+        return False
     if markers is not None:
         session_data["markers"] = markers
     if volcano_filters is not None:
