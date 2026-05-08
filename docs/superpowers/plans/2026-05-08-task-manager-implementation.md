@@ -1104,11 +1104,12 @@ async def _run_protein_correlation_task(
     session_id: str, req: ProteinCorrelationRequest
 ):
     """Run protein correlation through TaskManager."""
+    import asyncio as _asyncio
     try:
         await task_manager.submit(
-            session_id=session_id,
-            kind=TaskKind.COMPUTE,
-            fn=_run_protein_correlation,
+            session_id,
+            TaskKind.COMPUTE,
+            _run_protein_correlation,
             session_id,
             req,
             label=f"Protein: {req.protein_id}",
@@ -1120,20 +1121,7 @@ async def _run_protein_correlation_task(
         logger.exception("Protein correlation failed")
 ```
 
-But `_run_protein_correlation` is a sync function that takes `(session_id, req)`. We need `fn(session_id, req)` not `fn(session_id)(req)`. Let me check the TaskManager's `submit` signature... it takes `fn, *args`. So:
-
-```python
-await task_manager.submit(
-    session_id=session_id,
-    kind=TaskKind.COMPUTE,
-    fn=_run_protein_correlation,
-    session_id,
-    req,
-    ...
-)
-```
-
-This passes `session_id` and `req` as positional args to `_run_protein_correlation`. That's correct.
+This passes `session_id` and `req` as positional args to `_run_protein_correlation(session_id, req)`.
 
 - [ ] **Step 3: Apply same pattern to `trigger_comparison_correlation`**
 
@@ -1167,9 +1155,9 @@ async def _run_comparison_correlation_task(
 ):
     try:
         await task_manager.submit(
-            session_id=session_id,
-            kind=TaskKind.COMPUTE,
-            fn=_run_comparison_correlation,
+            session_id,
+            TaskKind.COMPUTE,
+            _run_comparison_correlation,
             session_id,
             req,
             label=f"Compare: {req.primary_comparison}",
@@ -1199,9 +1187,9 @@ async def trigger_venn(
 
     # Venn is fast (<5s) — still route through TaskManager for visibility
     result = await task_manager.submit(
-        session_id=session_id,
-        kind=TaskKind.COMPUTE,
-        fn=compute_venn_data,
+        session_id,
+        TaskKind.COMPUTE,
+        compute_venn_data,
         session_dir,
         req.comparisons,
         req.pvalue_threshold,
@@ -1250,7 +1238,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Rewrite `_background_bionet_run` to use TaskManager**
 
-Replace the direct `asyncio.create_task` approach with TaskManager submission:
+Match the existing `BioNetService.run_bionet(de_file, config, nodes_csv, edges_csv)` API:
 
 ```python
 async def _background_bionet_run(
@@ -1258,46 +1246,49 @@ async def _background_bionet_run(
     request: BioNetRunRequest,
     results_dir: Path,
     de_file: Path,
-    bionet_output_dir: Path,
 ) -> None:
     """Background BioNet run dispatched through TaskManager."""
     from app.services.task_manager import TaskKind, TaskCancelledError, TaskTimeoutError
+    from app.services.bionet_service import bionet_service
+    import pandas as pd
 
     comparison = request.comparison
+    bionet_output_dir = _bionet_output_dir(session_id)
     bionet_output_dir.mkdir(parents=True, exist_ok=True)
+    nodes_csv = bionet_output_dir / "nodes.csv"
+    edges_csv = bionet_output_dir / "edges.csv"
 
     def _run_bionet_sync():
-        """Run BioNet synchronously in the dedicated pool."""
-        # BioNet computation — import locally to avoid circular imports
-        from app.services.bionet_service import bionet_service
-        return asyncio.run(
-            bionet_service.run_bionet_analysis(
-                diff_expression_path=de_file,
-                output_dir=bionet_output_dir,
-                comparison_name=comparison,
-                pvalue_cutoff=request.pvalue_cutoff,
-                logfc_cutoff=request.logfc_cutoff,
-                statement_types=request.statement_types,
-                paper_count_cutoff=request.paper_count_cutoff,
-                evidence_count_cutoff=request.evidence_count_cutoff,
-                correlation_cutoff=request.correlation_cutoff,
-                sources_filter=request.sources_filter,
-            )
+        """Run BioNet in the dedicated pool (sync function, no event loop needed)."""
+        config_dict = request.model_dump()
+        return bionet_service.run_bionet(
+            de_file=de_file,
+            config=config_dict,
+            nodes_csv=nodes_csv,
+            edges_csv=edges_csv,
         )
 
     label = f"BioNet: {comparison}"
 
     try:
-        result = await task_manager.submit(
-            session_id=session_id,
-            kind=TaskKind.BIONET,
-            fn=_run_bionet_sync,
+        node_count, edge_count = await task_manager.submit(
+            session_id,
+            TaskKind.BIONET,
+            _run_bionet_sync,
             label=label,
             timeout_seconds=30 * 60,
         )
-        # Save results
-        subnetwork_path = bionet_output_dir / "bionet_subnetwork.json"
-        await asyncio.to_thread(_write_json_file, subnetwork_path, result)
+
+        # Convert CSVs to JSON for API response
+        nodes_df = await asyncio.to_thread(pd.read_csv, nodes_csv)
+        edges_df = await asyncio.to_thread(pd.read_csv, edges_csv)
+        subnetwork = {
+            "nodes": nodes_df.to_dict(orient="records"),
+            "edges": edges_df.to_dict(orient="records"),
+        }
+        subnetwork_path = _bionet_subnetwork_path(session_id)
+        await asyncio.to_thread(_write_json_file, subnetwork_path, subnetwork)
+
     except TaskCancelledError:
         logger.info(f"BioNet cancelled for {session_id}/{comparison}")
     except TaskTimeoutError:
@@ -1341,15 +1332,12 @@ async def run_bionet_on_demand(
             detail="A BioNet run is already in progress for this session",
         )
 
-    bionet_output_dir = settings.sessions_dir / session_id / "bionet" / request.comparison
-
     task = asyncio.create_task(
         _background_bionet_run(
             session_id=session_id,
             request=request,
             results_dir=results_dir,
             de_file=de_file,
-            bionet_output_dir=bionet_output_dir,
         )
     )
     _background_tasks.add(task)
@@ -1410,11 +1398,15 @@ Then replace the semaphore-acquire pattern in `run_processing_pipeline_async`. T
 Find the section where the semaphore is acquired (around lines 425-450) and replace with:
 
 ```python
-async def run_processing_pipeline_async(session_id: str, session: Session):
+async def run_processing_pipeline_async(
+    session_id: str,
+    session: Session,
+    websocket_callback: Callable | None = None,
+):
     """Run processing pipeline through TaskManager."""
     try:
         orchestrator = ProcessingOrchestrator(session_id)
-        cancel_evt = _cancel_events.get(session_id, asyncio.Event())
+        cancel_evt = _cancel_events.setdefault(session_id, asyncio.Event())
         orchestrator.set_cancel_event(cancel_evt)
 
         pipeline = _derive_pipeline(session)
@@ -1427,18 +1419,25 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
 
         def _run_pipeline():
             """Run the pipeline synchronously in the dedicated pool."""
-            return asyncio.run(orchestrator.process_session(config))
+            return asyncio.run(
+                orchestrator.process_session(config, websocket_callback=websocket_callback)
+            )
 
         label = f"Pipeline ({pipeline.value})"
+        # Report queue position if waiting
+        queue_pos = task_manager.get_queue_position(session_id, TaskKind.PIPELINE)
+        if queue_pos is not None:
+            session.state = SessionState.QUEUED
+            await store.save(session)  # frontend sees queued state
+
         await task_manager.submit(
-            session_id=session_id,
-            kind=TaskKind.PIPELINE,
-            fn=_run_pipeline,
+            session_id,
+            TaskKind.PIPELINE,
+            _run_pipeline,
             label=label,
-            timeout_seconds=12 * 60 * 60,  # 12 hours for pipeline
+            timeout_seconds=12 * 60 * 60,
         )
 
-        # Pipeline completed — session state already updated by orchestrator
         logger.info(f"Pipeline completed for session {session_id}")
 
     except TaskCancelledError:
@@ -1448,12 +1447,6 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         logger.exception(f"Pipeline failed for session {session_id}: {e}")
         await session_manager.update_session_state(session_id, SessionState.ERROR, str(e))
 ```
-
-But wait — the current `run_processing_pipeline_async` is more complex. It handles queue position tracking, state updates, and error recovery. Let me preserve the queue-position reporting while delegating execution to TaskManager.
-
-The key change: instead of acquiring its own semaphore, let TaskManager handle queuing. The queue position can be read from `task_manager.get_queue_position()`. The state transitions (QUEUED → PROCESSING → COMPLETED/ERROR) can be driven by TaskManager callbacks.
-
-Since refactoring the entire pipeline flow is complex, a minimal approach: replace just the `async with _processing_semaphore:` block with a TaskManager submission that runs the orchestrator's `process_session` in the PIPELINE pool. Keep the session state management as-is.
 
 - [ ] **Step 3: Commit**
 
