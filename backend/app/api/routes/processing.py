@@ -6,7 +6,6 @@ Processing status and control endpoints.
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_session_store
@@ -17,18 +16,10 @@ from app.models.session import ProcessingStatus, SessionState, Session
 from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism, PipelineTool
 from app.services.processing_orchestrator import ProcessingOrchestrator
 from app.services.session_manager import session_manager
+from app.services.task_manager import task_manager, TaskKind
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
-
-# Concurrency limit: max 1 concurrent processing session
-_processing_semaphore = asyncio.Semaphore(1)
-
-# Track sessions currently waiting in queue
-_queued_sessions: list[str] = []  # Ordered list of session_ids
-
-# Track sessions actively running inside the semaphore
-_processing_sessions: set[str] = set()
 
 # Cancellation events for active processing sessions
 _cancel_events: dict[str, asyncio.Event] = {}
@@ -66,75 +57,6 @@ def _schedule_background_task(coro) -> asyncio.Task:
     return task
 
 
-def _is_session_stale(started_at: str, max_age_hours: int = 6) -> bool:
-    """Check if a session's processing has exceeded the max age threshold.
-    Returns True if the timestamp is unparseable (treat corrupt data as stale)."""
-    try:
-        started = datetime.fromisoformat(started_at)
-        elapsed = datetime.now(timezone.utc) - started
-        return elapsed.total_seconds() > max_age_hours * 3600
-    except (ValueError, TypeError):
-        return True
-
-
-def _add_to_queue(session_id: str) -> int:
-    """Add session to queue, deduplicating first. Returns queue position (1-indexed)."""
-    try:
-        _queued_sessions.remove(session_id)
-    except ValueError:
-        pass
-    _queued_sessions.append(session_id)
-    return len(_queued_sessions)
-
-
-async def _is_any_session_processing(
-    store: SessionStore, exclude_session_id: str, current_session_id: str
-) -> bool:
-    """Check if any other session is actively processing (with 6-hour stale timeout).
-
-    Args:
-        store: Session store instance
-        exclude_session_id: Session ID to exclude (the one trying to start)
-        current_session_id: Used for logging context
-
-    Returns:
-        True if another session is actively processing
-    """
-    if _processing_sessions:
-        logger.info(
-            f"Session {current_session_id}: _processing_sessions is non-empty, queuing"
-        )
-        return True
-
-    # Fallback: check session store for any processing sessions
-    all_sessions = await store.list_all()
-    logger.info(
-        f"Session {current_session_id}: checking {len(all_sessions)} sessions for processing state"
-    )
-    for s in all_sessions:
-        if s.state == SessionState.PROCESSING and s.id != exclude_session_id:
-            is_stale = False
-            pipeline_state = await store.load_pipeline_state(s.id)
-            if pipeline_state:
-                started_at = pipeline_state.get("started_at")
-                if started_at:
-                    if _is_session_stale(started_at):
-                        is_stale = True
-                        started_time = datetime.fromisoformat(started_at)
-                        if started_time.tzinfo is None:
-                            started_time = started_time.replace(tzinfo=timezone.utc)
-                        elapsed = datetime.now(timezone.utc) - started_time
-                        logger.warning(
-                            f"Stale processing state for session {s.id}: "
-                            f"started {elapsed.total_seconds() / 3600:.1f}h ago, ignoring"
-                        )
-            if not is_stale:
-                logger.info(f"Session {s.id} is actively processing")
-                return True
-    logger.info(f"Session {current_session_id}: any_processing=False")
-    return False
-
-
 @router.get("/{session_id}/status")
 async def get_processing_status(
     session_id: str, store: SessionStore = Depends(get_session_store)
@@ -148,19 +70,17 @@ async def get_processing_status(
         )
 
     # Return default status based on session state
-    queue_position = None
-    if session_id in _queued_sessions:
-        try:
-            queue_position = _queued_sessions.index(session_id) + 1
-        except ValueError:
-            pass  # Session was removed between check and index
+    queue_position = task_manager.get_queue_position(session_id, TaskKind.PIPELINE)
 
     return ProcessingStatus(
         state=session.state,
         progress=0,
         steps=[],
         queue_position=queue_position,
-        queue_length=len(_queued_sessions),
+        queue_length=sum(
+            1 for info in task_manager._active_tasks.values()
+            if info.kind == TaskKind.PIPELINE and info.status in ("queued", "running")
+        ),
     )
 
 
@@ -249,7 +169,7 @@ async def retry_processing(
             detail=f"At least {MIN_PROTEOMICS_FILES} proteomics files required. Current: {len(session.files.proteomics)}",
         )
 
-    # Reset to PROCESSING state and clear error — start_processing will handle queue/semaphore
+    # Reset to PROCESSING state and clear error
     session.state = SessionState.PROCESSING
     session.error_message = None
     await store.save(session)
@@ -257,19 +177,6 @@ async def retry_processing(
     # Create cancellation event
     _cancel_events[session_id] = asyncio.Event()
 
-    # Reuse the same queue/semaphore decision as start_processing
-    any_processing = await _is_any_session_processing(store, session_id, session_id)
-
-    if any_processing:
-        session.state = SessionState.QUEUED
-        await store.save(session)
-        queue_position = _add_to_queue(session_id)
-        logger.info(f"Retry: Session {session_id} queued at position {queue_position}")
-        _schedule_background_task(run_processing_pipeline_async(session_id, session))
-        return {"data": {"status": "queued", "queue_position": queue_position}}
-
-    session.state = SessionState.PROCESSING
-    await store.save(session)
     _schedule_background_task(run_processing_pipeline_async(session_id, session))
     logger.info(f"Retry: Processing started for session {session_id}")
     return {"data": {"status": "started"}}
@@ -301,84 +208,6 @@ async def start_processing(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found",
         )
-
-    # Check if already processing
-    if session.state == SessionState.PROCESSING:
-        # Check for stale processing state (pipeline started but no recent activity)
-        pipeline_state = await store.load_pipeline_state(session_id)
-        is_stale = False
-        if pipeline_state:
-            started_at = pipeline_state.get("started_at")
-            if started_at:
-                parse_failed = False
-                if _is_session_stale(started_at):
-                    is_stale = True
-                    started_time = datetime.fromisoformat(started_at)
-                    if started_time.tzinfo is None:
-                        started_time = started_time.replace(tzinfo=timezone.utc)
-                    elapsed = datetime.now(timezone.utc) - started_time
-                    logger.warning(
-                        f"Stale processing state detected for {session_id}: "
-                        f"started {elapsed.total_seconds() / 3600:.1f}h ago, resetting"
-                    )
-                else:
-                    # Helper returned False — could be not-stale OR parse failure
-                    try:
-                        datetime.fromisoformat(started_at)
-                    except (ValueError, TypeError):
-                        parse_failed = True
-                        is_stale = True
-
-                if parse_failed:
-                    logger.warning(
-                        f"Failed to parse pipeline started_at for {session_id}"
-                    )
-
-        if is_stale:
-            # Reset stale processing state — use CONFIGURING since config and files are still valid
-            session.state = SessionState.CONFIGURING
-            await store.save(session)
-        else:
-            # Add to queue instead of rejecting
-            session.state = SessionState.QUEUED
-            await store.save(session)
-            queue_position = _add_to_queue(session_id)
-            logger.info(f"Session {session_id} queued at position {queue_position}")
-
-            # Create background task that will wait for semaphore
-            _schedule_background_task(
-                run_processing_pipeline_async(session_id, session)
-            )
-
-            return {
-                "data": {
-                    "status": "queued",
-                    "queue_position": queue_position,
-                    "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}",
-                }
-            }
-
-    # Check if ANY other session is currently processing
-    any_processing = await _is_any_session_processing(store, session_id, session_id)
-
-    if any_processing:
-        session.state = SessionState.QUEUED
-        await store.save(session)
-        queue_position = _add_to_queue(session_id)
-        logger.info(
-            f"Session {session_id} queued at position {queue_position} (another session processing)"
-        )
-
-        # Create background task that will wait for semaphore
-        _schedule_background_task(run_processing_pipeline_async(session_id, session))
-
-        return {
-            "data": {
-                "status": "queued",
-                "queue_position": queue_position,
-                "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}",
-            }
-        }
 
     # Validate session has required configuration
     if not session.config or not session.config.organism:
@@ -442,137 +271,128 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
     try:
         # If session was queued, log it
         if session.state == SessionState.QUEUED:
-            logger.info(f"Session {session_id} is queued, waiting for semaphore...")
+            logger.info(f"Session {session_id} is queued, waiting for pipeline slot...")
 
-        # Acquire semaphore (blocks until it's this session's turn)
-        async with _processing_semaphore:
-            _processing_sessions.add(session_id)
-            logger.info(f"Session {session_id} acquired semaphore, starting processing")
+        # Report queue position if waiting
+        queue_pos = task_manager.get_queue_position(session_id, TaskKind.PIPELINE)
+        if queue_pos is not None and queue_pos > 1:
+            session.state = SessionState.QUEUED
+            await session_manager.update_session_state(session_id, SessionState.QUEUED)
 
-            # Re-check session state — may have been cancelled while waiting in queue
-            session = await session_manager.get_session(session_id)
-            if session.state in (SessionState.CANCELLED, SessionState.ERROR):
+        # Ensure processing state
+        session.state = SessionState.PROCESSING
+        await session_manager.update_session_state(session_id, SessionState.PROCESSING)
+
+        # Define all config fields to forward from SessionConfig to AnalysisConfig
+        _CONFIG_FORWARD_FIELDS = [
+            # Core
+            "treatment", "control", "remove_razor", "strict_filtering",
+            # Shared advanced
+            "pvalue_threshold", "logfc_threshold", "min_peptides_per_protein",
+            # MSstats basic (existing)
+            "msstats_normalization", "msstats_feature_selection",
+            "msstats_summary_method", "msstats_impute", "msstats_log_base",
+            "msstats_censored_int", "msstats_max_quantile", "msstats_remove50missing",
+            # MSstats advanced (new)
+            "msstats_n_top_feature", "msstats_min_feature_count",
+            "msstats_remove_uninformative_feature_outlier",
+            "msstats_equal_feature_var", "msstats_name_standards",
+            "msstats_save_fitted_models",
+            "msstats_n_cores",
+            # Multi-condition
+            "comparisons",
+        ]
+
+        sc = session.config
+        pipeline = _derive_pipeline(session)
+        template = _derive_template(session.template)
+        config_kwargs = {
+            "organism": Organism(sc.organism) if sc.organism else Organism.HUMAN,
+            "template": template,
+            "pipeline": pipeline,
+        }
+
+        for field in _CONFIG_FORWARD_FIELDS:
+            if hasattr(sc, field):
+                val = getattr(sc, field)
+                if val is not None:
+                    config_kwargs[field] = val
+
+        # Map metadata_columns to metadata (different field name)
+        if hasattr(sc, "metadata_columns") and sc.metadata_columns:
+            config_kwargs["metadata"] = sc.metadata_columns
+
+        # Map covariate_columns (new)
+        if hasattr(sc, "covariate_columns") and sc.covariate_columns:
+            config_kwargs["covariate_columns"] = sc.covariate_columns
+
+        config = AnalysisConfig(**config_kwargs)
+        logger.info(
+            f"Config created: treatment={config.treatment}, control={config.control}"
+        )
+
+        # Create WebSocket callback for progress updates
+        async def websocket_callback(progress):
+            """Send progress update via WebSocket."""
+            try:
                 logger.info(
-                    f"Session {session_id} was {session.state.value} while queued, skipping"
+                    f"WebSocket callback: step {progress.step}, status {progress.status}"
                 )
-                _processing_sessions.discard(session_id)
-                try:
-                    _queued_sessions.remove(session_id)
-                except ValueError:
-                    pass
-                return
-
-            session.state = SessionState.PROCESSING
-            await session_manager.update_session_state(
-                session_id, SessionState.PROCESSING
-            )
-
-            # Remove from queue tracking
-            try:
-                _queued_sessions.remove(session_id)
-            except ValueError:
-                pass
-
-            # Define all config fields to forward from SessionConfig to AnalysisConfig
-            _CONFIG_FORWARD_FIELDS = [
-                # Core
-                "treatment", "control", "remove_razor", "strict_filtering",
-                # Shared advanced
-                "pvalue_threshold", "logfc_threshold", "min_peptides_per_protein",
-                # MSstats basic (existing)
-                "msstats_normalization", "msstats_feature_selection",
-                "msstats_summary_method", "msstats_impute", "msstats_log_base",
-                "msstats_censored_int", "msstats_max_quantile", "msstats_remove50missing",
-                # MSstats advanced (new)
-                "msstats_n_top_feature", "msstats_min_feature_count",
-                "msstats_remove_uninformative_feature_outlier",
-                "msstats_equal_feature_var", "msstats_name_standards",
-                "msstats_save_fitted_models",
-                "msstats_n_cores",
-                # Multi-condition
-                "comparisons",
-            ]
-
-            sc = session.config
-            pipeline = _derive_pipeline(session)
-            template = _derive_template(session.template)
-            config_kwargs = {
-                "organism": Organism(sc.organism) if sc.organism else Organism.HUMAN,
-                "template": template,
-                "pipeline": pipeline,
-            }
-
-            for field in _CONFIG_FORWARD_FIELDS:
-                if hasattr(sc, field):
-                    val = getattr(sc, field)
-                    if val is not None:
-                        config_kwargs[field] = val
-
-            # Map metadata_columns to metadata (different field name)
-            if hasattr(sc, "metadata_columns") and sc.metadata_columns:
-                config_kwargs["metadata"] = sc.metadata_columns
-
-            # Map covariate_columns (new)
-            if hasattr(sc, "covariate_columns") and sc.covariate_columns:
-                config_kwargs["covariate_columns"] = sc.covariate_columns
-
-            config = AnalysisConfig(**config_kwargs)
-            logger.info(
-                f"Config created: treatment={config.treatment}, control={config.control}"
-            )
-
-            # Create WebSocket callback for progress updates
-            async def websocket_callback(progress):
-                """Send progress update via WebSocket."""
-                try:
-                    logger.info(
-                        f"WebSocket callback: step {progress.step}, status {progress.status}"
-                    )
-                    await session_manager.send_progress_update(
-                        session_id, progress.model_dump()
-                    )
-                    logger.info("WebSocket callback: sent successfully")
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to send WebSocket progress update: {e}", exc_info=True
-                    )
-
-            # Run the processing pipeline
-            logger.info(f"Calling process_session for {session_id}")
-            orchestrator = ProcessingOrchestrator(session_id=session_id)
-            cancel_event = _cancel_events.get(session_id)
-            if cancel_event:
-                orchestrator.set_cancel_event(cancel_event)
-            result = await orchestrator.process_session(
-                config=config, websocket_callback=websocket_callback
-            )
-
-            logger.info(
-                f"Processing completed for session {session_id}",
-                extra={
-                    "session_id": session_id,
-                    "total_psms": result.total_psms,
-                    "total_proteins": result.total_proteins,
-                    "significant_proteins": result.significant_proteins,
-                },
-            )
-
-            # Send completion message via WebSocket
-            try:
-                await session_manager.send_complete_message(
-                    session_id=session_id,
-                    outputs={
-                        "psm_abundances": result.psm_abundances_path,
-                        "protein_abundances": result.protein_abundances_path,
-                        "diff_expression": result.diff_expression_path,
-                        "qc_results": result.qc_results_path,
-                        "gsea_results": result.gsea_results_path,
-                    },
-                    duration=result.processing_time_seconds or 0,
+                await session_manager.send_progress_update(
+                    session_id, progress.model_dump()
                 )
-                logger.info(f"Sent completion message to session {session_id}")
+                logger.info("WebSocket callback: sent successfully")
             except Exception as e:
-                logger.warning(f"Failed to send completion message: {e}")
+                logger.warning(
+                    f"Failed to send WebSocket progress update: {e}", exc_info=True
+                )
+
+        # Run the processing pipeline via TaskManager
+        logger.info(f"Calling process_session for {session_id}")
+        orchestrator = ProcessingOrchestrator(session_id=session_id)
+        cancel_event = _cancel_events.get(session_id)
+        if cancel_event:
+            orchestrator.set_cancel_event(cancel_event)
+
+        def _run_pipeline():
+            return asyncio.run(orchestrator.process_session(
+                config=config, websocket_callback=websocket_callback
+            ))
+
+        result = await task_manager.submit(
+            session_id,
+            TaskKind.PIPELINE,
+            _run_pipeline,
+            label=f"Pipeline ({pipeline.value})",
+            timeout_seconds=12 * 60 * 60,
+        )
+
+        logger.info(
+            f"Processing completed for session {session_id}",
+            extra={
+                "session_id": session_id,
+                "total_psms": result.total_psms,
+                "total_proteins": result.total_proteins,
+                "significant_proteins": result.significant_proteins,
+            },
+        )
+
+        # Send completion message via WebSocket
+        try:
+            await session_manager.send_complete_message(
+                session_id=session_id,
+                outputs={
+                    "psm_abundances": result.psm_abundances_path,
+                    "protein_abundances": result.protein_abundances_path,
+                    "diff_expression": result.diff_expression_path,
+                    "qc_results": result.qc_results_path,
+                    "gsea_results": result.gsea_results_path,
+                },
+                duration=result.processing_time_seconds or 0,
+            )
+            logger.info(f"Sent completion message to session {session_id}")
+        except Exception as e:
+            logger.warning(f"Failed to send completion message: {e}")
 
     except ProcessingError as e:
         logger.error(
@@ -599,47 +419,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             session_id, SessionState.ERROR, str(e)
         )
     finally:
-        _processing_sessions.discard(session_id)
         _cancel_events.pop(session_id, None)
-
-
-async def _recover_orphaned_sessions(store: SessionStore) -> None:
-    """Recover sessions stuck in QUEUED or stale PROCESSING state after a restart.
-
-    QUEUED sessions are reset to CONFIGURING (safe — user files/config preserved).
-    PROCESSING sessions are checked for staleness (6-hour timeout) and reset if stale.
-    """
-    all_sessions = await store.list_all()
-    recovered = 0
-    for session in all_sessions:
-        if session.state == SessionState.QUEUED:
-            logger.info(
-                f"Recovering orphaned queued session {session.id}: resetting to CONFIGURING"
-            )
-            session.state = SessionState.CONFIGURING
-            await store.save(session)
-            recovered += 1
-        elif session.state == SessionState.PROCESSING:
-            pipeline_state = await store.load_pipeline_state(session.id)
-            is_stale = False
-            if pipeline_state and pipeline_state.get("started_at"):
-                if _is_session_stale(pipeline_state["started_at"]):
-                    is_stale = True
-            else:
-                # No pipeline state or no started_at — likely orphaned from restart
-                is_stale = True
-
-            if is_stale:
-                logger.info(
-                    f"Recovering stale processing session {session.id}: "
-                    f"resetting to CONFIGURING"
-                )
-                session.state = SessionState.CONFIGURING
-                await store.save(session)
-                recovered += 1
-
-    if recovered:
-        logger.info(f"Session recovery: {recovered} session(s) reset to CONFIGURING")
 
 
 @router.post("/{session_id}/cancel")
@@ -654,12 +434,10 @@ async def cancel_processing(
             detail=f"Session {session_id} not found",
         )
 
-    # Handle queued sessions
+    # Cancel via TaskManager (handles queued + running tasks)
+    task_manager.cancel(session_id)
+
     if session.state == SessionState.QUEUED:
-        try:
-            _queued_sessions.remove(session_id)
-        except ValueError:
-            pass
         session.state = SessionState.CANCELLED
         await store.save(session)
         return {"data": {"status": "cancelled"}}

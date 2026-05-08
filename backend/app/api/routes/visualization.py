@@ -1033,15 +1033,7 @@ def _read_gsea_status(session_id: str) -> dict | None:
         return None
 
 
-async def _write_gsea_status(session_id: str, data: dict) -> None:
-    path = _gsea_status_path(session_id)
-    await asyncio.to_thread(_write_json_file, path, data)
-
-
 # --- BioNet helpers ---
-
-_bionet_run_locks: dict[str, asyncio.Lock] = {}
-_bionet_status_write_locks: dict[str, asyncio.Lock] = {}  # separate from run locks (avoids deadlock)
 
 _BIONET_OUTPUT_DIR_NAME = "bionet"
 
@@ -1066,21 +1058,9 @@ def _read_bionet_status(session_id: str) -> dict | None:
         return json.load(f)
 
 
-async def _write_bionet_status(session_id: str, data: dict) -> None:
-    path = _bionet_status_path(session_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if session_id not in _bionet_status_write_locks:
-        _bionet_status_write_locks[session_id] = asyncio.Lock()
-    async with _bionet_status_write_locks[session_id]:
-        await asyncio.to_thread(_write_json_file, path, data)
-
-
 def _write_json_file(path: Path, data: dict) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
-
-
-GSEA_STALE_TIMEOUT_MINUTES = 30
 
 
 @router.get("/{session_id}/gsea/status")
@@ -1121,19 +1101,40 @@ async def get_gsea_run_status(
     if status_data is None:
         return create_response({"status": "idle"})
 
-    # Mark stale if running for too long (defense-in-depth)
-    if status_data.get("status") == "running" and status_data.get("started_at"):
-        try:
-            started = datetime.fromisoformat(status_data["started_at"])
-            elapsed = datetime.now(timezone.utc) - started
-            if elapsed.total_seconds() > GSEA_STALE_TIMEOUT_MINUTES * 60:
-                status_data["status"] = "error"
-                status_data["error"] = "Server restarted during processing"
-                await _write_gsea_status(session_id, status_data)
-        except (ValueError, TypeError):
-            pass
-
     return create_response(status_data)
+
+
+@router.get("/{session_id}/tasks")
+async def get_session_tasks(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Return all task states for a session (from in-memory TaskManager)."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    return create_response(task_manager.get_status(session_id))
+
+
+@router.post("/{session_id}/tasks/cancel")
+async def cancel_session_tasks(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Cancel all running and queued tasks for a session."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    cancelled = task_manager.cancel(session_id)
+    return create_response({"cancelled": cancelled, "status": "cancelled"})
 
 
 async def _background_gsea_run(
@@ -1337,38 +1338,40 @@ async def _background_bionet_run(
     request: BioNetRunRequest,
     results_dir: Path,
     de_file: Path,
-    lock: asyncio.Lock,
 ) -> None:
+    """Background BioNet run dispatched through TaskManager."""
+    from app.services.task_manager import TaskKind, TaskCancelledError, TaskTimeoutError
     from app.services.bionet_service import bionet_service
+    import pandas as pd
 
-    status_data = {
-        "status": "running",
-        "comparison": request.comparison,
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "error": None,
-    }
-    _bionet_output_dir(session_id).mkdir(parents=True, exist_ok=True)
-    await _write_bionet_status(session_id, status_data)
+    comparison = request.comparison
+    bionet_output_dir = _bionet_output_dir(session_id)
+    bionet_output_dir.mkdir(parents=True, exist_ok=True)
+    nodes_csv = bionet_output_dir / "nodes.csv"
+    edges_csv = bionet_output_dir / "edges.csv"
 
-    try:
+    def _run_bionet_sync():
         config_dict = request.model_dump()
-        nodes_csv = _bionet_output_dir(session_id) / "nodes.csv"
-        edges_csv = _bionet_output_dir(session_id) / "edges.csv"
-
-        node_count, edge_count = await asyncio.to_thread(
-            bionet_service.run_bionet,
+        return bionet_service.run_bionet(
             de_file=de_file,
             config=config_dict,
             nodes_csv=nodes_csv,
             edges_csv=edges_csv,
         )
 
-        # Convert CSVs to JSON for API response
-        # (sourceCounts JSON parsing is handled in bionet_service.py)
-        import pandas as pd
-        nodes_df = pd.read_csv(nodes_csv)
-        edges_df = pd.read_csv(edges_csv)
+    label = f"BioNet: {comparison}"
 
+    try:
+        node_count, edge_count = await task_manager.submit(
+            session_id,
+            TaskKind.BIONET,
+            _run_bionet_sync,
+            label=label,
+            timeout_seconds=30 * 60,
+        )
+
+        nodes_df = await asyncio.to_thread(pd.read_csv, nodes_csv)
+        edges_df = await asyncio.to_thread(pd.read_csv, edges_csv)
         subnetwork = {
             "nodes": nodes_df.to_dict(orient="records"),
             "edges": edges_df.to_dict(orient="records"),
@@ -1376,20 +1379,12 @@ async def _background_bionet_run(
         subnetwork_path = _bionet_subnetwork_path(session_id)
         await asyncio.to_thread(_write_json_file, subnetwork_path, subnetwork)
 
-        status_data["status"] = "completed"
-        status_data["node_count"] = node_count
-        status_data["edge_count"] = edge_count
-        status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
-        await _write_bionet_status(session_id, status_data)
-
+    except TaskCancelledError:
+        logger.info(f"BioNet cancelled for {session_id}/{comparison}")
+    except TaskTimeoutError:
+        logger.error(f"BioNet timed out for {session_id}/{comparison}")
     except Exception as e:
-        logger.error(f"Background BioNet run failed: {e}")
-        status_data["status"] = "error"
-        status_data["error"] = str(e)
-        await _write_bionet_status(session_id, status_data)
-    finally:
-        lock.release()
-        _bionet_run_locks.pop(session_id, None)
+        logger.error(f"Background BioNet failed: {e}")
 
 
 @router.post("/{session_id}/bionet/run")
@@ -1413,34 +1408,27 @@ async def run_bionet_on_demand(
             detail=f"Differential expression file not found: {de_file.name}",
         )
 
-    # Per-session lock to prevent concurrent BioNet runs
-    if session_id not in _bionet_run_locks:
-        _bionet_run_locks[session_id] = asyncio.Lock()
-
-    run_lock = _bionet_run_locks[session_id]
-    if run_lock.locked():
+    # Check if BioNet already running for this session
+    from app.services.task_manager import TaskKind
+    bionet_active = any(
+        info.kind == TaskKind.BIONET and info.status in ("queued", "running")
+        for info in task_manager._active_tasks.values()
+        if info.session_id == session_id
+    )
+    if bionet_active:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A BioNet analysis is already running for this session",
+            detail="A BioNet run is already in progress for this session",
         )
 
-    await run_lock.acquire()
-
-    try:
-        task = asyncio.create_task(
-            _background_bionet_run(
-                session_id=session_id,
-                request=request,
-                results_dir=results_dir,
-                de_file=de_file,
-                lock=run_lock,
-            )
+    task = asyncio.create_task(
+        _background_bionet_run(
+            session_id=session_id,
+            request=request,
+            results_dir=results_dir,
+            de_file=de_file,
         )
-    except Exception:
-        run_lock.release()
-        _bionet_run_locks.pop(session_id, None)
-        raise
-
+    )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
