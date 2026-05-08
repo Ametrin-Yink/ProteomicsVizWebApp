@@ -3,9 +3,10 @@
 ## Summary
 
 Replace the dual-viewer (vanilla JS ZIP template + React weblink) with a single
-React-based report viewer. Export copies session result files into a standalone
-report directory. The report is a fully functional, independent copy — all
-visualization features work without the original session.
+React-based report viewer. Export copies the session directory (minus a few
+excluded files) into a standalone report directory. The report is a fully
+functional, independent copy — all visualization features work without the
+original session.
 
 ## Current Problems
 
@@ -27,104 +28,85 @@ visualization features work without the original session.
 1. **Weblink only, no ZIP** — a ZIP can't replicate the on-demand experience.
    The weblink IS the report.
 
-2. **Full file copy at export** — every file the visualization tabs read from
-   disk is copied into the report directory. The report is fully independent.
-   Deleting the original session has zero impact.
+2. **Copy-almost-everything at export** — the session directory is copied to
+   the report directory, excluding only files the visualization page never
+   reads. Any new file a future feature produces is automatically included.
 
 3. **Shared React components** — the report viewer and visualization page use
    the exact same presentational components. Editing a plot updates both.
 
 4. **Report API mirrors session API** — the report has its own endpoints that
-   read from the report directory. The report viewer fetches data on load
-   exactly like the visualization page (no pre-built snapshot JSON needed).
+   read from the report directory. Handler logic is extracted into shared
+   service functions; route files are thin wrappers.
 
-5. **Single codebase for rendering** — there is no Python/Jinja2/vanillaJS
-   rendering code. Only the React components render. The backend only copies
-   files and serves them.
+5. **No rendering code outside React** — there is no Python/Jinja2/vanillaJS
+   rendering. Only React components render. The backend only copies files and
+   serves them.
 
 ## Architecture
 
 ```
 Export flow:
   User clicks Export → modal asks for name → POST to backend
-  Backend copies relevant session files → reports/rpt_abc/
-  Backend writes report.json with metadata + config
+  Backend copies session directory (minus exclusions) → reports/rpt_abc/
+  Backend adds report.json with metadata
   Returns { report_id, weblink: "/reports/rpt_abc" }
 
 Viewer flow:
   User opens /reports/rpt_abc
-  Report viewer calls report API endpoints (same pattern as visualization page)
-  Components receive same prop types, render identically
+  Report viewer calls report API endpoints
+  Components receive same prop types as visualization page, render identically
   On-demand features (protein info, GSEA re-run, BioNet, compare, marking)
-    all work via report-scoped API endpoints
+    all work via report-scoped API endpoints reading the report's own files
 ```
 
 ## What Gets Copied at Export
 
-Every file the visualization endpoints read from disk, verbatim:
+**Strategy: blacklist, not whitelist.** The entire session directory is copied
+except for explicitly excluded paths. New files produced by future features are
+automatically included.
 
-```
-From session/{sid}/                    → To reports/{rid}/
-──────────────────────────────────────────────────────────
-results/Diff_Expression_*.tsv          → results/  (all comparisons)
-results/Protein_Abundances.tsv         → results/
-results/PSM_Abundances.parquet          → results/  (or .tsv fallback)
-results/normalization_coefficients.tsv  → results/
-results/QC_Results.json                → results/
-results/gsea/                          → results/gsea/  (entire tree)
-results/compare/                       → results/compare/  (entire tree)
-bionet/bionet_subnetwork.json          → bionet/
-bionet/bionet_status.json              → bionet/
-gsea_run_status.json                   → (root)
-```
+**Copy everything under `sessions/{sid}/` → `reports/{rid}/` EXCEPT:**
 
-**Config extracted from `session.json` and stored in `report.json`:**
-- `comparisons` (list of group1/group2 pairs)
-- `conditions` (list of condition names)
-- `experiment_name`
-- `treatment` / `control`
+| Excluded path | Reason |
+|---------------|--------|
+| `uploads/` | Raw PSM CSV files (~100MB+). All data has been processed into `results/`. |
+| `pipeline_state.json` | Processing progress tracking. Not used for viewing. |
 
-**Not copied (not used by any visualization endpoint):**
-- `session.json` (config extracted, rest is session-manager metadata)
-- `pipeline_state.json` (processing progress, not needed for viewing)
-- `uploads/*.csv` (raw PSM files, already processed into results/)
-- `results/MSqRob2_Processed.rds` / `MSstats_Processed.rds` (R checkpoints)
-- `bionet/nodes.csv` / `bionet/edges.csv` (intermediate, regenerated on re-run)
+Everything else comes along: `session.json` (config, markers, filters),
+`results/` (all DE files, abundance matrices, QC, GSEA, compare),
+`bionet/` (subnetwork, status), `gsea_run_status.json`.
+
+**Why `session.json` is copied as-is:** it contains the session config
+(comparisons, conditions, experiment name) that the visualization page needs.
+It also contains markers and volcano filters. If a future feature stores new
+config in session.json, it's automatically available in the report.
 
 ## Report Directory Structure
 
+Effectively a mirror of the session directory with `report.json` added:
+
 ```
 reports/rpt_abc123/
-├── report.json              # metadata + session config
-│   ├── report_id, name, session_id, session_name, created_at
-│   ├── experiment_name, conditions, comparisons, treatment, control
-│   └── state: { markers: {comparison: [accessions]}, volcano_filters: {...} }
+├── report.json              # {report_id, name, session_id, session_name, created_at}
+├── session.json             # copied as-is (config, markers, filters)
 ├── gsea_run_status.json     # on-demand GSEA tracking
 ├── results/
-│   ├── Diff_Expression_INCB224525_24h_vs_DMSO_24h.tsv
-│   ├── Diff_Expression_INCB224525_4h_vs_DMSO_24h.tsv
-│   ├── ... (all comparison DE files)
+│   ├── Diff_Expression_*.tsv        # one per comparison
 │   ├── Protein_Abundances.tsv
 │   ├── PSM_Abundances.parquet
 │   ├── normalization_coefficients.tsv
 │   ├── QC_Results.json
-│   ├── gsea/                        # pre-computed GSEA + re-run output
-│   │   └── {comparison}/
-│   │       ├── GSEA_Results.json
-│   │       ├── go_bp/  (gseapy output files)
-│   │       ├── go_cc/
-│   │       ├── go_mf/
-│   │       ├── kegg/
-│   │       └── reactome/
-│   └── compare/                     # on-demand comparison correlation
-│       ├── protein-correlation_status.json
-│       ├── protein-correlation_result.json
-│       ├── comparison-correlation_status.json
-│       └── comparison-correlation_result.json
+│   ├── gsea/{comparison}/           # GSEA results per comparison
+│   └── compare/                     # on-demand correlation results
 └── bionet/
     ├── bionet_subnetwork.json
     └── bionet_status.json
 ```
+
+Note: `results/MSqRob2_Processed.rds` and `bionet/nodes.csv` are also copied
+(since they're not in the exclusion list). They're harmless — unused by any
+endpoint but small enough not to matter.
 
 ## API Contract
 
@@ -136,67 +118,73 @@ reports/rpt_abc123/
 
 Request body: `{ "name": "My Report" }`
 
-### Report Viewing Endpoints (mirror session visualization endpoints)
+### Report Viewing Endpoints
 
 All read from `reports/{rid}/` instead of `sessions/{sid}/`.
 
-| Method | Path | Mirrors | Reads from report |
-|--------|------|---------|-------------------|
-| GET | /api/reports | (list, exists) | report.json files |
-| GET | /api/reports/{rid} | — | report.json |
-| GET | /api/reports/{rid}/results | GET /{sid}/results | results/Diff_Expression_*.tsv |
-| GET | /api/reports/{rid}/qc/plots | GET /{sid}/qc/plots | results/QC_Results.json |
-| GET | /api/reports/{rid}/gsea/status | GET /{sid}/gsea/status | gsea_run_status.json |
-| POST | /api/reports/{rid}/gsea/run | POST /{sid}/gsea/run | results/Diff_Expression_*.tsv, results/Protein_Abundances.tsv |
-| GET | /api/reports/{rid}/gsea/{db} | GET /{sid}/gsea/{db} | results/gsea/{comparison}/GSEA_Results.json |
-| GET | /api/reports/{rid}/gsea/{db}/plot | GET /{sid}/gsea/{db}/plot | results/gsea/{comparison}/*.rnk, ~/.cache/gseapy/*.gmt |
-| GET | /api/reports/{rid}/gsea/{db}/heatmap | GET /{sid}/gsea/{db}/heatmap | results/Protein_Abundances.tsv |
-| POST | /api/reports/{rid}/bionet/run | POST /{sid}/bionet/run | results/Diff_Expression_*.tsv |
-| GET | /api/reports/{rid}/bionet/status | GET /{sid}/bionet/status | bionet/bionet_status.json |
-| GET | /api/reports/{rid}/bionet/subnetwork | GET /{sid}/bionet/subnetwork | bionet/bionet_subnetwork.json |
-| GET | /api/reports/{rid}/protein/{pid}/abundance | GET /{sid}/protein/{pid}/abundance | results/Protein_Abundances.tsv |
-| GET | /api/reports/{rid}/protein/{pid}/peptide | GET /{sid}/protein/{pid}/peptide | results/PSM_Abundances.parquet, results/normalization_coefficients.tsv |
-| POST | /api/reports/{rid}/compare/protein-correlation | POST /{sid}/compare/protein-correlation | results/Diff_Expression_*.tsv |
-| GET | /api/reports/{rid}/compare/protein-correlation/status | — | results/compare/protein-correlation_status.json |
-| GET | /api/reports/{rid}/compare/protein-correlation | — | results/compare/protein-correlation_result.json |
-| POST | /api/reports/{rid}/compare/comparison-correlation | POST /{sid}/compare/comparison-correlation | results/Diff_Expression_*.tsv |
-| GET | /api/reports/{rid}/compare/comparison-correlation/status | — | results/compare/comparison-correlation_status.json |
-| GET | /api/reports/{rid}/compare/comparison-correlation | — | results/compare/comparison-correlation_result.json |
-| POST | /api/reports/{rid}/compare/venn | POST /{sid}/compare/venn | results/Diff_Expression_*.tsv |
-| GET | /api/reports/{rid}/compare/proteins | GET /{sid}/compare/proteins | results/Diff_Expression_*.tsv |
-| PATCH | /api/reports/{rid}/visualization-state | PATCH /{sid}/visualization-state | report.json (markers + volcano_filters fields) |
-| DELETE | /api/reports/{rid} | (exists) | entire report directory |
+| Method | Path | Mirrors session endpoint |
+|--------|------|--------------------------|
+| GET | /api/reports | (exists) |
+| GET | /api/reports/{rid} | — (returns report.json + session.json) |
+| GET | /api/reports/{rid}/results | GET /{sid}/results |
+| GET | /api/reports/{rid}/qc/plots | GET /{sid}/qc/plots |
+| GET | /api/reports/{rid}/gsea/status | GET /{sid}/gsea/status |
+| POST | /api/reports/{rid}/gsea/run | POST /{sid}/gsea/run |
+| GET | /api/reports/{rid}/gsea/{db} | GET /{sid}/gsea/{db} |
+| GET | /api/reports/{rid}/gsea/{db}/plot | GET /{sid}/gsea/{db}/plot |
+| GET | /api/reports/{rid}/gsea/{db}/heatmap | GET /{sid}/gsea/{db}/heatmap |
+| POST | /api/reports/{rid}/bionet/run | POST /{sid}/bionet/run |
+| GET | /api/reports/{rid}/bionet/status | GET /{sid}/bionet/status |
+| GET | /api/reports/{rid}/bionet/subnetwork | GET /{sid}/bionet/subnetwork |
+| GET | /api/reports/{rid}/protein/{pid}/abundance | GET /{sid}/protein/{pid}/abundance |
+| GET | /api/reports/{rid}/protein/{pid}/peptide | GET /{sid}/protein/{pid}/peptide |
+| POST | /api/reports/{rid}/compare/protein-correlation | POST /{sid}/compare/protein-correlation |
+| GET | /api/reports/{rid}/compare/protein-correlation/status | GET /{sid}/compare/protein-correlation/status |
+| GET | /api/reports/{rid}/compare/protein-correlation | GET /{sid}/compare/protein-correlation |
+| POST | /api/reports/{rid}/compare/comparison-correlation | POST /{sid}/compare/comparison-correlation |
+| GET | /api/reports/{rid}/compare/comparison-correlation/status | GET /{sid}/compare/comparison-correlation/status |
+| GET | /api/reports/{rid}/compare/comparison-correlation | GET /{sid}/compare/comparison-correlation |
+| POST | /api/reports/{rid}/compare/venn | POST /{sid}/compare/venn |
+| GET | /api/reports/{rid}/compare/proteins | GET /{sid}/compare/proteins |
+| PATCH | /api/reports/{rid}/visualization-state | PATCH /{sid}/visualization-state |
+| DELETE | /api/reports/{rid} | (exists) |
 
-### Backend Implementation Strategy
+### Backend Implementation
 
-Extract handler logic into shared service functions that take a `data_dir: Path`
-parameter. Both session and report route handlers call the same functions with
-different base directories.
+Handler logic is extracted into shared service functions that take a
+`data_dir: Path` parameter. Both session and report route handlers call the
+same functions with different base directories.
 
 ```
-# Before (session routes only):
+# Shared service (app/services/visualization_service.py):
+def load_de_results(data_dir: Path, comparison: str | None) -> dict: ...
+
+# Session route (app/api/routes/visualization.py):
 @router.get("/{session_id}/results")
 async def get_results(session_id: str):
-    results_dir = sessions_dir / session_id / "results"
-    return load_de_results(results_dir, comparison)
+    return load_de_results(sessions_dir / session_id / "results", comparison)
 
-# After (shared logic):
-# app/services/visualization_service.py
-def load_de_results(data_dir: Path, comparison: str | None): ...
-
-# app/api/routes/visualization.py (session routes)
-@router.get("/{session_id}/results")
-async def get_results(session_id: str):
-    return load_de_results(sessions_dir / session_id / "results", ...)
-
-# app/api/routes/reports.py (report routes)
+# Report route (app/api/routes/reports.py):
 @router.get("/{report_id}/results")
 async def get_report_results(report_id: str):
-    return load_de_results(reports_dir / report_id / "results", ...)
+    return load_de_results(reports_dir / report_id / "results", comparison)
 ```
 
-This avoids duplicating any visualization logic. Both route files are thin
-wrappers around shared service functions.
+Each report route is exactly one function call. Zero logic duplication.
+
+### Adding a New Visualization Feature
+
+When a future visualization tab needs a new endpoint and a new result file,
+here is everything required to support it in reports:
+
+1. **Result file**: Nothing. It's automatically copied (blacklist exclusion).
+2. **Config in session.json**: Nothing. session.json is copied as-is.
+3. **Backend endpoint**: Add a thin report route (one line) that calls the
+   same shared service function the session route calls.
+4. **Frontend**: The report viewer page calls the new report endpoint by
+   constructing the URL with the report ID — same pattern as every other call.
+
+No manual lists to update. No risk of silent breakage.
 
 ### Removed Endpoints
 
@@ -208,36 +196,24 @@ wrappers around shared service functions.
 
 ## Frontend Changes
 
-### Shared Components (already exist, no changes)
-- `VolcanoPlot`, `ProteinInfo`, `ProteinTable`, `FilterPanel`
-- `QCPlots`, `GSEADashboard`, `GSEAPlot`, `PathwayTable`
-- `BioNetNetwork`, `AbundancePlot`
+### Shared Components
 
-### API Client
-
-Add a `dataSource` concept to the frontend API client. Every function that calls
-a session endpoint gets a parallel report variant:
-
-```typescript
-// Current: session-scoped
-getDEResults(sessionId, opts) → GET /api/sessions/{id}/results
-// New: works for both
-getDEResults(sourceId, opts) where sourceId can be session or report
-```
-
-Or: the report viewer constructs API URLs with `/api/reports/{rid}/` prefix
-and uses the same fetch/transform logic. The API client is thin enough that
-a parallel set of functions is acceptable.
+All presentational components under `components/visualization/` are used by
+both the visualization page and the report viewer. No changes needed.
+New components placed there are automatically available to both.
 
 ### Report Viewer Page ([reportId]/page.tsx)
 
-Structure mirrors the visualization page (`analysis/visualization/page.tsx`)
-exactly, with these differences:
+Structure mirrors the visualization page with these differences:
 - Gets `reportId` from URL params instead of `sessionId`
-- Fetches metadata from `GET /api/reports/{rid}` for header info + config
-- Calls report-scoped API endpoints instead of session-scoped
+- Fetches metadata from `GET /api/reports/{rid}` (returns report.json + session.json)
+- Calls report-scoped API endpoints (`/api/reports/{rid}/...`)
 - No session sidebar or session manager
-- Report header (name, date, original session) instead of session nav
+- Report header (name, date, original session name) instead of session nav
+
+API calls use the same fetch/transform pattern as the current API client,
+just with report-prefixed URLs. No parallel function library needed — the
+page constructs URLs from the report ID directly.
 
 ### ExportModal
 
@@ -253,19 +229,14 @@ Simplified to a name input + single POST:
 
 ## Edge Cases
 
-- **Session deleted after export**: No impact. Report has its own copy of all
-  result files. All report endpoints read from the report directory.
-- **GSEA not run before export**: Export copies the `results/gsea/` directory
-  (may be empty or have partial results). User can run GSEA from the report
-  using `POST /api/reports/{rid}/gsea/run`.
-- **BioNet not run before export**: Same pattern — copy whatever exists, user
-  can trigger from the report.
-- **Compare correlation not run before export**: Same — on-demand from report.
+- **Session deleted after export**: No impact. Report has its own copy of all files.
+- **GSEA/BioNet/Compare not run before export**: Their output directories are
+  copied (may be empty or partial). User can trigger them from the report.
 - **Session still processing**: Export rejected if session state != "completed".
-- **Large sessions**: Report directory mirrors session results (~10-50MB).
-  Cleanup on delete recovers space.
+- **Large sessions**: Report directory size is similar to session results
+  (~10-50MB typical, since raw uploads are excluded). Deletion recovers space.
 - **MSstats vs msqrob2 pipeline**: Both produce the same result file names.
   `normalization_coefficients.tsv` is only produced by msqrob2; peptide endpoint
-  handles its absence gracefully (zero normalization factors).
-- **GMT cache files**: GSEA plot endpoint reads `~/.cache/gseapy/*.gmt`. These
-  are system-wide, not session-scoped, and remain available after session deletion.
+  handles its absence gracefully.
+- **GMT cache files**: `~/.cache/gseapy/*.gmt` are system-wide, not session-scoped.
+  Available after session deletion.
