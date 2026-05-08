@@ -279,7 +279,7 @@ export default function GSEAPlot({ pathway, sessionId, database, comparison, onP
   }
 
   const config = {
-    displayModeBar: true,
+    displayModeBar: 'hover',
     displaylogo: false,
     responsive: true,
   };

@@ -63,7 +63,7 @@ export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }
       <Plot
         data={[trace]}
         layout={layout}
-        config={{ displayModeBar: true, displaylogo: false, responsive: true }}
+        config={{ displayModeBar: 'hover', displaylogo: false, responsive: true }}
         style={{ width: '100%' }}
         useResizeHandler
       />

@@ -75,7 +75,7 @@ async def export_weblink(
     return {
         "report_id": metadata["report_id"],
         "name": metadata["name"],
-        "weblink": f"/api/reports/{metadata['report_id']}",
+        "weblink": f"/reports/{metadata['report_id']}",
         "download_url": f"/api/reports/{metadata['report_id']}/download",
         "created_at": metadata["created_at"],
     }

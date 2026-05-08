@@ -256,7 +256,7 @@ export default function VolcanoPlot({
   // Config for plot
   const config = useMemo(
     () => ({
-      displayModeBar: true,
+      displayModeBar: 'hover',
       modeBarButtonsToRemove: ['lasso2d', 'select2d'],
       displaylogo: false,
       responsive: true,

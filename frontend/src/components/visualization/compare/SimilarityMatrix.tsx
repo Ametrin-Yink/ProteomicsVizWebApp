@@ -77,7 +77,7 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
       <Plot
         data={[trace]}
         layout={layout}
-        config={{ displayModeBar: true, displaylogo: false, responsive: true }}
+        config={{ displayModeBar: 'hover', displaylogo: false, responsive: true }}
         style={{ width: '100%' }}
         useResizeHandler
       />

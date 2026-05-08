@@ -451,7 +451,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
   }, [data.psm_completeness]);
 
   const config = {
-    displayModeBar: true,
+    displayModeBar: 'hover',
     modeBarButtonsToRemove: ['lasso2d', 'select2d'],
     displaylogo: false,
     responsive: true,

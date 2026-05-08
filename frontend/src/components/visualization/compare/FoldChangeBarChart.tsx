@@ -72,7 +72,7 @@ export default function FoldChangeBarChart({ data, proteinName }: Props) {
       <Plot
         data={[traceBar]}
         layout={layout}
-        config={{ displayModeBar: true, displaylogo: false, responsive: true }}
+        config={{ displayModeBar: 'hover', displaylogo: false, responsive: true }}
         style={{ width: '100%' }}
         useResizeHandler
       />

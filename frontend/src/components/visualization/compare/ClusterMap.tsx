@@ -66,7 +66,7 @@ export default function ClusterMap(props: Props) {
       <Plot
         data={traces}
         layout={layout}
-        config={{ displayModeBar: true, displaylogo: false, responsive: true }}
+        config={{ displayModeBar: 'hover', displaylogo: false, responsive: true }}
         style={{ width: '100%' }}
         useResizeHandler
       />

@@ -85,7 +85,7 @@ export default function ReportsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <a
-                        href={`/api/reports/${r.report_id}`}
+                        href={`/reports/${r.report_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 px-3 py-1.5 text-sm bg-surface hover:bg-border rounded-lg transition-colors"

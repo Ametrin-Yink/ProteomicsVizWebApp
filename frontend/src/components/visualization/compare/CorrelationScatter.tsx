@@ -110,7 +110,7 @@ export default function CorrelationScatter({
       <Plot
         data={[traceScatter, traceRegression]}
         layout={layout}
-        config={{ displayModeBar: true, displaylogo: false, responsive: true }}
+        config={{ displayModeBar: 'hover', displaylogo: false, responsive: true }}
         style={{ width: '100%' }}
         useResizeHandler
       />
