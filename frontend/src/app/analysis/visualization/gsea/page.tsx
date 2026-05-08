@@ -8,7 +8,7 @@ import PathwayTable from '@/components/visualization/PathwayTable';
 import GSEAPlot from '@/components/visualization/GSEAPlot';
 import type { GSEAData, GSEAResult, GSEADatabase, GSEARunStatus } from '@/types/api';
 import { GSEADatabaseLabels } from '@/types/api';
-import { getGSEAData, getSession, runGSEA, getGSEAStatus } from '@/lib/api';
+import { getGSEAData, getDataSource, sessionApiPrefix, runGSEA, getGSEAStatus } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { Check, X, LoaderCircle } from 'lucide-react';
@@ -19,6 +19,7 @@ const DATABASES: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'
 function GSEAAnalysisContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+  const apiPrefix = sessionApiPrefix(sessionId);
 
   const [selectedDatabase, setSelectedDatabase] = useState<GSEADatabase>('go_bp');
   const [data, setData] = useState<GSEAData | null>(null);
@@ -65,7 +66,7 @@ function GSEAAnalysisContent() {
       setError(null);
       setSelectedPathway(null);
       try {
-        const gseaData = await getGSEAData(sessionId, selectedDatabase, {
+        const gseaData = await getGSEAData(apiPrefix, selectedDatabase, {
           page,
           per_page: pageSize,
           sort_by: sortBy,
@@ -97,7 +98,7 @@ function GSEAAnalysisContent() {
   // Fetch session config for comparisons
   useEffect(() => {
     if (!sessionId) return;
-    getSession(sessionId).then(session => {
+    getDataSource(sessionApiPrefix(sessionId)).then(session => {
       if (session?.config) {
         setSessionConfig({ comparisons: session.config.comparisons });
         const comps = session.config.comparisons;
@@ -117,7 +118,7 @@ function GSEAAnalysisContent() {
   const pollStatus = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const status = await getGSEAStatus(sessionId);
+      const status = await getGSEAStatus(apiPrefix);
       if (lastStatusRef.current?.status === status.status) {
         const prev = lastStatusRef.current.databases || {};
         const next = status.databases || {};
@@ -136,7 +137,7 @@ function GSEAAnalysisContent() {
         }
         if (status.status === 'completed') {
           const p = fetchParamsRef.current;
-          const gseaData = await getGSEAData(sessionId, p.selectedDatabase, {
+          const gseaData = await getGSEAData(apiPrefix, p.selectedDatabase, {
             page: 1, per_page: p.pageSize, sort_by: p.sortBy, sort_order: p.sortOrder,
             significant_only: p.significantOnly, search: p.debouncedSearch,
             comparison: p.selectedComparison || undefined,
@@ -161,7 +162,7 @@ function GSEAAnalysisContent() {
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
-    getGSEAStatus(sessionId).then(async (status) => {
+    getGSEAStatus(apiPrefix).then(async (status) => {
       if (cancelled) return;
       lastStatusRef.current = status;
       setGseaRunStatus(status);
@@ -169,7 +170,7 @@ function GSEAAnalysisContent() {
         startPolling();
       } else if (status.status === 'completed') {
         const p = fetchParamsRef.current;
-        const gseaData = await getGSEAData(sessionId, p.selectedDatabase, {
+        const gseaData = await getGSEAData(apiPrefix, p.selectedDatabase, {
           page: 1, per_page: p.pageSize, sort_by: p.sortBy, sort_order: p.sortOrder,
           significant_only: p.significantOnly, search: p.debouncedSearch,
           comparison: p.selectedComparison || undefined,
@@ -199,7 +200,7 @@ function GSEAAnalysisContent() {
     if (!selectedComparison || runDatabases.length === 0) return;
     setRunError(null);
     try {
-      await runGSEA(sessionId, {
+      await runGSEA(apiPrefix, {
         comparison: selectedComparison,
         databases: runDatabases,
         min_size: runParams.min_size,

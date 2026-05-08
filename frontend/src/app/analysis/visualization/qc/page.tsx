@@ -5,13 +5,14 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
-import { getQCData, getSession } from '@/lib/api';
+import { getQCData, getDataSource, sessionApiPrefix } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { buildQcExport } from '@/lib/figures/qc-figures';
 
 function QCContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+  const apiPrefix = sessionApiPrefix(sessionId);
 
   const [data, setData] = useState<QCData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,8 +28,8 @@ function QCContent() {
       setError(null);
       try {
         const [qcData, session] = await Promise.all([
-          getQCData(sessionId),
-          getSession(sessionId),
+          getQCData(apiPrefix),
+          getDataSource(sessionApiPrefix(sessionId)),
         ]);
         setData(qcData);
         if (session?.config) {

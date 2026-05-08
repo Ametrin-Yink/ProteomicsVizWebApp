@@ -18,6 +18,7 @@ import {
   runProteinCorrelation,
   getProteinCorrelationStatus,
   getProteinCorrelationData,
+  sessionApiPrefix,
 } from '@/lib/api';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
 
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export default function ProteinCorrelationPanel({ sessionId, comparisons }: Props) {
+  const apiPrefix = sessionApiPrefix(sessionId);
   const [proteins, setProteins] = useState<ProteinListEntry[]>([]);
   const [selectedProtein, setSelectedProtein] = useState<string>('');
   const [clusterMethod, setClusterMethod] = useState<ClusterMethod>('pca');
@@ -52,7 +54,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   // Load available proteins on mount
   useEffect(() => {
     if (!sessionId) return;
-    listProteins(sessionId).then((list) => {
+    listProteins(apiPrefix).then((list) => {
       setProteins(list);
     }).catch(() => {});
   }, [sessionId]);
@@ -60,7 +62,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
     if (!sessionId) return;
-    getProteinCorrelationData(sessionId).then((d) => setData(d)).catch(() => {});
+    getProteinCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
   }, [sessionId]);
 
   const proteinOptions = useMemo(() => {
@@ -78,14 +80,14 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
   const pollStatus = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const newStatus = await getProteinCorrelationStatus(sessionId);
+      const newStatus = await getProteinCorrelationStatus(apiPrefix);
       setStatus(newStatus);
       if (newStatus.status === 'completed') {
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
-        const result = await getProteinCorrelationData(sessionId);
+        const result = await getProteinCorrelationData(apiPrefix);
         setData(result);
         setSelectedSimilar(null);
       } else if (newStatus.status === 'error') {
@@ -122,7 +124,7 @@ export default function ProteinCorrelationPanel({ sessionId, comparisons }: Prop
     setSelectedSimilar(null);
     try {
       setStatus({ status: 'running' });
-      await runProteinCorrelation(sessionId, {
+      await runProteinCorrelation(apiPrefix, {
         protein_id: selectedProtein,
         cluster_method: clusterMethod,
         color_comparison: effectiveColorComparison,

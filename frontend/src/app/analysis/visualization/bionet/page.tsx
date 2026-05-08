@@ -6,7 +6,7 @@ import Link from 'next/link';
 import BioNetNetwork from '@/components/visualization/BioNetNetwork';
 import type { BioNetRunStatus, BioNetSubnetwork } from '@/types/api';
 import { INDRA_SOURCES, INDRA_STATEMENT_TYPES } from '@/types/api';
-import { getBioNetStatus, getBioNetSubnetwork, runBioNet, getSession } from '@/lib/api';
+import { getBioNetStatus, getBioNetSubnetwork, runBioNet, getDataSource, sessionApiPrefix } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { LoaderCircle } from 'lucide-react';
@@ -18,6 +18,7 @@ const DEFAULT_STATEMENT_TYPES = [...INDRA_STATEMENT_TYPES];
 function BioNetContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+  const apiPrefix = sessionApiPrefix(sessionId);
 
   // Config state
   const [selectedComparison, setSelectedComparison] = useState('');
@@ -53,7 +54,7 @@ function BioNetContent() {
   // Fetch session config for comparisons and markers
   useEffect(() => {
     if (!sessionId) return;
-    getSession(sessionId).then((session) => {
+    getDataSource(sessionApiPrefix(sessionId)).then((session) => {
       if (session?.config?.comparisons) {
         setComparisons(session.config.comparisons);
         const comps = session.config.comparisons;
@@ -75,7 +76,7 @@ function BioNetContent() {
   const pollStatus = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const status = await getBioNetStatus(sessionId);
+      const status = await getBioNetStatus(apiPrefix);
       if (
         lastStatusRef.current?.status === status.status &&
         lastStatusRef.current?.node_count === status.node_count
@@ -94,7 +95,7 @@ function BioNetContent() {
           setRunError(status.error || 'BioNet analysis failed');
         }
         if (status.status === 'completed') {
-          const data = await getBioNetSubnetwork(sessionId);
+          const data = await getBioNetSubnetwork(apiPrefix);
           setSubnetwork(data);
           setLoading(false);
         }
@@ -114,14 +115,14 @@ function BioNetContent() {
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
-    getBioNetStatus(sessionId).then(async (status) => {
+    getBioNetStatus(apiPrefix).then(async (status) => {
       if (cancelled) return;
       lastStatusRef.current = status;
       setRunStatus(status);
       if (status.status === 'running') {
         startPolling();
       } else if (status.status === 'completed') {
-        const data = await getBioNetSubnetwork(sessionId);
+        const data = await getBioNetSubnetwork(apiPrefix);
         if (!cancelled) setSubnetwork(data);
       }
       setLoading(false);
@@ -144,7 +145,7 @@ function BioNetContent() {
     if (!selectedComparison) return;
     setRunError(null);
     try {
-      await runBioNet(sessionId, {
+      await runBioNet(apiPrefix, {
         comparison: selectedComparison,
         pvalue_cutoff: adjPvalueCutoff,
         logfc_cutoff: logfcCutoff,

@@ -19,7 +19,8 @@ import {
   getComparisonCorrelationStatus,
   getComparisonCorrelationData,
   computeVennData,
-  getSession,
+  getDataSource,
+  sessionApiPrefix,
 } from '@/lib/api';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
 import { formatComparisonKeyWrapped } from '@/lib/utils';
@@ -30,6 +31,7 @@ interface Props {
 }
 
 export default function ComparisonCorrelationPanel({ sessionId, comparisons }: Props) {
+  const apiPrefix = sessionApiPrefix(sessionId);
   const [primaryComparison, setPrimaryComparison] = useState<string>('');
   const effectivePrimary = primaryComparison || comparisons[0]?.value || '';
   const [selectedComparisons, setSelectedComparisons] = useState<string[]>([]);
@@ -65,7 +67,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
 
   useEffect(() => {
     if (!sessionId) return;
-    getSession(sessionId).then((session) => {
+    getDataSource(apiPrefix).then((session) => {
       const markers = session.markers;
       if (markers && typeof markers === 'object' && !Array.isArray(markers)) {
         const obj: Record<string, string[]> = {};
@@ -83,7 +85,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
     if (!sessionId) return;
-    getComparisonCorrelationData(sessionId).then((d) => setData(d)).catch(() => {});
+    getComparisonCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
   }, [sessionId]);
 
   const availableVennComparisons = useMemo(() => {
@@ -93,14 +95,14 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
   const pollStatus = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const newStatus = await getComparisonCorrelationStatus(sessionId);
+      const newStatus = await getComparisonCorrelationStatus(apiPrefix);
       setStatus(newStatus);
       if (newStatus.status === 'completed') {
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
-        const result = await getComparisonCorrelationData(sessionId);
+        const result = await getComparisonCorrelationData(apiPrefix);
         setData(result);
       } else if (newStatus.status === 'error') {
         if (pollIntervalRef.current) {
@@ -140,7 +142,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
       for (const [comp, set] of Object.entries(markedProteins)) {
         markersForApi[comp] = Array.from(set);
       }
-      await runComparisonCorrelation(sessionId, {
+      await runComparisonCorrelation(apiPrefix, {
         primary_comparison: effectivePrimary,
         selected_comparisons: selectedComparisons,
         marked_proteins: markersForApi,
@@ -158,7 +160,7 @@ export default function ComparisonCorrelationPanel({ sessionId, comparisons }: P
     setVennLoading(true);
     setVennError(null);
     try {
-      const result = await computeVennData(sessionId, {
+      const result = await computeVennData(apiPrefix, {
         comparisons: vennComparisons,
         pvalue_threshold: vennThresholds.adjPValue,
         logfc_threshold: vennThresholds.foldChange,

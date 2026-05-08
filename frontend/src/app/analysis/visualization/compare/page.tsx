@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProteinCorrelationPanel from '@/components/visualization/compare/ProteinCorrelationPanel';
 import ComparisonCorrelationPanel from '@/components/visualization/compare/ComparisonCorrelationPanel';
-import { getSession, getComparisonCorrelationData } from '@/lib/api';
+import { getDataSource, sessionApiPrefix, getComparisonCorrelationData } from '@/lib/api';
 import { formatGroup } from '@/lib/utils';
 import { buildCompareExport } from '@/lib/figures/compare-figure';
 
@@ -19,7 +19,7 @@ function CompareContent() {
 
   useEffect(() => {
     if (!sessionId) return;
-    getSession(sessionId).then((session) => {
+    getDataSource(sessionApiPrefix(sessionId)).then((session) => {
       const comps = session?.config?.comparisons;
       if (comps && comps.length > 0) {
         const list = comps.map((c) => ({

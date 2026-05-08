@@ -7,7 +7,7 @@ import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
 import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
-import { getDEResults, getSession, updateSessionVisualizationState } from '@/lib/api';
+import { getDEResults, getDataSource, updateVisualizationState, sessionApiPrefix } from '@/lib/api';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
@@ -51,7 +51,7 @@ function ResultsContent() {
       setLoading(true);
       setError(null);
       try {
-        const results = await getDEResults(sessionId, {
+        const results = await getDEResults(sessionApiPrefix(sessionId), {
           page: 1,
           per_page: 20000,
           comparison: selectedComparison || undefined,
@@ -71,7 +71,7 @@ function ResultsContent() {
   useEffect(() => {
     if (!sessionId) return;
     async function fetchSessionConfig() {
-      const session = await getSession(sessionId!);
+      const session = await getDataSource(sessionApiPrefix(sessionId!));
       if (session) {
         const experiment = session.files?.proteomics?.[0]?.experiment ?? '';
         const comparisons = session.config?.comparisons;
@@ -242,7 +242,7 @@ function ResultsContent() {
     try {
       const newMarked = { ...markedProteins };
       for (const comp of batchMarkComparisons) {
-        const results = await getDEResults(sessionId!, {
+        const results = await getDEResults(sessionApiPrefix(sessionId!), {
           comparison: comp,
           per_page: 20000,
         });
@@ -265,7 +265,7 @@ function ResultsContent() {
     }
     const timer = setTimeout(async () => {
       try {
-        await updateSessionVisualizationState(sessionId, { markers: markersObj });
+        await updateVisualizationState(sessionApiPrefix(sessionId), { markers: markersObj });
       } catch {
         // Silently fail
       }
@@ -278,7 +278,7 @@ function ResultsContent() {
     if (!sessionId) return;
     const timer = setTimeout(async () => {
       try {
-        await updateSessionVisualizationState(sessionId, { volcano_filters: filters });
+        await updateVisualizationState(sessionApiPrefix(sessionId), { volcano_filters: filters });
       } catch {
         // Silently fail — filters are still in local state
       }

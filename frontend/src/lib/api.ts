@@ -57,8 +57,8 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 // Session API
-export async function getSession(
-  sessionId: string
+export async function getDataSource(
+  apiPrefix: string
 ): Promise<{
   id: string;
   name: string;
@@ -76,7 +76,7 @@ export async function getSession(
     s0: number;
   };
 }> {
-  const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`, {
+  const response = await fetch(`${API_BASE_URL}${apiPrefix}`, {
     headers: { 'Content-Type': 'application/json' },
   });
   if (!response.ok) {
@@ -92,7 +92,7 @@ export async function getSession(
 
 // Results API
 export async function getDEResults(
-  sessionId: string,
+  apiPrefix: string,
   params?: {
     significant_only?: boolean;
     page?: number;
@@ -112,17 +112,17 @@ export async function getDEResults(
   if (params?.comparison) queryParams.append('comparison', params.comparison);
 
   const query = queryParams.toString();
-  return fetchApi<DEResultsData>(`/api/sessions/${sessionId}/results${query ? `?${query}` : ''}`);
+  return fetchApi<DEResultsData>(`${apiPrefix}/results${query ? `?${query}` : ''}`);
 }
 
 // QC API
-export async function getQCData(sessionId: string): Promise<QCData> {
-  return fetchApi<QCData>(`/api/sessions/${sessionId}/qc/plots`);
+export async function getQCData(apiPrefix: string): Promise<QCData> {
+  return fetchApi<QCData>(`${apiPrefix}/qc/plots`);
 }
 
 // GSEA API
 export async function getGSEAData(
-  sessionId: string,
+  apiPrefix: string,
   database: GSEADatabase,
   params?: {
     significant_only?: boolean;
@@ -145,7 +145,7 @@ export async function getGSEAData(
   if (params?.comparison) queryParams.append('comparison', params.comparison);
 
   const query = queryParams.toString();
-  return fetchApi<GSEAData>(`/api/sessions/${sessionId}/gsea/${database}${query ? `?${query}` : ''}`);
+  return fetchApi<GSEAData>(`${apiPrefix}/gsea/${database}${query ? `?${query}` : ''}`);
 }
 
 // Encode term for URL query parameter
@@ -155,29 +155,29 @@ function encodeTerm(term: string): string {
 
 // GSEA Plot Data (on-demand)
 export async function getGSEAPlotData(
-  sessionId: string,
+  apiPrefix: string,
   database: GSEADatabase,
   term: string,
   comparison?: string
 ): Promise<GSEAPlotData> {
   const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
-  return fetchApi<GSEAPlotData>(`/api/sessions/${sessionId}/gsea/${database}/plot?term=${encodeTerm(term)}${compParam}`);
+  return fetchApi<GSEAPlotData>(`${apiPrefix}/gsea/${database}/plot?term=${encodeTerm(term)}${compParam}`);
 }
 
 // GSEA Heatmap Data (on-demand)
 export async function getGSEAHeatmapData(
-  sessionId: string,
+  apiPrefix: string,
   database: GSEADatabase,
   term: string,
   comparison?: string
 ): Promise<GSEAHeatmapData> {
   const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
-  return fetchApi<GSEAHeatmapData>(`/api/sessions/${sessionId}/gsea/${database}/heatmap?term=${encodeTerm(term)}${compParam}`);
+  return fetchApi<GSEAHeatmapData>(`${apiPrefix}/gsea/${database}/heatmap?term=${encodeTerm(term)}${compParam}`);
 }
 
 // GSEA On-Demand Run
 export async function runGSEA(
-  sessionId: string,
+  apiPrefix: string,
   body: {
     comparison: string;
     databases: string[];
@@ -186,7 +186,7 @@ export async function runGSEA(
     permutations?: number;
   }
 ): Promise<{ comparison: string; databases: string[]; summary: Record<string, { total_pathways: number; significant_pathways: number }> }> {
-  return fetchApi(`/api/sessions/${sessionId}/gsea/run`, {
+  return fetchApi(`${apiPrefix}/gsea/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -194,28 +194,28 @@ export async function runGSEA(
 }
 
 // GSEA Run Status
-export async function getGSEAStatus(sessionId: string): Promise<GSEARunStatus> {
-  return fetchApi<GSEARunStatus>(`/api/sessions/${sessionId}/gsea/status`);
+export async function getGSEAStatus(apiPrefix: string): Promise<GSEARunStatus> {
+  return fetchApi<GSEARunStatus>(`${apiPrefix}/gsea/status`);
 }
 
 // Protein Abundance API
 export async function getProteinAbundance(
-  sessionId: string,
+  apiPrefix: string,
   proteinId: string,
   comparison?: string
 ): Promise<ProteinAbundance> {
   const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
-  return fetchApi<ProteinAbundance>(`/api/sessions/${sessionId}/protein/${proteinId}/abundance${compParam}`);
+  return fetchApi<ProteinAbundance>(`${apiPrefix}/protein/${proteinId}/abundance${compParam}`);
 }
 
 // Peptide Abundance API
 export async function getPeptideAbundance(
-  sessionId: string,
+  apiPrefix: string,
   proteinId: string,
   comparison?: string
 ): Promise<PeptideAbundanceData> {
   const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
-  return fetchApi<PeptideAbundanceData>(`/api/sessions/${sessionId}/protein/${proteinId}/peptide${compParam}`);
+  return fetchApi<PeptideAbundanceData>(`${apiPrefix}/protein/${proteinId}/peptide${compParam}`);
 }
 
 // Processing API - Following AGENTS/04-api-contract.md
@@ -306,8 +306,8 @@ export const processingAPI = {
 };
 
 // Visualization state (markers + volcano filters)
-export async function updateSessionVisualizationState(
-  sessionId: string,
+export async function updateVisualizationState(
+  apiPrefix: string,
   data: {
     markers?: Record<string, string[]>;
     volcano_filters?: {
@@ -319,7 +319,7 @@ export async function updateSessionVisualizationState(
   }
 ): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/visualization-state`, {
+    const response = await fetch(`${API_BASE_URL}${apiPrefix}/visualization-state`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -328,13 +328,13 @@ export async function updateSessionVisualizationState(
       console.warn(`Failed to save visualization state: ${response.status} ${response.statusText}`);
       // Fall back to localStorage so markers/filters survive page refresh
       try {
-        localStorage.setItem(`viz_state_${sessionId}`, JSON.stringify(data));
+        localStorage.setItem(`viz_state_${apiPrefix}`, JSON.stringify(data));
       } catch { /* localStorage may be full or unavailable */ }
     }
   } catch (err) {
     console.warn('Failed to save visualization state:', err);
     try {
-      localStorage.setItem(`viz_state_${sessionId}`, JSON.stringify(data));
+      localStorage.setItem(`viz_state_${apiPrefix}`, JSON.stringify(data));
     } catch { /* localStorage unavailable */ }
   }
 }
@@ -343,14 +343,14 @@ export async function updateSessionVisualizationState(
 
 /** Trigger on-demand protein correlation computation */
 export async function runProteinCorrelation(
-  sessionId: string,
+  apiPrefix: string,
   body: {
     protein_id: string;
     cluster_method: ClusterMethod;
     color_comparison: string;
   }
 ): Promise<{ status: string }> {
-  return fetchApi(`/api/sessions/${sessionId}/compare/protein-correlation`, {
+  return fetchApi(`${apiPrefix}/compare/protein-correlation`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -358,18 +358,18 @@ export async function runProteinCorrelation(
 }
 
 /** Poll protein correlation compute status */
-export async function getProteinCorrelationStatus(sessionId: string): Promise<CompareRunStatus> {
-  return fetchApi<CompareRunStatus>(`/api/sessions/${sessionId}/compare/protein-correlation/status`);
+export async function getProteinCorrelationStatus(apiPrefix: string): Promise<CompareRunStatus> {
+  return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/protein-correlation/status`);
 }
 
 /** Get cached protein correlation results */
-export async function getProteinCorrelationData(sessionId: string): Promise<ProteinCorrelationData> {
-  return fetchApi<ProteinCorrelationData>(`/api/sessions/${sessionId}/compare/protein-correlation`);
+export async function getProteinCorrelationData(apiPrefix: string): Promise<ProteinCorrelationData> {
+  return fetchApi<ProteinCorrelationData>(`${apiPrefix}/compare/protein-correlation`);
 }
 
 /** Trigger on-demand comparison correlation computation */
 export async function runComparisonCorrelation(
-  sessionId: string,
+  apiPrefix: string,
   body: {
     primary_comparison: string;
     selected_comparisons: string[];
@@ -377,7 +377,7 @@ export async function runComparisonCorrelation(
     cluster_method: ClusterMethod;
   }
 ): Promise<{ status: string }> {
-  return fetchApi(`/api/sessions/${sessionId}/compare/comparison-correlation`, {
+  return fetchApi(`${apiPrefix}/compare/comparison-correlation`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -385,25 +385,25 @@ export async function runComparisonCorrelation(
 }
 
 /** Poll comparison correlation compute status */
-export async function getComparisonCorrelationStatus(sessionId: string): Promise<CompareRunStatus> {
-  return fetchApi<CompareRunStatus>(`/api/sessions/${sessionId}/compare/comparison-correlation/status`);
+export async function getComparisonCorrelationStatus(apiPrefix: string): Promise<CompareRunStatus> {
+  return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/comparison-correlation/status`);
 }
 
 /** Get cached comparison correlation results */
-export async function getComparisonCorrelationData(sessionId: string): Promise<ComparisonCorrelationData> {
-  return fetchApi<ComparisonCorrelationData>(`/api/sessions/${sessionId}/compare/comparison-correlation`);
+export async function getComparisonCorrelationData(apiPrefix: string): Promise<ComparisonCorrelationData> {
+  return fetchApi<ComparisonCorrelationData>(`${apiPrefix}/compare/comparison-correlation`);
 }
 
 /** Compute Venn diagram data (synchronous, returns result directly) */
 export async function computeVennData(
-  sessionId: string,
+  apiPrefix: string,
   body: {
     comparisons: string[];
     pvalue_threshold: number;
     logfc_threshold: number;
   }
 ): Promise<VennData> {
-  return fetchApi<VennData>(`/api/sessions/${sessionId}/compare/venn`, {
+  return fetchApi<VennData>(`${apiPrefix}/compare/venn`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -411,17 +411,17 @@ export async function computeVennData(
 }
 
 /** List all proteins across all comparisons for selector dropdowns */
-export async function listProteins(sessionId: string): Promise<ProteinListEntry[]> {
-  return fetchApi<ProteinListEntry[]>(`/api/sessions/${sessionId}/compare/proteins`);
+export async function listProteins(apiPrefix: string): Promise<ProteinListEntry[]> {
+  return fetchApi<ProteinListEntry[]>(`${apiPrefix}/compare/proteins`);
 }
 
 // BioNet API
 
 export async function runBioNet(
-  sessionId: string,
+  apiPrefix: string,
   body: BioNetRunRequest
 ): Promise<{ status: string; comparison: string }> {
-  return fetchApi(`/api/sessions/${sessionId}/bionet/run`, {
+  return fetchApi(`${apiPrefix}/bionet/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -429,17 +429,27 @@ export async function runBioNet(
 }
 
 export async function getBioNetStatus(
-  sessionId: string
+  apiPrefix: string
 ): Promise<BioNetRunStatus> {
   return fetchApi<BioNetRunStatus>(
-    `/api/sessions/${sessionId}/bionet/status`
+    `${apiPrefix}/bionet/status`
   );
 }
 
 export async function getBioNetSubnetwork(
-  sessionId: string
+  apiPrefix: string
 ): Promise<BioNetSubnetwork> {
   return fetchApi<BioNetSubnetwork>(
-    `/api/sessions/${sessionId}/bionet/subnetwork`
+    `${apiPrefix}/bionet/subnetwork`
   );
+}
+
+// Helper functions to construct apiPrefix strings
+
+export function sessionApiPrefix(sessionId: string): string {
+  return `/api/sessions/${sessionId}`;
+}
+
+export function reportApiPrefix(reportId: string): string {
+  return `/api/reports/${reportId}`;
 }
