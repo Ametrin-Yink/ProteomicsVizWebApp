@@ -90,6 +90,8 @@ export interface SessionConfig {
   msqrob2_adjust_method?: string;
   msqrob2_min_peptides?: number;
   msqrob2_n_cores?: number;
+  // Condition column name (user-renamable, defaults to "condition")
+  condition_column?: string;
   // Covariates
   covariate_columns?: string[];
 }

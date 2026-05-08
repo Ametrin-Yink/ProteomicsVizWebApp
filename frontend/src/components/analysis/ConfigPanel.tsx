@@ -11,6 +11,7 @@ import { useAnalysisStore, getConditions, getAllPairwiseComparisons } from '@/st
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 import { useUIStore } from '@/stores/ui-store';
 import { organismsApi } from '@/lib/api-client';
+import { formatGroup } from '@/lib/utils';
 import type { Organism } from '@/types';
 
 export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
@@ -28,12 +29,12 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
   useEffect(() => {
     if (template === 'multi_condition_comparison' && allComparisons.length > 0) {
       const existing = config.comparisons || [];
-      const existingKeys = new Set(existing.map((c) => `${c.group1.Condition}|${c.group2.Condition}`));
-      const allKeys = new Set(allComparisons.map((c) => `${c.group1.Condition}|${c.group2.Condition}`));
+      const existingKeys = new Set(existing.map((c) => `${JSON.stringify(c.group1)}|${JSON.stringify(c.group2)}`));
+      const allKeys = new Set(allComparisons.map((c) => `${JSON.stringify(c.group1)}|${JSON.stringify(c.group2)}`));
       // Auto-add new comparisons that aren't already in config
-      const toAdd = allComparisons.filter((c) => !existingKeys.has(`${c.group1.Condition}|${c.group2.Condition}`));
+      const toAdd = allComparisons.filter((c) => !existingKeys.has(`${JSON.stringify(c.group1)}|${JSON.stringify(c.group2)}`));
       // Auto-remove comparisons whose conditions no longer exist
-      const toKeep = existing.filter((c) => allKeys.has(`${c.group1.Condition}|${c.group2.Condition}`));
+      const toKeep = existing.filter((c) => allKeys.has(`${JSON.stringify(c.group1)}|${JSON.stringify(c.group2)}`));
       if (toAdd.length > 0 || toKeep.length !== existing.length) {
         setConfig({ comparisons: [...toKeep, ...toAdd] });
       }
@@ -325,10 +326,10 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
             <div className="space-y-1">
               {allComparisons.map((comp) => {
                 const enabled = (config.comparisons || []).some(
-                  (c) => c.group1.Condition === comp.group1.Condition && c.group2.Condition === comp.group2.Condition
+                  (c) => JSON.stringify(c.group1) === JSON.stringify(comp.group1) && JSON.stringify(c.group2) === JSON.stringify(comp.group2)
                 );
                 return (
-                  <label key={`${comp.group1.Condition}|${comp.group2.Condition}`} className="flex items-center gap-2 py-1 cursor-pointer">
+                  <label key={`${JSON.stringify(comp.group1)}|${JSON.stringify(comp.group2)}`} className="flex items-center gap-2 py-1 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={enabled}
@@ -339,14 +340,14 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
                         } else {
                           setConfig({
                             comparisons: current.filter(
-                              (c) => !(c.group1.Condition === comp.group1.Condition && c.group2.Condition === comp.group2.Condition)
+                              (c) => !(JSON.stringify(c.group1) === JSON.stringify(comp.group1) && JSON.stringify(c.group2) === JSON.stringify(comp.group2))
                             ),
                           });
                         }
                       }}
                       className="rounded border-border text-primary focus:ring-primary"
                     />
-                    <span className="text-sm text-text">{comp.group1.Condition} vs {comp.group2.Condition}</span>
+                    <span className="text-sm text-text">{formatGroup(comp.group1)} vs {formatGroup(comp.group2)}</span>
                   </label>
                 );
               })}

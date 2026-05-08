@@ -88,6 +88,7 @@ const defaultConfig: SessionConfig = {
   msstats_name_standards: undefined,
   msstats_save_fitted_models: true,
   msstats_n_cores: undefined,
+  condition_column: 'condition',
   covariate_columns: [],
 };
 
@@ -119,6 +120,14 @@ export const useAnalysisStore = create<AnalysisState>()(
         if (!exists) {
           state.uploadedFiles.push(file);
           state.selectedFiles.add(file.filename);
+          // Initialize metadata_columns for this file so addColumn works immediately
+          if (!state.config.metadata_columns) state.config.metadata_columns = {};
+          const condCol = state.config.condition_column || 'condition';
+          state.config.metadata_columns[file.filename] = {
+            experiment: file.experiment,
+            [condCol]: file.condition,
+            replicate: String(file.replicate),
+          };
         }
       });
     },
@@ -159,7 +168,10 @@ export const useAnalysisStore = create<AnalysisState>()(
           if (!state.config.metadata_columns) state.config.metadata_columns = {};
           if (!state.config.metadata_columns[filename]) state.config.metadata_columns[filename] = {};
           if (updates.experiment !== undefined) state.config.metadata_columns[filename].experiment = updates.experiment;
-          if (updates.condition !== undefined) state.config.metadata_columns[filename].condition = updates.condition;
+          if (updates.condition !== undefined) {
+            const condCol = state.config.condition_column || 'condition';
+            state.config.metadata_columns[filename][condCol] = updates.condition;
+          }
         }
       });
     },
@@ -190,7 +202,10 @@ export const useAnalysisStore = create<AnalysisState>()(
     
     setConfig: (configUpdate) => {
       set((state) => {
-        Object.assign(state.config, configUpdate);
+        const keys = Object.keys(configUpdate) as (keyof SessionConfig)[];
+        for (const key of keys) {
+          (state.config as Record<string, unknown>)[key] = (configUpdate as Record<string, unknown>)[key];
+        }
       });
     },
     
@@ -245,9 +260,28 @@ export const getExperiments = (state: AnalysisState): string[] => {
   return Array.from(new Set(selected.map((f) => f.experiment)));
 };
 
+function getConditionColumnNames(state: AnalysisState): string[] {
+  const metadataColumns = state.config.metadata_columns || {};
+  const primary = state.config.condition_column || 'condition';
+  const cols = new Set<string>();
+  cols.add(primary);
+  Object.values(metadataColumns).forEach((row) => {
+    Object.keys(row).forEach((k) => {
+      if (k !== 'experiment' && k !== primary && k !== 'replicate') cols.add(k);
+    });
+  });
+  return Array.from(cols);
+}
+
 export const getConditions = (state: AnalysisState): string[] => {
   const selected = getSelectedFiles(state);
-  return Array.from(new Set(selected.map((f) => f.condition)));
+  const metadataColumns = state.config.metadata_columns || {};
+  const condCols = getConditionColumnNames(state);
+  const combined = selected.map((f) => {
+    const meta = metadataColumns[f.filename] || {};
+    return condCols.map((col) => meta[col] || '').join('+');
+  });
+  return Array.from(new Set(combined));
 };
 
 /**
@@ -255,14 +289,24 @@ export const getConditions = (state: AnalysisState): string[] => {
  * Returns array of { group1: {Condition: ...}, group2: {Condition: ...} } pairs.
  */
 export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ group1: Record<string, string>; group2: Record<string, string> }> => {
-  const conditions = getConditions(state);
+  const selected = getSelectedFiles(state);
+  const metadataColumns = state.config.metadata_columns || {};
+  const condCols = getConditionColumnNames(state);
+
+  const uniqueConditions: Record<string, string>[] = [];
+  const seen = new Set<string>();
+  selected.forEach((f) => {
+    const meta = metadataColumns[f.filename] || {};
+    const combined: Record<string, string> = {};
+    condCols.forEach((col) => { combined[col] = meta[col] || ''; });
+    const key = JSON.stringify(combined);
+    if (!seen.has(key)) { seen.add(key); uniqueConditions.push(combined); }
+  });
+
   const comparisons: Array<{ group1: Record<string, string>; group2: Record<string, string> }> = [];
-  for (let i = 0; i < conditions.length; i++) {
-    for (let j = i + 1; j < conditions.length; j++) {
-      comparisons.push({
-        group1: { Condition: conditions[i] },
-        group2: { Condition: conditions[j] },
-      });
+  for (let i = 0; i < uniqueConditions.length; i++) {
+    for (let j = i + 1; j < uniqueConditions.length; j++) {
+      comparisons.push({ group1: uniqueConditions[i], group2: uniqueConditions[j] });
     }
   }
   return comparisons;
@@ -270,9 +314,13 @@ export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ group1:
 
 export const getReplicatesByCondition = (state: AnalysisState): Record<string, number> => {
   const selected = getSelectedFiles(state);
+  const metadataColumns = state.config.metadata_columns || {};
+  const condCols = getConditionColumnNames(state);
   const counts: Record<string, number> = {};
   selected.forEach((file) => {
-    counts[file.condition] = (counts[file.condition] || 0) + 1;
+    const meta = metadataColumns[file.filename] || {};
+    const combined = condCols.map((col) => meta[col] || '').join('+');
+    counts[combined] = (counts[combined] || 0) + 1;
   });
   return counts;
 };
