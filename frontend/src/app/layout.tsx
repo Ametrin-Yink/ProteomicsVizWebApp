@@ -12,6 +12,7 @@ import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { TopNavigation } from '@/components/layout/TopNavigation';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
+import { TaskStatusBar } from '@/components/layout/TaskStatusBar';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 
 // Load Plus Jakarta Sans font
@@ -57,6 +58,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
           <div className="flex h-screen pt-14">
             {children}
           </div>
+
+          {/* Task Status Bar - bottom-right task monitor */}
+          <TaskStatusBar />
 
           {/* Toast notifications */}
           <ToastProvider />
