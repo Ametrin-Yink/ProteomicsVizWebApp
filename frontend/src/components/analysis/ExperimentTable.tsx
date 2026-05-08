@@ -364,7 +364,7 @@ export const ExperimentTable: React.FC = () => {
           const values = parseCSVLine(lines[i]);
           const fn = values[filenameIdx];
           if (!fn || !uploadedFilenames.has(fn)) continue;
-          if (!current[fn]) current[fn] = {};
+          current[fn] = { ...(current[fn] || {}) };
           colNames.forEach((col) => {
             const colIdx = headers.indexOf(col);
             if (colIdx >= 0) current[fn][col] = values[colIdx] || '';
