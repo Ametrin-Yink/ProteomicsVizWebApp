@@ -26,11 +26,7 @@
 | `frontend/src/components/visualization/compare/ProteinCorrelationPanel.tsx` | Modify | Remove `sessionId` prop, use context |
 | `frontend/src/components/visualization/ExportModal.tsx` | Simplify | Name input + single POST |
 | `frontend/src/app/reports/[reportId]/page.tsx` | Rewrite | Thin shell using shared components |
-| `frontend/src/app/analysis/visualization/page.tsx` | Modify | Add ApiProvider wrapper |
-| `frontend/src/app/analysis/visualization/gsea/page.tsx` | Modify | Add ApiProvider wrapper |
-| `frontend/src/app/analysis/visualization/compare/page.tsx` | Modify | Add ApiProvider wrapper |
-| `frontend/src/app/analysis/visualization/bionet/page.tsx` | Modify | Add ApiProvider wrapper |
-| `frontend/src/app/analysis/visualization/qc/page.tsx` | Modify | Add ApiProvider wrapper |
+| `frontend/src/app/analysis/visualization/layout.tsx` | Modify | Add ApiProvider wrapper (covers all 5 viz sub-pages) |
 | `frontend/public/report-template.html` | Delete | Vanilla JS template |
 | `frontend/src/lib/html-report-builder.ts` | Delete | ZIP assembly |
 | `Tests/backend/unit/test_report_store.py` | Rewrite | Match new store API |
@@ -883,6 +879,38 @@ async def test_report_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_report_survives_session_deletion(client, monkeypatch, tmp_path):
+    """Report remains functional after original session is deleted."""
+    sessions_dir = tmp_path / "sessions"
+    reports_dir = tmp_path / "reports"
+
+    session_id = str(uuid.uuid4())
+    make_completed_session_with_files(sessions_dir, session_id)
+
+    # Generate report
+    response = await client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "Persistent Report"},
+    )
+    assert response.status_code == 200
+    report_id = response.json()["report_id"]
+
+    # Delete the original session
+    import shutil
+    shutil.rmtree(sessions_dir / session_id)
+
+    # Report should still work
+    response = await client.get(f"/api/reports/{report_id}")
+    assert response.status_code == 200
+
+    response = await client.get(f"/api/reports/{report_id}/results")
+    assert response.status_code == 200
+
+    response = await client.get(f"/api/reports/{report_id}/protein/P12345/abundance")
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_delete_nonexistent_report(client):
     response = await client.delete("/api/reports/rpt_nonexistent")
     assert response.status_code == 404
@@ -1594,6 +1622,60 @@ git commit -m "refactor: Compare panels read apiPrefix from context instead of s
 ---
 
 ## Phase 5: Frontend — Export Modal
+
+### Task 12b: Wrap visualization pages in ApiProvider
+
+**Files:**
+- Modify: `frontend/src/app/analysis/visualization/layout.tsx`
+
+- [ ] **Step 1: Read the layout to understand current structure**
+
+```bash
+grep -n "children\|return\|sessionId" frontend/src/app/analysis/visualization/layout.tsx
+```
+
+- [ ] **Step 2: Add ApiProvider to the layout**
+
+The visualization layout wraps all sub-pages (volcano, qc, gsea, compare, bionet). Add ApiProvider here so all pages inherit the session API prefix.
+
+```tsx
+import { ApiProvider } from '@/lib/api-context';
+import { sessionApiPrefix } from '@/lib/api';
+
+// Inside the layout component, read sessionId from searchParams:
+const searchParams = useSearchParams();
+const sessionId = searchParams.get('session_id') || '';
+
+if (!sessionId) {
+  return <NoSessionSelected />;
+}
+
+return (
+  <ApiProvider apiPrefix={sessionApiPrefix(sessionId)}>
+    {/* existing layout content */}
+    {children}
+  </ApiProvider>
+);
+```
+
+- [ ] **Step 3: Remove ApiProvider wrappers from individual page entries**
+
+The File Map listed individual pages for ApiProvider modification. Since the layout handles it, individual pages don't need separate wrappers.
+
+- [ ] **Step 4: Verify compilation**
+
+```bash
+cd frontend && npm run lint
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/app/analysis/visualization/layout.tsx
+git commit -m "feat: wrap visualization layout in ApiProvider"
+```
+
+---
 
 ### Task 13: Simplify ExportModal
 
