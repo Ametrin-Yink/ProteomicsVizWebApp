@@ -145,6 +145,20 @@ async def get_report_meta(report_id: str):
     }
 
 
+@global_router.patch("/reports/{report_id}")
+async def rename_report(report_id: str, request: Request):
+    """Rename a report."""
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    report_dir = _get_report_dir_or_404(report_id)
+    meta = get_report_metadata(report_id) or {}
+    meta["name"] = name
+    (report_dir / "report.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return {"message": "Renamed", "name": name}
+
+
 @global_router.delete("/reports/{report_id}")
 async def delete_report_endpoint(report_id: str):
     """Delete a report."""

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Download, Trash2, ExternalLink, Loader2 } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Trash2, ExternalLink, Loader2, Check, X, Pencil } from 'lucide-react';
 import { exportApi } from '@/lib/api-client';
 
 interface ReportItem {
@@ -16,6 +16,9 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -32,6 +35,46 @@ export default function ReportsPage() {
 
   useEffect(() => { fetchReports(); }, []);
 
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingId]);
+
+  const startRename = (r: ReportItem) => {
+    setEditingId(r.report_id);
+    setEditName(r.name);
+  };
+
+  const cancelRename = () => {
+    setEditingId(null);
+    setEditName('');
+  };
+
+  const saveRename = async (reportId: string) => {
+    if (!editName.trim()) return;
+    try {
+      const res = await fetch(`/api/reports/${reportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName.trim() }),
+      });
+      if (!res.ok) throw new Error('Rename failed');
+      setReports((prev) =>
+        prev.map((r) => (r.report_id === reportId ? { ...r, name: editName.trim() } : r))
+      );
+      setEditingId(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Rename failed');
+    }
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent, reportId: string) => {
+    if (e.key === 'Enter') saveRename(reportId);
+    if (e.key === 'Escape') cancelRename();
+  };
+
   const handleDelete = async (reportId: string) => {
     if (!confirm('Delete this report? This cannot be undone.')) return;
     try {
@@ -43,7 +86,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-bold mb-6">Reports</h1>
 
       {loading && (
@@ -68,20 +111,52 @@ export default function ReportsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left px-4 py-3 text-sm font-semibold">Name</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">Session</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">Created</th>
-                <th className="text-right px-4 py-3 text-sm font-semibold">Actions</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold w-[40%]">Name</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold w-[40%]">Experiment</th>
+                <th className="text-right px-4 py-3 text-sm font-semibold w-[20%]">Actions</th>
               </tr>
             </thead>
             <tbody>
               {reports.map((r) => (
                 <tr key={r.report_id} className="border-b border-border hover:bg-surface transition-colors">
-                  <td className="px-4 py-3 font-medium">{r.name}</td>
-                  <td className="px-4 py-3 text-text-secondary text-sm">{r.session_name}</td>
-                  <td className="px-4 py-3 text-text-secondary text-sm">
-                    {new Date(r.created_at).toLocaleDateString()}
+                  <td className="px-4 py-3">
+                    {editingId === r.report_id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onKeyDown={(e) => handleRenameKeyDown(e, r.report_id)}
+                          className="flex-1 px-2 py-1 text-sm border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary bg-surface"
+                        />
+                        <button
+                          onClick={() => saveRename(r.report_id)}
+                          className="p-1 hover:bg-success/10 rounded transition-colors text-success"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={cancelRename}
+                          className="p-1 hover:bg-error/10 rounded transition-colors text-error"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{r.name}</span>
+                        <button
+                          onClick={() => startRename(r)}
+                          className="p-0.5 hover:bg-border rounded transition-colors text-text-muted hover:text-text-primary"
+                          title="Rename"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                   </td>
+                  <td className="px-4 py-3 text-text-secondary text-sm">{r.session_name}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <a
@@ -91,12 +166,6 @@ export default function ReportsPage() {
                         className="flex items-center gap-1 px-3 py-1.5 text-sm bg-surface hover:bg-border rounded-lg transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5" /> Open
-                      </a>
-                      <a
-                        href={`/api/reports/${r.report_id}/download`}
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm bg-surface hover:bg-border rounded-lg transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5" /> ZIP
                       </a>
                       <button
                         onClick={() => handleDelete(r.report_id)}
