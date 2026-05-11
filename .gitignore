@@ -241,6 +241,7 @@ backend/uploads/
 test-results/
 playwright-report/
 playwright/.cache/
+.playwright-mcp/
 
 # Sample data (large real-world PSM files — not needed for repo functionality)
 # Clone users can use Tests/fixtures/ for testing or add their own data
