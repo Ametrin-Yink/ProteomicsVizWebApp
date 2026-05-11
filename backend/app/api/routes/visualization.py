@@ -135,6 +135,10 @@ class FileCache:
         prefix = f"{session_id}:"
         self._cache = {k: v for k, v in self._cache.items() if not k.startswith(prefix)}
 
+    def remove(self, key: str) -> None:
+        """Remove a single cache entry by exact key."""
+        self._cache.pop(key, None)
+
     def clear(self) -> None:
         self._cache.clear()
 
@@ -330,7 +334,7 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
         "pvalue_distribution": {"bins": [], "counts": []},
         "psm_cv": {},
         "protein_cv": {},
-        "intensity_distributions": {"psm": {}, "protein": {}},
+        "intensity_distributions": {"psm_boxplot": {}, "protein_boxplot": {}},
         "data_completeness": [],
         "psm_completeness": [],
         # Summary statistics - will be populated from data or set to None
@@ -995,18 +999,34 @@ class BioNetRunRequest(BaseModel):
 # Strong references to prevent background task GC
 _background_tasks: set[asyncio.Task] = set()
 
+# Per-kind locks for status file writes (prevents interleaving from concurrent on_db_done callbacks)
+_on_demand_status_locks: dict[str, threading.Lock] = {}
 
-def _gsea_status_path(session_id: str) -> Path:
-    return settings.sessions_dir / session_id / "gsea_run_status.json"
+
+def _on_demand_status_path(session_id: str, kind: str) -> Path:
+    return settings.sessions_dir / session_id / f"{kind}_run_status.json"
 
 
-def _read_gsea_status(session_id: str) -> dict | None:
-    path = _gsea_status_path(session_id)
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except Exception:
-        return None
+async def _write_on_demand_status(session_id: str, kind: str, data: dict) -> None:
+    """Write status file for on-demand analysis tasks (gsea, bionet).
+
+    Uses a per-kind threading.Lock inside asyncio.to_thread so the lock
+    acquisition happens in the executor thread, not across an await boundary.
+    This correctly serializes writes from both the outer event loop and the
+    inner event loop (created by asyncio.run() inside thread-pool work).
+    """
+    if kind not in _on_demand_status_locks:
+        _on_demand_status_locks[kind] = threading.Lock()
+    status_file = _on_demand_status_path(session_id, kind)
+    status_file.parent.mkdir(parents=True, exist_ok=True)
+    lock = _on_demand_status_locks[kind]
+    payload = json.dumps(data, indent=2, default=str)
+
+    def _write() -> None:
+        with lock:
+            status_file.write_text(payload, encoding="utf-8")
+
+    await asyncio.to_thread(_write)
 
 
 # --- BioNet helpers ---
@@ -1018,20 +1038,8 @@ def _bionet_output_dir(session_id: str) -> Path:
     return settings.sessions_dir / session_id / _BIONET_OUTPUT_DIR_NAME
 
 
-def _bionet_status_path(session_id: str) -> Path:
-    return _bionet_output_dir(session_id) / "bionet_status.json"
-
-
 def _bionet_subnetwork_path(session_id: str) -> Path:
     return _bionet_output_dir(session_id) / "bionet_subnetwork.json"
-
-
-def _read_bionet_status(session_id: str) -> dict | None:
-    path = _bionet_status_path(session_id)
-    if not path.exists():
-        return None
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def _write_json_file(path: Path, data: dict) -> None:
@@ -1051,7 +1059,39 @@ async def get_gsea_run_status(
             detail=f"Session {session_id} not found",
         )
 
-    # Read from TaskManager in-memory state (primary)
+    status_file = _on_demand_status_path(session_id, "gsea")
+
+    # File is authoritative for terminal states (survives task removal from _active_tasks).
+    if status_file.exists():
+        try:
+            data = await asyncio.to_thread(
+                lambda: json.loads(status_file.read_text(encoding="utf-8"))
+            )
+        except Exception:
+            data = None
+
+        if data and data.get("status") in ("completed", "error"):
+            return create_response(data)
+
+        # File says "running" — verify TaskManager still has it.
+        if data and data.get("status") == "running":
+            tm_active = task_manager.has_active_task(session_id, TaskKind.GSEA)
+            if tm_active:
+                tm_tasks = [
+                    t
+                    for t in task_manager._active_tasks.values()
+                    if t.session_id == session_id and t.kind == TaskKind.GSEA
+                ]
+                if tm_tasks:
+                    data["queue_position"] = tm_tasks[0].queue_position
+                return create_response(data)
+            # Server restarted mid-run — mark as error
+            data["status"] = "error"
+            data["error"] = "server_restarted"
+            await _write_on_demand_status(session_id, "gsea", data)
+            return create_response(data)
+
+    # No file → check TaskManager for queued/running
     tasks = [
         info
         for info in task_manager._active_tasks.values()
@@ -1059,29 +1099,18 @@ async def get_gsea_run_status(
     ]
     if tasks:
         t = tasks[0]
-        databases_val = {}
-        if t.progress:
-            databases_val = {
-                "completed": t.progress.get("completed", 0),
-                "total": t.progress.get("total", 0),
-            }
         return create_response(
             {
                 "status": t.status,
                 "started_at": t.started_at,
                 "error": t.error,
                 "comparison": t.label.replace("GSEA: ", ""),
-                "databases": databases_val,
+                "databases": {},
                 "queue_position": t.queue_position,
             }
         )
 
-    # Fallback: read from old status file for pre-migration state
-    status_data = _read_gsea_status(session_id)
-    if status_data is None:
-        return create_response({"status": "idle"})
-
-    return create_response(status_data)
+    return create_response({"status": "idle"})
 
 
 @router.get("/{session_id}/tasks")
@@ -1129,11 +1158,20 @@ async def _background_gsea_run(
 
     comparison = request.comparison
     gsea_output_dir.mkdir(parents=True, exist_ok=True)
-    progress = {"completed": 0, "total": len(request.databases)}
+
+    status_data = {
+        "status": "running",
+        "comparison": comparison,
+        "databases": {db: "running" for db in request.databases if db in VALID_GSEA_DATABASES},
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "error": None,
+    }
+    await _write_on_demand_status(session_id, "gsea", status_data)
 
     async def on_db_done(db_name: str, success: bool) -> None:
-        if success:
-            progress["completed"] += 1
+        if db_name in status_data["databases"]:
+            status_data["databases"][db_name] = "completed" if success else "error"
+        await _write_on_demand_status(session_id, "gsea", status_data)
 
     # Run the async gseapy work in a dedicated thread via TaskManager.
     # gseapy's prerank releases the GIL (compiled .pyd), so threads work well.
@@ -1166,14 +1204,27 @@ async def _background_gsea_run(
         results_file = gsea_output_dir / "GSEA_Results.json"
         await asyncio.to_thread(gsea_service.save_results, gsea_results, results_file)
         with _cache_lock:
-            _gsea_file_cache.invalidate(str(results_file))
+            _gsea_file_cache.remove(str(results_file))
+
+        status_data["status"] = "completed"
+        status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        await _write_on_demand_status(session_id, "gsea", status_data)
 
     except TaskCancelledError:
         logger.info(f"GSEA cancelled for {session_id}/{comparison}")
+        status_data["status"] = "error"
+        status_data["error"] = "Task cancelled"
+        await _write_on_demand_status(session_id, "gsea", status_data)
     except TaskTimeoutError:
         logger.error(f"GSEA timed out for {session_id}/{comparison}")
+        status_data["status"] = "error"
+        status_data["error"] = "Task timed out after 30 minutes"
+        await _write_on_demand_status(session_id, "gsea", status_data)
     except Exception as e:
         logger.error(f"Background GSEA failed: {e}")
+        status_data["status"] = "error"
+        status_data["error"] = str(e)
+        await _write_on_demand_status(session_id, "gsea", status_data)
 
 
 @router.post("/{session_id}/gsea/run")
@@ -1207,6 +1258,20 @@ async def run_gsea_on_demand(
 
     protein_file = results_dir / "Protein_Abundances.tsv"
     gsea_output_dir = results_dir / "gsea" / request.comparison
+
+    # Write initial "running" status before spawning background task so the
+    # frontend sees it immediately on first poll (avoids a 2-second dead gap).
+    await _write_on_demand_status(
+        session_id,
+        "gsea",
+        {
+            "status": "running",
+            "comparison": request.comparison,
+            "databases": {db: "running" for db in request.databases if db in VALID_GSEA_DATABASES},
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "error": None,
+        },
+    )
 
     task = asyncio.create_task(
         _background_gsea_run(
@@ -1328,6 +1393,14 @@ async def _background_bionet_run(
     nodes_csv = bionet_output_dir / "nodes.csv"
     edges_csv = bionet_output_dir / "edges.csv"
 
+    status_data = {
+        "status": "running",
+        "comparison": comparison,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "error": None,
+    }
+    await _write_on_demand_status(session_id, "bionet", status_data)
+
     def _run_bionet_sync():
         config_dict = request.model_dump()
         return bionet_service.run_bionet(
@@ -1357,12 +1430,25 @@ async def _background_bionet_run(
         subnetwork_path = _bionet_subnetwork_path(session_id)
         await asyncio.to_thread(_write_json_file, subnetwork_path, subnetwork)
 
+        status_data["status"] = "completed"
+        status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        await _write_on_demand_status(session_id, "bionet", status_data)
+
     except TaskCancelledError:
         logger.info(f"BioNet cancelled for {session_id}/{comparison}")
+        status_data["status"] = "error"
+        status_data["error"] = "Task cancelled"
+        await _write_on_demand_status(session_id, "bionet", status_data)
     except TaskTimeoutError:
         logger.error(f"BioNet timed out for {session_id}/{comparison}")
+        status_data["status"] = "error"
+        status_data["error"] = "Task timed out after 30 minutes"
+        await _write_on_demand_status(session_id, "bionet", status_data)
     except Exception as e:
         logger.error(f"Background BioNet failed: {e}")
+        status_data["status"] = "error"
+        status_data["error"] = str(e)
+        await _write_on_demand_status(session_id, "bionet", status_data)
 
 
 @router.post("/{session_id}/bionet/run")
@@ -1394,6 +1480,19 @@ async def run_bionet_on_demand(
             detail="A BioNet run is already in progress for this session",
         )
 
+    # Write initial "running" status before spawning background task so the
+    # frontend sees it immediately on first poll (avoids a 2-second dead gap).
+    await _write_on_demand_status(
+        session_id,
+        "bionet",
+        {
+            "status": "running",
+            "comparison": request.comparison,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "error": None,
+        },
+    )
+
     task = asyncio.create_task(
         _background_bionet_run(
             session_id=session_id,
@@ -1420,11 +1519,56 @@ async def get_bionet_run_status(
             detail=f"Session {session_id} not found",
         )
 
-    status_data = _read_bionet_status(session_id)
-    if status_data is None:
-        return create_response({"status": "idle"})
+    status_file = _on_demand_status_path(session_id, "bionet")
 
-    return create_response(status_data)
+    # File is authoritative for terminal states.
+    if status_file.exists():
+        try:
+            data = await asyncio.to_thread(
+                lambda: json.loads(status_file.read_text(encoding="utf-8"))
+            )
+        except Exception:
+            data = None
+
+        if data and data.get("status") in ("completed", "error"):
+            return create_response(data)
+
+        if data and data.get("status") == "running":
+            tm_active = task_manager.has_active_task(session_id, TaskKind.BIONET)
+            if tm_active:
+                tm_tasks = [
+                    t
+                    for t in task_manager._active_tasks.values()
+                    if t.session_id == session_id and t.kind == TaskKind.BIONET
+                ]
+                if tm_tasks:
+                    data["queue_position"] = tm_tasks[0].queue_position
+                return create_response(data)
+            data["status"] = "error"
+            data["error"] = "server_restarted"
+            await _write_on_demand_status(session_id, "bionet", data)
+            return create_response(data)
+
+    # No file → check TaskManager
+    tasks = [
+        info
+        for info in task_manager._active_tasks.values()
+        if info.session_id == session_id and info.kind == TaskKind.BIONET
+    ]
+    if tasks:
+        t = tasks[0]
+        return create_response(
+            {
+                "status": t.status,
+                "started_at": t.started_at,
+                "completed_at": t.completed_at,
+                "error": t.error,
+                "comparison": t.label.replace("BioNet: ", ""),
+                "queue_position": t.queue_position,
+            }
+        )
+
+    return create_response({"status": "idle"})
 
 
 @router.get("/{session_id}/bionet/subnetwork")

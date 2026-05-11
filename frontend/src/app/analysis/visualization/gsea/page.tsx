@@ -27,6 +27,7 @@ function GSEAAnalysisContent() {
     comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
   } | null>(null);
   const [selectedComparison, setSelectedComparison] = useState<string>('');
+  const [gseaAvailability, setGseaAvailability] = useState<Record<string, GSEADatabase[]>>({});
   const [runDatabases, setRunDatabases] = useState<GSEADatabase[]>(['go_bp', 'kegg', 'reactome']);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [runParams, setRunParams] = useState({ min_size: 15, max_size: 500, permutations: 1000 });
@@ -107,6 +108,35 @@ function GSEAAnalysisContent() {
     }).catch(() => {});
   }, [apiPrefix]);
 
+  // Discover which databases have GSEA results per comparison
+  useEffect(() => {
+    if (!apiPrefix || !sessionConfig?.comparisons) return;
+    let cancelled = false;
+    const availability: Record<string, GSEADatabase[]> = {};
+    async function checkAvailability() {
+      const checks = sessionConfig!.comparisons!.flatMap((c) => {
+        const comp = formatGroup(c.group1) + '_vs_' + formatGroup(c.group2);
+        return DATABASES.map(async (db) => {
+          try {
+            const data = await getGSEAData(apiPrefix, db, { per_page: 1, comparison: comp });
+            if (data.total && data.total > 0) return { comp, db };
+          } catch { /* no results for this combo */ }
+          return null;
+        });
+      });
+      const results = await Promise.all(checks);
+      if (cancelled) return;
+      for (const r of results) {
+        if (!r) continue;
+        if (!availability[r.comp]) availability[r.comp] = [];
+        availability[r.comp].push(r.db);
+      }
+      setGseaAvailability(availability);
+    }
+    checkAvailability();
+    return () => { cancelled = true; };
+  }, [apiPrefix, sessionConfig?.comparisons]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Poll GSEA run status — only depends on sessionId to avoid stale closures.
   // Uses a ref to always access the latest filter params for the completion data fetch.
   const fetchParamsRef = useRef({ selectedDatabase, pageSize, sortBy, sortOrder, significantOnly, debouncedSearch, selectedComparison });
@@ -142,6 +172,22 @@ function GSEAAnalysisContent() {
           setData(gseaData);
           setTotalResults(gseaData.total || 0);
           setInitialLoad(false);
+
+          // Refresh availability for the just-completed comparison
+          const comp = status.comparison;
+          if (comp) {
+            const results = await Promise.all(
+              DATABASES.map(async (db) => {
+                try {
+                  const data = await getGSEAData(apiPrefix, db, { per_page: 1, comparison: comp });
+                  if (data.total && data.total > 0) return db;
+                } catch { /* ignore */ }
+                return null;
+              })
+            );
+            const available = results.filter((r): r is GSEADatabase => r !== null);
+            setGseaAvailability(prev => ({ ...prev, [comp]: available }));
+          }
         }
       }
     } catch {
@@ -154,6 +200,14 @@ function GSEAAnalysisContent() {
     pollStatus();
     pollIntervalRef.current = setInterval(pollStatus, 2000);
   }, [pollStatus]);
+
+  // Auto-select first available database when comparison or availability changes
+  useEffect(() => {
+    const available = gseaAvailability[selectedComparison];
+    if (available && available.length > 0 && !available.includes(selectedDatabase)) {
+      setSelectedDatabase(available[0]);
+    }
+  }, [selectedComparison, gseaAvailability]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check GSEA status on mount — resume polling if run in progress, load if completed
   useEffect(() => {
@@ -271,7 +325,12 @@ function GSEAAnalysisContent() {
               options={sessionConfig.comparisons.map((c) => {
                 const g1 = formatGroup(c.group1);
                 const g2 = formatGroup(c.group2);
-                return { value: `${g1}_vs_${g2}`, label: `${g1} vs ${g2}` };
+                const comp = `${g1}_vs_${g2}`;
+                const dbs = gseaAvailability[comp];
+                const label = dbs
+                  ? `${g1} vs ${g2}  · ${dbs.length}/${DATABASES.length} databases`
+                  : `${g1} vs ${g2}`;
+                return { value: comp, label };
               })}
               value={selectedComparison}
               onChange={setSelectedComparison}
@@ -377,29 +436,34 @@ function GSEAAnalysisContent() {
           )}
 
           {/* Database Selector */}
-          <div className="bg-background rounded-lg border border-border p-4 mb-8">
-            <label className="block text-sm font-medium text-text-primary mb-3">
-              Select Database
-            </label>
-            <div data-testid="database-select" className="flex flex-wrap gap-2">
-              {DATABASES.map((db) => (
-                <button
-                  key={db}
-                  onClick={() => setSelectedDatabase(db)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedDatabase === db
-                      ? 'bg-primary text-white'
-                      : 'bg-surface text-text-secondary hover:bg-border/30'
-                  }`}
-                >
-                  {GSEADatabaseLabels[db]}
-                </button>
-              ))}
-            </div>
-            <div data-testid="current-database" className="mt-2 text-sm text-text-secondary">
-              Current: {GSEADatabaseLabels[selectedDatabase]}
-            </div>
-          </div>
+          {(() => {
+            const available = gseaAvailability[selectedComparison] || [];
+            return (
+              <div className="bg-background rounded-lg border border-border p-4 mb-8">
+                <label className="block text-sm font-medium text-text-primary mb-3">
+                  Select Database
+                </label>
+                <div data-testid="database-select" className="flex flex-wrap gap-2">
+                  {DATABASES.filter((db) => available.includes(db)).map((db) => (
+                    <button
+                      key={db}
+                      onClick={() => setSelectedDatabase(db)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        selectedDatabase === db
+                          ? 'bg-primary text-white'
+                          : 'bg-surface text-text-secondary hover:bg-border/30'
+                      }`}
+                    >
+                      {GSEADatabaseLabels[db]}
+                    </button>
+                  ))}
+                </div>
+                {available.length === 0 && (
+                  <p className="text-sm text-text-muted">No GSEA results yet. Run GSEA above to see results here.</p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Content */}
           {data ? (
@@ -424,6 +488,7 @@ function GSEAAnalysisContent() {
               selectedPathway={selectedPathway}
               onSelectPathway={setSelectedPathway}
               totalResults={totalResults}
+              totalPathways={data.total_pathways}
               currentPage={page}
               pageSize={pageSize}
               onPageChange={setPage}

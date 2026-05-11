@@ -825,14 +825,25 @@ class GSEAService:
 
     def save_results(self, results: dict[str, GSEAResults], output_path: Path) -> None:
         """
-        Save GSEA results to JSON.
+        Save GSEA results to JSON, merging with any existing results for the same comparison.
 
         Args:
-            results: GSEA results dictionary
+            results: GSEA results dictionary (new databases to save)
             output_path: Path to save JSON
         """
 
         results_dict = {db: result.model_dump() for db, result in results.items()}
+
+        # Merge with existing results if the file already exists (preserves results
+        # from previous GSEA runs for different databases on the same comparison).
+        if output_path.exists():
+            try:
+                with open(output_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                existing.update(results_dict)
+                results_dict = existing
+            except Exception:
+                pass
 
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(results_dict, f, indent=2, default=str)

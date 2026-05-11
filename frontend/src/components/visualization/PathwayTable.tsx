@@ -11,6 +11,7 @@ interface PathwayTableProps {
   onSelectPathway: (pathway: GSEAResult) => void;
   // Server-side pagination
   totalResults: number;
+  totalPathways?: number;
   currentPage: number;
   pageSize: number;
   onPageChange: (page: number) => void;
@@ -48,6 +49,7 @@ export default function PathwayTable({
   selectedPathway,
   onSelectPathway,
   totalResults,
+  totalPathways,
   currentPage,
   pageSize,
   onPageChange,
@@ -99,7 +101,7 @@ export default function PathwayTable({
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-semibold text-text-primary">Enriched Pathways</h3>
           <span data-testid="total-pathways" className="text-sm text-text-muted">
-            {filteredData.length} pathways
+            {totalResults}{totalPathways != null ? `/${totalPathways}` : ''} pathways
           </span>
         </div>
 

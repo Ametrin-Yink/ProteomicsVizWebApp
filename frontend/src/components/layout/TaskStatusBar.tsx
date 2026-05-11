@@ -5,8 +5,12 @@ import { getTaskStatus, cancelTasks, type TaskStatus, type TaskInfo } from "@/li
 
 function getCurrentSessionId(): string | null {
   if (typeof window === "undefined") return null;
-  const match = window.location.pathname.match(/\/sessions\/([^/]+)/);
-  return match ? match[1] : null;
+  // Check URL path first (e.g., /sessions/<id>/...)
+  const pathMatch = window.location.pathname.match(/\/sessions\/([^/]+)/);
+  if (pathMatch) return pathMatch[1];
+  // Check query params (e.g., ?session_id=<id>)
+  const params = new URLSearchParams(window.location.search);
+  return params.get('session_id') || params.get('session');
 }
 
 const STATUS_STYLE: Record<string, string> = {

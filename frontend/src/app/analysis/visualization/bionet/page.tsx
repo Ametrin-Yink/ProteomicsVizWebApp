@@ -210,7 +210,12 @@ function BioNetContent() {
               options={comparisons.map((c) => {
                 const g1 = formatGroup(c.group1);
                 const g2 = formatGroup(c.group2);
-                return { value: `${g1}_vs_${g2}`, label: `${g1} vs ${g2}` };
+                const comp = `${g1}_vs_${g2}`;
+                const hasResults = runStatus?.status === 'completed' && runStatus?.comparison === comp;
+                return {
+                  value: comp,
+                  label: hasResults ? `✓ ${g1} vs ${g2}` : `${g1} vs ${g2}`,
+                };
               })}
               value={selectedComparison}
               onChange={setSelectedComparison}
