@@ -6,7 +6,7 @@
 'use client';
 
 import React from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, ChevronDown, XCircle } from 'lucide-react';
 import { useAnalysisStore, getValidation, canStartAnalysis } from '@/stores/analysis-store';
 import type { ValidationWarning } from '@/types';
 
@@ -58,16 +58,15 @@ export const ValidationPanel: React.FC = () => {
   const state = useAnalysisStore();
   const validation = getValidation(state);
   const canStart = canStartAnalysis(state);
-  
-  const { warnings, selectedFiles, experiments, conditions, replicatesByCondition } = validation;
+  const [replicatesExpanded, setReplicatesExpanded] = React.useState(true);
+
+  const { warnings, selectedFiles, experiments, replicatesByCondition } = validation;
   
   const errorWarnings = warnings.filter((w) => w.type === 'error');
   const infoWarnings = warnings.filter((w) => w.type === 'warning');
 
   // Determine status for each check
   const experimentStatus = experiments.length === 1 ? 'valid' : experiments.length > 1 ? 'neutral' : 'neutral';
-  const conditionStatus = conditions.length >= 2 ? 'valid' : conditions.length > 0 ? 'neutral' : 'neutral';
-  const replicateStatus = Object.keys(replicatesByCondition).length > 0 ? 'valid' : 'neutral';
   
   return (
     <div className="space-y-4">
@@ -97,40 +96,40 @@ export const ValidationPanel: React.FC = () => {
           value={experiments.length === 0 ? 'None' : experiments.join(', ')}
           status={experimentStatus}
         />
-        <StatusItem
-          label="Conditions"
-          value={conditions.length === 0 ? 'None' : conditions.join(', ')}
-          status={conditionStatus}
-        />
-        <StatusItem
-          label="Replicates"
-          value={Object.entries(replicatesByCondition).map(([cond, count]) => `${cond}: ${count}`).join(', ') || 'None'}
-          status={replicateStatus}
-        />
       </div>
       
-      {/* Replicate Details */}
+      {/* Replicate Details — collapsible */}
       {Object.keys(replicatesByCondition).length > 0 && (
-        <div className="bg-surface rounded-lg p-4">
-          <h4 className="text-sm font-medium text-text mb-3">Replicates per Condition</h4>
-          <div className="space-y-2">
-            {Object.entries(replicatesByCondition).map(([condition, count]) => (
-              <div key={condition} className="flex items-center justify-between">
-                <span className="text-sm text-text-secondary">{condition}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 bg-border rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full transition-all bg-success"
-                      style={{ width: `${Math.min(count * 10, 100)}%` }}
-                    />
+        <div className="bg-surface rounded-lg">
+          <button
+            onClick={() => setReplicatesExpanded(!replicatesExpanded)}
+            className="w-full flex items-center justify-between p-4 text-left"
+          >
+            <h4 className="text-sm font-medium text-text">Replicates per Condition</h4>
+            <ChevronDown
+              className={`w-4 h-4 text-text-muted transition-transform duration-200 ${replicatesExpanded ? '' : '-rotate-90'}`}
+            />
+          </button>
+          {replicatesExpanded && (
+            <div className="px-4 pb-4 space-y-2">
+              {Object.entries(replicatesByCondition).map(([condition, count]) => (
+                <div key={condition} className="flex items-center justify-between">
+                  <span className="text-sm text-text-secondary">{condition}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 bg-border rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full transition-all bg-success"
+                        style={{ width: `${Math.min(count * 10, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-medium text-text">
+                      {count} sample{count !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                  <span className="text-sm font-medium text-text">
-                    {count} sample{count !== 1 ? 's' : ''}
-                  </span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       

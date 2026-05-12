@@ -62,6 +62,20 @@ function mapBackendStatus(status: string): SessionStatus {
   return statusMap[status] || 'created';
 }
 
+/** Parse PSM filename to extract experiment, conditions, replicate */
+function parsePsmFilename(filename: string): { experiment: string; conditions: string[]; replicate: number } | null {
+  const pattern = /^PSM_(.+)_(\d+)\.csv$/i;
+  const match = filename.match(pattern);
+  if (!match) return null;
+  const parts = match[1].split('_');
+  if (parts.length < 2) return null;
+  return {
+    experiment: parts[0],
+    conditions: parts.slice(1),
+    replicate: parseInt(match[2], 10),
+  };
+}
+
 /** Map backend file metadata to ParsedFilename format for the analysis store */
 export function mapBackendFiles(files: BackendSession['files']): Array<{
   filename: string;
@@ -80,14 +94,17 @@ export function mapBackendFiles(files: BackendSession['files']): Array<{
     conditions?: string[];
     replicate?: number;
     columns?: string[];
-  }>).map(f => ({
-    filename: f.filename,
-    experiment: f.experiment || '',
-    conditions: f.conditions || (f.condition ? [f.condition] : []),
-    replicate: f.replicate || 0,
-    size: f.size,
-    columns: f.columns || [],
-  }));
+  }>).map(f => {
+    const parsed = parsePsmFilename(f.filename);
+    return {
+      filename: f.filename,
+      experiment: parsed?.experiment || f.experiment || '',
+      conditions: parsed?.conditions || f.conditions || (f.condition ? [f.condition] : []),
+      replicate: parsed?.replicate || f.replicate || 0,
+      size: f.size,
+      columns: f.columns || [],
+    };
+  });
 }
 
 /**

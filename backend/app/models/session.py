@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SessionState(str, Enum):
@@ -94,6 +94,15 @@ class ProteomicsFileInfo(FileInfo):
     experiment: str = Field(..., description="Experiment name from filename")
     conditions: list[str] = Field(..., description="Conditions from filename (multiple segments between experiment and replicate)")
     replicate: int = Field(..., ge=1, description="Replicate number")
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_condition_field(cls, data: Any) -> Any:
+        """Accept old 'condition' string field and convert to 'conditions' list."""
+        if isinstance(data, dict) and "condition" in data and "conditions" not in data:
+            data = {**data, "conditions": data["condition"].split("_")}
+            del data["condition"]
+        return data
 
 
 class SessionFiles(BaseModel):
