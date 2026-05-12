@@ -61,12 +61,65 @@ if (is.null(config$aggregation))    config$aggregation    <- "robustSummary"
 if (is.null(config$min_peptides))   config$min_peptides   <- 1
 if (is.null(config$numberOfCores))  config$numberOfCores  <- 1
 
+batch_column    <- if (!is.null(config$batch_column) && nzchar(config$batch_column)) config$batch_column else NULL
+metadata        <- if (!is.null(config$metadata)) config$metadata else list()
+
 cat("Configuration:\n")
 cat("  normalization:", config$normalization, "\n")
 cat("  imputation:", config$imputation, "\n")
 cat("  aggregation:", config$aggregation, "\n")
 cat("  min_peptides:", config$min_peptides, "\n")
 cat("  numberOfCores:", config$numberOfCores, "\n")
+cat("  batch_column:", ifelse(is.null(batch_column), "(none)", batch_column), "\n")
+# Batch vector builder: matches sample names to metadata entries via condition values
+build_batch_vector <- function(sample_names, metadata, batch_col) {
+  batch_values <- rep(NA_character_, length(sample_names))
+  meta_filenames <- names(metadata)
+  if (length(meta_filenames) == 0) {
+    stop("No metadata entries found — cannot assign batch")
+  }
+  for (i in seq_along(sample_names)) {
+    sname <- sample_names[i]
+    matched <- FALSE
+    for (fname in meta_filenames) {
+      entry <- metadata[[fname]]
+      cond_keys <- grep("^condition_", names(entry), value = TRUE)
+      if (length(cond_keys) == 0) next
+      cond_vals <- as.character(unlist(entry[cond_keys]))
+      cond_vals <- cond_vals[nzchar(cond_vals)]
+      if (length(cond_vals) > 0 &&
+          all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
+        bv <- entry[[batch_col]]
+        if (!is.null(bv) && nzchar(bv)) {
+          batch_values[i] <- bv
+          matched <- TRUE
+        }
+        break
+      }
+    }
+    if (!matched) {
+      # Fallback: try matching experiment value
+      for (fname in meta_filenames) {
+        entry <- metadata[[fname]]
+        exp_val <- entry[["experiment"]]
+        if (!is.null(exp_val) && nzchar(exp_val) && grepl(exp_val, sname, fixed = TRUE)) {
+          bv <- entry[[batch_col]]
+          if (!is.null(bv) && nzchar(bv)) {
+            batch_values[i] <- bv
+            matched <- TRUE
+          }
+          break
+        }
+      }
+    }
+  }
+  if (any(is.na(batch_values))) {
+    stop("Could not assign batch for samples: ",
+         paste(sample_names[is.na(batch_values)], collapse = ", "))
+  }
+  as.factor(batch_values)
+}
+
 cat("Input file:", input_file, "\n")
 cat("Output file:", output_file, "\n")
 cat("RDS output:", rds_output, "\n")
@@ -476,9 +529,59 @@ if (min_peptides > 1) {
 }
 
 # ==========================================================================
+# Batch correction (removeBatchEffect for visualization)
+# ==========================================================================
+protein_matrix_batch_corrected <- NULL
+if (!is.null(batch_column) && length(metadata) > 0) {
+    cat("Applying batch correction via limma::removeBatchEffect...\n")
+    cat("  Batch column:", batch_column, "\n")
+    flush.console()
+
+    batch_factor <- build_batch_vector(sample_names, metadata, batch_column)
+    cat("  Batch assignments:\n")
+    for (i in seq_along(sample_names)) {
+        cat("    ", sample_names[i], "-> batch", batch_factor[i], "\n")
+    }
+    flush.console()
+
+    # Build a minimal design matrix preserving conditions
+    # (removeBatchEffect needs a design for the biological effects to preserve)
+    unique_conditions <- unique(vapply(sample_names, function(sname) {
+        for (fname in names(metadata)) {
+            entry <- metadata[[fname]]
+            cond_keys <- grep("^condition_", names(entry), value = TRUE)
+            cond_vals <- as.character(unlist(entry[cond_keys]))
+            cond_vals <- cond_vals[nzchar(cond_vals)]
+            if (length(cond_vals) > 0 &&
+                all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
+                return(paste(cond_vals, collapse = "+"))
+            }
+        }
+        return(NA_character_)
+    }, character(1)))
+
+    col_data_batch <- data.frame(
+        sample = sample_names,
+        condition = factor(unique_conditions),
+        stringsAsFactors = FALSE
+    )
+    batch_design <- model.matrix(~ 0 + condition, data = col_data_batch)
+
+    protein_matrix_batch_corrected <- removeBatchEffect(
+        protein_matrix,
+        batch = batch_factor,
+        design = batch_design
+    )
+    cat("  Batch correction applied successfully\n")
+    flush.console()
+}
+
+# ==========================================================================
 # Build output data frame with standard column order
 # ==========================================================================
-protein_df <- as.data.frame(protein_matrix, stringsAsFactors = FALSE)
+# Use batch-corrected matrix for output if available, otherwise raw
+output_matrix <- if (!is.null(protein_matrix_batch_corrected)) protein_matrix_batch_corrected else protein_matrix
+protein_df <- as.data.frame(output_matrix, stringsAsFactors = FALSE)
 protein_df$Master_Protein_Accessions <- protein_ids
 protein_df$Gene_Name  <- gene_names
 protein_df$PSM_Count  <- psm_counts
@@ -524,13 +627,18 @@ if (file.exists(norm_coeff_file)) {
 # Save RDS checkpoint (contract with Step 7 differential expression)
 # ==========================================================================
 cat("Saving RDS checkpoint to:", rds_output, "\n")
-saveRDS(list(
+rds_data <- list(
     protein_matrix   = protein_matrix,
     sample_names     = sample_names,
     gene_names       = gene_names,
     psm_counts       = psm_counts,
     norm_coefficients = norm_coeffs
-), file = rds_output)
+)
+if (!is.null(protein_matrix_batch_corrected)) {
+    rds_data$protein_matrix_batch_corrected <- protein_matrix_batch_corrected
+    rds_data$batch_column <- batch_column
+}
+saveRDS(rds_data, file = rds_output)
 cat("RDS checkpoint saved:", file.info(rds_output)$size, "bytes\n")
 
 cat("\nStep 6 complete: msqrob2 data process finished successfully\n")

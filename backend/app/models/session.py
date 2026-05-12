@@ -75,6 +75,9 @@ class SessionConfig(BaseModel):
     msstats_save_fitted_models: Optional[bool] = Field(default=None)
     msstats_n_cores: Optional[int] = Field(default=None)
 
+    # Batch correction (msqrob2)
+    msqrob2_batch_column: Optional[str] = Field(default=None)
+
     # Covariate columns (selected metadata columns to use as model covariates)
     covariate_columns: Optional[list[str]] = Field(default=None)
 

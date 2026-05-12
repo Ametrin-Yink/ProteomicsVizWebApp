@@ -5,11 +5,41 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Play, Loader2, Dna, BarChart3,
   FileText, Table2, GitCompare, Sliders, CheckCircle,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, processingApi } from '@/lib/api-client';
 import { cn, formatGroup } from '@/lib/utils';
+
+function SectionHeader({
+  icon: Icon,
+  title,
+  collapsed,
+  onToggle,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full px-5 py-3 border-b border-border flex items-center gap-3 hover:bg-surface/50 transition-colors text-left"
+    >
+      <Icon className="w-5 h-5 text-primary flex-shrink-0" />
+      <div className="flex-1">
+        <h2 className="font-semibold text-text-primary">{title}</h2>
+      </div>
+      {collapsed ? (
+        <ChevronRight className="w-4 h-4 text-text-muted" />
+      ) : (
+        <ChevronDown className="w-4 h-4 text-text-muted" />
+      )}
+    </button>
+  );
+}
 
 function SummaryContent() {
   const router = useRouter();
@@ -22,7 +52,17 @@ function SummaryContent() {
   const availableOrganisms = useAnalysisStore((s) => s.availableOrganisms);
   const { addToast } = useUIStore();
 
+  const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
   const [isStarting, setIsStarting] = React.useState(false);
+
+  const toggleSection = (name: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  };
+  const isCollapsed = (name: string) => collapsedSections.has(name);
 
   React.useEffect(() => {
     if (!sessionId) { router.replace('/'); }
@@ -104,50 +144,40 @@ function SummaryContent() {
 
       {/* Pipeline */}
       <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-          <PipelineIcon className="w-5 h-5 text-primary" />
-          <div>
-            <h2 className="font-semibold text-text-primary">Pipeline</h2>
-          </div>
-        </div>
+        <SectionHeader icon={PipelineIcon} title="Pipeline" collapsed={isCollapsed('pipeline')} onToggle={() => toggleSection('pipeline')} />
+        {!isCollapsed('pipeline') && (
         <div className="p-5">
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
             <PipelineIcon className="w-4 h-4" />
             {pipelineLabel}
           </span>
         </div>
+        )}
       </section>
 
       {/* Files */}
       <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-          <FileText className="w-5 h-5 text-primary" />
-          <div>
-            <h2 className="font-semibold text-text-primary">Files</h2>
-          </div>
-        </div>
+        <SectionHeader icon={FileText} title="Files" collapsed={isCollapsed('files')} onToggle={() => toggleSection('files')} />
+        {!isCollapsed('files') && (
         <div className="p-5">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Total Files</span>
-              <span className="text-text-primaryfont-medium">{uploadedFiles.length}</span>
+              <span className="text-text-primary font-medium">{uploadedFiles.length}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Total Size</span>
-              <span className="text-text-primaryfont-medium">{(totalSize / 1024 / 1024).toFixed(1)} MB</span>
+              <span className="text-text-primary font-medium">{(totalSize / 1024 / 1024).toFixed(1)} MB</span>
             </div>
           </div>
         </div>
+        )}
       </section>
 
       {/* Experiment Structure (read-only) */}
       <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-          <Table2 className="w-5 h-5 text-primary" />
-          <div>
-            <h2 className="font-semibold text-text-primary">Experiment Structure</h2>
-          </div>
-        </div>
+        <SectionHeader icon={Table2} title="Experiment Structure" collapsed={isCollapsed('experiment')} onToggle={() => toggleSection('experiment')} />
+        {!isCollapsed('experiment') && (
         <div className="p-5">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -187,16 +217,13 @@ function SummaryContent() {
             </table>
           </div>
         </div>
+        )}
       </section>
 
       {/* Comparisons */}
       <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-          <GitCompare className="w-5 h-5 text-primary" />
-          <div>
-            <h2 className="font-semibold text-text-primary">Comparisons</h2>
-          </div>
-        </div>
+        <SectionHeader icon={GitCompare} title="Comparisons" collapsed={isCollapsed('comparisons')} onToggle={() => toggleSection('comparisons')} />
+        {!isCollapsed('comparisons') && (
         <div className="p-5">
           {(!config.comparisons || config.comparisons.length === 0) ? (
             <p className="text-sm text-text-muted italic">No comparisons defined</p>
@@ -212,21 +239,19 @@ function SummaryContent() {
             </div>
           )}
         </div>
+        )}
       </section>
 
       {/* Configuration */}
       <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-          <Sliders className="w-5 h-5 text-primary" />
-          <div>
-            <h2 className="font-semibold text-text-primary">Configuration</h2>
-          </div>
-        </div>
-        <div className="p-5">
+        <SectionHeader icon={Sliders} title="Configuration" collapsed={isCollapsed('config')} onToggle={() => toggleSection('config')} />
+        {!isCollapsed('config') && (
+        <div className="p-5 space-y-4">
+          {/* Shared params */}
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Organism</span>
-              <span className="text-text-primaryfont-medium">{organismLabel}</span>
+              <span className="text-text-primary font-medium">{organismLabel}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Remove Razor Peptides</span>
@@ -242,37 +267,142 @@ function SummaryContent() {
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">P-Value Threshold</span>
-              <span className="text-text-primaryfont-medium">{config.pvalue_threshold ?? 0.05}</span>
+              <span className="text-text-primary font-medium">{config.pvalue_threshold ?? 0.05}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Log2 FC Threshold</span>
-              <span className="text-text-primaryfont-medium">{config.logfc_threshold ?? 1.0}</span>
+              <span className="text-text-primary font-medium">{config.logfc_threshold ?? 1.0}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Min Peptides per Protein</span>
-              <span className="text-text-primaryfont-medium">{config.min_peptides_per_protein ?? 1}</span>
+              <span className="text-text-primary font-medium">{config.min_peptides_per_protein ?? 1}</span>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Covariates (MSstats only) */}
-      {selectedPipeline === 'msstats' && (config.covariate_columns?.length ?? 0) > 0 && (
-        <section className="bg-background border border-border rounded-lg">
-          <div className="px-5 py-3 border-b border-border">
-            <h2 className="font-semibold text-text-primary">Covariates</h2>
-          </div>
-          <div className="p-5">
-            <div className="flex flex-wrap gap-2">
-              {config.covariate_columns?.map((col) => (
-                <span key={col} className="px-3 py-1 bg-primary/10 border border-primary/30 rounded-lg text-sm text-primary">
-                  {col}
-                </span>
-              ))}
+          {/* msqrob2 params */}
+          {selectedPipeline === 'msqrob2' && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider pt-2 border-t border-border">msqrob2 Parameters</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Normalization</span>
+                  <span className="text-text-primary font-medium">{config.msqrob2_normalization ?? 'center.median'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Imputation</span>
+                  <span className="text-text-primary font-medium">{config.msqrob2_imputation ?? 'none'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Aggregation</span>
+                  <span className="text-text-primary font-medium">{config.msqrob2_aggregation ?? 'robustSummary'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">DE Model</span>
+                  <span className="text-text-primary font-medium">{config.msqrob2_model ?? 'msqrobLm'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Robust Estimation</span>
+                  <span className={cn('font-medium', config.msqrob2_robust !== false ? 'text-success' : 'text-text-muted')}>
+                    {config.msqrob2_robust !== false ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Ridge Penalty</span>
+                  <span className={cn('font-medium', config.msqrob2_ridge ? 'text-success' : 'text-text-muted')}>
+                    {config.msqrob2_ridge ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Multiple Testing Correction</span>
+                  <span className="text-text-primary font-medium">{config.msqrob2_adjust_method ?? 'BH'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Batch Correction</span>
+                  <span className="text-text-primary font-medium">{config.msqrob2_batch_column || 'None'}</span>
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
-      )}
+          )}
+
+          {/* MSstats params */}
+          {selectedPipeline === 'msstats' && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider pt-2 border-t border-border">MSstats Parameters</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Normalization</span>
+                  <span className="text-text-primary font-medium">{config.msstats_normalization ?? 'equalizeMedians'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Feature Selection</span>
+                  <span className="text-text-primary font-medium">{config.msstats_feature_selection ?? 'all'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Summary Method</span>
+                  <span className="text-text-primary font-medium">{config.msstats_summary_method ?? 'TMP'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Impute</span>
+                  <span className={cn('font-medium', config.msstats_impute !== false ? 'text-success' : 'text-text-muted')}>
+                    {config.msstats_impute !== false ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Log Base</span>
+                  <span className="text-text-primary font-medium">{config.msstats_log_base ?? 2}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Censored Int</span>
+                  <span className="text-text-primary font-medium">{config.msstats_censored_int ?? 'NA'}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Max Quantile</span>
+                  <span className="text-text-primary font-medium">{config.msstats_max_quantile ?? 0.999}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Remove 50% Missing</span>
+                  <span className={cn('font-medium', config.msstats_remove50missing ? 'text-success' : 'text-text-muted')}>
+                    {config.msstats_remove50missing ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">N Top Feature</span>
+                  <span className="text-text-primary font-medium">{config.msstats_n_top_feature ?? 3}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Min Feature Count</span>
+                  <span className="text-text-primary font-medium">{config.msstats_min_feature_count ?? 2}</span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Remove Outlier Features</span>
+                  <span className={cn('font-medium', config.msstats_remove_uninformative_feature_outlier ? 'text-success' : 'text-text-muted')}>
+                    {config.msstats_remove_uninformative_feature_outlier ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div className="bg-surface rounded-lg p-3">
+                  <span className="text-text-muted block text-xs">Equal Feature Var</span>
+                  <span className={cn('font-medium', config.msstats_equal_feature_var !== false ? 'text-success' : 'text-text-muted')}>
+                    {config.msstats_equal_feature_var !== false ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Covariates (both pipelines) */}
+          {(config.covariate_columns?.length ?? 0) > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider pt-2 border-t border-border">Covariates</h3>
+              <div className="flex flex-wrap gap-2">
+                {config.covariate_columns?.map((col) => (
+                  <span key={col} className="px-3 py-1 bg-primary/10 border border-primary/30 rounded-lg text-sm text-primary">{col}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        )}
+      </section>
 
       {/* Navigation */}
       <div className="flex items-center justify-between pt-4 border-t border-border">

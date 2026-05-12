@@ -308,7 +308,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
             </div>
           </div>
           <div className="p-5">
-            <Msqrob2ConfigForm config={config} setConfig={setConfig} />
+            <Msqrob2ConfigForm config={config} setConfig={setConfig} metadataColumns={config.metadata_columns} />
           </div>
         </section>
       )}

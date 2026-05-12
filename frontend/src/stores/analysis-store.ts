@@ -94,6 +94,7 @@ const defaultConfig: SessionConfig = {
   msstats_n_cores: undefined,
   condition_column: 'condition',
   covariate_columns: [],
+  msqrob2_batch_column: 'batch',
 };
 
 export const useAnalysisStore = create<AnalysisState>()(
@@ -145,6 +146,7 @@ export const useAnalysisStore = create<AnalysisState>()(
             file.conditions.forEach((cond, i) => {
               entry[`condition_${i + 1}`] = cond;
             });
+            entry["batch"] = file.experiment;
             state.config.metadata_columns[file.filename] = entry;
           }
         }
@@ -190,7 +192,13 @@ export const useAnalysisStore = create<AnalysisState>()(
           }
           const meta = state.config.metadata_columns!;
           if (!meta[filename]) meta[filename] = {};
-          if (updates.experiment !== undefined) meta[filename].experiment = updates.experiment;
+          if (updates.experiment !== undefined) {
+            const oldExperiment = meta[filename].experiment;
+            meta[filename].experiment = updates.experiment;
+            if (meta[filename].batch === oldExperiment) {
+              meta[filename].batch = updates.experiment;
+            }
+          }
           if (updates.conditions !== undefined) {
             updates.conditions.forEach((cond, i) => {
               meta[filename][`condition_${i + 1}`] = cond;
@@ -359,15 +367,6 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   const conditions = getConditions(state);
   const replicatesByCondition = getReplicatesByCondition(state);
   const warnings: ValidationWarning[] = [];
-  
-  // Check multiple experiments
-  if (experiments.length > 1) {
-    warnings.push({
-      type: 'error',
-      message: 'Samples must be from the same experiment.',
-      code: 'MULTIPLE_EXPERIMENTS',
-    });
-  }
   
   // Check at least 2 conditions
   if (conditions.length < 2 && selected.length > 0) {

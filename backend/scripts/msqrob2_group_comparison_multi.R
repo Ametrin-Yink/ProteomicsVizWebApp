@@ -81,12 +81,15 @@ model_type    <- if (!is.null(config$model)) as.character(config$model) else "ms
 robust        <- if (!is.null(config$robust)) isTRUE(as.logical(config$robust)) else TRUE
 ridge         <- if (!is.null(config$ridge)) isTRUE(as.logical(config$ridge)) else FALSE
 adjust_method <- if (!is.null(config$adjust_method)) as.character(config$adjust_method) else "BH"
+batch_column  <- if (!is.null(config$batch_column) && nzchar(config$batch_column)) config$batch_column else NULL
+metadata      <- if (!is.null(config$metadata)) config$metadata else list()
 
 cat("Config:\n")
 cat("  model:", model_type, "\n")
 cat("  robust:", robust, "\n")
 cat("  ridge:", ridge, "\n")
 cat("  adjust_method:", adjust_method, "\n")
+cat("  batch_column:", ifelse(is.null(batch_column), "(none)", batch_column), "\n")
 flush.console()
 
 # numberOfCores for BiocParallel
@@ -104,6 +107,54 @@ if (!model_type %in% VALID_MODELS) {
 if (!adjust_method %in% VALID_ADJUST) {
     stop(paste("Invalid adjust_method:", adjust_method, "- must be one of",
                paste(VALID_ADJUST, collapse = ", ")))
+}
+
+# Batch vector builder: matches sample names to metadata entries via condition values
+build_batch_vector <- function(sample_names, metadata, batch_col) {
+  batch_values <- rep(NA_character_, length(sample_names))
+  meta_filenames <- names(metadata)
+  if (length(meta_filenames) == 0) {
+    stop("No metadata entries found — cannot assign batch")
+  }
+  for (i in seq_along(sample_names)) {
+    sname <- sample_names[i]
+    matched <- FALSE
+    for (fname in meta_filenames) {
+      entry <- metadata[[fname]]
+      cond_keys <- grep("^condition_", names(entry), value = TRUE)
+      if (length(cond_keys) == 0) next
+      cond_vals <- as.character(unlist(entry[cond_keys]))
+      cond_vals <- cond_vals[nzchar(cond_vals)]
+      if (length(cond_vals) > 0 &&
+          all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
+        bv <- entry[[batch_col]]
+        if (!is.null(bv) && nzchar(bv)) {
+          batch_values[i] <- bv
+          matched <- TRUE
+        }
+        break
+      }
+    }
+    if (!matched) {
+      for (fname in meta_filenames) {
+        entry <- metadata[[fname]]
+        exp_val <- entry[["experiment"]]
+        if (!is.null(exp_val) && nzchar(exp_val) && grepl(exp_val, sname, fixed = TRUE)) {
+          bv <- entry[[batch_col]]
+          if (!is.null(bv) && nzchar(bv)) {
+            batch_values[i] <- bv
+            matched <- TRUE
+          }
+          break
+        }
+      }
+    }
+  }
+  if (any(is.na(batch_values))) {
+    stop("Could not assign batch for samples: ",
+         paste(sample_names[is.na(batch_values)], collapse = ", "))
+  }
+  as.factor(batch_values)
 }
 
 # Set up BiocParallel for per-comparison parallelization
@@ -328,6 +379,18 @@ if (length(unique(col_data$condition)) < 2) {
     stop("At least 2 distinct conditions must be present in the data")
 }
 
+# Assign batch if batch_column is specified
+has_batch <- !is.null(batch_column) && length(metadata) > 0
+if (has_batch) {
+    cat("\n=== Step 4b: Assigning batch from metadata column '", batch_column, "' ===\n", sep = "")
+    flush.console()
+
+    col_data$batch <- build_batch_vector(sample_names, metadata, batch_column)
+    cat("Batch assignments:\n")
+    print(table(col_data$batch))
+    flush.console()
+}
+
 # ============================================================================
 # STEP 5: Pre-filter zero-variance proteins
 # ============================================================================
@@ -361,9 +424,17 @@ filtered_ids <- rownames(protein_matrix)
 # ============================================================================
 cat("\n=== Step 6: Building design matrix ===\n")
 
-design <- model.matrix(~ 0 + condition, data = col_data)
-model_coef_names <- colnames(design)  # e.g. conditionINCB224525_24h
-colnames(design) <- levels(col_data$condition)
+if (has_batch) {
+    design <- model.matrix(~ 0 + condition + batch, data = col_data)
+    n_conditions <- nlevels(col_data$condition)
+    cond_coef_names <- levels(col_data$condition)
+    # First n_conditions coefs are the condition columns (after ~ 0 + condition + batch)
+    colnames(design)[1:n_conditions] <- cond_coef_names
+} else {
+    design <- model.matrix(~ 0 + condition, data = col_data)
+    colnames(design) <- levels(col_data$condition)
+}
+model_coef_names <- colnames(design)
 
 cat("Design matrix (", nrow(design), " rows x ", ncol(design), " columns):\n", sep = "")
 print(design)
@@ -384,13 +455,21 @@ flush.console()
 cat("\n=== Step 7: Fitting model with", model_type, "===\n")
 flush.console()
 
+# Build formula dynamically: include batch if specified
+model_formula <- if (has_batch) {
+    as.formula("~ 0 + condition + batch")
+} else {
+    as.formula("~ 0 + condition")
+}
+cat("  Formula:", deparse(model_formula), "\n")
+
 if (model_type == "msqrobLm") {
     cat("  Fitting msqrobLm (robust =", robust, ", maxitRob = 10)\n")
     flush.console()
 
     fit <- msqrobLm(
         y       = protein_matrix,
-        formula = ~ 0 + condition,
+        formula = model_formula,
         data    = col_data,
         robust  = robust,
         maxitRob = 10
@@ -410,7 +489,7 @@ if (model_type == "msqrobLm") {
     fit <- msqrobGlm(
         y       = protein_matrix,
         npep    = psm_for_model,
-        formula = ~ 0 + condition,
+        formula = model_formula,
         data    = col_data
     )
 }

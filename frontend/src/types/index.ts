@@ -94,6 +94,8 @@ export interface SessionConfig {
   condition_column?: string;
   // Covariates
   covariate_columns?: string[];
+  // Batch correction (msqrob2)
+  msqrob2_batch_column?: string;
 }
 
 export interface SessionFiles {

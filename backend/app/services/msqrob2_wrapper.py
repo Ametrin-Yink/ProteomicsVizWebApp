@@ -42,6 +42,8 @@ class Msqrob2Wrapper(BaseRWrapper):
             "aggregation": config.msqrob2_aggregation,
             "min_peptides": config.msqrob2_min_peptides,
             "numberOfCores": n_cores,
+            "batch_column": config.msqrob2_batch_column,
+            "metadata": config.metadata,
         }
 
     def _build_gc_config(self, config: AnalysisConfig, n_cores: int, **extra) -> dict:
@@ -51,6 +53,8 @@ class Msqrob2Wrapper(BaseRWrapper):
             "ridge": config.msqrob2_ridge,
             "adjust_method": config.msqrob2_adjust_method,
             "numberOfCores": n_cores,
+            "batch_column": config.msqrob2_batch_column,
+            "metadata": config.metadata,
         }
 
     # _n_cores_config_attr = "msqrob2_n_cores"  (matches base default)

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, GitCompare, CheckSquare, Square,
   AlertCircle, Loader2, Plus, X, GripVertical, Trash2,
+  ChevronDown, ChevronRight, ArrowLeftRight,
 } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -39,6 +40,37 @@ function ComparisonsContent() {
   const [covariateSelections, setCovariateSelections] = React.useState<Set<string>>(
     new Set(config.covariate_columns || [])
   );
+
+  // --- Collapse state for palette columns ---
+  const [collapsedColumns, setCollapsedColumns] = React.useState<Set<string>>(new Set());
+
+  const toggleColumn = (col: string) => {
+    setCollapsedColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(col)) next.delete(col); else next.add(col);
+      return next;
+    });
+  };
+
+  // --- Add a condition card to both groups ---
+  const addToBothGroups = (card: {col: string; val: string; id: string}) => {
+    const g1Has = group1Cards.some(c => c.col === card.col);
+    const g2Has = group2Cards.some(c => c.col === card.col);
+    if (g1Has && g2Has) {
+      addToast('warning', `"${card.col}" is already in both groups`);
+      return;
+    }
+    if (g1Has) {
+      addToast('warning', `"${card.col}" is already in Group A`);
+      return;
+    }
+    if (g2Has) {
+      addToast('warning', `"${card.col}" is already in Group B`);
+      return;
+    }
+    setGroup1Cards(prev => [...prev, card]);
+    setGroup2Cards(prev => [...prev, card]);
+  };
 
   // --- Saving state ---
   const [isSaving, setIsSaving] = React.useState(false);
@@ -75,21 +107,32 @@ function ComparisonsContent() {
     return Array.from(cols);
   }, [conditionCards]);
 
-  // Filter palette cards to exclude those already in drop zones
-  const paletteCards = React.useMemo(() => {
-    const used = new Set([...group1Cards.map(c => c.id), ...group2Cards.map(c => c.id)]);
-    return conditionCards.filter(c => !used.has(c.id));
-  }, [conditionCards, group1Cards, group2Cards]);
+  // --- Compute sample counts for each group ---
+  const groupSampleCounts = React.useMemo(() => {
+    const countMatching = (cards: Array<{col: string; val: string; id: string}>) => {
+      if (cards.length === 0 || !config.metadata_columns) return 0;
+      let count = 0;
+      Object.values(config.metadata_columns).forEach((row) => {
+        if (cards.every((c) => row[c.col] === c.val)) count++;
+      });
+      return count;
+    };
+    return {
+      group1: countMatching(group1Cards),
+      group2: countMatching(group2Cards),
+    };
+  }, [group1Cards, group2Cards, config.metadata_columns]);
 
+  // All cards are always available in palette (cards can be reused across groups)
   // Group palette cards by column name
   const paletteGroups = React.useMemo(() => {
     const groups: Record<string, typeof conditionCards> = {};
-    paletteCards.forEach(c => {
+    conditionCards.forEach(c => {
       if (!groups[c.col]) groups[c.col] = [];
       groups[c.col].push(c);
     });
     return groups;
-  }, [paletteCards]);
+  }, [conditionCards]);
 
   // --- Drag-drop handlers ---
   const handleDragStart = (e: React.DragEvent, card: {col: string; val: string; id: string}, source: string) => {
@@ -108,15 +151,15 @@ function ComparisonsContent() {
     const card = JSON.parse(e.dataTransfer.getData('application/json'));
     const source = e.dataTransfer.getData('source');
 
-    // Remove from source
+    // Remove from source zone (if dragged from another zone, not from palette)
     if (source === 'group1') setGroup1Cards(prev => prev.filter(c => c.id !== card.id));
     else if (source === 'group2') setGroup2Cards(prev => prev.filter(c => c.id !== card.id));
 
-    // Check duplicate column in target zone
+    // Check duplicate column within target zone only
     const targetCards = target === 'group1' ? group1Cards : group2Cards;
     if (targetCards.some(c => c.col === card.col)) {
       addToast('warning', `Already have a "${card.col}" card in this group`);
-      return; // Card returns to palette (not re-added to any zone)
+      return;
     }
 
     const setTarget = target === 'group1' ? setGroup1Cards : setGroup2Cards;
@@ -224,31 +267,52 @@ function ComparisonsContent() {
             onDrop={handleDropOnPalette}
           >
             <p className="text-xs text-text-muted mb-2 font-medium">Condition Palette (drag to groups or drop here to return)</p>
-            {Object.keys(paletteGroups).length === 0 && group1Cards.length === 0 && group2Cards.length === 0 ? (
+            {Object.keys(paletteGroups).length === 0 ? (
               <p className="text-xs text-text-muted italic">No condition cards available. Define metadata columns on the Upload page.</p>
-            ) : Object.keys(paletteGroups).length === 0 ? (
-              <p className="text-xs text-text-muted italic">All cards are in use — remove from groups or drop here</p>
             ) : (
               <div className="space-y-2">
-                {Object.entries(paletteGroups).map(([colName, cards]) => (
+                {Object.entries(paletteGroups).map(([colName, cards]) => {
+                  const isCollapsed = collapsedColumns.has(colName);
+                  return (
                   <div key={colName}>
-                    <span className="text-xs uppercase tracking-wider text-text-muted font-semibold">{colName}</span>
+                    <button
+                      onClick={() => toggleColumn(colName)}
+                      className="flex items-center gap-1 text-xs uppercase tracking-wider text-text-muted font-semibold hover:text-text-primary transition-colors w-full text-left"
+                    >
+                      {isCollapsed ? <ChevronRight className="w-3 h-3 flex-shrink-0" /> : <ChevronDown className="w-3 h-3 flex-shrink-0" />}
+                      {colName}
+                      <span className="font-normal tracking-normal normal-case text-text-muted ml-0.5">({cards.length})</span>
+                    </button>
+                    {!isCollapsed && (
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {cards.map((card) => (
                         <div
                           key={card.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, card, 'palette')}
-                          className="flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-md text-xs text-text-primarycursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all select-none"
+                          className="flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-md text-xs text-text-primary select-none group"
                         >
-                          <GripVertical className="w-3 h-3 text-text-muted" />
-                          <span className="font-medium text-text-muted">{card.col}:</span>
-                          <span>{card.val}</span>
+                          <div
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, card, 'palette')}
+                            className="flex items-center gap-1 cursor-grab active:cursor-grabbing"
+                          >
+                            <GripVertical className="w-3 h-3 text-text-muted" />
+                            <span className="font-medium text-text-muted">{card.col}:</span>
+                            <span>{card.val}</span>
+                          </div>
+                          <button
+                            onClick={() => addToBothGroups(card)}
+                            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-primary transition-all ml-0.5"
+                            title="Add to both groups"
+                          >
+                            <ArrowLeftRight className="w-3 h-3" />
+                          </button>
                         </div>
                       ))}
                     </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -265,7 +329,14 @@ function ComparisonsContent() {
               onDrop={(e) => handleDropOnZone(e, 'group1')}
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group A</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group A</p>
+                  {group1Cards.length > 0 && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                      {groupSampleCounts.group1} sample{groupSampleCounts.group1 !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
                 {group1Cards.length > 0 && (
                   <button onClick={() => setGroup1Cards([])} className="text-xs text-text-muted hover:text-error transition-colors">
                     Clear all
@@ -299,7 +370,14 @@ function ComparisonsContent() {
               onDrop={(e) => handleDropOnZone(e, 'group2')}
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group B</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group B</p>
+                  {group2Cards.length > 0 && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                      {groupSampleCounts.group2} sample{groupSampleCounts.group2 !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
                 {group2Cards.length > 0 && (
                   <button onClick={() => setGroup2Cards([])} className="text-xs text-text-muted hover:text-error transition-colors">
                     Clear all

@@ -314,6 +314,8 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             "msstats_n_cores",
             # Multi-condition
             "comparisons",
+            # Batch correction (msqrob2)
+            "msqrob2_batch_column",
         ]
 
         sc = session.config

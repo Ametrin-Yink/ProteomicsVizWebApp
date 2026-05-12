@@ -1,14 +1,33 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { SessionConfig } from '@/types';
 
 interface Msqrob2ConfigFormProps {
   config: SessionConfig;
   setConfig: (partial: Partial<SessionConfig>) => void;
+  metadataColumns?: Record<string, Record<string, string>>;
 }
 
-export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFormProps) {
+export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }: Msqrob2ConfigFormProps) {
+  const customColumnNames = useMemo(() => {
+    if (!metadataColumns) return [];
+    const conditionColSet = new Set<string>();
+    // Discover condition_N columns from the data
+    Object.values(metadataColumns).forEach((row) => {
+      Object.keys(row).forEach((k) => {
+        if (/^condition_\d+$/.test(k)) conditionColSet.add(k);
+      });
+    });
+    const cols = new Set<string>();
+    Object.values(metadataColumns).forEach((row) => {
+      Object.keys(row).forEach((k) => {
+        if (k !== 'experiment' && k !== 'replicate' && !conditionColSet.has(k)) cols.add(k);
+      });
+    });
+    return Array.from(cols).sort();
+  }, [metadataColumns]);
+
   return (
     <div className="space-y-5">
       {/* Normalization Method */}
@@ -149,6 +168,29 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
           </label>
         </>
       )}
+
+      {/* Batch Correction */}
+      <div>
+        <label className="block text-sm font-medium text-text-primary mb-2">
+          Batch Correction
+        </label>
+        <select
+          data-testid="msqrob2-batch-column-select"
+          value={config.msqrob2_batch_column ?? 'batch'}
+          onChange={(e) => setConfig({ msqrob2_batch_column: e.target.value || undefined })}
+          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
+            focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+        >
+          <option value="">None (No batch correction)</option>
+          {customColumnNames.map((col) => (
+            <option key={col} value={col}>{col}</option>
+          ))}
+        </select>
+        <p className="text-xs text-text-muted mt-1">
+          Include a metadata column as batch covariate in the linear model (limma removeBatchEffect).
+          Add custom columns (e.g. &ldquo;Batch&rdquo;) on the Upload page metadata table.
+        </p>
+      </div>
 
       {/* Multiple Testing Correction */}
       <div>

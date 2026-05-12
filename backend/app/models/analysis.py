@@ -156,6 +156,11 @@ class AnalysisConfig(BaseModel):
         description="Number of CPU cores for parallel msqrob2 processing. None = auto-calibrate.",
     )
 
+    # Batch correction (msqrob2)
+    msqrob2_batch_column: Optional[str] = Field(
+        default=None, description="Metadata column to use as batch variable in limma"
+    )
+
     # Covariate columns (selected metadata columns used as model covariates)
     covariate_columns: Optional[list[str]] = Field(
         default=None, description="Metadata column names to use as covariates"
