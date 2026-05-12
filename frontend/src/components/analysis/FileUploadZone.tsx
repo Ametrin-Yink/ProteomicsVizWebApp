@@ -60,7 +60,7 @@ const CollapsibleFileList: React.FC<{
                     {file.filename}
                   </span>
                   <span className="text-xs text-text-muted flex-shrink-0">
-                    {file.experiment} / {file.condition} / #{file.replicate}
+                    {file.experiment} / {file.conditions.join('_')} / #{file.replicate}
                   </span>
                 </div>
                 <button
@@ -88,24 +88,29 @@ const ALLOWED_EXTENSIONS = ['.csv'];
 
 /**
  * Parse PSM filename to extract metadata
- * Pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv
+ * Pattern: PSM_ExperimentName_Cond1_Cond2_..._CondN_ReplicateNumber.csv
  *
- * Note: Uses non-greedy matching to properly handle underscores in condition names
+ * Everything between PSM_ and the final _<number>.csv is split by _:
+ * first segment = experiment, rest = conditions.
  */
 const parseFilename = (filename: string): ParsedFilename | null => {
-  // Use non-greedy matching (+?) to properly handle condition names with underscores
-  const pattern = /^PSM_(.+?)_(.+?)_(\d+)\.csv$/i;
+  const pattern = /^PSM_(.+)_(\d+)\.csv$/i;
   const match = filename.match(pattern);
 
   if (!match) {
     return null;
   }
 
+  const parts = match[1].split('_');
+  if (parts.length < 2) {
+    return null;
+  }
+
   return {
     filename,
-    experiment: match[1],
-    condition: match[2],
-    replicate: parseInt(match[3], 10),
+    experiment: parts[0],
+    conditions: parts.slice(1),
+    replicate: parseInt(match[2], 10),
     size: 0,
   };
 };
@@ -218,7 +223,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           const parsed = parseFilename(file.name);
           if (!parsed) {
             console.error('Invalid filename:', file.name);
-            addToast('error', `Invalid filename: ${file.name}. Expected: PSM_ExperimentName_Condition_ReplicateNumber.csv`);
+            addToast('error', `Invalid filename: ${file.name}. Expected: PSM_ExperimentName_Condition1_Condition2_ReplicateNumber.csv`);
             continue;
           }
           validFiles.push(file);
@@ -246,7 +251,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                 addUploadedFile({
                   filename: uploadedFile.filename,
                   experiment: parsed.experiment,
-                  condition: parsed.condition,
+                  conditions: parsed.conditions,
                   replicate: parsed.replicate,
                   size: uploadedFile.size,
                   columns: uploadedFile.columns || [],
@@ -256,7 +261,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                 addUploadedFile({
                   filename: uploadedFile.filename,
                   experiment: uploadedFile.experiment || 'Unknown',
-                  condition: uploadedFile.condition || 'Unknown',
+                  conditions: uploadedFile.conditions || ['Unknown'],
                   replicate: uploadedFile.replicate || 1,
                   size: uploadedFile.size,
                   columns: uploadedFile.columns || [],
@@ -371,7 +376,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                 or click to browse
               </p>
               <p className="text-xs text-text-muted mt-1">
-                Expected: <code className="px-1 py-0.5 bg-surface rounded text-text-secondary">PSM_Experiment_Condition_Rep.csv</code>
+                Expected: <code className="px-1 py-0.5 bg-surface rounded text-text-secondary">PSM_Experiment_Cond1_Cond2_Rep.csv</code>
               </p>
             </div>
             

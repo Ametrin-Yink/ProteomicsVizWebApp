@@ -88,7 +88,7 @@ export const CompoundDisplay: React.FC = () => {
   // Derive conditions dynamically from selected files
   const conditions = useMemo(() => {
     const selected = uploadedFiles.filter((file) => selectedFiles.has(file.filename));
-    return Array.from(new Set(selected.map((f) => f.condition)));
+    return Array.from(new Set(selected.flatMap((f) => f.conditions)));
   }, [uploadedFiles, selectedFiles]);
 
   // Match compounds to conditions

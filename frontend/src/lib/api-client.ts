@@ -66,7 +66,7 @@ function mapBackendStatus(status: string): SessionStatus {
 export function mapBackendFiles(files: BackendSession['files']): Array<{
   filename: string;
   experiment: string;
-  condition: string;
+  conditions: string[];
   replicate: number;
   size: number;
   columns?: string[];
@@ -77,12 +77,13 @@ export function mapBackendFiles(files: BackendSession['files']): Array<{
     size: number;
     experiment?: string;
     condition?: string;
+    conditions?: string[];
     replicate?: number;
     columns?: string[];
   }>).map(f => ({
     filename: f.filename,
     experiment: f.experiment || '',
-    condition: f.condition || '',
+    conditions: f.conditions || (f.condition ? [f.condition] : []),
     replicate: f.replicate || 0,
     size: f.size,
     columns: f.columns || [],

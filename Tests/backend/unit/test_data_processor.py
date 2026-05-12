@@ -41,7 +41,7 @@ class TestDataProcessor:
         result = processor.parse_psm_filename("PSM_SampleData_DMSO_1.csv")
 
         assert result.experiment == "SampleData"
-        assert result.condition == "DMSO"
+        assert result.conditions == ["DMSO"]
         assert result.replicate == 1
 
     def test_parse_psm_filename_invalid(self, processor):

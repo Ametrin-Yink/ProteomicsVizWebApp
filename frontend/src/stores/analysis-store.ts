@@ -51,7 +51,7 @@ interface AnalysisState {
   toggleFileSelection: (filename: string) => void;
   selectAllFiles: () => void;
   deselectAllFiles: () => void;
-  updateFileMetadata: (filename: string, updates: Partial<Pick<ParsedFilename, 'experiment' | 'condition'>>) => void;
+  updateFileMetadata: (filename: string, updates: Partial<Pick<ParsedFilename, 'experiment' | 'conditions'>>) => void;
   setPipeline: (pipeline: 'msqrob2' | 'msstats') => void;
   setConfig: (config: Partial<SessionConfig>) => void;
   setAvailableOrganisms: (organisms: Organism[]) => void;
@@ -121,15 +121,16 @@ export const useAnalysisStore = create<AnalysisState>()(
           state.uploadedFiles.push(file);
           state.selectedFiles.add(file.filename);
           // Initialize metadata_columns for this file so addColumn works immediately.
-          // Only create if not already present (e.g. from a prior session restore).
           if (!state.config.metadata_columns) state.config.metadata_columns = {};
           if (!state.config.metadata_columns[file.filename]) {
-            const condCol = state.config.condition_column || 'condition';
-            state.config.metadata_columns[file.filename] = {
+            const entry: Record<string, string> = {
               experiment: file.experiment,
-              [condCol]: file.condition,
               replicate: String(file.replicate),
             };
+            file.conditions.forEach((cond, i) => {
+              entry[`condition_${i + 1}`] = cond;
+            });
+            state.config.metadata_columns[file.filename] = entry;
           }
         }
       });
@@ -166,14 +167,19 @@ export const useAnalysisStore = create<AnalysisState>()(
         const file = state.uploadedFiles.find((f: ParsedFilename) => f.filename === filename);
         if (file) {
           if (updates.experiment !== undefined) file.experiment = updates.experiment;
-          if (updates.condition !== undefined) file.condition = updates.condition;
+          if (updates.conditions !== undefined) file.conditions = updates.conditions;
           // Sync to metadata_columns so the unified panel and downstream consumers stay consistent
-          if (!state.config.metadata_columns) state.config.metadata_columns = {};
-          if (!state.config.metadata_columns[filename]) state.config.metadata_columns[filename] = {};
-          if (updates.experiment !== undefined) state.config.metadata_columns[filename].experiment = updates.experiment;
-          if (updates.condition !== undefined) {
-            const condCol = state.config.condition_column || 'condition';
-            state.config.metadata_columns[filename][condCol] = updates.condition;
+          const mc = state.config.metadata_columns;
+          if (!mc) {
+            state.config.metadata_columns = {};
+          }
+          const meta = state.config.metadata_columns!;
+          if (!meta[filename]) meta[filename] = {};
+          if (updates.experiment !== undefined) meta[filename].experiment = updates.experiment;
+          if (updates.conditions !== undefined) {
+            updates.conditions.forEach((cond, i) => {
+              meta[filename][`condition_${i + 1}`] = cond;
+            });
           }
         }
       });
@@ -264,16 +270,15 @@ export const getExperiments = (state: AnalysisState): string[] => {
 };
 
 function getConditionColumnNames(state: AnalysisState): string[] {
-  const metadataColumns = state.config.metadata_columns || {};
-  const primary = state.config.condition_column || 'condition';
-  const cols = new Set<string>();
-  cols.add(primary);
-  Object.values(metadataColumns).forEach((row) => {
-    Object.keys(row).forEach((k) => {
-      if (k !== 'experiment' && k !== primary && k !== 'replicate') cols.add(k);
-    });
-  });
-  return Array.from(cols);
+  const maxConditions = state.uploadedFiles.reduce(
+    (max, f) => Math.max(max, f.conditions.length),
+    0,
+  );
+  const cols: string[] = [];
+  for (let i = 1; i <= maxConditions; i++) {
+    cols.push(`condition_${i}`);
+  }
+  return cols;
 }
 
 export const getConditions = (state: AnalysisState): string[] => {

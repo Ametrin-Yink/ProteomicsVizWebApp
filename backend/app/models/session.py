@@ -92,7 +92,7 @@ class ProteomicsFileInfo(FileInfo):
     """Proteomics file metadata with parsed filename info."""
 
     experiment: str = Field(..., description="Experiment name from filename")
-    condition: str = Field(..., description="Condition from filename")
+    conditions: list[str] = Field(..., description="Conditions from filename (multiple segments between experiment and replicate)")
     replicate: int = Field(..., ge=1, description="Replicate number")
 
 

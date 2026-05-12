@@ -151,7 +151,15 @@ export const ExperimentTable: React.FC = () => {
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const conditionCol = config.condition_column || 'condition';
+  // Derive condition column names from max conditions across all files
+  const maxConditions = useMemo(
+    () => uploadedFiles.reduce((max, f) => Math.max(max, f.conditions.length), 0),
+    [uploadedFiles],
+  );
+  const conditionCols = useMemo(
+    () => Array.from({ length: maxConditions }, (_, i) => `condition_${i + 1}`),
+    [maxConditions],
+  );
 
   // Auto-populate metadata_columns for any uploaded files missing entries
   React.useEffect(() => {
@@ -160,30 +168,34 @@ export const ExperimentTable: React.FC = () => {
     let hasChanges = false;
     uploadedFiles.forEach((f) => {
       if (!current[f.filename]) {
-        current[f.filename] = {
+        const entry: Record<string, string> = {
           experiment: f.experiment,
-          [conditionCol]: f.condition,
           replicate: String(f.replicate),
         };
+        f.conditions.forEach((cond, i) => {
+          entry[`condition_${i + 1}`] = cond;
+        });
+        current[f.filename] = entry;
         hasChanges = true;
       }
     });
     if (hasChanges) {
       setConfig({ metadata_columns: current });
     }
-  }, [uploadedFiles]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [uploadedFiles, conditionCols]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Derive custom column names (exclude core columns: experiment, conditionCol, replicate)
+  // Derive custom column names (exclude core columns: experiment, condition_N, replicate)
   const customColumns = useMemo(() => {
     if (!config.metadata_columns) return [];
+    const conditionColSet = new Set(conditionCols);
     const cols = new Set<string>();
     Object.values(config.metadata_columns).forEach((row) => {
       Object.keys(row).forEach((k) => {
-        if (k !== 'experiment' && k !== conditionCol && k !== 'replicate') cols.add(k);
+        if (k !== 'experiment' && !conditionColSet.has(k) && k !== 'replicate') cols.add(k);
       });
     });
     return Array.from(cols);
-  }, [config.metadata_columns, conditionCol]);
+  }, [config.metadata_columns, conditionCols]);
 
   // Derived values from raw state (useMemo to avoid infinite re-render loop in React 19)
   const selected = useMemo(
@@ -195,27 +207,28 @@ export const ExperimentTable: React.FC = () => {
     [selected]
   );
   const conditions = useMemo(
-    () => Array.from(new Set(selected.map((f) => f.condition))),
+    () => Array.from(new Set(selected.flatMap((f) => f.conditions))).filter(Boolean),
     [selected]
   );
   
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
     const filtered = uploadedFiles.filter((file) => {
-      const matchesText = filterText === '' || 
+      const conditionsText = file.conditions.join(' ');
+      const matchesText = filterText === '' ||
         file.filename.toLowerCase().includes(filterText.toLowerCase()) ||
         file.experiment.toLowerCase().includes(filterText.toLowerCase()) ||
-        file.condition.toLowerCase().includes(filterText.toLowerCase());
-      
+        conditionsText.toLowerCase().includes(filterText.toLowerCase());
+
       const matchesExperiment = filterExperiment === 'all' || file.experiment === filterExperiment;
-      const matchesCondition = filterCondition === 'all' || file.condition === filterCondition;
-      
+      const matchesCondition = filterCondition === 'all' || file.conditions.includes(filterCondition);
+
       return matchesText && matchesExperiment && matchesCondition;
     });
-    
+
     filtered.sort((a, b) => {
       let comparison = 0;
-      
+
       switch (sort.field) {
         case 'filename':
           comparison = a.filename.localeCompare(b.filename);
@@ -224,16 +237,16 @@ export const ExperimentTable: React.FC = () => {
           comparison = a.experiment.localeCompare(b.experiment);
           break;
         case 'condition':
-          comparison = a.condition.localeCompare(b.condition);
+          comparison = a.conditions.join('_').localeCompare(b.conditions.join('_'));
           break;
         case 'replicate':
           comparison = a.replicate - b.replicate;
           break;
       }
-      
+
       return sort.direction === 'asc' ? comparison : -comparison;
     });
-    
+
     return filtered;
   }, [uploadedFiles, filterText, filterExperiment, filterCondition, sort]);
 
@@ -286,24 +299,6 @@ export const ExperimentTable: React.FC = () => {
     setConfig({ metadata_columns: current });
   };
 
-  const renameConditionColumn = (oldName: string, newName: string) => {
-    if (!newName || newName === oldName) return;
-    if (customColumns.includes(newName)) {
-      addToast('warning', `Column "${newName}" already exists`);
-      return;
-    }
-    const current = { ...(config.metadata_columns || {}) };
-    Object.keys(current).forEach((fn) => {
-      const row = { ...current[fn] };
-      if (oldName in row) {
-        row[newName] = row[oldName];
-        delete row[oldName];
-      }
-      current[fn] = row;
-    });
-    setConfig({ metadata_columns: current, condition_column: newName });
-  };
-
   const updateCell = (filename: string, col: string, value: string) => {
     const current = { ...(config.metadata_columns || {}) };
     if (!current[filename]) current[filename] = {};
@@ -314,7 +309,7 @@ export const ExperimentTable: React.FC = () => {
   // --- CSV Import/Export ---
   const handleExportCSV = () => {
     if (uploadedFiles.length === 0) return;
-    const allCols = ['experiment', conditionCol, ...customColumns, 'replicate'];
+    const allCols = ['experiment', ...conditionCols, ...customColumns, 'replicate'];
     const header = ['filename', ...allCols].join(',');
     const rows = uploadedFiles.map((file) => {
       const meta = config.metadata_columns?.[file.filename] || {};
@@ -354,11 +349,7 @@ export const ExperimentTable: React.FC = () => {
 
         const uploadedFilenames = new Set(uploadedFiles.map((f) => f.filename));
 
-        // Infer condition column from position in our export format:
-        // colNames = ['experiment', <conditionCol>, ...customColumns, 'replicate']
-        const csvConditionCol = colNames.length > 1 && colNames[1] !== 'replicate' ? colNames[1] : null;
         const expIdx = headers.indexOf('experiment');
-        const condIdx = csvConditionCol ? headers.indexOf(csvConditionCol) : -1;
 
         // Collect imported rows
         const imported: Record<string, Record<string, string>> = {};
@@ -374,19 +365,26 @@ export const ExperimentTable: React.FC = () => {
           imported[fn] = entry;
         }
 
-        // Atomically update metadata_columns, condition_column, and ParsedFilename
+        // Atomically update metadata_columns and ParsedFilename
         useAnalysisStore.setState((state) => {
           if (!state.config.metadata_columns) state.config.metadata_columns = {};
           Object.assign(state.config.metadata_columns, imported);
-          if (csvConditionCol && csvConditionCol !== (state.config.condition_column || 'condition')) {
-            state.config.condition_column = csvConditionCol;
-          }
           // Sync ParsedFilename so the table shows imported values
           Object.entries(imported).forEach(([fn, entry]) => {
             const pf = state.uploadedFiles.find((f) => f.filename === fn);
             if (pf) {
               if (expIdx >= 0 && entry.experiment) pf.experiment = entry.experiment;
-              if (condIdx >= 0 && csvConditionCol) pf.condition = entry[csvConditionCol] || pf.condition;
+              // Reconstruct conditions array from condition_N columns
+              const importedConditions: string[] = [];
+              for (let ci = 1; ; ci++) {
+                const col = `condition_${ci}`;
+                if (col in entry) {
+                  importedConditions.push(entry[col]);
+                } else {
+                  break;
+                }
+              }
+              if (importedConditions.length > 0) pf.conditions = importedConditions;
             }
           });
         });
@@ -551,20 +549,23 @@ export const ExperimentTable: React.FC = () => {
               </th>
               <TableHeader field="filename" onSort={handleSort} sort={sort}>Filename</TableHeader>
               <TableHeader field="experiment" onSort={handleSort} sort={sort}>Experiment</TableHeader>
-              <th
-                onClick={() => handleSort('condition')}
-                className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-surface transition-colors select-none"
-              >
-                <div className="flex items-center gap-1">
-                  <EditableHeader
-                    colName={conditionCol}
-                    onRename={renameConditionColumn}
-                    onRemove={() => {}}
-                    hideRemove
-                  />
-                  <SortIcon field="condition" sort={sort} />
-                </div>
-              </th>
+              {conditionCols.map((col) => (
+                <th
+                  key={col}
+                  onClick={() => handleSort('condition')}
+                  className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-surface transition-colors select-none"
+                >
+                  <div className="flex items-center gap-1">
+                    <EditableHeader
+                      colName={col}
+                      onRename={renameColumn}
+                      onRemove={() => {}}
+                      hideRemove
+                    />
+                    <SortIcon field="condition" sort={sort} />
+                  </div>
+                </th>
+              ))}
               {customColumns.map((col) => (
                 <th key={col} className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
                   <EditableHeader
@@ -619,17 +620,24 @@ export const ExperimentTable: React.FC = () => {
                       data-testid="experiment-name"
                     />
                   </td>
-                  <td className="px-4 py-3">
-                    <EditableBadge
-                      value={file.condition}
-                      isEditing={editingCell === `${file.filename}-cond`}
-                      onEdit={() => setEditingCell(`${file.filename}-cond`)}
-                      onSave={(val) => { updateFileMetadata(file.filename, { condition: val }); setEditingCell(null); }}
-                      onCancel={() => setEditingCell(null)}
-                      colorClass="bg-success/10 text-success"
-                      data-testid={`condition-${file.condition}`}
-                    />
-                  </td>
+                  {conditionCols.map((col, ci) => (
+                    <td key={col} className="px-4 py-3">
+                      <EditableBadge
+                        value={file.conditions[ci] || ''}
+                        isEditing={editingCell === `${file.filename}-${col}`}
+                        onEdit={() => setEditingCell(`${file.filename}-${col}`)}
+                        onSave={(val) => {
+                          const newConditions = [...file.conditions];
+                          newConditions[ci] = val;
+                          updateFileMetadata(file.filename, { conditions: newConditions });
+                          setEditingCell(null);
+                        }}
+                        onCancel={() => setEditingCell(null)}
+                        colorClass="bg-success/10 text-success"
+                        data-testid={`condition-${col}-${file.conditions[ci] || 'empty'}`}
+                      />
+                    </td>
+                  ))}
                   {customColumns.map((col) => (
                     <td key={col} className="px-4 py-3">
                       <input

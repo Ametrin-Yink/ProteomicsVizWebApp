@@ -108,7 +108,7 @@ export interface SessionFiles {
 export interface ParsedFilename {
   filename: string;
   experiment: string;
-  condition: string;
+  conditions: string[];
   replicate: number;
   size: number;
   columns?: string[];
@@ -117,7 +117,7 @@ export interface ParsedFilename {
 export interface UploadedFile {
   filename: string;
   experiment: string;
-  condition: string;
+  conditions: string[];
   replicate: number;
   size: number;
   columns: string[];

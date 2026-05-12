@@ -26,7 +26,7 @@ class TestParsePsmFilename:
         result = parse_psm_filename("PSM_SampleData_DMSO_1.csv")
 
         assert result.experiment == "SampleData"
-        assert result.condition == "DMSO"
+        assert result.conditions == ["DMSO"]
         assert result.replicate == 1
 
     def test_parse_valid_filename_with_numbers(self):
@@ -34,16 +34,24 @@ class TestParsePsmFilename:
         result = parse_psm_filename("PSM_SampleData_INCZ123456_3.csv")
 
         assert result.experiment == "SampleData"
-        assert result.condition == "INCZ123456"
+        assert result.conditions == ["INCZ123456"]
         assert result.replicate == 3
 
     def test_parse_valid_filename_with_underscores(self):
-        """Parse filename with underscores in condition name."""
+        """Parse filename with multiple underscore-separated conditions."""
         result = parse_psm_filename("PSM_Exp_Name_Condition_5.csv")
 
         assert result.experiment == "Exp"
-        assert result.condition == "Name_Condition"
+        assert result.conditions == ["Name", "Condition"]
         assert result.replicate == 5
+
+    def test_parse_multi_condition_filename(self):
+        """Parse filename with multiple conditions."""
+        result = parse_psm_filename("PSM_Exp_A_B_B2_C_1.csv")
+
+        assert result.experiment == "Exp"
+        assert result.conditions == ["A", "B", "B2", "C"]
+        assert result.replicate == 1
 
     def test_parse_invalid_filename_no_prefix(self):
         """Reject filename without PSM_ prefix."""

@@ -22,7 +22,7 @@ class ParsedFilename:
     """Parsed PSM filename components."""
 
     experiment: str
-    condition: str
+    conditions: list[str]
     replicate: int
     original_filename: str
 
@@ -37,10 +37,11 @@ REQUIRED_COLUMNS = [
     "Quan Info",
 ]
 
-# Pattern for PSM filenames: PSM_ExperimentName_Condition_ReplicateNumber.csv
-# Using non-greedy matching (+?) to properly handle underscores in condition names
+# Pattern for PSM filenames: PSM_ExperimentName_Cond1_Cond2_..._CondN_ReplicateNumber.csv
+# Everything between PSM_ prefix and the last _<number>.csv is experiment + conditions.
+# Split by _, first segment is experiment, rest are conditions.
 PSM_FILENAME_PATTERN = re.compile(
-    r"^PSM_(?P<experiment>.+?)_(?P<condition>.+?)_(?P<replicate>\d+)\.csv$",
+    r"^PSM_(?P<middle>.+)_(?P<replicate>\d+)\.csv$",
     re.IGNORECASE,
 )
 
@@ -168,9 +169,10 @@ class FileParser:
 
 def parse_psm_filename(filename: str) -> ParsedFilename:
     """
-    Parse PSM filename to extract experiment, condition, and replicate.
+    Parse PSM filename to extract experiment, conditions, and replicate.
 
-    Expected format: PSM_ExperimentName_Condition_ReplicateNumber.csv
+    Expected format: PSM_ExperimentName_Cond1_Cond2_..._CondN_ReplicateNumber.csv
+    Conditions are all segments between experiment and the final replicate number.
 
     Args:
         filename: The filename to parse
@@ -188,14 +190,26 @@ def parse_psm_filename(filename: str) -> ParsedFilename:
             message=f"Invalid filename format: {filename}",
             details={
                 "filename": filename,
-                "expected_pattern": "PSM_ExperimentName_Condition_ReplicateNumber.csv",
+                "expected_pattern": "PSM_ExperimentName_Condition1_Condition2_ReplicateNumber.csv",
                 "example": "PSM_SampleData_DMSO_1.csv",
             },
         )
 
+    middle = match.group("middle")
+    parts = middle.split("_")
+
+    if len(parts) < 2:
+        raise InvalidFileFormatError(
+            message=f"Invalid filename format: {filename}",
+            details={
+                "filename": filename,
+                "reason": "Must have at least experiment and one condition",
+            },
+        )
+
     return ParsedFilename(
-        experiment=match.group("experiment"),
-        condition=match.group("condition"),
+        experiment=parts[0],
+        conditions=parts[1:],
         replicate=int(match.group("replicate")),
         original_filename=filename,
     )

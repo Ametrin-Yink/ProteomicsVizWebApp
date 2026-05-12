@@ -63,7 +63,7 @@ def validate_psm_filename_pattern(filename: str) -> None:
     """
     Validate PSM filename matches required pattern.
 
-    Pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv
+    Pattern: PSM_ExperimentName_Condition1_Condition2_ReplicateNumber.csv
 
     Args:
         filename: Filename to validate
@@ -76,7 +76,7 @@ def validate_psm_filename_pattern(filename: str) -> None:
             message=f"Invalid PSM filename format: {filename}",
             details={
                 "filename": filename,
-                "expected_pattern": "PSM_ExperimentName_Condition_ReplicateNumber.csv",
+                "expected_pattern": "PSM_ExperimentName_Condition1_Condition2_ReplicateNumber.csv",
                 "example": "PSM_SampleData_DMSO_1.csv",
             },
         )

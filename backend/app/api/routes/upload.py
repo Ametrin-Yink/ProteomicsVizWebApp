@@ -80,7 +80,7 @@ async def upload_proteomics_files(
             uploaded_at=file_metadata.uploaded_at,
             columns=[],  # Will be populated later if needed
             experiment=parsed.experiment,
-            condition=parsed.condition,
+            conditions=parsed.conditions,
             replicate=parsed.replicate,
         )
         session.files.proteomics.append(proteomics_file)
@@ -91,7 +91,7 @@ async def upload_proteomics_files(
                 "filename": file_metadata.original_filename,
                 "size": file_metadata.size,
                 "experiment": parsed.experiment,
-                "condition": parsed.condition,
+                "conditions": parsed.conditions,
                 "replicate": parsed.replicate,
                 "columns": [],
             }

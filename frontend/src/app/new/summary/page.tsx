@@ -29,16 +29,24 @@ function SummaryContent() {
     else if (!selectedPipeline) { router.replace(`/new/pipeline?session=${sessionId}`); }
   }, [sessionId, selectedPipeline, router]);
 
+  const maxConditions = React.useMemo(
+    () => uploadedFiles.reduce((max, f) => Math.max(max, f.conditions.length), 0),
+    [uploadedFiles],
+  );
+
   const customColumns = React.useMemo(() => {
     if (!config.metadata_columns) return [];
+    const conditionColSet = new Set(
+      Array.from({ length: maxConditions }, (_, i) => `condition_${i + 1}`),
+    );
     const cols = new Set<string>();
     Object.values(config.metadata_columns).forEach((row) => {
       Object.keys(row).forEach((k) => {
-        if (k !== 'experiment' && k !== 'condition' && k !== 'replicate') cols.add(k);
+        if (k !== 'experiment' && !conditionColSet.has(k) && k !== 'replicate') cols.add(k);
       });
     });
     return Array.from(cols);
-  }, [config.metadata_columns]);
+  }, [config.metadata_columns, maxConditions]);
 
   const totalSize = React.useMemo(
     () => uploadedFiles.reduce((sum, f) => sum + f.size, 0),
@@ -147,7 +155,9 @@ function SummaryContent() {
                 <tr className="border-b border-border">
                   <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Filename</th>
                   <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Experiment</th>
-                  <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Condition</th>
+                  {Array.from({ length: maxConditions }, (_, i) => (
+                    <th key={`cond-${i}`} className="text-left py-2 px-3 text-text-muted font-medium text-xs">Condition {i + 1}</th>
+                  ))}
                   <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Replicate</th>
                   {customColumns.map((col) => (
                     <th key={col} className="text-left py-2 px-3 text-text-muted font-medium text-xs">{col}</th>
@@ -163,7 +173,9 @@ function SummaryContent() {
                         {file.filename}
                       </td>
                       <td className="py-1.5 px-3 text-text-primarytext-xs">{meta.experiment || file.experiment}</td>
-                      <td className="py-1.5 px-3 text-text-primarytext-xs">{meta.condition || file.condition}</td>
+                      {Array.from({ length: maxConditions }, (_, i) => (
+                        <td key={`cond-${i}`} className="py-1.5 px-3 text-text-primarytext-xs">{file.conditions[i] || '—'}</td>
+                      ))}
                       <td className="py-1.5 px-3 text-text-primarytext-xs font-mono">#{meta.replicate || file.replicate}</td>
                       {customColumns.map((col) => (
                         <td key={col} className="py-1.5 px-3 text-text-primarytext-xs">{meta[col] || '—'}</td>

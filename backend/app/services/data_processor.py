@@ -24,7 +24,7 @@ class PSMFilenameParsed:
     """Parsed PSM filename components."""
 
     experiment: str
-    condition: str
+    conditions: list[str]
     replicate: int
 
 
@@ -61,7 +61,7 @@ class DataProcessor:
     def parse_psm_filename(self, filename: str) -> PSMFilenameParsed:
         """Parse PSM filename to extract metadata.
 
-        Format: PSM_ExperimentName_Condition_ReplicateNumber.csv
+        Format: PSM_ExperimentName_Cond1_Cond2_..._CondN_ReplicateNumber.csv
         Example: PSM_SampleData_DMSO_1.csv
 
         Args:
@@ -73,8 +73,8 @@ class DataProcessor:
         Raises:
             ValueError: If filename doesn't match expected pattern
         """
-        # Pattern: PSM_<Experiment>_<Condition>_<Replicate>.csv
-        pattern = r"PSM_(.+?)_(.+?)_(\d+)\.csv$"
+        # Pattern: PSM_<everything>_<Replicate>.csv
+        pattern = r"PSM_(.+)_(\d+)\.csv$"
         match = re.match(pattern, filename)
 
         if not match:
@@ -83,10 +83,16 @@ class DataProcessor:
                 "PSM_ExperimentName_Condition_ReplicateNumber.csv"
             )
 
+        parts = match.group(1).split("_")
+        if len(parts) < 2:
+            raise ValueError(
+                f"Filename '{filename}' must have at least experiment and one condition"
+            )
+
         return PSMFilenameParsed(
-            experiment=match.group(1),
-            condition=match.group(2),
-            replicate=int(match.group(3)),
+            experiment=parts[0],
+            conditions=parts[1:],
+            replicate=int(match.group(2)),
         )
 
     def find_abundance_column(self, columns: List[str]) -> str:
@@ -166,15 +172,18 @@ class DataProcessor:
             # Rename to unified 'Abundance' column
             df = df.rename(columns={abundance_col_renamed: "Abundance"})
 
+            # Join multiple conditions with underscore for backward compatibility
+            condition_str = "_".join(parsed.conditions)
+
             # Add sample origination column
-            df["Sample_Origination"] = f"{parsed.condition}_{parsed.replicate}"
-            df["Condition"] = parsed.condition
+            df["Sample_Origination"] = f"{condition_str}_{parsed.replicate}"
+            df["Condition"] = condition_str
             df["Replicate"] = parsed.replicate
 
             combined.append(df)
             logger.info(
                 f"  Loaded {file_path.name}: {len(df)} rows, "
-                f"condition={parsed.condition}, replicate={parsed.replicate}"
+                f"condition={condition_str}, replicate={parsed.replicate}"
             )
 
         result = pd.concat(combined, ignore_index=True)
