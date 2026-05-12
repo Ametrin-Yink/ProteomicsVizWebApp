@@ -37,12 +37,12 @@ export default function NewAnalysisLayout({
   const currentStep = getStepIndex(pathname);
 
   return (
-    <div className="flex w-full h-full">
+    <div className="flex w-full h-full relative">
       {/* Left Sidebar - Session Manager */}
       <SessionManager className="h-full" />
 
       {/* Right Panel - Wizard Content */}
-      <main className="flex-1 h-full overflow-y-auto bg-surface">
+      <main className="absolute top-0 left-80 right-0 bottom-0 overflow-y-auto bg-surface">
         {/* Back link */}
         <div className="px-8 pt-4">
           <Link

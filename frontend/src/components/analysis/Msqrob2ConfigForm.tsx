@@ -13,14 +13,14 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
     <div className="space-y-5">
       {/* Normalization Method */}
       <div>
-        <label className="block text-sm font-medium text-text mb-2">
+        <label className="block text-sm font-medium text-text-primary mb-2">
           Normalization Method
         </label>
         <select
           data-testid="msqrob2-normalization-select"
           value={config.msqrob2_normalization ?? 'center.median'}
           onChange={(e) => setConfig({ msqrob2_normalization: e.target.value })}
-          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
             focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
         >
           <option value="center.median">Center Median (shift to max)</option>
@@ -38,14 +38,14 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
 
       {/* Imputation Method */}
       <div>
-        <label className="block text-sm font-medium text-text mb-2">
+        <label className="block text-sm font-medium text-text-primary mb-2">
           Missing Value Imputation
         </label>
         <select
           data-testid="msqrob2-imputation-select"
           value={config.msqrob2_imputation ?? 'none'}
           onChange={(e) => setConfig({ msqrob2_imputation: e.target.value })}
-          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
             focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
         >
           <option value="none">None (Filter only)</option>
@@ -63,14 +63,14 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
 
       {/* Aggregation Method */}
       <div>
-        <label className="block text-sm font-medium text-text mb-2">
+        <label className="block text-sm font-medium text-text-primary mb-2">
           Protein Aggregation Method
         </label>
         <select
           data-testid="msqrob2-aggregation-select"
           value={config.msqrob2_aggregation ?? 'robustSummary'}
           onChange={(e) => setConfig({ msqrob2_aggregation: e.target.value })}
-          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
             focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
         >
           <option value="robustSummary">Robust Summary (MAD-based, recommended)</option>
@@ -85,14 +85,14 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
 
       {/* DE Model */}
       <div>
-        <label className="block text-sm font-medium text-text mb-2">
+        <label className="block text-sm font-medium text-text-primary mb-2">
           Differential Expression Model
         </label>
         <select
           data-testid="msqrob2-model-select"
           value={config.msqrob2_model ?? 'msqrobLm'}
           onChange={(e) => setConfig({ msqrob2_model: e.target.value })}
-          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
             focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
         >
           <option value="msqrobLm">msqrobLm (Robust Linear Model, recommended)</option>
@@ -108,7 +108,7 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
         <>
           <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
             <div>
-              <span className="text-sm font-medium text-text">Robust Estimation (M-estimation)</span>
+              <span className="text-sm font-medium text-text-primary">Robust Estimation (M-estimation)</span>
               <p className="text-xs text-text-muted mt-0.5">
                 Use Huber weights to down-weight outlier observations
               </p>
@@ -129,7 +129,7 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
 
           <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
             <div>
-              <span className="text-sm font-medium text-text">Ridge Penalty</span>
+              <span className="text-sm font-medium text-text-primary">Ridge Penalty</span>
               <p className="text-xs text-text-muted mt-0.5">
                 Apply ridge regression penalty for high-dimensional designs
               </p>
@@ -152,14 +152,14 @@ export default function Msqrob2ConfigForm({ config, setConfig }: Msqrob2ConfigFo
 
       {/* Multiple Testing Correction */}
       <div>
-        <label className="block text-sm font-medium text-text mb-2">
+        <label className="block text-sm font-medium text-text-primary mb-2">
           Multiple Testing Correction
         </label>
         <select
           data-testid="msqrob2-adjust-select"
           value={config.msqrob2_adjust_method ?? 'BH'}
           onChange={(e) => setConfig({ msqrob2_adjust_method: e.target.value })}
-          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
             focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
         >
           <option value="BH">Benjamini-Hochberg (BH, recommended)</option>

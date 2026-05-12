@@ -24,13 +24,16 @@ import { cn } from '@/lib/utils';
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 import Msqrob2ConfigForm from '@/components/analysis/Msqrob2ConfigForm';
 
-function ConfigContent() {
+function ConfigContent({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session') || '';
 
-  const state = useAnalysisStore();
-  const { config, setConfig, setAvailableOrganisms, availableOrganisms, selectedPipeline } = state;
+  const selectedPipeline = useAnalysisStore((s) => s.selectedPipeline);
+  const config = useAnalysisStore((s) => s.config);
+  const setConfig = useAnalysisStore((s) => s.setConfig);
+  const setAvailableOrganisms = useAnalysisStore((s) => s.setAvailableOrganisms);
+  const availableOrganisms = useAnalysisStore((s) => s.availableOrganisms);
+  const selectedFilesSize = useAnalysisStore((s) => s.selectedFiles.size);
+  const canStart = useAnalysisStore(canStartAnalysis);
   const { addToast } = useUIStore();
 
   const [isStarting, setIsStarting] = React.useState(false);
@@ -65,7 +68,7 @@ function ConfigContent() {
     loadOrganisms();
   }, [sessionId, setAvailableOrganisms]);
 
-  const canContinue = canStartAnalysis(state) && config.organism !== '';
+  const canContinue = canStart && config.organism !== '';
 
   const handleBack = () => {
     router.push(`/new/comparisons?session=${sessionId}`);
@@ -311,7 +314,7 @@ function ConfigContent() {
       )}
 
       {/* Validation warning */}
-      {!canContinue && state.selectedFiles.size > 0 && (
+      {!canContinue && selectedFilesSize > 0 && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/20 text-warning">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div>
@@ -363,6 +366,12 @@ function ConfigContent() {
   );
 }
 
+function SearchParamsReader({ children }: { children: (sessionId: string) => React.ReactNode }) {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session') || '';
+  return <>{children(sessionId)}</>;
+}
+
 export default function ConfigPage() {
   return (
     <Suspense
@@ -372,7 +381,9 @@ export default function ConfigPage() {
         </div>
       }
     >
-      <ConfigContent />
+      <SearchParamsReader>
+        {(sessionId) => <ConfigContent sessionId={sessionId} />}
+      </SearchParamsReader>
     </Suspense>
   );
 }
