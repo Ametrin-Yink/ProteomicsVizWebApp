@@ -27,6 +27,9 @@ interface AnalysisState {
   // Selection state
   selectedFiles: Set<string>;
 
+  // Template selection
+  selectedTemplate: 'protein' | 'ptm';
+
   // Pipeline selection
   selectedPipeline: 'msqrob2' | 'msstats' | null;
 
@@ -52,6 +55,7 @@ interface AnalysisState {
   selectAllFiles: () => void;
   deselectAllFiles: () => void;
   updateFileMetadata: (filename: string, updates: Partial<Pick<ParsedFilename, 'experiment' | 'conditions'>>) => void;
+  setTemplate: (template: 'protein' | 'ptm') => void;
   setPipeline: (pipeline: 'msqrob2' | 'msstats') => void;
   setConfig: (config: Partial<SessionConfig>) => void;
   setAvailableOrganisms: (organisms: Organism[]) => void;
@@ -99,6 +103,7 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadProgress: [],
     compoundFile: null,
     selectedFiles: new Set<string>(),
+    selectedTemplate: 'protein',
     selectedPipeline: null,
     config: { ...defaultConfig },
     availableOrganisms: [],
@@ -107,6 +112,16 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadError: null,
 
     // Actions
+    setTemplate: (template) => {
+      set((state) => {
+        state.selectedTemplate = template;
+        if (template === 'ptm') {
+          state.selectedPipeline = null;
+          state.config.pipeline = undefined;
+        }
+      });
+    },
+
     setPipeline: (pipeline) => {
       set((state) => {
         state.selectedPipeline = pipeline;
@@ -248,6 +263,7 @@ export const useAnalysisStore = create<AnalysisState>()(
         state.uploadProgress = [];
         state.compoundFile = null;
         state.selectedFiles.clear();
+        state.selectedTemplate = 'protein';
         state.selectedPipeline = null;
         state.config = { ...defaultConfig };
         state.isUploading = false;
@@ -402,8 +418,6 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
 
 export const canStartAnalysis = (state: AnalysisState): boolean => {
   const validation = getValidation(state);
-  const hasRequiredConfig = state.config.organism !== '' &&
-    state.selectedFiles.size > 0;
   const hasComparisons = (state.config.comparisons?.length ?? 0) > 0;
-  return validation.isValid && hasRequiredConfig && hasComparisons;
+  return validation.isValid && state.selectedFiles.size > 0 && hasComparisons;
 };

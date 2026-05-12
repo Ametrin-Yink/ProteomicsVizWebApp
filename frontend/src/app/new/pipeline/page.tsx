@@ -7,10 +7,10 @@
 
 import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, Dna, BarChart3, Check, Info } from 'lucide-react';
-import { useAnalysisStore, getValidation, getConditions } from '@/stores/analysis-store';
+import { ArrowLeft, ArrowRight, Loader2, Dna, BarChart3, Check, FlaskConical } from 'lucide-react';
+import { useAnalysisStore, getValidation } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { organismsApi, sessionsApi } from '@/lib/api-client';
+import { sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 const pipelines = [
@@ -19,14 +19,7 @@ const pipelines = [
     name: 'msqrob2',
     title: 'Robust Protein Analysis',
     icon: Dna,
-    description:
-      'Uses robust M-estimation with ridge penalty for protein-level aggregation and differential expression via limma. Best for experiments with expected outliers or heterogeneous variance.',
-    features: [
-      'Robust regression (M-estimation)',
-      'limma-based differential expression',
-      'Handles missing values via ridge penalty',
-      'Well-suited for TMT-labeled data',
-    ],
+    summary: 'For large cohorts with moderate to high missing values',
     gradient: 'from-[#E73564] to-[#C42A52]',
   },
   {
@@ -34,14 +27,7 @@ const pipelines = [
     name: 'MSstats',
     title: 'Statistical Modeling',
     icon: BarChart3,
-    description:
-      'Uses linear mixed models and Tukey median polish for protein abundance, with flexible normalization and imputation. Best for label-free or complex experimental designs.',
-    features: [
-      'Linear mixed models / Tukey median polish',
-      'Multiple normalization options',
-      'Model-based imputation (MBimpute)',
-      'Handles complex experimental designs',
-    ],
+    summary: 'For <50 samples with low missing values',
     gradient: 'from-[#00ADEF] to-[#0088CC]',
   },
 ];
@@ -52,33 +38,11 @@ function PipelineContent() {
   const sessionId = searchParams.get('session') || '';
 
   const state = useAnalysisStore();
-  const { selectedPipeline, setPipeline, config, setConfig, setAvailableOrganisms, availableOrganisms } = state;
-  const conditions = getConditions(state);
+  const { selectedTemplate, setTemplate, selectedPipeline, setPipeline } = state;
   const validation = getValidation(state);
   const { addToast } = useUIStore();
 
   const [isSaving, setIsSaving] = React.useState(false);
-
-  // Load organisms on mount
-  React.useEffect(() => {
-    if (!sessionId) return;
-    const loadOrganisms = async () => {
-      try {
-        const organisms = await organismsApi.list();
-        setAvailableOrganisms(
-          organisms.map((o) => ({
-            id: o.id,
-            name: o.name,
-            display_name: o.display_name || o.name,
-            available: o.available,
-          }))
-        );
-      } catch (error) {
-        console.error('Failed to load organisms:', error);
-      }
-    };
-    loadOrganisms();
-  }, [sessionId, setAvailableOrganisms]);
 
   // Redirect guard: no session or no uploaded files -> back to first step
   React.useEffect(() => {
@@ -90,8 +54,8 @@ function PipelineContent() {
   }, [sessionId, state.uploadedFiles.length, state.selectedFiles.size, router]);
 
   const canContinue =
+    selectedTemplate === 'protein' &&
     selectedPipeline !== null &&
-    config.organism !== '' &&
     validation.isValid;
 
   const handleBack = () => {
@@ -103,7 +67,7 @@ function PipelineContent() {
 
     // Read latest state directly to avoid stale closure
     const latest = useAnalysisStore.getState();
-    if (!latest.selectedPipeline || !latest.config.organism) return;
+    if (!latest.selectedPipeline) return;
 
     setIsSaving(true);
     try {
@@ -130,141 +94,87 @@ function PipelineContent() {
         </p>
       </div>
 
-      {/* Experiment Configuration */}
-      {conditions.length > 0 && (
-        <section className="bg-background border border-border rounded-lg">
-          <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-            <Info className="w-5 h-5 text-primary" />
-            <div>
-              <h2 className="font-semibold text-text-primary">Experiment Configuration</h2>
-              <p className="text-sm text-text-muted">
-                Set conditions, organism, and filtering options
-              </p>
-            </div>
-          </div>
-          <div className="p-5">
-            <div className="grid grid-cols-1 md:grid-cols-1 gap-5">
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">Organism</label>
-                <select
-                  data-testid="organism-select"
-                  value={config.organism}
-                  onChange={(e) => setConfig({ organism: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
-                    focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                >
-                  <option value="">Select organism...</option>
-                  {availableOrganisms
-                    .filter((o) => o.available)
-                    .map((org) => (
-                      <option key={org.id} value={org.id}>
-                        {org.display_name || org.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-5 mt-5">
-              <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
-                <div>
-                  <span className="text-sm font-medium text-text-primary">Remove Razor Peptides</span>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    Exclude peptides matching multiple protein groups
-                  </p>
-                </div>
-                <input
-                  data-testid="remove-razor-checkbox"
-                  type="checkbox"
-                  checked={config.remove_razor}
-                  onChange={(e) => setConfig({ remove_razor: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-                  after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-                  after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-                  peer-checked:after:translate-x-4 flex-shrink-0"
-                />
-              </label>
-              <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
-                <div>
-                  <span className="text-sm font-medium text-text-primary">Strict Filtering</span>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    20% missing value threshold, remove single-peptide proteins
-                  </p>
-                </div>
-                <input
-                  data-testid="strict-filtering-checkbox"
-                  type="checkbox"
-                  checked={config.strict_filtering}
-                  onChange={(e) => setConfig({ strict_filtering: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-                  after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-                  after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-                  peer-checked:after:translate-x-4 flex-shrink-0"
-                />
-              </label>
-            </div>
-          </div>
-        </section>
-      )}
+      {/* Template selection */}
+      <div className="flex justify-center">
+        <div className="inline-flex gap-0.5 p-0.5 bg-surface rounded-lg">
+          <button
+            data-testid="template-btn-protein"
+            onClick={() => setTemplate('protein')}
+            className={cn(
+              'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+              selectedTemplate === 'protein'
+                ? 'bg-background text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-primary'
+            )}
+          >
+            Protein Analysis
+          </button>
+          <button
+            data-testid="template-btn-ptm"
+            onClick={() => setTemplate('ptm')}
+            className={cn(
+              'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+              selectedTemplate === 'ptm'
+                ? 'bg-background text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-primary'
+            )}
+          >
+            PTM Analysis
+            <span className="ml-1.5 text-[10px] text-text-muted">Soon</span>
+          </button>
+        </div>
+      </div>
 
       {/* Pipeline cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {pipelines.map((pipeline) => {
-          const isSelected = selectedPipeline === pipeline.id;
-          const Icon = pipeline.icon;
+      {selectedTemplate === 'protein' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {pipelines.map((pipeline) => {
+            const isSelected = selectedPipeline === pipeline.id;
+            const Icon = pipeline.icon;
 
-          return (
-            <button
-              key={pipeline.id}
-              data-testid={`pipeline-card-${pipeline.id}`}
-              onClick={() => setPipeline(pipeline.id)}
-              className={cn(
-                'relative text-left p-6 rounded-xl border-2 transition-all duration-200 bg-background',
-                isSelected
-                  ? 'border-primary shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]'
-                  : 'border-border hover:border-primary/30 hover:shadow-sm'
-              )}
-            >
-              {/* Selected indicator */}
-              {isSelected && (
-                <div className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-primary text-white shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]">
-                  <Check className="w-4 h-4" />
-                </div>
-              )}
-
-              {/* Icon with gradient */}
-              <div
+            return (
+              <button
+                key={pipeline.id}
+                data-testid={`pipeline-card-${pipeline.id}`}
+                onClick={() => setPipeline(pipeline.id)}
                 className={cn(
-                  'inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br mb-4',
-                  pipeline.gradient
+                  'relative text-left p-6 rounded-xl border-2 transition-all duration-200 bg-background',
+                  isSelected
+                    ? 'border-primary shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]'
+                    : 'border-border hover:border-primary/30 hover:shadow-sm'
                 )}
               >
-                <Icon className="w-6 h-6 text-white" />
-              </div>
+                {isSelected && (
+                  <div className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-primary text-white shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
 
-              <h3 className="font-semibold text-text-primary mb-1">{pipeline.name}</h3>
-              <p className="text-sm font-medium text-primary mb-3">{pipeline.title}</p>
-              <p className="text-sm text-text-muted mb-4 leading-relaxed">
-                {pipeline.description}
-              </p>
+                <div
+                  className={cn(
+                    'inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br mb-4',
+                    pipeline.gradient
+                  )}
+                >
+                  <Icon className="w-6 h-6 text-white" />
+                </div>
 
-              {/* Feature list */}
-              <ul className="space-y-2">
-                {pipeline.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-text-secondary">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary/50 flex-shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </button>
-          );
-        })}
-      </div>
+                <h3 className="font-semibold text-text-primary mb-1">{pipeline.name}</h3>
+                <p className="text-sm font-medium text-primary mb-2">{pipeline.title}</p>
+                <p className="text-sm text-text-muted">{pipeline.summary}</p>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-16 text-center bg-background border border-border rounded-xl">
+          <FlaskConical className="w-12 h-12 text-text-muted mb-4" />
+          <h3 className="font-semibold text-text-primary mb-2">Post-translational Modification Analysis</h3>
+          <p className="text-sm text-text-muted max-w-md">
+            Pipeline details are currently being developed. Check back soon for PTM-specific analysis tools.
+          </p>
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="flex items-center justify-between pt-4 border-t border-border">
