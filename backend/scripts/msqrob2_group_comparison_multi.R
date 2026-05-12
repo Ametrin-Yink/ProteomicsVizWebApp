@@ -692,9 +692,13 @@ process_one_comparison <- local({
     }
 })
 
-# Run comparisons in parallel; fall back to serial if SnowParam fails
+# Run comparisons serially. SnowParam workers run in separate R processes
+# that cannot reliably reconstruct S4 msqrob2 fit objects from RDS files,
+# even when msqrob2 is loaded in the worker. The resulting "signature 'list'"
+# error from hypothesisTest is unrecoverable in parallel, so we bypass
+# bplapply and use lapply directly.
 valid_idx <- which(valid_comparisons)
-cat("Running", length(valid_idx), "comparisons...\n")
+cat("Running", length(valid_idx), "comparisons (serial)...\n")
 flush.console()
 
 parallel_args <- list(
@@ -702,14 +706,7 @@ parallel_args <- list(
     FUN = process_one_comparison
 )
 
-all_results <- tryCatch({
-    do.call(bplapply, c(parallel_args, list(BPPARAM = BPPARAM)))
-}, error = function(e) {
-    cat("WARNING: Parallel processing failed:", conditionMessage(e), "\n")
-    cat("WARNING: Falling back to serial processing. Analysis will be slower.\n")
-    flush.console()
-    do.call(lapply, parallel_args)
-})
+all_results <- do.call(lapply, parallel_args)
 
 # ============================================================================
 # STEP 10: Write TSV files and print summaries
