@@ -614,6 +614,11 @@ process_one_comparison <- local({
                          "df.residual", "df_total")
 
     function(idx) {
+        # Ensure msqrob2 S4 class definitions are available in SnowParam workers.
+        # Without this, readRDS returns a plain list and hypothesisTest fails with
+        # "unable to find an inherited method for 'hypothesisTest' for signature 'list'".
+        suppressPackageStartupMessages(library(msqrob2))
+
         # Load model from RDS inside worker to avoid S4 serialization issues
         .fit <- readRDS(.fit_rds)
 
