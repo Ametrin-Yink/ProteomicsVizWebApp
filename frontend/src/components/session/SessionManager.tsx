@@ -11,7 +11,6 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  Plus,
   ChevronRight,
   FlaskConical,
   Loader2,
@@ -31,7 +30,6 @@ import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessio
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/Button';
-import { useAnalysisStore } from '@/stores/analysis-store';
 import type { Session } from '@/types/session';
 
 // Session manager props
@@ -48,11 +46,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const sessionsList = React.useMemo(() => sessions || [], [sessions]);
   const currentSession = useCurrentSession();
   const sessionError = useSessionStore((state) => state.error);
-  const { setCurrentSession, addSession, loadSessions, deleteSession, deleteSessions, updateSession } = useSessionStore();
+  const { setCurrentSession, loadSessions, deleteSession, deleteSessions, updateSession } = useSessionStore();
   const { sidebar, setSidebarCollapsed } = useUIStore();
 
-  const [isCreating, setIsCreating] = React.useState(false);
-  const resetAnalysis = useAnalysisStore((s) => s.reset);
   const [activeTab, setActiveTab] = React.useState<'active' | 'completed'>('active');
   const [isScanning, setIsScanning] = React.useState(false);
   const [isSelectMode, setIsSelectMode] = React.useState(false);
@@ -123,24 +119,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     } else {
       // processing, error, cancelled → processing/log page
       router.push(`/analysis/processing?session_id=${session.id}`);
-    }
-  };
-
-  // Handle create session - navigate to new wizard flow
-  const handleNewAnalysis = async () => {
-    if (isCreating) return;
-    setIsCreating(true);
-    try {
-      const now = new Date();
-      const name = `Analysis ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const newSession = await sessionsApi.create(name, 'multi_condition_comparison');
-      resetAnalysis();
-      addSession(newSession);
-      router.push(`/new/upload?session=${newSession.id}`);
-    } catch {
-      // Error silently handled — button resets, user can try again
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -255,23 +233,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
             <FlaskConical className="w-5 h-5 text-white" />
           </div>
 
-          {/* New session button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleNewAnalysis}
-            disabled={isCreating}
-            className="mb-4"
-            title="New Analysis"
-            data-testid="new-analysis-btn"
-          >
-            {isCreating ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Plus className="w-5 h-5" />
-            )}
-          </Button>
-
           {/* Recent sessions */}
           <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
             {sortedSessions.slice(0, 5).map((session) => (
@@ -318,20 +279,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
           className
         )}
       >
-        {/* New session button */}
-        <div className="p-4 pb-1 space-y-1.5 flex-shrink-0">
-          <Button
-            variant="primary"
-            fullWidth
-            leftIcon={isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            onClick={handleNewAnalysis}
-            disabled={isCreating}
-            data-testid="new-analysis-btn"
-          >
-            New Analysis
-          </Button>
-        </div>
-
         {/* Tabs */}
         <div className="px-4 pb-2 flex-shrink-0">
           <div className="flex gap-0.5 p-0.5 bg-surface rounded-lg">

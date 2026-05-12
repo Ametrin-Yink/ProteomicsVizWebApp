@@ -18,8 +18,12 @@ import {
   BookOpen,
   Plus,
   ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useSessionStore } from '@/stores/sessionStore';
+import { useAnalysisStore } from '@/stores/analysis-store';
+import { sessionsApi } from '@/lib/api-client';
 
 const workflowSteps = [
   {
@@ -38,6 +42,26 @@ const workflowSteps = [
 
 export default function HomePage() {
   const router = useRouter();
+  const [isCreating, setIsCreating] = React.useState(false);
+  const addSession = useSessionStore((s) => s.addSession);
+  const resetAnalysis = useAnalysisStore((s) => s.reset);
+
+  const handleNewAnalysis = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const now = new Date();
+      const name = `Analysis ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const newSession = await sessionsApi.create(name, 'multi_condition_comparison');
+      resetAnalysis();
+      addSession(newSession);
+      router.push(`/new/upload?session=${newSession.id}`);
+    } catch {
+      // Error silently handled — button resets, user can try again
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   return (
     <div className="flex w-full h-full">
@@ -66,8 +90,10 @@ export default function HomePage() {
               variant="primary"
               size="lg"
               fullWidth
-              leftIcon={<Plus className="w-5 h-5" />}
-              onClick={() => router.push('/new/upload')}
+              leftIcon={isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+              onClick={handleNewAnalysis}
+              disabled={isCreating}
+              data-testid="new-analysis-btn"
             >
               New Analysis
             </Button>
