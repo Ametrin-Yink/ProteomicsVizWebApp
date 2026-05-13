@@ -40,10 +40,10 @@ def get_gene_mapping(organism: Organism | None) -> Path | None:
     return None
 
 
-def get_psm_input(ctx) -> Path:
+def get_psm_input(ctx, step: int = 5) -> Path:
     """Get the PSM input file path for R steps."""
     if not ctx.psm_file_path:
-        raise ProcessingError("PSM file not saved", step=5)
+        raise ProcessingError("PSM file not saved", step=step)
     return ctx.psm_file_path
 
 
