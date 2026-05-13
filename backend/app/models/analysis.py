@@ -130,11 +130,11 @@ class AnalysisConfig(BaseModel):
     )
     msqrob2_model: str = Field(
         default="msqrobLm",
-        description="DE model type: msqrobLm (robust linear), msqrobGlm (generalized linear)",
+        description="[DEPRECATED in v1.16] msqrob() replaces msqrobLm; no msqrobGlm. Value ignored.",
     )
     msqrob2_robust: bool = Field(
         default=True,
-        description="Use robust M-estimation (Huber weights) for DE model fitting",
+        description="[DEPRECATED in v1.16] msqrob() always uses robust regression. Value ignored.",
     )
     msqrob2_ridge: bool = Field(
         default=False,
@@ -154,6 +154,11 @@ class AnalysisConfig(BaseModel):
         default=None,
         ge=1,
         description="Number of CPU cores for parallel msqrob2 processing. None = auto-calibrate.",
+    )
+
+    # Batch correction (msqrob2)
+    msqrob2_batch_column: Optional[str] = Field(
+        default=None, description="Metadata column to use as batch variable in limma"
     )
 
     # Covariate columns (selected metadata columns used as model covariates)

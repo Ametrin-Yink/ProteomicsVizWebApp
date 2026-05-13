@@ -36,21 +36,28 @@ class Msqrob2Wrapper(BaseRWrapper):
     # ------------------------------------------------------------------
 
     def _build_data_process_config(self, config: AnalysisConfig, n_cores: int) -> dict:
+        """Build config JSON for step 3 (protein abundance via QFeatures)."""
         return {
             "normalization": config.msqrob2_normalization,
             "imputation": config.msqrob2_imputation,
             "aggregation": config.msqrob2_aggregation,
             "min_peptides": config.msqrob2_min_peptides,
+            "remove_razor": config.remove_razor,
+            "strict_filtering": config.strict_filtering,
             "numberOfCores": n_cores,
+            "batch_column": config.msqrob2_batch_column,
+            "metadata": config.metadata,
         }
 
     def _build_gc_config(self, config: AnalysisConfig, n_cores: int, **extra) -> dict:
+        """Build config JSON for step 4 (differential expression via msqrob v1.16 API)."""
         return {
-            "model": config.msqrob2_model,
-            "robust": config.msqrob2_robust,
             "ridge": config.msqrob2_ridge,
+            "maxitRob": 10,
             "adjust_method": config.msqrob2_adjust_method,
             "numberOfCores": n_cores,
+            "batch_column": config.msqrob2_batch_column,
+            "metadata": config.metadata,
         }
 
     # _n_cores_config_attr = "msqrob2_n_cores"  (matches base default)
