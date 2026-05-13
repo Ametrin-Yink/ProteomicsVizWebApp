@@ -61,12 +61,9 @@ pe <- readRDS(rds_file)
 cat("Loaded QFeatures:", nrow(pe[["protein"]]), "proteins,", ncol(pe[["protein"]]), "samples\n")
 flush.console()
 
-# Extract sample names
+# Extract sample names from protein assay (QFeatures colnames returns CharacterList)
 protein_matrix <- assay(pe[["protein"]])
-sample_names <- colnames(pe)
-if (is.null(sample_names) || length(sample_names) == 0) {
-    sample_names <- colnames(protein_matrix)
-}
+sample_names <- colnames(protein_matrix)
 sample_names <- as.character(sample_names)
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
