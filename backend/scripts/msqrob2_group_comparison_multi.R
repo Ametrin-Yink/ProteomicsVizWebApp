@@ -94,24 +94,54 @@ for (i in seq_along(comparisons)) {
 flush.console()
 
 # ==========================================================================
-# Assign conditions to samples
+# Assign conditions to samples using metadata entries
 # ==========================================================================
-unique_conditions <- unique(all_condition_values)
-unique_conditions <- unique_conditions[order(-nchar(unique_conditions))]
-cat("Unique conditions:", paste(unique_conditions, collapse = ", "), "\n")
-
-col_data <- data.frame(sample = sample_names, stringsAsFactors = FALSE)
-col_data$condition <- vapply(sample_names, function(sname) {
-    for (cond in unique_conditions) {
-        if (grepl(cond, sname, ignore.case = TRUE, fixed = TRUE)) return(cond)
+# For multi-condition comparisons, each metadata entry has condition_1, condition_2, etc.
+# We build a combined condition string per sample (e.g. "Jurkat+INCB224525+24h")
+# to match the comparison group format.
+assign_condition <- function(sample_names, metadata) {
+  conditions <- character(length(sample_names))
+  for (i in seq_along(sample_names)) {
+    sname <- sample_names[i]
+    matched <- FALSE
+    for (fname in names(metadata)) {
+      entry <- metadata[[fname]]
+      cond_keys <- grep("^condition_", names(entry), value = TRUE)
+      if (length(cond_keys) == 0) next
+      cond_vals <- as.character(unlist(entry[cond_keys]))
+      cond_vals <- cond_vals[nzchar(cond_vals)]
+      if (length(cond_vals) > 0 &&
+          all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
+        conditions[i] <- paste(cond_vals, collapse = "+")
+        matched <- TRUE
+        break
+      }
     }
-    return(NA_character_)
-}, character(1), USE.NAMES = FALSE)
+    if (!matched) conditions[i] <- NA_character_
+  }
+  conditions
+}
+
+if (length(metadata) > 0) {
+    col_data <- data.frame(sample = sample_names, stringsAsFactors = FALSE)
+    col_data$condition <- assign_condition(sample_names, metadata)
+} else {
+    # Fallback: use grepl matching against comparison values (legacy)
+    unique_conditions <- unique(all_condition_values)
+    unique_conditions <- unique_conditions[order(-nchar(unique_conditions))]
+    col_data <- data.frame(sample = sample_names, stringsAsFactors = FALSE)
+    col_data$condition <- vapply(sample_names, function(sname) {
+        for (cond in unique_conditions) {
+            if (grepl(cond, sname, ignore.case = TRUE, fixed = TRUE)) return(cond)
+        }
+        return(NA_character_)
+    }, character(1), USE.NAMES = FALSE)
+}
 
 if (any(is.na(col_data$condition)))
     stop("Could not assign condition for: ", paste(sample_names[is.na(col_data$condition)], collapse = ", "))
 
-col_data$condition <- factor(col_data$condition, levels = unique_conditions)
+col_data$condition <- factor(col_data$condition)
 cat("Condition distribution:\n")
 print(table(col_data$condition))
 flush.console()
