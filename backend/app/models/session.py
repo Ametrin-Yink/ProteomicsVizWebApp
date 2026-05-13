@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SessionState(str, Enum):
@@ -75,6 +75,9 @@ class SessionConfig(BaseModel):
     msstats_save_fitted_models: Optional[bool] = Field(default=None)
     msstats_n_cores: Optional[int] = Field(default=None)
 
+    # Batch correction (msqrob2)
+    msqrob2_batch_column: Optional[str] = Field(default=None)
+
     # Covariate columns (selected metadata columns to use as model covariates)
     covariate_columns: Optional[list[str]] = Field(default=None)
 
@@ -92,8 +95,17 @@ class ProteomicsFileInfo(FileInfo):
     """Proteomics file metadata with parsed filename info."""
 
     experiment: str = Field(..., description="Experiment name from filename")
-    condition: str = Field(..., description="Condition from filename")
+    conditions: list[str] = Field(..., description="Conditions from filename (multiple segments between experiment and replicate)")
     replicate: int = Field(..., ge=1, description="Replicate number")
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_condition_field(cls, data: Any) -> Any:
+        """Accept old 'condition' string field and convert to 'conditions' list."""
+        if isinstance(data, dict) and "condition" in data and "conditions" not in data:
+            data = {**data, "conditions": data["condition"].split("_")}
+            del data["condition"]
+        return data
 
 
 class SessionFiles(BaseModel):
