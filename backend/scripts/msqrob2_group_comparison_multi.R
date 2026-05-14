@@ -110,6 +110,8 @@ assign_condition <- function(sample_names, metadata) {
       if (length(cond_keys) == 0) next
       cond_vals <- as.character(unlist(entry[cond_keys]))
       cond_vals <- cond_vals[nzchar(cond_vals)]
+      # Sort by length descending to prevent substring mismatches (e.g. "4h" in "24h")
+      cond_vals <- cond_vals[order(-nchar(cond_vals))]
       if (length(cond_vals) > 0 &&
           all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
         conditions[i] <- paste(cond_vals, collapse = "_")
