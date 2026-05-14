@@ -194,8 +194,8 @@ if (has_batch) {
     print(table(col_data$batch))
 }
 
-# Set colData on QFeatures object
-colData(pe) <- DataFrame(col_data, row.names = colnames(pe))
+# Set colData on QFeatures object — use protein assay sample names as row names
+colData(pe) <- DataFrame(col_data, row.names = sample_names)
 cat("colData set. Columns:", paste(colnames(colData(pe)), collapse = ", "), "\n")
 flush.console()
 
