@@ -112,7 +112,7 @@ assign_condition <- function(sample_names, metadata) {
       cond_vals <- cond_vals[nzchar(cond_vals)]
       if (length(cond_vals) > 0 &&
           all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
-        conditions[i] <- paste(cond_vals, collapse = "+")
+        conditions[i] <- paste(cond_vals, collapse = "_")
         matched <- TRUE
         break
       }
@@ -263,8 +263,8 @@ for (i in seq_along(comparisons)) {
         all(vapply(g2_values, function(v) grepl(v, lv, fixed = TRUE), logical(1)))
     }, logical(1))]
 
-    if (length(cond_x) == 0) cond_x <- g1_label
-    if (length(cond_y) == 0) cond_y <- g2_label
+    if (length(cond_x) == 0) cond_x <- paste(g1_values, collapse = "_")
+    if (length(cond_y) == 0) cond_y <- paste(g2_values, collapse = "_")
     cond_x <- cond_x[1]
     cond_y <- cond_y[1]
 
