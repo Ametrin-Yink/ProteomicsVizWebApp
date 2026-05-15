@@ -96,8 +96,14 @@ flush.console()
 # ==========================================================================
 # Assign conditions to samples using metadata entries
 # ==========================================================================
+# Helper: match value as an underscore-delimited token in sample name.
+# Prevents substring mismatches like "4h" matching inside "24h".
+match_token <- function(value, sname) {
+  grepl(paste0("(^|_)", value, "($|_)"), sname)
+}
+
 # For multi-condition comparisons, each metadata entry has condition_1, condition_2, etc.
-# We build a combined condition string per sample (e.g. "Jurkat+INCB224525+24h")
+# We build a combined condition string per sample (e.g. "Jurkat_INCB224525_24h")
 # to match the comparison group format.
 assign_condition <- function(sample_names, metadata) {
   conditions <- character(length(sample_names))
@@ -110,10 +116,8 @@ assign_condition <- function(sample_names, metadata) {
       if (length(cond_keys) == 0) next
       cond_vals <- as.character(unlist(entry[cond_keys]))
       cond_vals <- cond_vals[nzchar(cond_vals)]
-      # Sort by length descending to prevent substring mismatches (e.g. "4h" in "24h")
-      cond_vals <- cond_vals[order(-nchar(cond_vals))]
       if (length(cond_vals) > 0 &&
-          all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
+          all(vapply(cond_vals, function(v) match_token(v, sname), logical(1)))) {
         conditions[i] <- paste(cond_vals, collapse = "_")
         matched <- TRUE
         break
@@ -134,7 +138,7 @@ if (length(metadata) > 0) {
     col_data <- data.frame(sample = sample_names, stringsAsFactors = FALSE)
     col_data$condition <- vapply(sample_names, function(sname) {
         for (cond in unique_conditions) {
-            if (grepl(cond, sname, ignore.case = TRUE, fixed = TRUE)) return(cond)
+            if (match_token(cond, sname)) return(cond)
         }
         return(NA_character_)
     }, character(1), USE.NAMES = FALSE)
@@ -163,7 +167,7 @@ build_batch_vector <- function(sample_names, metadata, batch_col) {
       cond_vals <- as.character(unlist(entry[cond_keys]))
       cond_vals <- cond_vals[nzchar(cond_vals)]
       if (length(cond_vals) > 0 &&
-          all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
+          all(vapply(cond_vals, function(v) match_token(v, sname), logical(1)))) {
         bv <- entry[[batch_col]]
         if (!is.null(bv) && nzchar(bv)) { batch_values[i] <- bv; matched <- TRUE }
         break

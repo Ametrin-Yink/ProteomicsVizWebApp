@@ -340,6 +340,11 @@ flush.console()
 # ==========================================================================
 # Batch vector builder
 # ==========================================================================
+# Helper: match value as underscore-delimited token in sample name
+match_token <- function(value, sname) {
+  grepl(paste0("(^|_)", value, "($|_)"), sname)
+}
+
 build_batch_vector <- function(sample_names, metadata, batch_col) {
   batch_values <- rep(NA_character_, length(sample_names))
   for (i in seq_along(sample_names)) {
@@ -352,7 +357,7 @@ build_batch_vector <- function(sample_names, metadata, batch_col) {
       cond_vals <- as.character(unlist(entry[cond_keys]))
       cond_vals <- cond_vals[nzchar(cond_vals)]
       if (length(cond_vals) > 0 &&
-          all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1)))) {
+          all(vapply(cond_vals, function(v) match_token(v, sname), logical(1)))) {
         bv <- entry[[batch_col]]
         if (!is.null(bv) && nzchar(bv)) { batch_values[i] <- bv; matched <- TRUE }
         break
@@ -393,7 +398,7 @@ if (!is.null(batch_column) && length(metadata) > 0) {
             cond_vals <- as.character(unlist(entry[cond_keys]))
             cond_vals <- cond_vals[nzchar(cond_vals)]
             if (length(cond_vals) > 0 &&
-                all(vapply(cond_vals, function(v) grepl(v, sname, fixed = TRUE), logical(1))))
+                all(vapply(cond_vals, function(v) match_token(v, sname), logical(1))))
                 return(paste(cond_vals, collapse = "+"))
         }
         return(NA_character_)
