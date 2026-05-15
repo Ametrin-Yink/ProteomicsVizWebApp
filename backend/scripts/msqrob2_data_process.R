@@ -397,7 +397,7 @@ if (!is.null(batch_column) && length(metadata) > 0) {
                 return(paste(cond_vals, collapse = "+"))
         }
         return(NA_character_)
-    }, character(1)))
+    }, character(1))
 
     col_data_batch <- data.frame(sample = sample_names, condition = factor(conditions_all))
     batch_design <- model.matrix(~ 0 + condition, data = col_data_batch)
