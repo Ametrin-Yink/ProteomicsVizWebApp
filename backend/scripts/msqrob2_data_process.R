@@ -386,7 +386,7 @@ if (!is.null(batch_column) && length(metadata) > 0) {
 
     batch_factor <- build_batch_vector(sample_names, metadata, batch_column)
 
-    unique_conditions <- unique(vapply(sample_names, function(sname) {
+    conditions_all <- vapply(sample_names, function(sname) {
         for (fname in names(metadata)) {
             entry <- metadata[[fname]]
             cond_keys <- grep("^condition_", names(entry), value = TRUE)
@@ -399,7 +399,7 @@ if (!is.null(batch_column) && length(metadata) > 0) {
         return(NA_character_)
     }, character(1)))
 
-    col_data_batch <- data.frame(sample = sample_names, condition = factor(unique_conditions))
+    col_data_batch <- data.frame(sample = sample_names, condition = factor(conditions_all))
     batch_design <- model.matrix(~ 0 + condition, data = col_data_batch)
 
     protein_matrix_batch_corrected <- removeBatchEffect(
