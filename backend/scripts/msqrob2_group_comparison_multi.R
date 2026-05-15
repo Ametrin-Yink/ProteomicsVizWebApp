@@ -263,10 +263,10 @@ for (i in seq_along(comparisons)) {
 
     # Match each group's values against condition levels
     cond_x <- cond_levels[vapply(cond_levels, function(lv) {
-        all(vapply(g1_values, function(v) grepl(v, lv, fixed = TRUE), logical(1)))
+        all(vapply(g1_values, function(v) match_token(v, lv), logical(1)))
     }, logical(1))]
     cond_y <- cond_levels[vapply(cond_levels, function(lv) {
-        all(vapply(g2_values, function(v) grepl(v, lv, fixed = TRUE), logical(1)))
+        all(vapply(g2_values, function(v) match_token(v, lv), logical(1)))
     }, logical(1))]
 
     if (length(cond_x) == 0) cond_x <- paste(g1_values, collapse = "_")
