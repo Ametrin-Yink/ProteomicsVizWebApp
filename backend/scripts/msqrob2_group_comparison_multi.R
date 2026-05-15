@@ -270,11 +270,15 @@ for (i in seq_along(comparisons)) {
     cond_x <- cond_x[1]
     cond_y <- cond_y[1]
 
-    contrast_str <- paste0(cond_x, " - ", cond_y, " = 0")
+    # model.matrix(~ 0 + condition) prefixes level names with "condition"
+    param_x <- paste0("condition", cond_x)
+    param_y <- paste0("condition", cond_y)
+
+    contrast_str <- paste0(param_x, " - ", param_y, " = 0")
     cat("  Comparison", i, ":", contrast_str, "\n")
     flush.console()
 
-    L <- makeContrast(contrast_str, c(cond_x, cond_y))
+    L <- makeContrast(contrast_str, c(param_x, param_y))
 
     pe <- hypothesisTest(pe, i = "protein", contrast = L,
                          adjust.method = adjust_method, overwrite = TRUE)
