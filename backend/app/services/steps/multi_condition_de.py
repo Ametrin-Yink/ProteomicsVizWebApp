@@ -1,4 +1,4 @@
-"""Step 7: Multi-condition differential expression analysis (msqrob2)."""
+"""Step 4: Differential expression analysis (msqrob2 v1.16 API)."""
 
 import asyncio
 import logging
@@ -16,23 +16,24 @@ logger = logging.getLogger("proteomics")
 
 
 async def step_multi_condition_de(ctx: StepContext) -> None:
-    """Step 7: Multi-condition DE using msqrob2 native robust regression.
+    """Step 4: Multi-condition DE using msqrob2 native QFeatures API.
 
-    Loads MSqRob2_Processed.rds from step 6, runs msqrobLm + hypothesisTest
-    for all contrasts, writes per-comparison Diff_Expression_*.tsv files.
+    Loads MSqRob2_Processed.rds (QFeatures object) from step 3, runs
+    msqrob() + makeContrast() + hypothesisTest() for all contrasts,
+    writes per-comparison Diff_Expression_*.tsv files.
     """
     rds_input = ctx.results_dir / "MSqRob2_Processed.rds"
     if not rds_input.exists():
         raise FileNotFoundError(
             f"MSqRob2_Processed.rds not found at {rds_input}. "
-            "Step 6 (data_process) must complete first."
+            "Step 3 (protein abundance) must complete first."
         )
 
     comparisons = ctx.config.comparisons if ctx.config.comparisons else []
     if not comparisons:
         raise ValueError("No comparisons specified for multi-condition analysis")
 
-    logger.info(f"Step 7 (msqrob2 multi): Running {len(comparisons)} comparisons")
+    logger.info(f"Step 4 (msqrob2 DE): Running {len(comparisons)} comparisons")
 
     gene_mapping = get_gene_mapping(ctx.config.organism)
 
@@ -42,11 +43,10 @@ async def step_multi_condition_de(ctx: StepContext) -> None:
         comparisons=comparisons,
         gene_mapping_file=gene_mapping,
         config=ctx.config,
-        log_callback=create_log_callback(ctx, step=7),
+        log_callback=create_log_callback(ctx, step=4),
         timeout_multiplier=ctx.timeout_multiplier,
     )
 
-    # Record the first comparison result as the primary diff_expression_path
     if comparisons:
         first = comparisons[0]
         label = _build_label(first["group1"]) + "_vs_" + _build_label(first["group2"])
@@ -54,9 +54,8 @@ async def step_multi_condition_de(ctx: StepContext) -> None:
             ctx.results_dir / f"Diff_Expression_{label}.tsv"
         )
 
-    ctx.step_outputs[7] = ctx.results_dir
+    ctx.step_outputs[4] = ctx.results_dir
 
-    # Count total significant proteins across all comparison files
     total_sig = 0
     for comp in comparisons:
         label = _build_label(comp["group1"]) + "_vs_" + _build_label(comp["group2"])
@@ -70,5 +69,5 @@ async def step_multi_condition_de(ctx: StepContext) -> None:
 
 
 def _build_label(group: dict) -> str:
-    """Build a label from a comparison group dict, e.g. {Condition: 'Drug'} -> 'Drug'."""
+    """Build a label from a comparison group dict."""
     return "+".join(str(v) for v in group.values())

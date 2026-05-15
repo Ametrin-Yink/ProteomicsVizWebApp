@@ -130,11 +130,11 @@ class AnalysisConfig(BaseModel):
     )
     msqrob2_model: str = Field(
         default="msqrobLm",
-        description="DE model type: msqrobLm (robust linear), msqrobGlm (generalized linear)",
+        description="[DEPRECATED in v1.16] msqrob() replaces msqrobLm; no msqrobGlm. Value ignored.",
     )
     msqrob2_robust: bool = Field(
         default=True,
-        description="Use robust M-estimation (Huber weights) for DE model fitting",
+        description="[DEPRECATED in v1.16] msqrob() always uses robust regression. Value ignored.",
     )
     msqrob2_ridge: bool = Field(
         default=False,
