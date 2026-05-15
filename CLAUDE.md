@@ -131,9 +131,21 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 - **msqrob2** (default): R/msqrob2 + QFeatures for protein abundance and DE
 - **MSstats**: R/MSstats for protein abundance and DE
 
-Both share steps 1-5 (Python preprocessing). GSEA and BioNet are on-demand, triggered from visualization routes — not pipeline steps. The `TIME_SERIES` template is reserved for future use.
+Both pipelines are defined in `pipeline_registry.py`. GSEA and BioNet are on-demand, triggered from visualization routes — not pipeline steps. The `TIME_SERIES` template is reserved for future use.
 
-**8 Pipeline Steps:**
+**msqrob2 Pipeline (5 steps — consolidated for v1.16 API):**
+
+| Step | Name | Tool |
+|------|------|------|
+| 1 | Combine Replicates | Python (DataProcessor) |
+| 2 | Generate Unique PSM | Python (DataProcessor) |
+| 3 | Protein Abundance | R (msqrob2/QFeatures) |
+| 4 | Differential Expression | R (msqrob2 v1.16: `msqrob()` + `makeContrast()` + `hypothesisTest()`) |
+| 5 | QC Metrics | Python (QCCalculator, msqrob2-specific) |
+
+Steps 1-2 are shared with MSstats. Steps 3-5 replace the old 8-step pipeline: Python preprocessing (old steps 3-5: razor, quality, filter) is now handled natively in the R QFeatures pipeline at step 3.
+
+**MSstats Pipeline (8 steps — unchanged):**
 
 | Step | Name | Tool |
 |------|------|------|
@@ -142,8 +154,8 @@ Both share steps 1-5 (Python preprocessing). GSEA and BioNet are on-demand, trig
 | 3 | Remove Razor Peptides | Python (DataProcessor, conditional) |
 | 4 | Remove Low Quality | Python (DataProcessor) |
 | 5 | Filter by Criteria | Python (DataProcessor) |
-| 6 | Protein Abundance | R (msqrob2 or MSstats) |
-| 7 | Differential Expression | R (msqrob2 or MSstats) |
+| 6 | Protein Abundance | R (MSstats dataProcess) |
+| 7 | Differential Expression | R (MSstats groupComparison) |
 | 8 | QC Metrics | Python (QCCalculator) |
 
 **On-Demand Analysis (triggered from visualization, not pipeline steps):**
@@ -155,10 +167,10 @@ Both share steps 1-5 (Python preprocessing). GSEA and BioNet are on-demand, trig
 
 | Script | Step | Purpose |
 |--------|------|---------|
-| `msqrob2_data_process.R` | 6 | Peptide-to-protein aggregation via msqrob2/QFeatures |
-| `msqrob2_group_comparison_multi.R` | 7 | Multi-condition DE with N conditions, M contrasts |
-| `msstats_data_process.R` | 6 | MSstats protein abundance (MSstats pipeline) |
-| `msstats_group_comparison_multi.R` | 7 | MSstats group comparison (MSstats pipeline) |
+| `msqrob2_data_process.R` | 3 (msqrob2) | Full QFeatures pipeline: filter, log2, normalize, impute, aggregate, gene map, batch correct |
+| `msqrob2_group_comparison_multi.R` | 4 (msqrob2) | Multi-condition DE via msqrob v1.16 API (`msqrob()` + `makeContrast()` + `hypothesisTest()`) |
+| `msstats_data_process.R` | 6 (MSstats) | MSstats protein abundance |
+| `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison |
 | `bionet_network.R` | on-demand | INDRA subnetwork analysis via MSstatsBioNet |
 | `install_r_packages.R` | setup | Installs Bioconductor packages |
 | `verify_r_packages.R` | setup | Verifies msqrob2/QFeatures/limma are installed |
