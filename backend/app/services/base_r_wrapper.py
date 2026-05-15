@@ -605,7 +605,7 @@ class BaseRWrapper(ABC):
         worker_multiplier = n_cores + 1  # main proc + workers
         estimated_cells = n_rows * n_cols * worker_multiplier
 
-        CELL_THRESHOLD = 500_000_000  # 500M cells
+        CELL_THRESHOLD = 50_000_000_000  # 50B cells (~400GB for float64)
 
         logger.info(
             "Memory estimate: %d rows x %d cols x %d workers = %.0fM cells",
