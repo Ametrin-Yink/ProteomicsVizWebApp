@@ -206,6 +206,27 @@ cat("colData set. Columns:", paste(colnames(colData(pe)), collapse = ", "), "\n"
 flush.console()
 
 # ==========================================================================
+# Detect confounding: batch is confounded if every condition level maps to
+# exactly one batch level. In that case including batch in the formula makes
+# the model matrix rank-deficient — coefficients for one cell type go to NA.
+# ==========================================================================
+if (has_batch) {
+    cond_batch_map <- table(col_data$condition, col_data$batch)
+    batches_per_condition <- apply(cond_batch_map, 1, function(r) sum(r > 0))
+    n_cond_with_multi_batch <- sum(batches_per_condition > 1)
+    if (n_cond_with_multi_batch == 0) {
+        cat("WARNING: batch is perfectly confounded with condition (each condition",
+            "maps to exactly one batch level). Dropping batch from model formula",
+            "to avoid inestimable coefficients.\n")
+        has_batch <- FALSE
+    } else {
+        cat("Batch has", n_cond_with_multi_batch, "condition(s) spanning multiple",
+            "batches — keeping batch in model.\n")
+    }
+}
+flush.console()
+
+# ==========================================================================
 # Build formula and fit model
 # ==========================================================================
 model_formula <- if (has_batch) {
