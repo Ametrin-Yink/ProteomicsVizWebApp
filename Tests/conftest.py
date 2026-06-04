@@ -12,7 +12,9 @@ if str(backend_dir) not in sys.path:
 
 import shutil
 from collections.abc import Generator
+from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -139,6 +141,96 @@ def create_test_csv(tmp_path: Path):
         return filepath
 
     return _create
+
+
+# ── Service-layer fixtures ──
+
+
+@pytest.fixture
+def mock_subprocess_run():
+    """Mock subprocess.run to return success with fake R output."""
+    import subprocess as _subprocess_mod
+
+    with patch.object(_subprocess_mod, "run") as mock_run:
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "R processing complete\n"
+        mock_result.stderr = ""
+        mock_run.return_value = mock_result
+        yield mock_run
+
+
+@pytest.fixture
+def mock_subprocess_failure():
+    """Mock subprocess.run to simulate R script failure."""
+    import subprocess as _subprocess_mod
+
+    with patch.object(_subprocess_mod, "run") as mock_run:
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "Error in msqrob2::msqrob(): object 'x' not found\n"
+        mock_run.return_value = mock_result
+        yield mock_run
+
+
+@pytest.fixture
+def sample_abundance_matrix() -> np.ndarray:
+    """10 proteins x 6 samples abundance matrix for QC calculator tests."""
+    rng = np.random.default_rng(42)
+    return np.abs(rng.standard_normal((10, 6)) * 2 + 10)
+
+
+@pytest.fixture
+def sample_gene_sets() -> dict[str, set[str]]:
+    """Small GMT-style gene sets for GSEA curve tests."""
+    return {
+        "Pathway_A": {"GENE1", "GENE2", "GENE3", "GENE4"},
+        "Pathway_B": {"GENE5", "GENE6", "GENE7"},
+        "Pathway_C": {"GENE1", "GENE5", "GENE8", "GENE9", "GENE10"},
+    }
+
+
+@pytest.fixture
+def sample_ranked_genes() -> tuple[list[str], list[float]]:
+    """Ranked gene list matching sample_gene_sets."""
+    genes = [f"GENE{i}" for i in range(1, 21)]
+    metrics = [3.0 - (i * 0.15) for i in range(20)]  # descending
+    return genes, metrics
+
+
+@pytest.fixture
+def mock_session_with_config():
+    """Fully configured mock session for orchestrator/manager tests."""
+    from datetime import UTC, datetime
+
+    from app.models.session import SessionConfig, SessionState
+
+    session = MagicMock()
+    session.id = "550e8400-e29b-41d4-a716-446655440000"
+    session.name = "Test Experiment"
+    session.state = SessionState.CONFIGURING
+    session.template = "multi_condition_comparison"
+    session.pipeline = "msqrob2"
+    session.config = SessionConfig(
+        treatment="DrugA",
+        control="DMSO",
+        organism="human",
+        remove_razor=False,
+        strict_filtering=False,
+        comparisons=[{"group1": {"C": "DrugA"}, "group2": {"C": "DMSO"}}],
+    )
+    session.files = MagicMock()
+    session.files.proteomics = [
+        MagicMock(filename=f"PSM_Exp_DrugA_{i}.csv") for i in range(1, 4)
+    ] + [MagicMock(filename=f"PSM_Exp_DMSO_{i}.csv") for i in range(1, 4)]
+    session.files.compound = None
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    session.markers = {}
+    session.volcano_filters = None
+    session.error_message = None
+    return session
 
 
 # Pytest hooks for custom reporting
