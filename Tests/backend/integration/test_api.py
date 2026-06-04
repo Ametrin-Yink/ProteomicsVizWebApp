@@ -403,3 +403,44 @@ class TestErrorHandling:
         response = client.put("/api/sessions")  # PUT not allowed on collection
 
         assert response.status_code == 405
+
+
+class TestFileDelete:
+    def test_delete_nonexistent_file(self, client):
+        create_resp = client.post(
+            "/api/sessions",
+            json={"name": "Delete Test", "template": "multi_condition_comparison"},
+        )
+        session_id = create_resp.json()["id"]
+
+        response = client.delete(
+            f"/api/sessions/{session_id}/files/proteomics/nonexistent.csv"
+        )
+        assert response.status_code == 200
+
+    def test_invalid_file_type_returns_400(self, client):
+        create_resp = client.post(
+            "/api/sessions",
+            json={"name": "Delete Test", "template": "multi_condition_comparison"},
+        )
+        session_id = create_resp.json()["id"]
+
+        response = client.delete(
+            f"/api/sessions/{session_id}/files/invalid_type/test.csv"
+        )
+        assert response.status_code == 400
+
+    def test_session_not_found_on_delete(self, client):
+        response = client.delete(
+            "/api/sessions/non-existent-id/files/proteomics/test.csv"
+        )
+        assert response.status_code == 404
+
+
+class TestOrganismsEndpoint:
+    def test_lists_organisms(self, client):
+        response = client.get("/api/organisms")
+        assert response.status_code == 200
+        data = response.json()
+        assert "organisms" in data
+        assert isinstance(data["organisms"], list)

@@ -113,3 +113,41 @@ class TestPatchVisualizationState:
             json={"markers": {"default": ["P00367"]}},
         )
         assert response.status_code == 404
+
+
+class TestUpdateSession:
+    def test_put_updates_session_name(self, client_with_mock_store, mock_store):
+        response = client_with_mock_store.put(
+            "/api/sessions/test-session-id",
+            json={"name": "Updated Name"},
+        )
+        assert response.status_code == 200
+        mock_store.update.assert_awaited_once()
+
+    def test_put_session_not_found(self, client_with_mock_store, mock_store):
+        mock_store.get = AsyncMock(return_value=None)
+        response = client_with_mock_store.put(
+            "/api/sessions/nonexistent-id",
+            json={"name": "Test"},
+        )
+        assert response.status_code == 404
+
+    def test_config_with_pipeline_selection(self, client_with_mock_store, mock_store):
+        response = client_with_mock_store.put(
+            "/api/sessions/test-session-id/config",
+            json={
+                "treatment": "DrugA", "control": "DMSO",
+                "organism": "human", "pipeline": "msstats",
+            },
+        )
+        assert response.status_code == 200
+        # Verify pipeline was set on the session
+        updated = mock_store.update.call_args[0][0]
+        assert updated.pipeline == "msstats"
+
+    def test_config_preserves_state_on_second_config(self, client_with_mock_store, mock_store):
+        response = client_with_mock_store.put(
+            "/api/sessions/test-session-id/config",
+            json={"treatment": "DrugB", "control": "Vehicle", "organism": "mouse"},
+        )
+        assert response.status_code == 200
