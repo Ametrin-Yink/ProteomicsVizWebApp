@@ -14,18 +14,21 @@ Proteomics Visualization Web App - A full-stack scientific data analysis platfor
 ## Quick Start (Dev)
 
 ```bash
-# Install deps (first time)
+# Install deps + pre-commit hooks (first time)
 cd backend && .venv/Scripts/python.exe -m pip install -r requirements.txt
 cd ../frontend && npm install
 cd ../Tests && npm install
+cd ../backend && .venv/Scripts/pre-commit.exe install
 
-# Terminal 1 - Backend (use backend venv)
+# Terminal 1 - Backend (start FIRST — frontend proxies to port 8000)
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 
 # Terminal 2 - Frontend
 cd frontend && npm run dev
 # Access at http://localhost:3000
 ```
+
+**Startup order matters:** Backend must be running on port 8000 before the frontend — Next.js proxies `/api/*` requests to the backend. If you see 502/ECONNREFUSED errors in the frontend, the backend is not running or port 8000 is blocked.
 
 ## System Paths (This Machine)
 
@@ -54,8 +57,15 @@ cd Tests && npx playwright show-report
 
 ### Code Quality
 ```bash
-cd frontend && npm run lint && npm run lint:fix
-cd backend && ruff check . && ruff format .
+# Backend lint (run from project root)
+backend/.venv/Scripts/python.exe -m ruff check .
+backend/.venv/Scripts/python.exe -m ruff format .
+
+# Frontend lint
+cd frontend && npm run lint
+
+# Pre-commit (run manually if git hooks aren't installed)
+backend/.venv/Scripts/pre-commit.exe run --all-files
 ```
 
 ### R Package Verification
@@ -286,44 +296,121 @@ Sessions persisted to `backend/sessions/{session_id}/`:
 
 ## Troubleshooting
 
-**Backend won't start / Port 8000 in use:**
-```bash
-# Find all PIDs on port 8000
-netstat -ano | findstr ":8000 " | findstr "LISTENING"
+### Backend won't start / Port 8000 in use
+This is the most common issue. uvicorn's `--reload` spawns child processes; killing by PID alone leaves zombies. Kill ALL Python processes:
 
-# Kill ALL Python processes (uvicorn --reload spawns workers; zombies can't be killed by PID alone)
-taskkill //F //IM python.exe
+**PowerShell (recommended on Windows):**
+```powershell
+# Kill ALL Python processes
+taskkill /F /IM python.exe
 
-# Verify port is free
-netstat -ano | findstr ":8000 " | findstr "LISTENING"
+# Verify port is free (should show no output)
+netstat -ano | findstr ":8000.*LISTENING"
 
-# Restart backend with venv Python
-cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
-
-# Verify routes
-curl -s http://localhost:8000/openapi.json | python -c "import sys,json; d=json.load(sys.stdin); [print(p,list(d['paths'][p].keys())) for p in sorted(d['paths']) if 'protein' in p]"
+# Restart backend
+cd backend
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 ```
 
-**Python code changes not picked up (IMPORTANT):**
-uvicorn's `--reload` mode on Windows can serve stale bytecode. **Always clear `__pycache__` BEFORE restarting** when debugging:
+**Bash (Git Bash / WSL):**
 ```bash
 taskkill //F //IM python.exe
-find backend -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
-find backend -name "*.pyc" -delete 2>/dev/null
+netstat -ano | grep ":8000.*LISTENING"
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 ```
-If a fix works in isolation (`python -c "..."`) but the API still fails, it is ALWAYS a cache issue.
 
-**Test failures:**
-```bash
-rm -rf Tests/test-results/ Tests/screenshots/ frontend/playwright-report/
+### Stale bytecode / Code changes not picked up
+On Windows, uvicorn's `--reload` often serves stale `.pyc` files. If a fix works in `python -c "..."` but the API still fails, **it is always a cache issue**:
+
+```powershell
+taskkill /F /IM python.exe
+Get-ChildItem -Recurse -Directory -Filter "__pycache__" -Path backend | Remove-Item -Recurse -Force
+Get-ChildItem -Recurse -Filter "*.pyc" -Path backend | Remove-Item -Force
+cd backend
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 ```
 
-**Venv corrupted or missing packages:**
-```bash
-rm -rf backend/.venv
-cd backend && python -m venv .venv
-cd backend && .venv/Scripts/activate && pip install -r requirements.txt
+### Frontend won't start
+
+**`npm run dev` fails with module not found:**
+```powershell
+cd frontend
+npm install        # reinstall if node_modules is missing or stale
+npm run dev        # starts at http://localhost:3000
+```
+
+**API calls return 404 / proxy errors:**
+The Next.js dev server proxies `/api/*` to `http://127.0.0.1:8000` (see `frontend/next.config.ts`). The backend must be running on port 8000. If you see `ECONNREFUSED` or 502 errors, start the backend first.
+
+**Multipart upload fails with 6+ files:**
+Next.js dev server has a known issue proxying large multipart uploads. The frontend batches uploads into groups of 5 as a workaround (`api-client.ts` line 403). If uploads still fail, try `npm run build && npm start` instead of `npm run dev`.
+
+**Port 3000 already in use:**
+```powershell
+netstat -ano | findstr ":3000.*LISTENING"
+taskkill /F /PID <PID>
+```
+
+### Running tests
+
+**Always run from project root:**
+```powershell
+# Backend unit tests
+backend\.venv\Scripts\python.exe -m pytest Tests/backend/unit -v
+
+# Backend integration tests (some require SampleData — use -m "not needs_sample_data" to skip)
+backend\.venv\Scripts\python.exe -m pytest Tests/backend/integration -v
+
+# Run everything
+backend\.venv\Scripts\python.exe -m pytest Tests/backend/ -v --tb=short
+```
+
+**E2E tests (Playwright):**
+```powershell
+cd Tests
+npx playwright install chromium   # first time only
+npx playwright test               # run all specs
+npx playwright show-report        # view HTML report
+```
+
+**Clean test artifacts before re-running:**
+```powershell
+Remove-Item -Recurse -Force Tests/test-results, Tests/screenshots, Tests/playwright-report -ErrorAction SilentlyContinue
+```
+
+### Linting and formatting
+
+```powershell
+# Backend (run from project root)
+backend\.venv\Scripts\python.exe -m ruff check .
+backend\.venv\Scripts\python.exe -m ruff format .
+
+# Frontend
+cd frontend; npx eslint src/
+```
+
+### Pre-commit hooks
+
+Hooks are configured in `.pre-commit-config.yaml`. They run ruff, ruff-format, and eslint on staged files. Install once:
+
+```powershell
+backend\.venv\Scripts\pip.exe install pre-commit
+backend\.venv\Scripts\pre-commit.exe install
+```
+
+If `pre-commit install` fails with "Cowardly refusing to install hooks with core.hooksPath set" (Claude Code worktrees set this), run manually instead:
+
+```powershell
+backend\.venv\Scripts\pre-commit.exe run --all-files
+```
+
+### Venv corrupted or missing packages
+
+```powershell
+Remove-Item -Recurse -Force backend\.venv
+cd backend
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ## Common Bug Patterns to Avoid
