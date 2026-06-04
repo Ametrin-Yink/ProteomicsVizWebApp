@@ -1,6 +1,6 @@
 /**
  * File Upload Component
- * 
+ *
  * Drag and drop file upload with progress tracking.
  */
 
@@ -68,7 +68,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     if (disabled) return;
 
     const files = Array.from(e.dataTransfer.files);
@@ -78,7 +78,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     handleFiles(files);
-    
+
     // Reset input
     if (inputRef.current) {
       inputRef.current.value = '';
@@ -132,22 +132,22 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     'w-full min-h-[200px] p-8 rounded-xl border-2 border-dashed',
     'transition-all duration-200 cursor-pointer',
     'bg-surface',
-    
+
     isDragging && !disabled && [
       'border-primary bg-primary/5',
       'scale-[1.02]',
     ],
-    
+
     !isDragging && !disabled && [
       'border-border hover:border-primary/50',
       'hover:bg-primary/5',
     ],
-    
+
     disabled && [
       'opacity-50 cursor-not-allowed',
       'border-border',
     ],
-    
+
     className
   );
 
@@ -170,7 +170,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           className="hidden"
           disabled={disabled}
         />
-        
+
         <div className="flex flex-col items-center gap-4 text-center">
           <div
             className={cn(
@@ -186,7 +186,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               )}
             />
           </div>
-          
+
           <div className="space-y-1">
             <p className="text-base font-medium text-text-primary">
               {isDragging ? 'Drop files here' : 'Drag & drop files here'}
@@ -195,7 +195,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               or click to browse
             </p>
           </div>
-          
+
           <div className="text-xs text-text-muted">
             <p>Accepted: {accept}</p>
             <p>Max size: {formatFileSize(maxSize)} per file</p>
@@ -210,7 +210,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           <p className="text-sm font-medium text-text-primary">
             Files ({uploadedFiles.length})
           </p>
-          
+
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {uploadedFiles.map((uploadedFile) => (
               <div
@@ -228,7 +228,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 <div className="flex-shrink-0">
                   <File className="w-5 h-5 text-text-muted" />
                 </div>
-                
+
                 {/* File info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-primary truncate">
@@ -237,7 +237,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   <p className="text-xs text-text-secondary">
                     {formatFileSize(uploadedFile.file.size)}
                   </p>
-                  
+
                   {/* Progress bar */}
                   {uploadedFile.state === 'uploading' && (
                     <div className="mt-2">
@@ -252,7 +252,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                       </p>
                     </div>
                   )}
-                  
+
                   {/* Error message */}
                   {uploadedFile.state === 'error' && uploadedFile.error && (
                     <p className="text-xs text-error mt-1 flex items-center gap-1">
@@ -261,7 +261,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                     </p>
                   )}
                 </div>
-                
+
                 {/* Status icon */}
                 <div className="flex-shrink-0">
                   {uploadedFile.state === 'success' && (
@@ -271,7 +271,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                     <AlertCircle className="w-5 h-5 text-error" />
                   )}
                 </div>
-                
+
                 {/* Remove button */}
                 <Button
                   variant="ghost"

@@ -5,9 +5,9 @@ Defines all session-related data structures including configuration,
 file metadata, and session state.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -27,11 +27,9 @@ class SessionState(str, Enum):
 class SessionConfig(BaseModel):
     """Session configuration model."""
 
-    treatment: Optional[str] = Field(
-        default=None, description="Treatment condition name"
-    )
-    control: Optional[str] = Field(default=None, description="Control condition name")
-    organism: Optional[str] = Field(
+    treatment: str | None = Field(default=None, description="Treatment condition name")
+    control: str | None = Field(default=None, description="Control condition name")
+    organism: str | None = Field(
         default=None,
         pattern=r"^(|[a-z]+)$",
         description="Organism identifier (e.g., 'human', 'mouse')",
@@ -43,43 +41,43 @@ class SessionConfig(BaseModel):
         default=False, description="Use strict filtering criteria"
     )
     # Multi-condition: explicit list of comparison pairs
-    comparisons: Optional[list[dict[str, dict[str, str]]]] = Field(
+    comparisons: list[dict[str, dict[str, str]]] | None = Field(
         default=None,
         description="List of {group1: {col:val}, group2: {col:val}} comparison criteria",
     )
     # Multi-condition: per-sample metadata columns (filename -> {column -> value})
-    metadata_columns: Optional[dict[str, dict[str, str]]] = Field(
+    metadata_columns: dict[str, dict[str, str]] | None = Field(
         default=None, description="Custom metadata columns per sample file"
     )
     # MSstats-specific parameters (optional, used only for msstats templates)
-    msstats_normalization: Optional[str] = Field(default=None)
-    msstats_feature_selection: Optional[str] = Field(default=None)
-    msstats_summary_method: Optional[str] = Field(default=None)
-    msstats_impute: Optional[bool] = Field(default=None)
-    msstats_log_base: Optional[int] = Field(default=None)
-    msstats_censored_int: Optional[str] = Field(default=None)
-    msstats_max_quantile: Optional[float] = Field(default=None)
-    msstats_remove50missing: Optional[bool] = Field(default=None)
+    msstats_normalization: str | None = Field(default=None)
+    msstats_feature_selection: str | None = Field(default=None)
+    msstats_summary_method: str | None = Field(default=None)
+    msstats_impute: bool | None = Field(default=None)
+    msstats_log_base: int | None = Field(default=None)
+    msstats_censored_int: str | None = Field(default=None)
+    msstats_max_quantile: float | None = Field(default=None)
+    msstats_remove50missing: bool | None = Field(default=None)
 
     # Shared advanced parameters (previously dropped by backend)
-    pvalue_threshold: Optional[float] = Field(default=None, ge=0.001, le=0.5)
-    logfc_threshold: Optional[float] = Field(default=None, ge=0.1, le=5.0)
-    min_peptides_per_protein: Optional[int] = Field(default=None, ge=1, le=10)
+    pvalue_threshold: float | None = Field(default=None, ge=0.001, le=0.5)
+    logfc_threshold: float | None = Field(default=None, ge=0.1, le=5.0)
+    min_peptides_per_protein: int | None = Field(default=None, ge=1, le=10)
 
     # MSstats advanced parameters (new)
-    msstats_n_top_feature: Optional[int] = Field(default=None)
-    msstats_min_feature_count: Optional[int] = Field(default=None)
-    msstats_remove_uninformative_feature_outlier: Optional[bool] = Field(default=None)
-    msstats_equal_feature_var: Optional[bool] = Field(default=None)
-    msstats_name_standards: Optional[str] = Field(default=None)
-    msstats_save_fitted_models: Optional[bool] = Field(default=None)
-    msstats_n_cores: Optional[int] = Field(default=None)
+    msstats_n_top_feature: int | None = Field(default=None)
+    msstats_min_feature_count: int | None = Field(default=None)
+    msstats_remove_uninformative_feature_outlier: bool | None = Field(default=None)
+    msstats_equal_feature_var: bool | None = Field(default=None)
+    msstats_name_standards: str | None = Field(default=None)
+    msstats_save_fitted_models: bool | None = Field(default=None)
+    msstats_n_cores: int | None = Field(default=None)
 
     # Batch correction (msqrob2)
-    msqrob2_batch_column: Optional[str] = Field(default=None)
+    msqrob2_batch_column: str | None = Field(default=None)
 
     # Covariate columns (selected metadata columns to use as model covariates)
-    covariate_columns: Optional[list[str]] = Field(default=None)
+    covariate_columns: list[str] | None = Field(default=None)
 
 
 class FileInfo(BaseModel):
@@ -87,7 +85,7 @@ class FileInfo(BaseModel):
 
     filename: str = Field(..., description="Original filename")
     size: int = Field(..., ge=0, description="File size in bytes")
-    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     columns: list[str] = Field(default_factory=list, description="CSV columns")
 
 
@@ -95,7 +93,10 @@ class ProteomicsFileInfo(FileInfo):
     """Proteomics file metadata with parsed filename info."""
 
     experiment: str = Field(..., description="Experiment name from filename")
-    conditions: list[str] = Field(..., description="Conditions from filename (multiple segments between experiment and replicate)")
+    conditions: list[str] = Field(
+        ...,
+        description="Conditions from filename (multiple segments between experiment and replicate)",
+    )
     replicate: int = Field(..., ge=1, description="Replicate number")
 
     @model_validator(mode="before")
@@ -112,7 +113,7 @@ class SessionFiles(BaseModel):
     """Session files collection."""
 
     proteomics: list[ProteomicsFileInfo] = Field(default_factory=list)
-    compound: Optional[FileInfo] = None
+    compound: FileInfo | None = None
 
 
 class Session(BaseModel):
@@ -123,11 +124,11 @@ class Session(BaseModel):
     template: str = Field(default="multi_condition_comparison")
     pipeline: str = Field(default="msqrob2")
     state: SessionState = Field(default=SessionState.CREATED)
-    config: Optional[SessionConfig] = None
+    config: SessionConfig | None = None
     files: SessionFiles = Field(default_factory=SessionFiles)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    error_message: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    error_message: str | None = None
     markers: dict[str, list[str]] = Field(
         default_factory=dict,
         description="Marked protein accessions per comparison for volcano plot labels",
@@ -143,7 +144,7 @@ class Session(BaseModel):
             return {k: v for k, v in v.items()}
         return {}
 
-    volcano_filters: Optional[dict[str, Any]] = Field(
+    volcano_filters: dict[str, Any] | None = Field(
         default=None,
         description="Volcano plot filter settings (foldChange, pValue, adjPValue, s0)",
     )
@@ -177,15 +178,15 @@ class SessionCreate(BaseModel):
 class SessionUpdate(BaseModel):
     """Session update request."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
-    config: Optional[SessionConfig] = None
+    name: str | None = Field(None, min_length=1, max_length=200)
+    config: SessionConfig | None = None
 
 
 class VisualizationStateUpdate(BaseModel):
     """Partial update for visualization state (markers + volcano filters)."""
 
-    markers: Optional[dict[str, list[str]]] = None
-    volcano_filters: Optional[dict[str, Any]] = None
+    markers: dict[str, list[str]] | None = None
+    volcano_filters: dict[str, Any] | None = None
 
 
 class SessionSummary(BaseModel):
@@ -208,22 +209,22 @@ class ProcessingStepStatus(BaseModel):
     name: str
     status: str = Field(..., pattern=r"^(pending|in_progress|completed|failed)$")
     progress: int = Field(default=0, ge=0, le=100)
-    message: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
+    message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
 
 
 class ProcessingStatus(BaseModel):
     """Complete processing status for a session."""
 
     state: SessionState
-    current_step: Optional[int] = None
-    step_name: Optional[str] = None
+    current_step: int | None = None
+    step_name: str | None = None
     progress: int = Field(default=0, ge=0, le=100)
     steps: list[ProcessingStepStatus] = Field(default_factory=list)
-    started_at: Optional[datetime] = None
-    estimated_completion: Optional[datetime] = None
-    error_message: Optional[str] = None
-    queue_position: Optional[int] = None
-    queue_length: Optional[int] = None
+    started_at: datetime | None = None
+    estimated_completion: datetime | None = None
+    error_message: str | None = None
+    queue_position: int | None = None
+    queue_length: int | None = None

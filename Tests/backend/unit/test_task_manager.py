@@ -1,18 +1,15 @@
 """Tests for TaskManager — centralized background computation manager."""
 
 import asyncio
-import time
 import threading
+import time
 
 import pytest
-
 from app.services.task_manager import (
-    TaskManager,
-    TaskKind,
-    TaskInfo,
     TaskCancelledError,
+    TaskKind,
+    TaskManager,
     TaskTimeoutError,
-    task_manager,
 )
 
 
@@ -33,6 +30,7 @@ def test_task_manager_creates_pools():
 
 def test_task_manager_semaphore_size():
     import os
+
     tm = TaskManager()
     n_cores = os.cpu_count() or 4
     expected = max(1, n_cores // 2)
@@ -62,6 +60,7 @@ async def test_per_session_serialization():
             time.sleep(delay)
             order.append(f"{label}-end")
             return label
+
         return await tm.submit("sess-1", TaskKind.COMPUTE, fn, label=label)
 
     task_a = asyncio.create_task(run("a", 0.05))
@@ -85,6 +84,7 @@ async def test_cross_session_parallel():
             started.append(label)
             time.sleep(delay)
             return label
+
         return await tm.submit(session_id, TaskKind.COMPUTE, fn, label=label)
 
     task_1 = asyncio.create_task(run("sess-A", "A", 0.1))
@@ -115,7 +115,13 @@ async def test_cancel_queued_task():
     assert blocking_started.wait(timeout=2), "blocker should start within 2s"
 
     task_queued = asyncio.create_task(
-        tm.submit("sess-1", TaskKind.COMPUTE, lambda: "never", label="queued", cancel_event=cancel_evt)
+        tm.submit(
+            "sess-1",
+            TaskKind.COMPUTE,
+            lambda: "never",
+            label="queued",
+            cancel_event=cancel_evt,
+        )
     )
     await asyncio.sleep(0.05)
 
@@ -142,8 +148,12 @@ async def test_timeout_event_fires():
 
     with pytest.raises(TaskTimeoutError):
         await tm.submit(
-            "sess-1", TaskKind.COMPUTE, checking_fn,
-            label="timeout-test", timeout_event=timeout_evt, timeout_seconds=0.1
+            "sess-1",
+            TaskKind.COMPUTE,
+            checking_fn,
+            label="timeout-test",
+            timeout_event=timeout_evt,
+            timeout_seconds=0.1,
         )
 
     assert checkpoint_hit.is_set()
@@ -168,12 +178,15 @@ async def test_get_status_shows_running_task():
     for _ in range(100):
         await asyncio.sleep(0)
         status = tm.get_status("sess-1")
-        if any(t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"]):
+        if any(
+            t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"]
+        ):
             break
 
     tasks = tm.get_status("sess-1")["tasks"]
-    assert any(t["kind"] == "compute" and t["status"] == "running" for t in tasks), \
-        f"Expected running task, got: {tasks}"
+    assert any(
+        t["kind"] == "compute" and t["status"] == "running" for t in tasks
+    ), f"Expected running task, got: {tasks}"
 
     done.set()
     await task
@@ -210,7 +223,7 @@ async def test_queue_position_for_blocked_session():
         await asyncio.sleep(0)
 
     pos = tm.get_queue_position("sess-1", TaskKind.COMPUTE)
-    assert pos is not None, f"Expected task_b to be queued, got pos=None"
+    assert pos is not None, "Expected task_b to be queued, got pos=None"
     assert pos >= 1
 
     done.set()

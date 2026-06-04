@@ -5,9 +5,8 @@ Defines Pydantic models for analysis configuration, processing parameters,
 and various analysis results.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -63,8 +62,8 @@ class AnalysisConfig(BaseModel):
 
     template: AnalysisTemplate = Field(default=AnalysisTemplate.MULTI_CONDITION)
     pipeline: PipelineTool = Field(default=PipelineTool.MSQROB2)
-    treatment: Optional[str] = Field(default="")
-    control: Optional[str] = Field(default="")
+    treatment: str | None = Field(default="")
+    control: str | None = Field(default="")
     organism: Organism = Field(default=Organism.HUMAN)
     remove_razor: bool = Field(default=False)
     strict_filtering: bool = Field(default=False)
@@ -72,7 +71,7 @@ class AnalysisConfig(BaseModel):
     # Multi-condition: explicit list of comparison pairs
     comparisons: list[dict[str, dict[str, str]]] = Field(default_factory=list)
     # Multi-condition: per-sample metadata (filename -> {column -> value})
-    metadata: Optional[dict[str, dict[str, str]]] = Field(default=None)
+    metadata: dict[str, dict[str, str]] | None = Field(default=None)
 
     # Advanced parameters
     pvalue_threshold: float = Field(default=0.05, ge=0.001, le=0.5)
@@ -103,14 +102,14 @@ class AnalysisConfig(BaseModel):
         default=True,
         description="Assume equal feature variances (linear summary method only)",
     )
-    msstats_name_standards: Optional[str] = Field(
+    msstats_name_standards: str | None = Field(
         default=None,
         description="Comma-separated standard protein names for GLOBALSTANDARDS normalization",
     )
     msstats_save_fitted_models: bool = Field(
         default=True, description="Save fitted linear models in groupComparison output"
     )
-    msstats_n_cores: Optional[int] = Field(
+    msstats_n_cores: int | None = Field(
         default=None,
         description="Number of CPU cores for parallel R processing. None = auto-calibrate.",
     )
@@ -150,19 +149,19 @@ class AnalysisConfig(BaseModel):
         le=10,
         description="Minimum peptides per protein for aggregation",
     )
-    msqrob2_n_cores: Optional[int] = Field(
+    msqrob2_n_cores: int | None = Field(
         default=None,
         ge=1,
         description="Number of CPU cores for parallel msqrob2 processing. None = auto-calibrate.",
     )
 
     # Batch correction (msqrob2)
-    msqrob2_batch_column: Optional[str] = Field(
+    msqrob2_batch_column: str | None = Field(
         default=None, description="Metadata column to use as batch variable in limma"
     )
 
     # Covariate columns (selected metadata columns used as model covariates)
-    covariate_columns: Optional[list[str]] = Field(
+    covariate_columns: list[str] | None = Field(
         default=None, description="Metadata column names to use as covariates"
     )
 
@@ -190,14 +189,14 @@ class AnalysisResult(BaseModel):
     """Complete analysis result."""
 
     session_id: str
-    completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # File paths
-    psm_abundances_path: Optional[str] = None
-    protein_abundances_path: Optional[str] = None
-    diff_expression_path: Optional[str] = None
-    qc_results_path: Optional[str] = None
-    gsea_results_path: Optional[str] = None
+    psm_abundances_path: str | None = None
+    protein_abundances_path: str | None = None
+    diff_expression_path: str | None = None
+    qc_results_path: str | None = None
+    gsea_results_path: str | None = None
 
     # Statistics
     total_psms: int = 0
@@ -216,6 +215,6 @@ class ProcessingProgress(BaseModel):
     step_name: str
     status: str = Field(..., pattern=r"^(started|in_progress|completed|failed)$")
     progress: int = Field(..., ge=0, le=100)
-    message: Optional[str] = None
+    message: str | None = None
     overall_progress: int = Field(..., ge=0, le=100)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))

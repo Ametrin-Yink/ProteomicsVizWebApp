@@ -84,13 +84,15 @@ class TestRunBatched:
             return (["echo", json.dumps(batch_items)], 30)
 
         with patch.object(wrapper, "_run_r_script", new_callable=AsyncMock) as mock_run:
-            asyncio.run(wrapper.run_batched(
-                items=items,
-                batch_size=10,
-                max_workers=4,
-                n_cores_cap=32,
-                build_batch_cmd=build_cmd,
-            ))
+            asyncio.run(
+                wrapper.run_batched(
+                    items=items,
+                    batch_size=10,
+                    max_workers=4,
+                    n_cores_cap=32,
+                    build_batch_cmd=build_cmd,
+                )
+            )
             assert mock_run.call_count == 1
 
     # ------------------------------------------------------------------
@@ -103,25 +105,29 @@ class TestRunBatched:
     def test_splits_into_correct_batches(self, wrapper):
         """15 items with batch_size=10 -> 2 batches via ProcessPoolExecutor."""
         items = [{"i": i} for i in range(15)]
-        asyncio.run(wrapper.run_batched(
-            items=items,
-            batch_size=10,
-            max_workers=4,
-            n_cores_cap=32,
-            build_batch_cmd=_build_success_cmd,
-        ))
+        asyncio.run(
+            wrapper.run_batched(
+                items=items,
+                batch_size=10,
+                max_workers=4,
+                n_cores_cap=32,
+                build_batch_cmd=_build_success_cmd,
+            )
+        )
 
     def test_batch_indices(self, wrapper, tmp_path):
         """Verify batch_idx values passed to build_cmd are sequential."""
         items = [{"i": i} for i in range(25)]  # 10 + 10 + 5 = 3 batches
         build_cmd = partial(_build_log_cmd, str(tmp_path))
-        asyncio.run(wrapper.run_batched(
-            items=items,
-            batch_size=10,
-            max_workers=4,
-            n_cores_cap=32,
-            build_batch_cmd=build_cmd,
-        ))
+        asyncio.run(
+            wrapper.run_batched(
+                items=items,
+                batch_size=10,
+                max_workers=4,
+                n_cores_cap=32,
+                build_batch_cmd=build_cmd,
+            )
+        )
         batch_files = sorted(
             tmp_path.glob("batch_*.json"),
             key=lambda p: int(p.stem.split("_")[1]),
@@ -135,13 +141,15 @@ class TestRunBatched:
         """Each batch receives the correct subset of items."""
         items = [{"i": i} for i in range(15)]
         build_cmd = partial(_build_log_cmd, str(tmp_path))
-        asyncio.run(wrapper.run_batched(
-            items=items,
-            batch_size=10,
-            max_workers=4,
-            n_cores_cap=32,
-            build_batch_cmd=build_cmd,
-        ))
+        asyncio.run(
+            wrapper.run_batched(
+                items=items,
+                batch_size=10,
+                max_workers=4,
+                n_cores_cap=32,
+                build_batch_cmd=build_cmd,
+            )
+        )
         batch_files = sorted(
             tmp_path.glob("batch_*.json"),
             key=lambda p: int(p.stem.split("_")[1]),
@@ -156,10 +164,12 @@ class TestRunBatched:
         """If a batch fails, the error is raised as RuntimeError."""
         items = [{"i": i} for i in range(25)]
         with pytest.raises(RuntimeError, match="batch"):
-            asyncio.run(wrapper.run_batched(
-                items=items,
-                batch_size=10,
-                max_workers=4,
-                n_cores_cap=32,
-                build_batch_cmd=_build_failure_cmd,
-            ))
+            asyncio.run(
+                wrapper.run_batched(
+                    items=items,
+                    batch_size=10,
+                    max_workers=4,
+                    n_cores_cap=32,
+                    build_batch_cmd=_build_failure_cmd,
+                )
+            )

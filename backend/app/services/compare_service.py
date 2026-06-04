@@ -9,21 +9,20 @@ import logging
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
-
-from app.core.config import settings
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import linkage, leaves_list
+from scipy.cluster.hierarchy import leaves_list, linkage
 from scipy.spatial.distance import squareform
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
+from app.core.config import settings
+
 logger = logging.getLogger("proteomics")
 
 
-def _load_de_file(session_dir: str, comparison: str) -> Optional[pd.DataFrame]:
+def _load_de_file(session_dir: str, comparison: str) -> pd.DataFrame | None:
     """Load a single Diff_Expression file for a comparison."""
     file_path = Path(session_dir) / "results" / f"Diff_Expression_{comparison}.tsv"
     # Fall back to simple format for single-comparison sessions
@@ -74,7 +73,7 @@ def _read_status(session_id: str, compute_type: str) -> dict:
     sp = _status_path(session_id, compute_type)
     if not sp.exists():
         return {"status": "idle"}
-    with open(sp, "r") as f:
+    with open(sp) as f:
         return json.load(f)
 
 
@@ -231,6 +230,70 @@ def compute_protein_similarities(
     return candidates
 
 
+def compute_correlation_matrix(
+    matrix: np.ndarray, method: str = "pearson"
+) -> np.ndarray:
+    """
+    Compute pairwise correlation matrix (n x n).
+    Entry (i,j) = correlation between protein i and protein j.
+    Higher = more correlated. Supports 'pearson' and 'spearman'.
+    """
+    n = matrix.shape[0]
+    if n < 2:
+        return np.array([[1.0]])
+    if matrix.shape[1] < 3:
+        return np.full((n, n), np.nan)
+
+    corr = np.zeros((n, n))
+    for i in range(n):
+        corr[i, i] = 1.0
+        for j in range(i + 1, n):
+            valid = ~(np.isnan(matrix[i]) | np.isnan(matrix[j]))
+            if valid.sum() < 3:
+                corr[i, j] = corr[j, i] = np.nan
+                continue
+            x = matrix[i][valid]
+            y = matrix[j][valid]
+            if method == "spearman":
+                from scipy.stats import rankdata
+
+                x = rankdata(x)
+                y = rankdata(y)
+            r = np.corrcoef(x, y)[0, 1]
+            corr[i, j] = corr[j, i] = r
+    return corr
+
+
+def compute_protein_correlations(
+    matrix: np.ndarray,
+    accessions: list[str],
+    gene_names: list[str],
+    query_idx: int,
+    method: str = "pearson",
+    top_n: int = 10,
+) -> list[dict]:
+    """
+    Compute correlation-based similarity to a query protein.
+    Higher correlation = more similar. Returns query protein first,
+    then top_n most correlated, then top_n least correlated.
+    """
+    n = matrix.shape[0]
+    corr_matrix = compute_correlation_matrix(matrix, method=method)
+    query_corrs = corr_matrix[query_idx]
+
+    result = [
+        {
+            "accession": accessions[i],
+            "gene_name": gene_names[i],
+            "correlation": float(query_corrs[i]) if not np.isnan(query_corrs[i]) else None,
+        }
+        for i in range(n)
+    ]
+    # Sort by correlation descending (higher = more correlated)
+    result.sort(key=lambda x: x["correlation"] if x["correlation"] is not None else -2.0, reverse=True)
+    return result
+
+
 def run_pca(matrix: np.ndarray) -> tuple[np.ndarray, list[float]]:
     """Run PCA, returns (n, 2) coords and per-component variance ratios."""
     col_means = np.nanmean(matrix, axis=0)
@@ -280,7 +343,7 @@ def run_tsne(matrix: np.ndarray, random_state: int = 42) -> np.ndarray:
 
 def run_cluster(
     matrix: np.ndarray, method: str = "pca"
-) -> tuple[np.ndarray, Optional[list[float]]]:
+) -> tuple[np.ndarray, list[float] | None]:
     """Dispatch to PCA/UMAP/tSNE. Returns coords and per-component variance (PCA only)."""
     if method == "umap":
         return run_umap(matrix), None
@@ -302,8 +365,8 @@ def compute_hierarchical_order(matrix: np.ndarray) -> list[int]:
     condensed = squareform(dist)
     if len(condensed) == 0:
         return list(range(matrix.shape[0]))
-    Z = linkage(condensed, method="average")
-    return leaves_list(Z).tolist()
+    z = linkage(condensed, method="average")
+    return leaves_list(z).tolist()
 
 
 def compute_venn_data(

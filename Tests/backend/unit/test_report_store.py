@@ -4,6 +4,7 @@ Unit tests for report_store service (post-redesign).
 
 import json
 from pathlib import Path
+
 import pytest
 
 
@@ -11,13 +12,17 @@ import pytest
 def temp_reports_dir(monkeypatch, tmp_path):
     """Redirect reports dir to a temp path."""
     from app.core import config
+
     monkeypatch.setattr(config.settings, "base_dir", tmp_path)
     import app.services.report_store as store
+
     monkeypatch.setattr(store, "REPORTS_DIR", tmp_path / "reports")
     yield tmp_path / "reports"
 
 
-def seed_session_json(report_dir: Path, session_id="ses_123", session_name="Experiment A"):
+def seed_session_json(
+    report_dir: Path, session_id="ses_123", session_name="Experiment A"
+):
     """Write a session.json into the report directory (simulating export copy)."""
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -30,7 +35,10 @@ def seed_session_json(report_dir: Path, session_id="ses_123", session_name="Expe
             "experiment_name": session_name,
             "conditions": ["Treatment", "Control"],
             "comparisons": [
-                {"group1": {"Condition": "Treatment"}, "group2": {"Condition": "Control"}}
+                {
+                    "group1": {"Condition": "Treatment"},
+                    "group2": {"Condition": "Control"},
+                }
             ],
         },
         "markers": {},
@@ -65,14 +73,16 @@ def test_create_report_writes_metadata(temp_reports_dir):
 
 def test_list_reports_empty(temp_reports_dir):
     from app.services.report_store import list_reports
+
     assert list_reports() == []
 
 
 def test_list_reports_sorted(temp_reports_dir):
-    from app.services.report_store import create_report, list_reports
     import time
 
-    m1 = create_report("A", "s1", "E1")
+    from app.services.report_store import create_report, list_reports
+
+    m1 = create_report("A", "s1", "E1")  # noqa: F841 — created for ordering test below
     time.sleep(0.1)
     m2 = create_report("B", "s2", "E2")
 
@@ -92,6 +102,7 @@ def test_get_report_dir(temp_reports_dir):
 
 def test_get_report_dir_nonexistent(temp_reports_dir):
     from app.services.report_store import get_report_dir
+
     assert get_report_dir("rpt_nonexistent") is None
 
 
@@ -105,6 +116,7 @@ def test_delete_report(temp_reports_dir):
 
 def test_delete_nonexistent(temp_reports_dir):
     from app.services.report_store import delete_report
+
     assert delete_report("rpt_nonexistent") is False
 
 
@@ -160,6 +172,7 @@ def test_get_report_session_json(temp_reports_dir):
 
 def test_get_report_session_nonexistent(temp_reports_dir):
     from app.services.report_store import get_report_session
+
     assert get_report_session("rpt_nonexistent") is None
 
 
@@ -176,6 +189,7 @@ def test_get_report_session_missing_file(temp_reports_dir):
 def test_patch_report_state_nonexistent(temp_reports_dir):
     """patch_report_state returns False for nonexistent report."""
     from app.services.report_store import patch_report_state
+
     assert patch_report_state("rpt_nonexistent", markers={"a": ["P1"]}) is False
 
 

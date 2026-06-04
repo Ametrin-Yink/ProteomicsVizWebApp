@@ -5,8 +5,6 @@ Defines Pydantic models for proteomics data structures including
 PSM data, protein abundances, differential expression results, and QC metrics.
 """
 
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -47,22 +45,22 @@ class DataCompleteness(BaseModel):
 class QCData(BaseModel):
     """Complete QC metrics data."""
 
-    pca: Optional[PCAResult] = None
-    pvalue_distribution: Optional[PValueDistribution] = None
-    psm_cv: Optional[dict[str, list[float]]] = None
-    protein_cv: Optional[dict[str, list[float]]] = None
-    data_completeness: Optional[list[DataCompleteness]] = None
-    psm_completeness: Optional[list[DataCompleteness]] = None
-    pvalue_distributions: Optional[dict[str, PValueDistribution]] = None
+    pca: PCAResult | None = None
+    pvalue_distribution: PValueDistribution | None = None
+    psm_cv: dict[str, list[float]] | None = None
+    protein_cv: dict[str, list[float]] | None = None
+    data_completeness: list[DataCompleteness] | None = None
+    psm_completeness: list[DataCompleteness] | None = None
+    pvalue_distributions: dict[str, PValueDistribution] | None = None
     # Summary statistics
-    total_psms: Optional[int] = None
-    avg_psms_per_sample: Optional[float] = None
-    total_proteins: Optional[int] = None
-    avg_proteins_per_sample: Optional[int] = None
-    average_cv: Optional[float] = None
-    average_protein_cv: Optional[float] = None
-    average_psm_cv: Optional[float] = None
-    completeness_rate: Optional[float] = None
+    total_psms: int | None = None
+    avg_psms_per_sample: float | None = None
+    total_proteins: int | None = None
+    avg_proteins_per_sample: int | None = None
+    average_cv: float | None = None
+    average_protein_cv: float | None = None
+    average_psm_cv: float | None = None
+    completeness_rate: float | None = None
 
 
 class GSEAResult(BaseModel):
@@ -79,15 +77,15 @@ class GSEAResult(BaseModel):
     )
     matched_genes: int = Field(..., ge=0, description="Number of matched genes")
     # Running enrichment score curve data for plotting
-    running_es_curve: Optional[list[tuple[int, float]]] = Field(
+    running_es_curve: list[tuple[int, float]] | None = Field(
         default=None, description="Running ES curve as list of (rank, es) tuples"
     )
-    rank_metric_positions: Optional[list[tuple[str, int, float]]] = Field(
+    rank_metric_positions: list[tuple[str, int, float]] | None = Field(
         default=None,
         description="Gene positions in ranked list: (gene_name, rank, metric_value)",
     )
     # Heatmap data for z-score transformed protein intensities
-    heatmap_data: Optional[dict] = Field(
+    heatmap_data: dict | None = Field(
         default=None,
         description="Heatmap data for leading edge genes: {genes: [], samples: [], z_scores: [[],...]}",
     )
@@ -124,6 +122,6 @@ class UploadedFileMetadata(BaseModel):
     filename: str
     original_filename: str
     size: int
-    content_type: Optional[str] = None
+    content_type: str | None = None
     uploaded_at: str
     path: str

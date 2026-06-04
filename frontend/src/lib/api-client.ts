@@ -205,7 +205,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (data && typeof data === 'object' && 'data' in data) {
     return (data as ApiResponse<T>).data;
   }
-  
+
   return data as T;
 }
 
@@ -223,11 +223,11 @@ export const sessionsApi = {
       body: JSON.stringify({ name, template }),
     });
     const backendSession = await handleResponse<BackendSession>(response);
-    
+
     // Use id or session_id (backend returns id)
     const sessionId = backendSession.id || backendSession.session_id || '';
     const sessionStatus = backendSession.state || backendSession.status || 'created';
-    
+
     // Map backend format to frontend format
     return {
       id: sessionId,
@@ -319,7 +319,7 @@ export const sessionsApi = {
   updateConfig: async (sessionId: string, config: SessionConfig): Promise<unknown> => {
     const response = await fetch(apiUrl(`/sessions/${sessionId}/config?_t=${Date.now()}`), {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',
       },

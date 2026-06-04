@@ -4,20 +4,21 @@ GSEA analysis service (on-demand, triggered from visualization routes).
 Performs Gene Set Enrichment Analysis using gseapy.
 """
 
-import os
 import asyncio
 import json
 import logging
+import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
-import pandas as pd
-import numpy as np
 import gseapy as gp
+import numpy as np
+import pandas as pd
 
-from app.models.data import GSEAResults, GSEAResult
-from app.models.analysis import DatabaseType, DATABASE_NAMES
-from app.services.gsea_cache_service import gsea_cache_service, GSEACacheKey
+from app.models.analysis import DATABASE_NAMES, DatabaseType
+from app.models.data import GSEAResult, GSEAResults
+from app.services.gsea_cache_service import GSEACacheKey, gsea_cache_service
 
 logger = logging.getLogger("proteomics")
 
@@ -69,8 +70,8 @@ class GSEAService:
         self,
         diff_expression_path: Path,
         output_dir: Path,
-        databases: Optional[list[DatabaseType]] = None,
-        protein_abundance_path: Optional[Path] = None,
+        databases: list[DatabaseType] | None = None,
+        protein_abundance_path: Path | None = None,
     ) -> dict[str, GSEAResults]:
         """
         Run GSEA analysis on all databases in parallel with caching.
@@ -203,7 +204,7 @@ class GSEAService:
 
         return results
 
-    def _prepare_ranked_list(self, diff_df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    def _prepare_ranked_list(self, diff_df: pd.DataFrame) -> pd.DataFrame | None:
         """
         Prepare ranked gene list for GSEA.
 
@@ -267,7 +268,7 @@ class GSEAService:
         rnk: pd.DataFrame,
         gene_set: str,
         output_dir: Path,
-        protein_df: Optional[pd.DataFrame] = None,
+        protein_df: pd.DataFrame | None = None,
         threads: int = 4,
     ) -> GSEAResults:
         """
@@ -388,7 +389,7 @@ class GSEAService:
         ranked_genes: list[str],
         lead_genes: list[str],
         nes: float,
-        ranked_metrics: Optional[list[float]] = None,
+        ranked_metrics: list[float] | None = None,
     ) -> list[tuple[int, float]]:
         """
         Generate the running enrichment score curve using the classic GSEA algorithm.
@@ -418,10 +419,10 @@ class GSEAService:
         # Create a set for faster lookup
         lead_gene_set = set(lead_genes)
 
-        N = len(ranked_genes)
-        n = len(lead_genes)
+        n_total = len(ranked_genes)
+        n_lead = len(lead_genes)
 
-        if n == 0 or N == 0 or n >= N:
+        if n_lead == 0 or n_total == 0 or n_lead >= n_total:
             return []
 
         # Classic GSEA running sum calculation
@@ -429,10 +430,10 @@ class GSEAService:
         # For weighted analysis (p=1), hits are weighted by |metric|
 
         # Use equal weights if no metrics provided
-        if ranked_metrics is None or len(ranked_metrics) != N:
-            # Equal weighting: each hit = 1/n, each miss = -1/(N-n)
-            hit_weight = 1.0 / n
-            miss_weight = -1.0 / (N - n)
+        if ranked_metrics is None or len(ranked_metrics) != n_total:
+            # Equal weighting: each hit = 1/n_lead, each miss = -1/(n_total-n_lead)
+            hit_weight = 1.0 / n_lead
+            miss_weight = -1.0 / (n_total - n_lead)
 
             running_sum = 0.0
             curve = []
@@ -473,7 +474,7 @@ class GSEAService:
                     running_sum += abs(ranked_metrics[i]) / hit_metrics_sum
                 else:
                     # Miss decrement
-                    running_sum -= 1.0 / (N - n)
+                    running_sum -= 1.0 / (n_total - n_lead)
 
                 curve.append((i, running_sum))
 
@@ -494,7 +495,7 @@ class GSEAService:
 
     def generate_heatmap_data(
         self, protein_df: pd.DataFrame, lead_genes: list[str]
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """
         Generate heatmap data for leading edge genes.
 
@@ -516,7 +517,7 @@ class GSEAService:
                 "Protein",
                 "Master_Protein_Accessions",
             ]
-            exclude_cols = set(gene_id_cols + ["PSM_Count", "psm_count"])
+            exclude_cols = {*gene_id_cols, "PSM_Count", "psm_count"}
 
             gene_col = None
             for col in gene_id_cols:
@@ -602,8 +603,8 @@ class GSEAService:
         diff_expression_path: Path,
         comparison_name: str,
         output_dir: Path,
-        databases: Optional[list[str]] = None,
-        protein_abundance_path: Optional[Path] = None,
+        databases: list[str] | None = None,
+        protein_abundance_path: Path | None = None,
         min_size: int = 15,
         max_size: int = 500,
         permutations: int = 1000,
@@ -721,7 +722,7 @@ class GSEAService:
         rnk: pd.DataFrame,
         gene_set: str,
         output_dir: Path,
-        protein_df: Optional[pd.DataFrame] = None,
+        protein_df: pd.DataFrame | None = None,
         threads: int = 4,
         min_size: int = 15,
         max_size: int = 500,
@@ -807,8 +808,8 @@ class GSEAService:
         )
 
     def get_results(
-        self, results: dict[str, GSEAResults], database: Optional[str] = None
-    ) -> Optional[GSEAResults]:
+        self, results: dict[str, GSEAResults], database: str | None = None
+    ) -> GSEAResults | None:
         """
         Get GSEA results.
 
@@ -838,7 +839,7 @@ class GSEAService:
         # from previous GSEA runs for different databases on the same comparison).
         if output_path.exists():
             try:
-                with open(output_path, "r", encoding="utf-8") as f:
+                with open(output_path, encoding="utf-8") as f:
                     existing = json.load(f)
                 existing.update(results_dict)
                 results_dict = existing

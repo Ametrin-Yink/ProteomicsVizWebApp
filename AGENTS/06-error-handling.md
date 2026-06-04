@@ -93,7 +93,7 @@ export const handleApiError = (error: unknown): never => {
   if (error instanceof APIError) {
     // Show user-friendly message
     const { addToast } = useUIStore.getState();
-    
+
     switch (error.code) {
       case 'VALIDATION_ERROR':
         addToast({
@@ -120,10 +120,10 @@ export const handleApiError = (error: unknown): never => {
           message: 'An unexpected error occurred. Please try again.',
         });
     }
-    
+
     throw error;
   }
-  
+
   // Unknown error
   logger.error('Unexpected API error:', error);
   throw new Error('An unexpected error occurred');
@@ -136,11 +136,11 @@ export const handleApiError = (error: unknown): never => {
 export const useSessionActions = () => {
   const { setError, setLoading } = useSessionStore();
   const { addToast } = useUIStore();
-  
+
   const createSession = async (config: SessionConfig) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const session = await api.sessions.create(config);
       return session;
@@ -163,7 +163,7 @@ export const useSessionActions = () => {
       setLoading(false);
     }
   };
-  
+
   return { createSession };
 };
 ```
@@ -180,7 +180,7 @@ class AppException(Exception):
     """Base application exception."""
     status_code = 500
     code = "INTERNAL_ERROR"
-    
+
     def __init__(self, message: str, details: Optional[dict] = None):
         self.message = message
         self.details = details or {}
@@ -210,7 +210,7 @@ class ProcessingError(AppException):
     """Processing pipeline failure."""
     status_code = 500
     code = "PROCESSING_ERROR"
-    
+
     def __init__(self, message: str, step: int, recoverable: bool = True):
         super().__init__(message)
         self.step = step
@@ -245,7 +245,7 @@ async def app_exception_handler(request: Request, exc: AppException):
             "message": exc.message,
         }
     )
-    
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -271,24 +271,24 @@ class ProcessingPipeline:
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.state = self.load_state()
-    
+
     async def run(self, start_from_step: Optional[int] = None):
         """Run processing pipeline with error recovery."""
         step = start_from_step or self.state.last_completed_step + 1
-        
+
         for step_num in range(step, 10):
             try:
                 result = await self.run_step(step_num)
                 self.state.mark_completed(step_num, result)
                 self.save_state()
-                
+
             except Exception as e:
                 self.state.mark_failed(step_num, str(e))
                 self.save_state()
-                
+
                 # Determine if recoverable
                 recoverable = not isinstance(e, (MemoryError, SystemError))
-                
+
                 logger.error(
                     f"Step {step_num} failed",
                     extra={
@@ -298,13 +298,13 @@ class ProcessingPipeline:
                         "recoverable": recoverable,
                     }
                 )
-                
+
                 raise ProcessingError(
                     f"Step {step_num} failed: {e}",
                     step=step_num,
                     recoverable=recoverable
                 )
-    
+
     async def run_step(self, step_num: int):
         """Run a single processing step."""
         step_runners = {
@@ -318,11 +318,11 @@ class ProcessingPipeline:
             8: self._qc_metrics,
             9: self._gsea,
         }
-        
+
         runner = step_runners.get(step_num)
         if not runner:
             raise ValueError(f"Invalid step: {step_num}")
-        
+
         return await runner()
 ```
 
@@ -337,12 +337,12 @@ class ProcessingPipeline:
 async def retry_step(session_id: str, step: int):
     """Retry a failed processing step."""
     pipeline = ProcessingPipeline(session_id)
-    
+
     # Check if step is recoverable
     state = pipeline.load_state()
     if not state.step_failed(step):
         raise ValueError(f"Step {step} did not fail")
-    
+
     # Retry from failed step
     try:
         await pipeline.run(start_from_step=step)
@@ -361,7 +361,7 @@ async def retry_step(session_id: str, step: int):
 async def recover_session(session_id: str) -> Session:
     """Recover a session after server restart."""
     session = await load_session(session_id)
-    
+
     if session.state == 'processing':
         # Check if processing actually running
         if not is_processing_running(session_id):
@@ -369,7 +369,7 @@ async def recover_session(session_id: str) -> Session:
             session.state = 'error'
             session.error = 'Processing interrupted'
             await save_session(session)
-    
+
     return session
 ```
 
@@ -386,25 +386,25 @@ async def recover_session(session_id: str) -> Session:
 ### Message Templates
 ```typescript
 const errorMessages: Record<string, (details?: any) => string> = {
-  VALIDATION_ERROR: (details) => 
+  VALIDATION_ERROR: (details) =>
     `Validation failed: ${details.field} - ${details.message}`,
-  
-  FILE_TOO_LARGE: () => 
+
+  FILE_TOO_LARGE: () =>
     'File too large. Maximum size is 500MB. Please compress or split your file.',
-  
-  INVALID_FILE_FORMAT: (details) => 
+
+  INVALID_FILE_FORMAT: (details) =>
     `Invalid file format: ${details.reason}. Required columns: ${details.required.join(', ')}`,
-  
-  PROCESSING_ERROR: (details) => 
+
+  PROCESSING_ERROR: (details) =>
     `Processing failed at Step ${details.step} (${details.stepName}). ${details.recoverable ? 'You can retry this step.' : 'Please contact support.'}`,
-  
-  SESSION_NOT_FOUND: () => 
+
+  SESSION_NOT_FOUND: () =>
     'Session not found. It may have been deleted or expired.',
-  
-  NETWORK_ERROR: () => 
+
+  NETWORK_ERROR: () =>
     'Network error. Please check your connection and try again.',
-  
-  UNKNOWN_ERROR: () => 
+
+  UNKNOWN_ERROR: () =>
     'An unexpected error occurred. Please try again or contact support.',
 };
 ```
@@ -432,11 +432,11 @@ def setup_logging():
         }
     )
     logHandler.setFormatter(formatter)
-    
+
     logger = logging.getLogger("proteomics")
     logger.addHandler(logHandler)
     logger.setLevel(logging.INFO)
-    
+
     return logger
 
 logger = setup_logging()

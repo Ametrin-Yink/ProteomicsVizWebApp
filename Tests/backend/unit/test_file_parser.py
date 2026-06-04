@@ -4,18 +4,16 @@ Unit tests for file parsing utilities.
 Tests filename parsing, CSV column validation, and column extraction.
 """
 
-import pytest
 import pandas as pd
-from pathlib import Path
-
-from app.utils.file_parser import (
-    parse_psm_filename,
-    validate_psm_columns,
-    find_abundance_column,
-    sanitize_filename,
-    REQUIRED_COLUMNS,
-)
+import pytest
 from app.core.exceptions import InvalidFileFormatError
+from app.utils.file_parser import (
+    REQUIRED_COLUMNS,
+    find_abundance_column,
+    parse_psm_filename,
+    sanitize_filename,
+    validate_psm_columns,
+)
 
 
 class TestParsePsmFilename:

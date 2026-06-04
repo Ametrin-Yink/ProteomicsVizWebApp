@@ -4,7 +4,6 @@ Custom exception classes for the Proteomics Visualization API.
 Defines the exception hierarchy and FastAPI exception handlers.
 """
 
-from typing import Optional
 import logging
 
 logger = logging.getLogger("proteomics")
@@ -19,8 +18,8 @@ class AppException(Exception):
     def __init__(
         self,
         message: str,
-        details: Optional[dict] = None,
-        request_id: Optional[str] = None,
+        details: dict | None = None,
+        request_id: str | None = None,
     ):
         self.message = message
         self.details = details or {}
@@ -67,8 +66,8 @@ class ProcessingError(AppException):
         message: str,
         step: int,
         recoverable: bool = True,
-        details: Optional[dict] = None,
-        request_id: Optional[str] = None,
+        details: dict | None = None,
+        request_id: str | None = None,
     ):
         super().__init__(message, details, request_id)
         self.step = step

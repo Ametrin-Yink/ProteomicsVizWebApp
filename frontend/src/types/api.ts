@@ -286,7 +286,7 @@ export interface PaginationConfig {
 }
 
 // WebSocket Types
-export type WebSocketMessageType = 
+export type WebSocketMessageType =
   | 'session_update'
   | 'progress_update'
   | 'processing_complete'

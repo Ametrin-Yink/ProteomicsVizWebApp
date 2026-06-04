@@ -6,7 +6,7 @@ so API routes don't need changes.
 
 import asyncio
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from app.models.analysis import AnalysisConfig, AnalysisResult
 from app.models.session import SessionState as SessionStateEnum
@@ -23,7 +23,7 @@ class ProcessingOrchestrator:
     def __init__(self, session_id: str):
         self._session_id = session_id
         self.progress_callbacks: list[Callable] = []
-        self._cancel_event: Optional[asyncio.Event] = None
+        self._cancel_event: asyncio.Event | None = None
 
     def set_cancel_event(self, event: asyncio.Event) -> None:
         self._cancel_event = event
@@ -34,7 +34,7 @@ class ProcessingOrchestrator:
     async def process_session(
         self,
         config: AnalysisConfig,
-        websocket_callback: Optional[Callable] = None,
+        websocket_callback: Callable | None = None,
     ) -> AnalysisResult:
         engine = PipelineEngine(PIPELINES)
 

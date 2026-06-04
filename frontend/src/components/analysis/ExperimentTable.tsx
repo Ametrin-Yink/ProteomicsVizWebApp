@@ -210,7 +210,7 @@ export const ExperimentTable: React.FC = () => {
     () => Array.from(new Set(selected.flatMap((f) => f.conditions))).filter(Boolean),
     [selected]
   );
-  
+
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
     const filtered = uploadedFiles.filter((file) => {
@@ -404,12 +404,12 @@ export const ExperimentTable: React.FC = () => {
       direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
     }));
   };
-  
+
   const handleSelectAll = () => {
-    const allSelected = filteredAndSortedFiles.every((file) => 
+    const allSelected = filteredAndSortedFiles.every((file) =>
       selectedFiles.has(file.filename)
     );
-    
+
     if (allSelected) {
       filteredAndSortedFiles.forEach((file) => {
         if (selectedFiles.has(file.filename)) {
@@ -424,7 +424,7 @@ export const ExperimentTable: React.FC = () => {
       });
     }
   };
-  
+
   const areAllFilteredSelected = filteredAndSortedFiles.length > 0 &&
     filteredAndSortedFiles.every((file) => selectedFiles.has(file.filename));
 
@@ -438,7 +438,7 @@ export const ExperimentTable: React.FC = () => {
       </div>
     );
   }
-  
+
   return (
     <div data-testid="experiment-structure" className="space-y-4">
       {/* Column Manager Bar */}
@@ -533,7 +533,7 @@ export const ExperimentTable: React.FC = () => {
           {selected.length} of {uploadedFiles.length} selected
         </div>
       </div>
-      
+
       {/* Table */}
       <div className="overflow-x-auto border border-border rounded-lg">
         <table data-testid="file-table" className="min-w-full divide-y divide-border">
@@ -584,7 +584,7 @@ export const ExperimentTable: React.FC = () => {
           <tbody className="bg-background divide-y divide-border">
             {filteredAndSortedFiles.slice((page - 1) * pageSize, page * pageSize).map((file, index) => {
               const isSelected = selectedFiles.has(file.filename);
-              
+
               return (
                 <tr
                   key={file.filename}
@@ -669,7 +669,7 @@ export const ExperimentTable: React.FC = () => {
           </tbody>
         </table>
       </div>
-      
+
       {filteredAndSortedFiles.length === 0 && (
         <div className="text-center py-8 text-text-muted">
           No files match the current filters

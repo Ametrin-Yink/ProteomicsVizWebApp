@@ -2,14 +2,21 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.services.steps.group_comparison_multi import step_msstats_group_comparison
 from app.services.pipeline_engine import StepContext
+from app.services.steps.group_comparison_multi import step_msstats_group_comparison
 
 
 class FakeConfig:
-    def __init__(self, comparisons, organism="Human", treatment=None, control=None,
-                 msstats_log_base=2, msstats_save_fitted_models=True,
-                 pvalue_threshold=0.05):
+    def __init__(
+        self,
+        comparisons,
+        organism="Human",
+        treatment=None,
+        control=None,
+        msstats_log_base=2,
+        msstats_save_fitted_models=True,
+        pvalue_threshold=0.05,
+    ):
         self.comparisons = comparisons
         self.organism = organism
         self.treatment = treatment
@@ -39,9 +46,7 @@ class TestStepMsstatsBatched:
 
     @pytest.fixture
     def mock_msstats(self):
-        with patch(
-            "app.services.steps.group_comparison_multi.msstats_wrapper"
-        ) as mock:
+        with patch("app.services.steps.group_comparison_multi.msstats_wrapper") as mock:
             mock.group_comparison_multi = AsyncMock()
             mock.group_comparison_batched = AsyncMock()
             yield mock

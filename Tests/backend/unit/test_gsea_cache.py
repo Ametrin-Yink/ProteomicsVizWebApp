@@ -1,5 +1,4 @@
-import pytest
-from app.services.gsea_cache_service import gsea_cache_service, GSEACacheKey
+from app.services.gsea_cache_service import GSEACacheKey, gsea_cache_service
 
 
 class TestGSEACacheService:
@@ -20,7 +19,7 @@ class TestGSEACacheService:
 
     def test_cache_store_and_retrieve(self):
         """Test storing and retrieving cached results."""
-        from app.models.data import GSEAResults, GSEAResult
+        from app.models.data import GSEAResult, GSEAResults
 
         key = GSEACacheKey.create(["P1_STORE"], ["G1_STORE"], ("T", "C"), "GO_BP_STORE")
         result = GSEAResults(

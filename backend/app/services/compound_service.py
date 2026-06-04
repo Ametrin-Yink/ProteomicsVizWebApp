@@ -8,13 +8,13 @@ and 2D structure image generation using RDKit.
 import base64
 import io
 import logging
-from pathlib import Path
-from typing import Any, Optional
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from rdkit import Chem
-from rdkit.Chem import Draw, Descriptors, rdMolDescriptors
+from rdkit.Chem import Descriptors, Draw, rdMolDescriptors
 from rdkit.Chem.rdDepictor import Compute2DCoords
 
 from app.core.exceptions import ValidationError
@@ -28,11 +28,11 @@ class CompoundData:
 
     corp_id: str
     smiles: str
-    condition: Optional[str] = None
-    molecular_weight: Optional[float] = None
-    formula: Optional[str] = None
-    structure_svg: Optional[str] = None
-    structure_png: Optional[bytes] = None
+    condition: str | None = None
+    molecular_weight: float | None = None
+    formula: str | None = None
+    structure_svg: str | None = None
+    structure_png: bytes | None = None
 
 
 class CompoundService:
@@ -73,9 +73,9 @@ class CompoundService:
             df = pd.read_csv(file_path)
         except Exception as e:
             raise ValidationError(
-                message=f"Failed to parse compound CSV: {str(e)}",
+                message=f"Failed to parse compound CSV: {e!s}",
                 details={"file": str(file_path)},
-            )
+            ) from e
 
         if df.empty:
             raise ValidationError(
@@ -154,9 +154,7 @@ class CompoundService:
         logger.info(f"Parsed {len(compounds)} compounds from {file_path.name}")
         return compounds
 
-    def _find_column(
-        self, columns: list[str], possible_names: list[str]
-    ) -> Optional[str]:
+    def _find_column(self, columns: list[str], possible_names: list[str]) -> str | None:
         """
         Find column name matching any of the possible names (case-insensitive).
 
@@ -180,7 +178,7 @@ class CompoundService:
 
     def get_compound_for_condition(
         self, condition: str, compound_file: Path
-    ) -> Optional[CompoundData]:
+    ) -> CompoundData | None:
         """
         Get compound data for a specific condition.
 
@@ -203,7 +201,7 @@ class CompoundService:
         compounds = self._compound_cache[cache_key]
 
         # Try to find by condition first
-        for corp_id, compound in compounds.items():
+        for _corp_id, compound in compounds.items():
             if compound.condition and compound.condition.lower() == condition.lower():
                 return compound
 
@@ -222,7 +220,7 @@ class CompoundService:
 
     def generate_structure_image(
         self, smiles: str, format: str = "svg", width: int = 300, height: int = 300
-    ) -> Optional[str | bytes]:
+    ) -> str | bytes | None:
         """
         Generate 2D structure image from SMILES.
 
@@ -263,7 +261,7 @@ class CompoundService:
 
     def get_compound_with_structure(
         self, condition: str, compound_file: Path, format: str = "svg"
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get compound data with generated structure image.
 
@@ -319,7 +317,7 @@ class CompoundService:
         compounds = self.parse_compound_csv(compound_file)
 
         results = []
-        for corp_id, compound in compounds.items():
+        for _corp_id, compound in compounds.items():
             entry = {
                 "corp_id": compound.corp_id,
                 "smiles": compound.smiles,
@@ -360,7 +358,7 @@ class CompoundService:
         mol = Chem.MolFromSmiles(smiles)
         return mol is not None
 
-    def get_molecular_properties(self, smiles: str) -> Optional[dict[str, Any]]:
+    def get_molecular_properties(self, smiles: str) -> dict[str, Any] | None:
         """
         Calculate molecular properties from SMILES.
 

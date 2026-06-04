@@ -1,0 +1,30 @@
+target-version = "py312"
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # naming conventions
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade (modern syntax)
+    "B",    # bugbear (common bugs)
+    "SIM",  # simplify code
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "B008",    # FastAPI: Depends() and File() in function signatures is standard
+    "N818",    # AppException is the established name; renaming breaks entire codebase
+    "UP042",   # (str, Enum) is the established pattern; StrEnum changes MRO behavior
+    "RUF012",  # Class-level mutable defaults are intentional (e.g., REQUIRED_COLUMNS)
+]
+
+[lint.per-file-ignores]
+"Tests/**" = ["ARG001", "ARG002", "E402"]  # allow unused args + sys.path imports in tests
+"**/__init__.py" = ["F401"]                 # allow unused imports in __init__.py re-exports
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

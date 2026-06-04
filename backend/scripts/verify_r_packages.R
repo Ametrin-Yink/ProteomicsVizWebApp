@@ -39,24 +39,24 @@ cat("\n=====================================================================\n")
 if (length(missing_packages) == 0) {
     cat("\nSUCCESS: All required R packages are installed.\n")
     cat("Installed packages:", paste(installed_packages, collapse = ", "), "\n")
-    
+
     # Print version information
     cat("\nPackage versions:\n")
     for (pkg in installed_packages) {
         ver <- packageVersion(pkg)
         cat("  ", pkg, ":", as.character(ver), "\n")
     }
-    
+
     quit(status = 0)
 } else {
     cat("\nERROR: Missing required packages:\n")
     for (pkg in missing_packages) {
         cat("  -", pkg, "\n")
     }
-    
+
     cat("\nTo install missing packages, run:\n")
     cat("  Rscript -e \"if (!require('BiocManager', quietly = TRUE)) install.packages('BiocManager')\"\n")
     cat("  Rscript -e \"BiocManager::install(c('", paste(missing_packages, collapse = "', '"), "'))\"\n")
-    
+
     quit(status = 1)
 }

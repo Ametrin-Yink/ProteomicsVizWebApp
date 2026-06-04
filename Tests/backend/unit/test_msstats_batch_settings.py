@@ -1,4 +1,5 @@
 import os
+
 import pytest
 from app.core.config import Settings
 
@@ -24,22 +25,28 @@ class TestMsstatsBatchSettings:
         expected = min(cpu // 2, 32)
         assert settings.msstats_max_workers == expected
 
-    @pytest.mark.parametrize("env_val,expected", [
-        ("5", 5),
-        ("20", 20),
-        ("1", 1),
-    ])
+    @pytest.mark.parametrize(
+        "env_val,expected",
+        [
+            ("5", 5),
+            ("20", 20),
+            ("1", 1),
+        ],
+    )
     def test_batch_size_from_env(self, monkeypatch, env_val, expected):
         """batch_size should be overridable via env var."""
         monkeypatch.setenv("MSSTATS_BATCH_SIZE", env_val)
         settings = Settings()
         assert settings.msstats_batch_size == expected
 
-    @pytest.mark.parametrize("env_val,expected", [
-        ("8", 8),
-        ("16", 16),
-        ("1", 1),
-    ])
+    @pytest.mark.parametrize(
+        "env_val,expected",
+        [
+            ("8", 8),
+            ("16", 16),
+            ("1", 1),
+        ],
+    )
     def test_max_workers_from_env(self, monkeypatch, env_val, expected):
         """max_workers should be overridable via env var."""
         monkeypatch.setenv("MSSTATS_MAX_WORKERS", env_val)

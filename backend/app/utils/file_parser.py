@@ -4,14 +4,14 @@ CSV file parsing utilities with filename extraction.
 Handles parsing of PSM CSV files and extraction of metadata from filenames.
 """
 
-import re
 import asyncio
-from pathlib import Path
+import re
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
-import pandas as pd
 import aiofiles
+import pandas as pd
 
 from app.core.exceptions import InvalidFileFormatError
 from app.models.data import UploadedFileMetadata
@@ -90,7 +90,7 @@ class FileParser:
             raise InvalidFileFormatError(
                 message=f"Invalid CSV content in {filename}",
                 details={"filename": filename, "error": str(e)},
-            )
+            ) from e
 
         return UploadedFileMetadata(
             filename=safe_filename,
@@ -281,7 +281,7 @@ def validate_psm_columns(df: pd.DataFrame, filename: str) -> None:
                 "expected_pattern": "Abundance F{{code}} Sample",
                 "available_columns": list(columns),
             },
-        )
+        ) from None
 
 
 def extract_columns_from_csv(file_path: Path) -> list[str]:
@@ -301,7 +301,7 @@ def extract_columns_from_csv(file_path: Path) -> list[str]:
         raise InvalidFileFormatError(
             message=f"Failed to read CSV columns: {file_path.name}",
             details={"filename": file_path.name, "error": str(e)},
-        )
+        ) from e
 
 
 def parse_compound_csv(file_path: Path) -> pd.DataFrame:
@@ -324,7 +324,7 @@ def parse_compound_csv(file_path: Path) -> pd.DataFrame:
         raise InvalidFileFormatError(
             message=f"Failed to read compound CSV: {file_path.name}",
             details={"filename": file_path.name, "error": str(e)},
-        )
+        ) from e
 
     # Check for required columns (case-insensitive)
     columns_lower = [col.lower() for col in df.columns]

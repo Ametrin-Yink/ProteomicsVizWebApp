@@ -2,8 +2,6 @@
 
 import subprocess
 
-import pytest
-
 from app.core.config import settings
 from app.core.exceptions import RScriptError
 from app.models.analysis import PipelineTool

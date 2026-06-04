@@ -5,61 +5,53 @@ Verifies: step count, per-step timeouts, wrapper config serialization,
 RDS checkpoint behavior, heartbeat logging, and timeout retry.
 """
 
-import asyncio
 import json
-import subprocess
-from pathlib import Path
-
-import pytest
 
 from app.core.config import settings
 from app.models.analysis import AnalysisConfig, AnalysisTemplate, PipelineTool
 from app.services.msqrob2_wrapper import msqrob2_wrapper
-from app.services.pipeline_engine import PipelineDefinition, PipelineStep, PipelineEngine, StepContext
 from app.services.steps import (
-    step_combine_replicates,
-    step_generate_unique_psm,
-    step_remove_razor,
-    step_remove_low_quality_default,
-    step_filter_criteria_default,
-    step_protein_abundance_msqrob2,
     step_multi_condition_de,
-    step_qc_metrics,
+    step_protein_abundance_msqrob2,
 )
 
 
 class TestMsqrob2PipelineStructure:
     """Verify msqrob2 pipeline definition is correctly structured."""
 
-    def test_eight_steps(self):
-        """Pipeline has exactly 8 steps."""
+    def test_five_steps(self):
+        """Pipeline has exactly 5 steps."""
         from app.services.pipeline_registry import PIPELINES
+
         pipeline = PIPELINES[PipelineTool.MSQROB2]
-        assert len(pipeline.steps) == 8
+        assert len(pipeline.steps) == 5
 
     def test_step_numbers_sequential(self):
-        """Steps are numbered 1 through 8."""
+        """Steps are numbered 1 through 5."""
         from app.services.pipeline_registry import PIPELINES
+
         pipeline = PIPELINES[PipelineTool.MSQROB2]
         numbers = [s.number for s in pipeline.steps]
-        assert numbers == list(range(1, 9))
+        assert numbers == list(range(1, 6))
 
-    def test_step_6_is_msqrob2(self):
-        """Step 6 uses msqrob2 handler."""
+    def test_step_3_is_protein_abundance(self):
+        """Step 3 uses msqrob2 protein abundance handler."""
         from app.services.pipeline_registry import PIPELINES
-        pipeline = PIPELINES[PipelineTool.MSQROB2]
-        step6 = pipeline.steps[5]
-        assert step6.number == 6
-        assert "msqrob2" in step6.display_name.lower()
-        assert step6.handler == step_protein_abundance_msqrob2
 
-    def test_step_7_is_msqrob2(self):
-        """Step 7 uses msqrob2 handler."""
-        from app.services.pipeline_registry import PIPELINES
         pipeline = PIPELINES[PipelineTool.MSQROB2]
-        step7 = pipeline.steps[6]
-        assert step7.number == 7
-        assert step7.handler == step_multi_condition_de
+        step3 = pipeline.steps[2]
+        assert step3.number == 3
+        assert "msqrob2" in step3.display_name.lower() or "protein" in step3.display_name.lower()
+        assert step3.handler == step_protein_abundance_msqrob2
+
+    def test_step_4_is_multi_condition_de(self):
+        """Step 4 uses msqrob2 multi-condition DE handler."""
+        from app.services.pipeline_registry import PIPELINES
+
+        pipeline = PIPELINES[PipelineTool.MSQROB2]
+        step4 = pipeline.steps[3]
+        assert step4.number == 4
+        assert step4.handler == step_multi_condition_de
 
 
 class TestMsqrob2Config:
@@ -121,7 +113,10 @@ class TestMsqrob2Timeouts:
 
     def test_timeouts_are_distinct(self):
         """Step 6 and Step 7 have different timeout settings."""
-        assert settings.r_msqrob2_data_process_timeout != settings.r_msqrob2_group_comparison_timeout
+        assert (
+            settings.r_msqrob2_data_process_timeout
+            != settings.r_msqrob2_group_comparison_timeout
+        )
 
 
 class TestMsqrob2TimeoutRetry:
@@ -130,11 +125,13 @@ class TestMsqrob2TimeoutRetry:
     def test_timeout_expired_detection(self):
         """subprocess.TimeoutExpired is detectable."""
         import subprocess as sp
+
         assert issubclass(sp.TimeoutExpired, sp.SubprocessError)
 
     def test_wrapper_has_timeout_multiplier_param(self):
         """Wrapper methods accept timeout_multiplier."""
         import inspect
+
         sig = inspect.signature(msqrob2_wrapper.data_process)
         assert "timeout_multiplier" in sig.parameters
         sig2 = inspect.signature(msqrob2_wrapper.group_comparison_multi)
@@ -147,12 +144,14 @@ class TestMsqrob2WrapperAttributes:
     def test_has_rds_parameter(self):
         """data_process accepts rds_output parameter."""
         import inspect
+
         sig = inspect.signature(msqrob2_wrapper.data_process)
         assert "rds_output" in sig.parameters
 
     def test_group_comparison_accepts_rds(self):
         """group_comparison_multi accepts rds_file parameter."""
         import inspect
+
         sig = inspect.signature(msqrob2_wrapper.group_comparison_multi)
         assert "rds_file" in sig.parameters
 
@@ -195,18 +194,21 @@ class TestMSstatsUnaffected:
 
     def test_msstats_pipeline_still_registered(self):
         from app.services.pipeline_registry import PIPELINES
+
         assert PipelineTool.MSSTATS in PIPELINES
 
     def test_msstats_step_6_unchanged(self):
         from app.services.pipeline_registry import PIPELINES
         from app.services.steps import step_msstats_protein_abundance
+
         pipeline = PIPELINES[PipelineTool.MSSTATS]
-        step6 = [s for s in pipeline.steps if s.number == 6][0]
+        step6 = next(s for s in pipeline.steps if s.number == 6)
         assert step6.handler == step_msstats_protein_abundance
 
     def test_msstats_step_7_unchanged(self):
         from app.services.pipeline_registry import PIPELINES
         from app.services.steps import step_msstats_group_comparison
+
         pipeline = PIPELINES[PipelineTool.MSSTATS]
-        step7 = [s for s in pipeline.steps if s.number == 7][0]
+        step7 = next(s for s in pipeline.steps if s.number == 7)
         assert step7.handler == step_msstats_group_comparison

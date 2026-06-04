@@ -1,10 +1,6 @@
-# =============================================================================
-# Proteomics Visualization Web App - Root .gitignore
-# =============================================================================
+# Proteomics Visualization Web App — .gitignore
 
-# -----------------------------------------------------------------------------
-# Global - OS Generated Files
-# -----------------------------------------------------------------------------
+# --- OS generated ---
 .DS_Store
 .DS_Store?
 ._*
@@ -14,305 +10,132 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# -----------------------------------------------------------------------------
-# Global - Editor/IDE Files
-# -----------------------------------------------------------------------------
-# VS Code
+# --- Editor / IDE ---
 .vscode/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 *.code-workspace
-
-# JetBrains (PyCharm, WebStorm, etc.)
 .idea/
 *.iml
 *.iws
 *.ipr
-
-# Vim/Neovim
 *.swp
 *.swo
 *~
-
-# Emacs
-*~
 .#*
-
-# Sublime Text
 *.sublime-project
 *.sublime-workspace
 
-# -----------------------------------------------------------------------------
-# Global - Logs and Databases
-# -----------------------------------------------------------------------------
-*.log
-*.sql
-*.sqlite
-*.sqlite3
-
-# -----------------------------------------------------------------------------
-# Global - Environment Files
-# -----------------------------------------------------------------------------
+# --- Environment ---
 .env
-.env.local
-.env.*.local
-.env.development
-.env.test
-.env.production
+.env.*
+!.env.example
 
-# -----------------------------------------------------------------------------
-# Node.js / Frontend (Next.js)
-# -----------------------------------------------------------------------------
+# --- Node / Next.js ---
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# Next.js build output
+.npm/
 .next/
 out/
-build/
 dist/
-
-# Coverage reports
-coverage/
-.nyc_output/
-
-# TypeScript
 *.tsbuildinfo
 next-env.d.ts
-
-# Package managers
-.pnp
-.pnp.js
-.yarn-integrity
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
-
-# Vercel
+.pnp
+.pnp.js
 .vercel
 
-# -----------------------------------------------------------------------------
-# Python / Backend (FastAPI)
-# -----------------------------------------------------------------------------
-# Virtual environments
+# --- Python ---
 .venv/
 venv/
-ENV/
-env/
-env.bak/
-venv.bak/
-
-# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-
-# Distribution / packaging
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-!frontend/src/lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
 .tox/
 .nox/
 .coverage
 .coverage.*
-.cache
-nosetests.xml
+htmlcov/
 coverage.xml
-*.cover
-*.py,cover
+nosetests.xml
 .hypothesis/
-.pytest_cache/
-
-# Jupyter Notebook
 .ipynb_checkpoints
+.ruff_cache/
 
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath
-*.sage.py
-
-# Environments (already covered above, but explicit for Python)
-.env
-.venv
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# -----------------------------------------------------------------------------
-# R Language
-# -----------------------------------------------------------------------------
-# R history and session data
+# --- R ---
 .Rhistory
-.Rapp.history
 .RData
 .Ruserdata
-
-# RStudio
-.Rproj.user/
-*.Rproj
-
-# R packages
 .Renviron
 
-# -----------------------------------------------------------------------------
-# Project Specific
-# -----------------------------------------------------------------------------
-# Session data (runtime generated)
+# --- Project: runtime data ---
 sessions/
 backend/sessions/
-*.session
-
-# Reports (runtime generated)
 backend/reports/
-
-# Uploaded files (user data)
 uploads/
 backend/uploads/
 
-# Generated reports
-/reports
-*.pdf
-!docs/examples/*.pdf
-
-# Test artifacts
+# --- Project: test artifacts ---
 test-results/
 playwright-report/
-playwright/.cache/
-.playwright-mcp/
-
-# Sample data (large real-world PSM files — not needed for repo functionality)
-# Clone users can use Tests/fixtures/ for testing or add their own data
-SampleData/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-*.temp
-*.bak
-*.backup
-
-# Test screenshots (generated during test runs)
 Tests/screenshots/
 Tests/downloads/
-test-screenshots/
+Tests/node_modules/
+Tests/__pycache__/
+.playwright-mcp/
+frontend/test-results/
 
-# Backend logs
-backend.log
-backend/logs/
+# --- Project: logs ---
 *.log
+!frontend/src/**/*.log
 
-# Local configuration overrides
-config.local.yaml
-config.local.yml
-settings.local.json
+# --- Project: sample / test data ---
+SampleData/
+backend/test_upload/
 
-# -----------------------------------------------------------------------------
-# Security - Never Commit
-# -----------------------------------------------------------------------------
-# Certificates and keys
+# --- Project: security ---
 *.pem
 *.key
 *.crt
 *.csr
 *.p12
 *.pfx
-
-# Secrets
-secrets.json
-secrets.yaml
-secrets.yml
+secrets.*
 *.secret
 
-# API keys and tokens
-api_keys.json
-.tokens
-
-# -----------------------------------------------------------------------------
-# Backup Files
-# -----------------------------------------------------------------------------
+# --- Project: temp ---
+tmp/
+temp/
+*.tmp
 *.bak
-*.backup
-*~
 *.orig
 *.save
 
-# Claude Code
+# --- Project: local config ---
+config.local.yaml
+config.local.yml
+settings.local.json
+
+# --- Claude Code ---
 .claude/
 .remember/
-
-# Local test data
-local/
-
 .worktrees/
-backend/test_upload3/PSM_DOCK5_DMSO_24h_1.csv
-backend/test_upload/PSM_DOCK5_DMSO_24h_1.csv
-PRODUCT.md
-docs/superpowers/specs/2026-04-29-ui-ux-color-consistency-design.md
-DESIGN.md
+
+# --- Design docs (local only) ---
 DESIGN.json
--w
+DESIGN.md
+PRODUCT.md
 docs/msqrob2-pipeline.md

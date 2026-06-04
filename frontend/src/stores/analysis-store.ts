@@ -152,7 +152,7 @@ export const useAnalysisStore = create<AnalysisState>()(
         }
       });
     },
-    
+
     removeUploadedFile: (filename) => {
       set((state) => {
         state.uploadedFiles = state.uploadedFiles.filter((f: ParsedFilename) => f.filename !== filename);
@@ -160,7 +160,7 @@ export const useAnalysisStore = create<AnalysisState>()(
         state.uploadProgress = state.uploadProgress.filter((p: UploadProgress) => p.filename !== filename);
       });
     },
-    
+
     setUploadProgress: (filename, progress, status) => {
       set((state) => {
         const existing = state.uploadProgress.find((p: UploadProgress) => p.filename === filename);
@@ -172,13 +172,13 @@ export const useAnalysisStore = create<AnalysisState>()(
         }
       });
     },
-    
+
     setCompoundFile: (data) => {
       set((state) => {
         state.compoundFile = data;
       });
     },
-    
+
     updateFileMetadata: (filename, updates) => {
       set((state) => {
         const file = state.uploadedFiles.find((f: ParsedFilename) => f.filename === filename);
@@ -217,7 +217,7 @@ export const useAnalysisStore = create<AnalysisState>()(
         }
       });
     },
-    
+
     selectAllFiles: () => {
       set((state) => {
         state.uploadedFiles.forEach((file: ParsedFilename) => {
@@ -225,13 +225,13 @@ export const useAnalysisStore = create<AnalysisState>()(
         });
       });
     },
-    
+
     deselectAllFiles: () => {
       set((state) => {
         state.selectedFiles.clear();
       });
     },
-    
+
     setConfig: (configUpdate) => {
       set((state) => {
         const keys = Object.keys(configUpdate) as (keyof SessionConfig)[];
@@ -240,31 +240,31 @@ export const useAnalysisStore = create<AnalysisState>()(
         }
       });
     },
-    
+
     setAvailableOrganisms: (organisms) => {
       set((state) => {
         state.availableOrganisms = organisms;
       });
     },
-    
+
     setIsUploading: (isUploading) => {
       set((state) => {
         state.isUploading = isUploading;
       });
     },
-    
+
     setIsLoadingOrganisms: (isLoading) => {
       set((state) => {
         state.isLoadingOrganisms = isLoading;
       });
     },
-    
+
     setUploadError: (error) => {
       set((state) => {
         state.uploadError = error;
       });
     },
-    
+
     reset: () => {
       set((state) => {
         state.uploadedFiles = [];
@@ -367,7 +367,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   const conditions = getConditions(state);
   const replicatesByCondition = getReplicatesByCondition(state);
   const warnings: ValidationWarning[] = [];
-  
+
   // Check at least 2 conditions
   if (conditions.length < 2 && selected.length > 0) {
     warnings.push({
@@ -376,7 +376,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
       code: 'INSUFFICIENT_CONDITIONS',
     });
   }
-  
+
   // Check config validation
   if (state.config.treatment && state.config.control && state.config.treatment === state.config.control) {
     warnings.push({
@@ -385,7 +385,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
       code: 'SAME_TREATMENT_CONTROL',
     });
   }
-  
+
   if (selected.length > 0 && state.config.treatment && !conditions.includes(state.config.treatment)) {
     warnings.push({
       type: 'error',
@@ -393,7 +393,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
       code: 'INVALID_TREATMENT',
     });
   }
-  
+
   if (selected.length > 0 && state.config.control && !conditions.includes(state.config.control)) {
     warnings.push({
       type: 'error',
@@ -401,10 +401,10 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
       code: 'INVALID_CONTROL',
     });
   }
-  
+
   const isValid = warnings.filter((w) => w.type === 'error').length === 0 &&
     selected.length > 0;
-  
+
   return {
     isValid,
     warnings,

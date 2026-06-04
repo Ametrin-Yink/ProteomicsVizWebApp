@@ -6,7 +6,7 @@ Follows the same async polling pattern as GSEA routes.
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 import numpy as np
@@ -17,19 +17,19 @@ from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.compare_service import (
-    _result_path,
     _read_status,
-    _write_status,
+    _result_path,
     _write_result,
+    _write_status,
     build_fold_change_matrix,
+    compute_hierarchical_order,
     compute_protein_similarities,
     compute_similarity_matrix,
     compute_venn_data,
-    run_cluster,
     load_pvalues_for_protein,
-    compute_hierarchical_order,
+    run_cluster,
 )
-from app.services.task_manager import task_manager, TaskKind, TaskCancelledError
+from app.services.task_manager import TaskCancelledError, TaskKind, task_manager
 
 logger = logging.getLogger("proteomics")
 
@@ -167,7 +167,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
             {
                 "status": "completed",
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
     except Exception as e:
@@ -180,7 +180,7 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
                 "status": "error",
                 "error": str(e),
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -310,7 +310,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
             {
                 "status": "completed",
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
     except Exception as e:
@@ -323,7 +323,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
                 "status": "error",
                 "error": str(e),
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -393,7 +393,7 @@ async def get_protein_correlation_data(
         raise HTTPException(
             status_code=404, detail="No results found — run protein correlation first"
         )
-    with open(rp, "r") as f:
+    with open(rp) as f:
         return json.load(f)
 
 
@@ -462,7 +462,7 @@ async def get_comparison_correlation_data(
             status_code=404,
             detail="No results found — run comparison correlation first",
         )
-    with open(rp, "r") as f:
+    with open(rp) as f:
         return json.load(f)
 
 
@@ -484,12 +484,12 @@ async def list_proteins(
 
     def _load():
         session_dir = str(settings.sessions_dir / session_id)
-        matrix, accessions, gene_names = build_fold_change_matrix(
+        _matrix, accessions, gene_names = build_fold_change_matrix(
             session_dir, comparisons
         )
         return [
             {"accession": acc, "gene_name": gn}
-            for acc, gn in zip(accessions, gene_names)
+            for acc, gn in zip(accessions, gene_names, strict=False)
         ]
 
     return await asyncio.to_thread(_load)

@@ -40,13 +40,13 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
       }
     }
   }, [conditions, template]); // eslint-disable-line react-hooks/exhaustive-deps
-  
+
   // Load organisms on mount
   useEffect(() => {
     const loadOrganisms = async () => {
       setIsLoadingOrganisms(true);
       setLoadError(null);
-      
+
       try {
         const data = await organismsApi.list();
         setOrganisms(data);
@@ -59,15 +59,15 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
         setIsLoadingOrganisms(false);
       }
     };
-    
+
     loadOrganisms();
   }, [setAvailableOrganisms, addToast]);
-  
+
   // Check if treatment and control are different
-  const isTreatmentControlValid = config.treatment !== config.control || 
-    config.treatment === '' || 
+  const isTreatmentControlValid = config.treatment !== config.control ||
+    config.treatment === '' ||
     config.control === '';
-  
+
   // Toggle switch component - Enhanced for better usability
   const Toggle: React.FC<{
     checked: boolean;
@@ -108,7 +108,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
       </button>
     </div>
   );
-  
+
   return (
     <div className="space-y-6" data-testid="config-form">
       {/* Header */}
@@ -118,13 +118,13 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
           Configure parameters for differential expression analysis
         </p>
       </div>
-      
+
       {/* Treatment/Control Setup */}
       <div className="space-y-4 p-4 bg-surface rounded-lg">
         <h4 className="text-sm font-medium text-text uppercase tracking-wider">
           Treatment / Control Setup
         </h4>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Treatment Dropdown */}
           <div className="space-y-2">
@@ -157,7 +157,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
               </p>
             )}
           </div>
-          
+
           {/* Control Dropdown */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-text">
@@ -185,7 +185,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
             </select>
           </div>
         </div>
-        
+
         {/* Validation Error */}
         {!isTreatmentControlValid && (
           <div data-testid="config-error" className="flex items-center gap-2 text-sm text-error">
@@ -194,14 +194,14 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
           </div>
         )}
       </div>
-      
+
       {/* Organism Selection */}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-text">
           Organism
           <span className="text-error ml-1">*</span>
         </label>
-        
+
         {isLoadingOrganisms ? (
           <div className="flex items-center gap-2 text-sm text-text-muted py-2">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -229,14 +229,14 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
               ))}
           </select>
         )}
-        
+
         {organisms.filter((org) => !org.available).length > 0 && (
           <p className="text-xs text-text-muted">
             {organisms.filter((org) => !org.available).length} organism(s) unavailable
           </p>
         )}
       </div>
-      
+
       {/* Remove Razor Information */}
       <div data-testid="advanced-options-toggle">
         <div className="space-y-4">
@@ -277,7 +277,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
               description="Apply stricter quality filters to the data. Improves reliability but may reduce coverage."
             />
           </div>
-          
+
           <div className="flex items-start gap-3 p-3 bg-info/5 border-info/20 rounded-lg text-sm text-secondary">
             <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <span>
@@ -393,7 +393,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
           <div className="flex justify-between">
             <span className="text-text-muted">Organism:</span>
             <span className={config.organism ? 'text-text font-medium' : 'text-text-muted'}>
-              {config.organism 
+              {config.organism
                 ? organisms.find(o => o.id === config.organism)?.display_name || config.organism
                 : 'Not selected'
               }

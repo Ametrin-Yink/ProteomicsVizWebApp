@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getTaskStatus, cancelTasks, type TaskStatus, type TaskInfo } from "@/lib/api";
 
 function getCurrentSessionId(): string | null {
@@ -34,26 +34,37 @@ export function TaskStatusBar() {
   const [expanded, setExpanded] = useState(false);
   const lastPayload = useRef("");
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const sessionId = getCurrentSessionId();
-      if (!sessionId) return;
-      const data = await getTaskStatus(sessionId);
-      const payload = JSON.stringify(data);
-      if (payload !== lastPayload.current) {
-        lastPayload.current = payload;
-        setStatus(data);
-      }
-    } catch {
-      // silently ignore fetch errors
-    }
-  }, []);
-
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
-  }, [fetchStatus]);
+    let active = true;
+    const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null };
+
+    const poll = async () => {
+      if (!active) return;
+      try {
+        const sessionId = getCurrentSessionId();
+        if (sessionId) {
+          const data = await getTaskStatus(sessionId);
+          const payload = JSON.stringify(data);
+          if (payload !== lastPayload.current) {
+            lastPayload.current = payload;
+            setStatus(data);
+          }
+        }
+      } catch {
+        // silently ignore fetch errors
+      }
+      if (active) {
+        timeoutRef.current = setTimeout(poll, 5000);
+      }
+    };
+
+    poll();
+
+    return () => {
+      active = false;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const handleCancel = async () => {
     try {

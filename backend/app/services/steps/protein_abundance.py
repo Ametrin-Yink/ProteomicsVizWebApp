@@ -34,7 +34,9 @@ async def step_protein_abundance_msqrob2(ctx: StepContext) -> None:
         rds_mtime = rds_output.stat().st_mtime
         psm_mtime = psm_input.stat().st_mtime
         if rds_mtime > psm_mtime:
-            logger.info("RDS checkpoint found (newer than input), skipping data_process")
+            logger.info(
+                "RDS checkpoint found (newer than input), skipping data_process"
+            )
             ctx.state.add_log(
                 "info", "Checkpoint found — skipping protein abundance", step=3
             )

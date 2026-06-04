@@ -10,9 +10,8 @@ This module implements the initial data processing steps:
 
 import logging
 import re
-from pathlib import Path
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 
@@ -34,7 +33,7 @@ class ProcessingConfig:
 
     remove_razor: bool = False
     strict_filtering: bool = False
-    fasta_db: Optional[Dict[str, str]] = None
+    fasta_db: dict[str, str] | None = None
 
 
 class DataProcessor:
@@ -95,7 +94,7 @@ class DataProcessor:
             replicate=int(match.group(2)),
         )
 
-    def find_abundance_column(self, columns: List[str]) -> str:
+    def find_abundance_column(self, columns: list[str]) -> str:
         """Find the abundance column in the data.
 
         Pattern: Abundance F{code} Sample (may be quoted in CSV)
@@ -120,7 +119,7 @@ class DataProcessor:
             f"Available columns: {columns}"
         )
 
-    def step1_combine_replicates(self, file_paths: List[Path]) -> pd.DataFrame:
+    def step1_combine_replicates(self, file_paths: list[Path]) -> pd.DataFrame:
         """Step 1: Combine multiple PSM files into single DataFrame.
 
         Args:
@@ -154,7 +153,7 @@ class DataProcessor:
                 )
 
             # Select required columns PLUS the abundance column
-            columns_to_keep = self.REQUIRED_COLUMNS + [abundance_col]
+            columns_to_keep = [*self.REQUIRED_COLUMNS, abundance_col]
 
             # Include Total # PSMs if present
             psm_col = "Total # PSMs"
@@ -276,7 +275,7 @@ class DataProcessor:
 
         return df
 
-    def _count_peptides_per_protein(self, df: pd.DataFrame) -> Dict[str, int]:
+    def _count_peptides_per_protein(self, df: pd.DataFrame) -> dict[str, int]:
         """Count peptides per protein across all samples (vectorized).
 
         Args:
@@ -300,9 +299,9 @@ class DataProcessor:
 
     def _select_best_protein(
         self,
-        proteins: List[str],
-        peptide_counts: Dict[str, int],
-        fasta_db: Optional[Dict[str, str]],
+        proteins: list[str],
+        peptide_counts: dict[str, int],
+        fasta_db: dict[str, str] | None,
     ) -> str:
         """Select best protein from list of candidates.
 
@@ -475,7 +474,7 @@ class DataProcessor:
 
         return df
 
-    def process(self, file_paths: List[Path], output_path: Path) -> pd.DataFrame:
+    def process(self, file_paths: list[Path], output_path: Path) -> pd.DataFrame:
         """Run complete Steps 1-5 processing pipeline.
 
         Args:

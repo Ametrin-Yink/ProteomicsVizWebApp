@@ -1,6 +1,6 @@
 ﻿/**
  * Select Component
- * 
+ *
  * Dropdown select with label and error handling.
  * Uses native select with custom styling.
  */
@@ -100,7 +100,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             {label}
           </label>
         )}
-        
+
         <div className={wrapperClasses}>
           <select
             ref={ref}
@@ -126,10 +126,10 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             ))}
           </select>
-          
+
           <ChevronDown className={iconClasses} />
         </div>
-        
+
         {(error || helperText) && (
           <p
             id={error ? errorId : helperId}
@@ -243,7 +243,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
           {label}
         </label>
       )}
-      
+
       <div className="relative">
         <button
           type="button"
@@ -265,7 +265,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
             )}
           />
         </button>
-        
+
         {isOpen && (
           <div className={dropdownClasses} role="listbox">
             {options.map((option) => (
@@ -288,7 +288,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
           </div>
         )}
       </div>
-      
+
       {(error || helperText) && (
         <p className={helperTextClasses}>
           {error || helperText}

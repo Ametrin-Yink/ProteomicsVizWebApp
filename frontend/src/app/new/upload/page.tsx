@@ -48,7 +48,7 @@ function UploadContent() {
           // Restore config from raw backend response
           const cfg = raw.config as Record<string, unknown> | null;
           if (cfg && typeof cfg === 'object') {
-            const updates: Partial<typeof config> = {};
+            const updates: Record<string, unknown> = {};
             if (typeof cfg.treatment === 'string') updates.treatment = cfg.treatment;
             if (typeof cfg.control === 'string') updates.control = cfg.control;
             if (typeof cfg.organism === 'string') updates.organism = cfg.organism;
@@ -59,7 +59,7 @@ function UploadContent() {
             if (cfg.metadata_columns && typeof cfg.metadata_columns === 'object') {
               updates.metadata_columns = cfg.metadata_columns as Record<string, Record<string, string>>;
             }
-            if (Array.isArray(cfg.comparisons)) updates.comparisons = cfg.comparisons as typeof config.comparisons;
+            if (Array.isArray(cfg.comparisons)) updates.comparisons = cfg.comparisons;
             if (Array.isArray(cfg.covariate_columns)) updates.covariate_columns = cfg.covariate_columns as string[];
             if (Object.keys(updates).length > 0) {
               setConfig(updates);

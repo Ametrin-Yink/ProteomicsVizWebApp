@@ -1,6 +1,6 @@
 /**
  * New Root Layout - Amica-style Design
- * 
+ *
  * Three-panel layout:
  * 1. Top navigation bar (dark)
  * 2. Left sidebar (30% - file operations)

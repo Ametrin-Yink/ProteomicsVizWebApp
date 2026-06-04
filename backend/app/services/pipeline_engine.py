@@ -4,23 +4,24 @@ Defines the engine, registry, and state management for template-based pipelines.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import json
-import subprocess
 import logging
+import subprocess
+import time
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Awaitable, Callable, Optional
 
 import pandas as pd
 
 from app.core.config import settings
 from app.core.exceptions import ProcessingError
 from app.models.analysis import (
+    STEP_DISPLAY_NAMES,
     AnalysisConfig,
     AnalysisResult,
     ProcessingProgress,
-    STEP_DISPLAY_NAMES,
 )
 
 logger = logging.getLogger("proteomics")
@@ -36,6 +37,8 @@ class PipelineState:
         self.session_id = session_id
         self.state_file = settings.sessions_dir / session_id / "pipeline_state.json"
         self.data = self._load()
+        self._pending_logs: list[dict] = []
+        self._last_flush_time: float = time.time()
 
     def _load(self) -> dict:
         if self.state_file.exists():
@@ -57,28 +60,48 @@ class PipelineState:
         }
 
     def save(self) -> None:
+        """Save state to disk, flushing pending logs first."""
+        self._flush()
+        self._write_to_disk()
+
+    def _write_to_disk(self) -> None:
+        """Internal: write self.data to JSON file."""
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=2)
 
-    def add_log(self, level: str, message: str, step: int = None) -> None:
+    def _flush(self) -> None:
+        """Move pending log entries into self.data['logs']."""
+        if not self._pending_logs:
+            return
         if "logs" not in self.data:
             self.data["logs"] = []
-        self.data["logs"].append(
+        self.data["logs"].extend(self._pending_logs)
+        self._pending_logs.clear()
+        self._last_flush_time = time.time()
+
+    def add_log(self, level: str, message: str, step: int | None = None) -> None:
+        """Buffer a log entry. Flush every 100 lines or 5 seconds."""
+        self._pending_logs.append(
             {
                 "level": level,
                 "message": message,
                 "step": step,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
-        self.save()
+        now = time.time()
+        if len(self._pending_logs) >= 100 or (now - self._last_flush_time) >= 5.0:
+            self.save()
 
     def get_logs(self) -> list:
-        return self.data.get("logs", [])
+        """Return all logs including pending (not yet flushed) entries."""
+        logs = list(self.data.get("logs", []))
+        logs.extend(self._pending_logs)
+        return logs
 
     def mark_started(self) -> None:
-        self.data["started_at"] = datetime.now(timezone.utc).isoformat()
+        self.data["started_at"] = datetime.now(UTC).isoformat()
         # Reset run-scoped fields for clean retry tracking
         self.data["completed_steps"] = []
         self.data["outputs"] = {}
@@ -87,7 +110,7 @@ class PipelineState:
         self.data["current_step"] = 0
         self.save()
 
-    def mark_step_started(self, step: int, message: str = None) -> None:
+    def mark_step_started(self, step: int, message: str | None = None) -> None:
         self.data["current_step"] = step
         if "logs" not in self.data:
             self.data["logs"] = []
@@ -96,13 +119,13 @@ class PipelineState:
                 "level": "info",
                 "message": message or f"Step {step} started",
                 "step": step,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
         self.save()
 
     def mark_step_completed(
-        self, step: int, output_path: Optional[Path] = None, message: str = None
+        self, step: int, output_path: Path | None = None, message: str | None = None
     ) -> None:
         if step not in self.data["completed_steps"]:
             self.data["completed_steps"].append(step)
@@ -115,7 +138,7 @@ class PipelineState:
                 "level": "info",
                 "message": message or f"Step {step} complete",
                 "step": step,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
         self.save()
@@ -126,7 +149,7 @@ class PipelineState:
         self.save()
 
     def mark_completed(self) -> None:
-        self.data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        self.data["completed_at"] = datetime.now(UTC).isoformat()
         self.save()
 
     def can_resume(self) -> bool:
@@ -284,7 +307,7 @@ class PipelineEngine:
         if ctx.state.data["started_at"]:
             start_time = datetime.fromisoformat(ctx.state.data["started_at"])
             ctx.result.processing_time_seconds = (
-                datetime.now(timezone.utc) - start_time
+                datetime.now(UTC) - start_time
             ).total_seconds()
         ctx.result.steps_completed = ctx.state.data["completed_steps"]
         ctx.state.mark_completed()

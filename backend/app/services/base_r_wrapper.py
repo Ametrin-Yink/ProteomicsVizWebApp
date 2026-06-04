@@ -6,7 +6,6 @@ Msqrob2Wrapper and MsstatsWrapper. Subclasses override two abstract
 config-building methods and pass tool-specific parameters via constructor.
 """
 
-from abc import ABC, abstractmethod
 import asyncio
 import json
 import logging
@@ -14,8 +13,9 @@ import os
 import subprocess
 import threading
 import time
+from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
 
 from app.core.config import settings
 from app.core.exceptions import RScriptError
@@ -41,7 +41,7 @@ def _execute_batch(
     batch_items: list[dict],
     batch_idx: int,
     n_cores_per: int,
-    build_batch_cmd: callable,
+    build_batch_cmd: Callable,
 ) -> dict:
     """Run a single batch subprocess (called from ProcessPoolExecutor worker).
 
@@ -213,10 +213,10 @@ class BaseRWrapper(ABC):
         try:
             data: dict = {}
             if path.exists():
-                try:
+                import contextlib
+
+                with contextlib.suppress(Exception):
                     data = json.loads(path.read_text(encoding="utf-8"))
-                except Exception:
-                    pass
             data[self._cal_prefix] = {"n_cores": n_cores, "timestamp": time.time()}
             path.write_text(json.dumps(data, indent=2), encoding="utf-8")
             logger.info("Saved calibration to disk: n_cores=%d", n_cores)
@@ -338,7 +338,7 @@ class BaseRWrapper(ABC):
         self,
         cmd: list[str],
         script_path: Path,
-        log_callback: Optional[callable] = None,
+        log_callback: Callable | None = None,
         timeout: int | None = None,
     ) -> None:
         """Run an R script via subprocess with real-time output streaming and heartbeat."""
@@ -375,13 +375,13 @@ class BaseRWrapper(ABC):
                     lines_list.append(line)
                     logger.info(f"{log_prefix}: {line}")
                     if log_cb and event_loop:
-                        try:
+                        import contextlib
+
+                        with contextlib.suppress(Exception):
                             asyncio.run_coroutine_threadsafe(
                                 log_cb(log_level, line),
                                 event_loop,
                             )
-                        except Exception:
-                            pass
                 pipe.close()
             except Exception as e:
                 logger.error(f"Error reading {log_prefix}: {e}")
@@ -410,13 +410,13 @@ class BaseRWrapper(ABC):
                 msg = f"Still working... ({count * 60}s elapsed)"
                 logger.info(f"Heartbeat: {msg}")
                 if log_callback and loop:
-                    try:
+                    import contextlib
+
+                    with contextlib.suppress(Exception):
                         asyncio.run_coroutine_threadsafe(
                             log_callback("info", msg),
                             loop,
                         )
-                    except Exception:
-                        pass
 
         heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
         heartbeat_thread.start()
@@ -605,7 +605,7 @@ class BaseRWrapper(ABC):
         worker_multiplier = n_cores + 1  # main proc + workers
         estimated_cells = n_rows * n_cols * worker_multiplier
 
-        CELL_THRESHOLD = 50_000_000_000  # 50B cells (~400GB for float64)
+        cell_threshold = 50_000_000_000  # 50B cells (~400GB for float64)
 
         logger.info(
             "Memory estimate: %d rows x %d cols x %d workers = %.0fM cells",
@@ -615,7 +615,7 @@ class BaseRWrapper(ABC):
             estimated_cells / 1e6,
         )
 
-        if estimated_cells > CELL_THRESHOLD:
+        if estimated_cells > cell_threshold:
             logger.warning(
                 "Estimated memory footprint exceeds threshold (%.0fM > 500M). "
                 "Falling back to serial processing.",
@@ -701,9 +701,9 @@ class BaseRWrapper(ABC):
         input_file: Path,
         output_file: Path,
         rds_output: Path,
-        gene_mapping_file: Optional[Path] = None,
-        config: Optional[AnalysisConfig] = None,
-        log_callback: Optional[callable] = None,
+        gene_mapping_file: Path | None = None,
+        config: AnalysisConfig | None = None,
+        log_callback: Callable | None = None,
         timeout: int | None = None,
         timeout_multiplier: int = 1,
     ) -> Path:
@@ -771,7 +771,7 @@ class BaseRWrapper(ABC):
                 message=f"Protein abundance calculation timed out after "
                 f"{effective_timeout}s",
                 details={"timeout": effective_timeout},
-            )
+            ) from None
         except RScriptError:
             raise
         except Exception as e:
@@ -780,16 +780,16 @@ class BaseRWrapper(ABC):
             raise RScriptError(
                 message=f"Protein abundance calculation failed: {e}",
                 details={"error": str(e), "traceback": traceback.format_exc()},
-            )
+            ) from e
 
     async def group_comparison_multi(
         self,
         rds_file: Path,
         output_dir: Path,
         comparisons: list[dict],
-        gene_mapping_file: Optional[Path] = None,
-        config: Optional[AnalysisConfig] = None,
-        log_callback: Optional[callable] = None,
+        gene_mapping_file: Path | None = None,
+        config: AnalysisConfig | None = None,
+        log_callback: Callable | None = None,
         timeout: int | None = None,
         timeout_multiplier: int = 1,
         **extra,
@@ -862,7 +862,7 @@ class BaseRWrapper(ABC):
             raise RScriptError(
                 message=f"DE analysis timed out after {effective_timeout}s",
                 details={"timeout": effective_timeout},
-            )
+            ) from None
         except RScriptError:
             raise
         except Exception as e:
@@ -871,7 +871,7 @@ class BaseRWrapper(ABC):
             raise RScriptError(
                 message=f"DE analysis failed: {e}",
                 details={"error": str(e), "traceback": traceback.format_exc()},
-            )
+            ) from e
 
     # ------------------------------------------------------------------
     # Hooks with defaults (subclasses may override)

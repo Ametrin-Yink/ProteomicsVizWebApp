@@ -7,9 +7,8 @@ Provides CRUD operations for session data stored as JSON files.
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import aiofiles
 
@@ -31,7 +30,7 @@ class SessionStore:
     # Class-level lock shared across all instances to prevent concurrent writes
     _save_lock: asyncio.Lock = None  # type: ignore
 
-    def __init__(self, sessions_dir: Optional[Path] = None):
+    def __init__(self, sessions_dir: Path | None = None):
         """
         Initialize session store.
 
@@ -50,7 +49,10 @@ class SessionStore:
             session_id,
             re.IGNORECASE,
         ):
-            raise ValueError(f"Invalid session ID format: {session_id}")
+            raise SessionNotFoundError(
+                message=f"Session not found: {session_id}",
+                details={"session_id": session_id},
+            )
         return self.sessions_dir / session_id
 
     def _get_session_file(self, session_id: str) -> Path:
@@ -104,14 +106,14 @@ class SessionStore:
                 details={"session_id": session_id},
             )
 
-        async with aiofiles.open(session_file, "r", encoding="utf-8") as f:
+        async with aiofiles.open(session_file, encoding="utf-8") as f:
             content = await f.read()
 
         if not content.strip():
             # File is empty — likely a race condition from a concurrent write.
             # Retry once with a short delay to let the writer finish.
             await asyncio.sleep(0.05)
-            async with aiofiles.open(session_file, "r", encoding="utf-8") as f:
+            async with aiofiles.open(session_file, encoding="utf-8") as f:
                 content = await f.read()
             if not content.strip():
                 raise SessionNotFoundError(
@@ -126,7 +128,7 @@ class SessionStore:
             raise SessionNotFoundError(
                 message=f"Session file is corrupted: {session_id}",
                 details={"session_id": session_id, "error": str(e)},
-            )
+            ) from e
 
         return Session(**data)
 
@@ -147,7 +149,7 @@ class SessionStore:
         await self.get(session.id)
 
         # Update timestamp
-        session.updated_at = datetime.now(timezone.utc)
+        session.updated_at = datetime.now(UTC)
 
         await self._save_session(session)
 
@@ -208,9 +210,7 @@ class SessionStore:
                 session_file = session_dir / "session.json"
                 if session_file.exists():
                     try:
-                        async with aiofiles.open(
-                            session_file, "r", encoding="utf-8"
-                        ) as f:
+                        async with aiofiles.open(session_file, encoding="utf-8") as f:
                             content = await f.read()
                             data = json.loads(content)
                             sessions.append(Session(**data))
@@ -221,11 +221,10 @@ class SessionStore:
                         )
 
         # Sort by updated_at descending (handle mixed naive/aware datetimes)
-        from datetime import timezone as tz
 
         sessions.sort(
             key=lambda s: (
-                s.updated_at.replace(tzinfo=tz.utc)
+                s.updated_at.replace(tzinfo=UTC)
                 if s.updated_at.tzinfo is None
                 else s.updated_at
             ),
@@ -328,7 +327,7 @@ class SessionStore:
         async with aiofiles.open(pipeline_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(state, indent=2, default=str))
 
-    async def load_pipeline_state(self, session_id: str) -> Optional[dict]:
+    async def load_pipeline_state(self, session_id: str) -> dict | None:
         """
         Load pipeline state.
 
@@ -343,13 +342,13 @@ class SessionStore:
         if not pipeline_file.exists():
             return None
 
-        async with aiofiles.open(pipeline_file, "r", encoding="utf-8") as f:
+        async with aiofiles.open(pipeline_file, encoding="utf-8") as f:
             content = await f.read()
 
         if not content.strip():
             # Retry once for race condition with concurrent write
             await asyncio.sleep(0.05)
-            async with aiofiles.open(pipeline_file, "r", encoding="utf-8") as f:
+            async with aiofiles.open(pipeline_file, encoding="utf-8") as f:
                 content = await f.read()
             if not content.strip():
                 logger.warning(f"Pipeline state file is empty: {session_id}")
@@ -362,7 +361,7 @@ class SessionStore:
             return None
 
     async def update_session_state(
-        self, session_id: str, state: SessionState, error_message: Optional[str] = None
+        self, session_id: str, state: SessionState, error_message: str | None = None
     ) -> Session:
         """
         Update session state.
@@ -393,7 +392,7 @@ class SessionStore:
         """
         from datetime import timedelta
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
         sessions = await self.list_all()
 
         cleaned = 0
@@ -438,9 +437,7 @@ class SessionStore:
                 try:
                     # Add timeout for each file read to prevent hanging
                     async with asyncio.timeout(5.0):  # 5 second timeout per file
-                        async with aiofiles.open(
-                            session_file, "r", encoding="utf-8"
-                        ) as f:
+                        async with aiofiles.open(session_file, encoding="utf-8") as f:
                             content = await f.read()
                             if not content.strip():
                                 logger.warning(f"Empty session file: {session_file}")
@@ -449,7 +446,7 @@ class SessionStore:
                             session = Session(**data)
                             sessions.append(session)
                             logger.info(f"Loaded existing session: {session.id}")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning(f"Timeout reading session file: {session_file}")
                     continue
                 except json.JSONDecodeError as e:

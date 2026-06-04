@@ -130,7 +130,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const compoundInputRef = useRef<HTMLInputElement>(null);
-  
+
   const {
     uploadedFiles,
     uploadProgress,
@@ -142,35 +142,35 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     setIsUploading,
     setUploadError,
   } = useAnalysisStore();
-  
+
   const { addToast } = useUIStore();
-  
+
   const validateFile = (file: File): string | null => {
     if (file.size > MAX_FILE_SIZE) {
       return `File too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}`;
     }
-    
+
     const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(extension)) {
       return `Invalid file type. Only ${ALLOWED_EXTENSIONS.join(', ')} files are allowed`;
     }
-    
+
     return null;
   };
-  
+
   const handleFiles = useCallback(async (files: FileList | null, isCompound: boolean = false) => {
     if (!files || files.length === 0) {
       return;
     }
-    
-    
+
+
     // Check if sessionId is available
     if (!sessionId) {
       console.error('No sessionId available');
       addToast('error', 'No session available. Please create a session first.');
       return;
     }
-    
+
     setIsUploading(true);
     setUploadError(null);
 
@@ -200,7 +200,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
       setIsUploading(false);
       return;
     }
-    
+
     try {
       if (isCompound) {
         // Handle compound file upload
@@ -210,11 +210,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
         }
         const file = validFilesAfterValidation[0];
         setUploadProgress(file.name, 0, 'uploading');
-        
+
         const result = await uploadApi.uploadCompound(sessionId, file);
         setCompoundFile(result);
         setUploadProgress(file.name, 100, 'completed');
-        
+
         addToast('success', `Compound file uploaded successfully: ${result.compounds.length} compounds`);
       } else {
         // Handle proteomics files upload - validate filename pattern
@@ -229,17 +229,17 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
           validFiles.push(file);
           setUploadProgress(file.name, 0, 'uploading');
         }
-        
+
         if (validFiles.length === 0) {
           setIsUploading(false);
           return;
         }
-        
+
         try {
           const results = await uploadApi.uploadProteomics(sessionId, validFiles, (name, progress) => {
             setUploadProgress(name, progress, progress === 100 ? 'completed' : 'uploading');
           });
-          
+
           // Process all uploaded files
           for (const uploadedFile of results) {
             try {
@@ -271,7 +271,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
               console.error('Error adding file to store:', error);
             }
           }
-          
+
           if (results.length > 0) {
             addToast('success', `Uploaded ${results.length} file(s) successfully`);
           }
@@ -291,17 +291,17 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
       setIsUploading(false);
     }
   }, [sessionId, addUploadedFile, setUploadProgress, setCompoundFile, setIsUploading, setUploadError, addToast]);
-  
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
   }, []);
-  
+
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
   }, []);
-  
+
   // Separate handler for proteomics drop zone
   const handleProteomicsDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -309,7 +309,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
     setIsDragging(false);
     handleFiles(e.dataTransfer.files, false);
   }, [handleFiles]);
-  
+
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, isCompound: boolean = false) => {
     const files = e.target.files;
     handleFiles(files, isCompound);
@@ -321,7 +321,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
       {/* Proteomics File Upload */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-text">Proteomics Data Files</h3>
-        
+
         <div
           role="button"
           tabIndex={0}
@@ -356,7 +356,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             onChange={(e) => handleFileInputChange(e, false)}
             className="hidden"
           />
-          
+
           <div className="flex flex-col items-center text-center space-y-4">
             <div className={`
               p-4 rounded-full transition-colors duration-200
@@ -367,7 +367,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                 ${isDragging ? 'text-primary' : 'text-primary/70'}
               `} />
             </div>
-            
+
             <div>
               <p className="text-base font-medium text-text">
                 {isDragging ? 'Drop files here' : 'Drag & drop files here'}
@@ -379,7 +379,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
                 Expected: <code className="px-1 py-0.5 bg-surface rounded text-text-secondary">PSM_Experiment_Cond1_Cond2_Rep.csv</code>
               </p>
             </div>
-            
+
             <div className="flex items-center gap-2 text-xs text-text-muted">
               <span>Supported: CSV files</span>
               <span>•</span>
@@ -387,7 +387,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             </div>
           </div>
         </div>
-        
+
         {/* Upload from Database Button */}
         <div className="flex items-center gap-4">
           <button
@@ -401,7 +401,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             Upload from Database
           </button>
         </div>
-        
+
         {/* Uploaded Files List — collapsible, folded by default */}
         {uploadedFiles.length > 0 && (
           <CollapsibleFileList
@@ -415,7 +415,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
       {/* Compound File Upload */}
       <div className="space-y-4 pt-6 border-t border-border">
         <h3 className="text-lg font-semibold text-text">Compound Information (Optional)</h3>
-        
+
         <div className="flex items-start gap-3 p-4 bg-info/5 rounded-lg">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-secondary">
@@ -426,7 +426,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId }) => 
             </p>
           </div>
         </div>
-        
+
         {compoundFile ? (
           <div className="flex items-center justify-between p-3 bg-success/5 border border-success/20 rounded-lg" data-testid="compound-upload-success">
             <div className="flex items-center gap-3">

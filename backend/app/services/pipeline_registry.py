@@ -4,16 +4,16 @@ from app.models.analysis import PipelineTool
 from app.services.pipeline_engine import PipelineDefinition, PipelineStep
 from app.services.steps import (
     step_combine_replicates,
-    step_generate_unique_psm,
-    step_remove_razor,
-    step_remove_low_quality_default,
     step_filter_criteria_default,
-    step_protein_abundance_msqrob2,
-    step_multi_condition_de,
-    step_msstats_protein_abundance,
+    step_generate_unique_psm,
     step_msstats_group_comparison,
+    step_msstats_protein_abundance,
+    step_multi_condition_de,
+    step_protein_abundance_msqrob2,
     step_qc_metrics,
     step_qc_metrics_msqrob2,
+    step_remove_low_quality_default,
+    step_remove_razor,
 )
 
 PIPELINES: dict[str, PipelineDefinition] = {}

@@ -1,6 +1,6 @@
 /**
  * Button Component
- * 
+ *
  * Custom button with primary/secondary color variants.
  * Uses design system colors: #E73564 (pink) and #00ADEF (cyan)
  */

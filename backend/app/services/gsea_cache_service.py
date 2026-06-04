@@ -8,7 +8,6 @@ import json
 import logging
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Optional
 
 from app.models.data import GSEAResults
 
@@ -61,7 +60,7 @@ class GSEACacheService:
         self._max_size = max_size
         self._cache: OrderedDict[str, GSEAResults] = OrderedDict()
 
-    def get(self, key: GSEACacheKey) -> Optional[GSEAResults]:
+    def get(self, key: GSEACacheKey) -> GSEAResults | None:
         """Get cached result if exists."""
         if key.key_hash in self._cache:
             # Update access order (move to end = most recently used)

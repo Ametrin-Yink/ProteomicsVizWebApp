@@ -6,17 +6,18 @@ Processing status and control endpoints.
 
 import asyncio
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_session_store
 from app.core.config import MIN_PROTEOMICS_FILES
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
-from app.models.session import ProcessingStatus, SessionState, Session
 from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism, PipelineTool
+from app.models.session import ProcessingStatus, Session, SessionState
 from app.services.processing_orchestrator import ProcessingOrchestrator
 from app.services.session_manager import session_manager
-from app.services.task_manager import task_manager, TaskKind
+from app.services.task_manager import TaskKind, task_manager
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
@@ -127,8 +128,8 @@ async def get_processing_logs(
         logger.error(f"Error getting processing logs for {session_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to load processing logs: {str(e)}",
-        )
+            detail=f"Failed to load processing logs: {e!s}",
+        ) from e
 
 
 @router.post("/{session_id}/retry")
@@ -285,7 +286,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         await session_manager.update_session_state(session_id, SessionState.PROCESSING)
 
         # Define all config fields to forward from SessionConfig to AnalysisConfig
-        _CONFIG_FORWARD_FIELDS = [
+        config_forward_fields = [
             # Core
             "treatment",
             "control",
@@ -327,7 +328,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             "pipeline": pipeline,
         }
 
-        for field in _CONFIG_FORWARD_FIELDS:
+        for field in config_forward_fields:
             if hasattr(sc, field):
                 val = getattr(sc, field)
                 if val is not None:
@@ -424,7 +425,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         # Session state already updated by orchestrator
     except Exception as e:
         logger.error(
-            f"Unexpected error during processing for session {session_id}: {str(e)}",
+            f"Unexpected error during processing for session {session_id}: {e!s}",
             extra={
                 "session_id": session_id,
                 "error": str(e),

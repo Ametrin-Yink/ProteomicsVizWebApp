@@ -1,8 +1,10 @@
 """Integration tests for BioNet API routes."""
+
 import uuid
+
 import pytest
-from httpx import AsyncClient, ASGITransport
 from app.main import app
+from httpx import ASGITransport, AsyncClient
 
 NONEXISTENT_SESSION = str(uuid.uuid4())
 
@@ -16,9 +18,7 @@ def client():
 @pytest.mark.asyncio
 async def test_bionet_status_404_for_missing_session(client):
     """GET /bionet/status should return 404 for nonexistent session."""
-    response = await client.get(
-        f"/api/sessions/{NONEXISTENT_SESSION}/bionet/status"
-    )
+    response = await client.get(f"/api/sessions/{NONEXISTENT_SESSION}/bionet/status")
     assert response.status_code == 404
 
 

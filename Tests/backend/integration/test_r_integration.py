@@ -5,8 +5,9 @@ Tests R package availability and script execution.
 """
 
 import subprocess
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 def _rscript_available() -> bool:

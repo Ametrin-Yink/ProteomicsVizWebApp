@@ -2,6 +2,7 @@
 
 import asyncio
 import gc
+
 from app.core.config import settings
 from app.services.data_processor import DataProcessor, ProcessingConfig
 

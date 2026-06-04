@@ -77,12 +77,12 @@ async def get_compound_structure(
         return compound_data
 
     except SessionNotFoundError:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found") from None
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting compound structure: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{session_id}/compounds/{condition}/image")
@@ -151,12 +151,12 @@ async def get_compound_image(
             return Response(content=structure_image, media_type="image/png")
 
     except SessionNotFoundError:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found") from None
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting compound image: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{session_id}/compounds")
@@ -202,10 +202,10 @@ async def list_compounds(
         return {"compounds": compounds}
 
     except SessionNotFoundError:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found") from None
     except Exception as e:
         logger.error(f"Error listing compounds: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/{session_id}/compounds/validate")
@@ -250,7 +250,7 @@ async def validate_compound_file(
             valid_count = 0
             invalid_count = 0
 
-            for corp_id, compound in compounds.items():
+            for _corp_id, compound in compounds.items():
                 if compound_service.validate_smiles(compound.smiles):
                     valid_count += 1
                 else:
@@ -281,10 +281,10 @@ async def validate_compound_file(
             }
 
     except SessionNotFoundError:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found") from None
     except Exception as e:
         logger.error(f"Error validating compound file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{session_id}/compounds/{condition}/properties")
@@ -346,9 +346,9 @@ async def get_compound_properties(
         }
 
     except SessionNotFoundError:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found") from None
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting compound properties: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

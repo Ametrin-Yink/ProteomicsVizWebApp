@@ -16,7 +16,7 @@ class TestBuildMsstatsBatchCmd:
         batch_items = [
             {"group1": {"Condition": "Drug"}, "group2": {"Condition": "Control"}},
         ]
-        cmd, timeout = _build_msstats_batch_cmd(
+        cmd, _timeout = _build_msstats_batch_cmd(
             rds_file_str="/tmp/test.rds",
             output_dir_str="/tmp/out",
             gene_mapping_str="",
@@ -44,7 +44,7 @@ class TestBuildMsstatsBatchCmd:
         batch_items = [
             {"group1": {"Condition": "A"}, "group2": {"Condition": "B"}},
         ]
-        cmd, timeout = _build_msstats_batch_cmd(
+        cmd, _timeout = _build_msstats_batch_cmd(
             rds_file_str="/tmp/test.rds",
             output_dir_str="/tmp/out",
             gene_mapping_str="/tmp/gene.map",
@@ -66,7 +66,7 @@ class TestBuildMsstatsBatchCmd:
     def test_build_cmd_includes_covariates(self):
         """Covariates JSON is passed as positional arg."""
         batch_items = [{"group1": {"Condition": "X"}, "group2": {"Condition": "Y"}}]
-        cmd, timeout = _build_msstats_batch_cmd(
+        cmd, _timeout = _build_msstats_batch_cmd(
             rds_file_str="/tmp/test.rds",
             output_dir_str="/tmp/out",
             gene_mapping_str="",
@@ -96,14 +96,16 @@ class TestGroupComparisonBatched:
         ]
 
         with patch.object(wrapper, "run_batched", new_callable=AsyncMock) as mock_rb:
-            asyncio.run(wrapper.group_comparison_batched(
-                rds_file=Path("/tmp/test.rds"),
-                output_dir=Path("/tmp/out"),
-                comparisons=comparisons,
-                batch_size=10,
-                max_workers=4,
-                n_cores_cap=32,
-            ))
+            asyncio.run(
+                wrapper.group_comparison_batched(
+                    rds_file=Path("/tmp/test.rds"),
+                    output_dir=Path("/tmp/out"),
+                    comparisons=comparisons,
+                    batch_size=10,
+                    max_workers=4,
+                    n_cores_cap=32,
+                )
+            )
 
         mock_rb.assert_called_once()
         call_kwargs = mock_rb.call_args.kwargs
@@ -119,9 +121,11 @@ class TestGroupComparisonBatched:
         comparisons = [{"group1": {"Condition": "A"}, "group2": {"Condition": "B"}}]
 
         with patch.object(wrapper, "run_batched", new_callable=AsyncMock):
-            result = asyncio.run(wrapper.group_comparison_batched(
-                rds_file=Path("/tmp/test.rds"),
-                output_dir=Path("/tmp/out"),
-                comparisons=comparisons,
-            ))
+            result = asyncio.run(
+                wrapper.group_comparison_batched(
+                    rds_file=Path("/tmp/test.rds"),
+                    output_dir=Path("/tmp/out"),
+                    comparisons=comparisons,
+                )
+            )
         assert result == Path("/tmp/out")

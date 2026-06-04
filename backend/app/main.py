@@ -8,20 +8,20 @@ import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import (
+    compare,
+    compounds,
+    processing,
+    reports,
     sessions,
     upload,
-    processing,
     visualization,
-    reports,
-    compounds,
-    compare,
 )
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
             app.state.session_manager.scan_existing_sessions(),
             timeout=30.0,  # 30 second timeout for session scanning
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "Session scanning timed out after 30 seconds - continuing with empty session list"
         )
@@ -177,7 +177,7 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.app_version,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -349,7 +349,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 if data.startswith("{") and '"type":"pong"' in data.replace(" ", ""):
                     continue
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send ping to check connection
                 try:
                     await websocket.send_text('{"type": "ping"}')

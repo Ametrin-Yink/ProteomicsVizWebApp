@@ -5,22 +5,21 @@ Provides high-level operations for session lifecycle management.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Dict, List
 
 from fastapi import WebSocket
 
 from app.db.session_store import SessionStore, session_store
 from app.models.session import (
     Session,
-    SessionCreate,
-    SessionUpdate,
     SessionConfig,
+    SessionCreate,
     SessionState,
+    SessionUpdate,
 )
-from app.utils.validators import validate_session_name
 from app.utils.helpers import generate_uuid
+from app.utils.validators import validate_session_name
 
 logger = logging.getLogger("proteomics")
 
@@ -32,7 +31,7 @@ class SessionManager:
     Coordinates between the session store and business logic.
     """
 
-    def __init__(self, store: Optional[SessionStore] = None):
+    def __init__(self, store: SessionStore | None = None):
         """
         Initialize session manager.
 
@@ -40,7 +39,7 @@ class SessionManager:
             store: Session store instance (defaults to global)
         """
         self.store = store or session_store
-        self._websocket_connections: Dict[str, List[WebSocket]] = {}
+        self._websocket_connections: dict[str, list[WebSocket]] = {}
 
     async def create_session(self, data: SessionCreate) -> Session:
         """
@@ -161,7 +160,7 @@ class SessionManager:
         logger.info(f"Session deleted: {session_id}", extra={"session_id": session_id})
 
     async def update_session_state(
-        self, session_id: str, state: SessionState, error_message: Optional[str] = None
+        self, session_id: str, state: SessionState, error_message: str | None = None
     ) -> Session:
         """
         Update session state.
@@ -228,7 +227,7 @@ class SessionManager:
                 timeout=60.0,  # 60 second total timeout
             )
             logger.info("Session scan completed")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Session scanning timed out after 60 seconds")
         except Exception as e:
             logger.warning(f"Session scan failed (may be first run): {e}")
@@ -342,7 +341,7 @@ class SessionManager:
             await self.unregister_websocket(session_id, websocket)
 
     async def send_log_message(
-        self, session_id: str, level: str, message: str, step: int = None
+        self, session_id: str, level: str, message: str, step: int | None = None
     ) -> None:
         """Send log message to all WebSocket connections for a session.
 
@@ -360,7 +359,7 @@ class SessionManager:
             "payload": {
                 "level": level,
                 "message": message,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "step": step,
             },
         }

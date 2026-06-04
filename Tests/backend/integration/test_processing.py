@@ -4,10 +4,11 @@ Integration tests for processing pipeline.
 Tests DataProcessor with actual file operations.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
 
 
 @pytest.fixture
@@ -284,12 +285,12 @@ class TestStep5FilterByCriteria:
                 + ["PEP4||2"] * 5,
                 "Condition": ["DMSO"] * 20,
                 "Replicate": list(range(1, 6)) * 4,
-                "Abundance": (
-                    [100.0, 200.0, 300.0, 400.0, 500.0]  # PEP1 all detected
-                    + [150.0, 250.0, 350.0, 450.0, 550.0]  # PEP2 all detected
-                    + [100.0, np.nan, np.nan, np.nan, np.nan]  # PEP3 only rep 1
-                    + [100.0, np.nan, np.nan, np.nan, np.nan]
-                ),  # PEP4 only rep 1
+                "Abundance": [
+                    *[100.0, 200.0, 300.0, 400.0, 500.0],  # PEP1 all detected
+                    *[150.0, 250.0, 350.0, 450.0, 550.0],  # PEP2 all detected
+                    *[100.0, np.nan, np.nan, np.nan, np.nan],  # PEP3 only rep 1
+                    *[100.0, np.nan, np.nan, np.nan, np.nan],
+                ],  # PEP4 only rep 1
             }
         )
 

@@ -8,14 +8,13 @@ CV analysis, intensity distributions, and data completeness.
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-from app.models.data import QCData, PCAResult, PValueDistribution, DataCompleteness
+from app.models.data import DataCompleteness, PCAResult, PValueDistribution, QCData
 
 logger = logging.getLogger("proteomics")
 
@@ -31,7 +30,7 @@ class QCCalculator:
         self,
         protein_abundances_path: Path,
         diff_expression_paths: list[Path],
-        psm_abundances_path: Optional[Path] = None,
+        psm_abundances_path: Path | None = None,
     ) -> QCData:
         """
         Calculate all QC metrics.
@@ -476,7 +475,7 @@ class QCCalculator:
         return completeness
 
     def _calculate_intensity_distributions(
-        self, protein_df: pd.DataFrame, psm_df: Optional[pd.DataFrame]
+        self, protein_df: pd.DataFrame, psm_df: pd.DataFrame | None
     ) -> dict:
         """
         Calculate intensity distributions.
@@ -581,8 +580,8 @@ class QCCalculator:
         return completeness
 
     def _calculate_avg_per_sample(
-        self, total: Optional[int], completeness: Optional[list]
-    ) -> Optional[float]:
+        self, total: int | None, completeness: list | None
+    ) -> float | None:
         """Calculate average PSMs per sample from completeness data."""
         if completeness is None or len(completeness) == 0:
             return None
@@ -612,7 +611,7 @@ class QCCalculator:
         total_present = sum(protein_df[col].notna().sum() for col in abundance_cols)
         return total_present // len(abundance_cols)
 
-    def _calculate_average_cv(self, cv_by_condition: Optional[dict]) -> Optional[float]:
+    def _calculate_average_cv(self, cv_by_condition: dict | None) -> float | None:
         """Calculate overall average CV across all conditions."""
         if cv_by_condition is None or len(cv_by_condition) == 0:
             return None
@@ -623,7 +622,7 @@ class QCCalculator:
             return None
         return round(np.mean(all_cvs), 1)  # CVs are already percentages
 
-    def _calculate_completeness_rate(self, completeness: list) -> Optional[float]:
+    def _calculate_completeness_rate(self, completeness: list) -> float | None:
         """Calculate overall completeness rate across all samples."""
         if not completeness:
             return None

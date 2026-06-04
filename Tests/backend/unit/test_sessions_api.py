@@ -2,25 +2,28 @@
 Unit tests for Sessions API routes (visualization state endpoint).
 """
 
+from datetime import UTC
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def mock_store():
     """Mock SessionStore that returns a basic session."""
-    from app.models.session import Session, SessionState
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.db.session_store import SessionStore
+    from app.models.session import Session, SessionState
 
     session = Session(
         id="test-session-id",
         name="test",
         state=SessionState.COMPLETED,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        markers=[],
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        markers={},
         volcano_filters=None,
     )
 
@@ -55,12 +58,12 @@ class TestPatchVisualizationState:
         """Can update markers without changing filters."""
         response = client_with_mock_store.patch(
             "/api/sessions/test-session-id/visualization-state",
-            json={"markers": ["P00367", "Q9Y6Q9"]},
+            json={"markers": {"default": ["P00367", "Q9Y6Q9"]}},
         )
         assert response.status_code == 200
         mock_store.update.assert_awaited_once()
         updated_session = mock_store.update.call_args[0][0]
-        assert updated_session.markers == ["P00367", "Q9Y6Q9"]
+        assert updated_session.markers == {"default": ["P00367", "Q9Y6Q9"]}
         assert updated_session.volcano_filters is None  # unchanged
 
     def test_patch_volcano_filters_only(self, client_with_mock_store, mock_store):
@@ -80,14 +83,14 @@ class TestPatchVisualizationState:
         mock_store.update.assert_awaited_once()
         updated_session = mock_store.update.call_args[0][0]
         assert updated_session.volcano_filters["foldChange"] == 2.0
-        assert updated_session.markers == []  # unchanged
+        assert updated_session.markers == {}  # unchanged
 
     def test_patch_both_fields(self, client_with_mock_store, mock_store):
         """Can update both markers and volcano_filters in one call."""
         response = client_with_mock_store.patch(
             "/api/sessions/test-session-id/visualization-state",
             json={
-                "markers": ["P00367"],
+                "markers": {"default": ["P00367"]},
                 "volcano_filters": {
                     "foldChange": 1.5,
                     "pValue": 0.05,
@@ -99,7 +102,7 @@ class TestPatchVisualizationState:
         assert response.status_code == 200
         mock_store.update.assert_awaited_once()
         updated_session = mock_store.update.call_args[0][0]
-        assert updated_session.markers == ["P00367"]
+        assert updated_session.markers == {"default": ["P00367"]}
         assert updated_session.volcano_filters["foldChange"] == 1.5
 
     def test_patch_session_not_found(self, client_with_mock_store, mock_store):
@@ -107,6 +110,6 @@ class TestPatchVisualizationState:
         mock_store.get = AsyncMock(return_value=None)
         response = client_with_mock_store.patch(
             "/api/sessions/nonexistent-id/visualization-state",
-            json={"markers": ["P00367"]},
+            json={"markers": {"default": ["P00367"]}},
         )
         assert response.status_code == 404

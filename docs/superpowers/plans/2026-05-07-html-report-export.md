@@ -2279,7 +2279,7 @@ test.describe('HTML Report Export', () => {
   test('Export button is visible on completed session visualization page', async ({ page }) => {
     // Navigate to a visualization page (requires a completed session)
     await page.goto('/analysis/visualization?session_id=test-session');
-    
+
     // Export button should exist (if session is completed)
     const exportBtn = page.getByTestId('export-report-btn');
     // Button may or may not be visible depending on session state
@@ -2287,18 +2287,18 @@ test.describe('HTML Report Export', () => {
 
   test('Export modal opens and validates name input', async ({ page }) => {
     await page.goto('/analysis/visualization?session_id=test-session');
-    
+
     const exportBtn = page.getByTestId('export-report-btn');
     if (await exportBtn.isVisible()) {
       await exportBtn.click();
-      
+
       // Modal should appear
       await expect(page.getByTestId('report-name-input')).toBeVisible();
-      
+
       // Buttons should be disabled when name is empty
       await expect(page.getByTestId('generate-weblink-btn')).toBeDisabled();
       await expect(page.getByTestId('download-zip-btn')).toBeDisabled();
-      
+
       // After entering a name, buttons should enable
       await page.getByTestId('report-name-input').fill('Test Report');
       await expect(page.getByTestId('generate-weblink-btn')).toBeEnabled();
@@ -2345,7 +2345,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 # Terminal 1
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
 
-# Terminal 2  
+# Terminal 2
 cd frontend && npm run dev
 ```
 

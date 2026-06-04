@@ -3,12 +3,13 @@ Integration tests for report API routes (post-redesign).
 """
 
 import json
-import uuid
 import shutil
-import pytest
-from httpx import AsyncClient, ASGITransport
+import uuid
 from pathlib import Path
+
+import pytest
 from app.main import app
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture
@@ -20,6 +21,7 @@ def client(monkeypatch, tmp_path):
     reports_dir.mkdir(parents=True)
 
     from app.core import config
+
     monkeypatch.setattr(config.settings, "base_dir", tmp_path)
     monkeypatch.setattr(config.settings, "sessions_dir", sessions_dir)
 
@@ -35,6 +37,7 @@ def client(monkeypatch, tmp_path):
     app.state.session_manager = session_manager
 
     import app.services.report_store as report_store
+
     monkeypatch.setattr(report_store, "REPORTS_DIR", reports_dir)
 
     transport = ASGITransport(app=app)
@@ -46,19 +49,26 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
     session_dir = sessions_dir / session_id
     session_dir.mkdir(parents=True)
 
-    (session_dir / "session.json").write_text(json.dumps({
-        "id": session_id,
-        "name": "Test Experiment",
-        "state": "completed",
-        "config": {
-            "experiment_name": "Test Experiment",
-            "comparisons": [
-                {"group1": {"C": "Trt"}, "group2": {"C": "Ctrl"}}
-            ],
-        },
-        "markers": {},
-        "volcano_filters": {"foldChange": 1, "pValue": 0.05, "adjPValue": 1, "s0": 0.1},
-    }))
+    (session_dir / "session.json").write_text(
+        json.dumps(
+            {
+                "id": session_id,
+                "name": "Test Experiment",
+                "state": "completed",
+                "config": {
+                    "experiment_name": "Test Experiment",
+                    "comparisons": [{"group1": {"C": "Trt"}, "group2": {"C": "Ctrl"}}],
+                },
+                "markers": {},
+                "volcano_filters": {
+                    "foldChange": 1,
+                    "pValue": 0.05,
+                    "adjPValue": 1,
+                    "s0": 0.1,
+                },
+            }
+        )
+    )
 
     results_dir = session_dir / "results"
     results_dir.mkdir(parents=True)
@@ -71,11 +81,15 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
         "P12345\tGENE1\t10\t15.2\t14.8\n"
     )
     (results_dir / "QC_Results.json").write_text('{"pca": {"pc1": [1,2,3]}}')
-    (results_dir / "PSM_Abundances.tsv").write_text("Sequence\tS1\tS2\nPEPTIDE\t100\t200\n")
+    (results_dir / "PSM_Abundances.tsv").write_text(
+        "Sequence\tS1\tS2\nPEPTIDE\t100\t200\n"
+    )
 
     gsea_dir = results_dir / "gsea" / "Trt_vs_Ctrl"
     gsea_dir.mkdir(parents=True)
-    (gsea_dir / "GSEA_Results.json").write_text('{"go_bp": [{"Term": "test", "P-value": 0.01}]}')
+    (gsea_dir / "GSEA_Results.json").write_text(
+        '{"go_bp": [{"Term": "test", "P-value": 0.01}]}'
+    )
 
     bionet_dir = session_dir / "bionet"
     bionet_dir.mkdir(parents=True)
@@ -95,7 +109,9 @@ async def test_list_reports_empty(client):
 @pytest.mark.asyncio
 async def test_generate_and_view_report(client):
     """End-to-end: create session, generate report, view all endpoints."""
-    sessions_dir = client._transport.app.state.session_manager.session_store.sessions_dir
+    sessions_dir = (
+        client._transport.app.state.session_manager.session_store.sessions_dir
+    )
 
     session_id = str(uuid.uuid4())
     make_completed_session_with_files(sessions_dir, session_id)
@@ -157,7 +173,9 @@ async def test_generate_and_view_report(client):
 
 @pytest.mark.asyncio
 async def test_generate_rejects_non_completed_session(client):
-    sessions_dir = client._transport.app.state.session_manager.session_store.sessions_dir
+    sessions_dir = (
+        client._transport.app.state.session_manager.session_store.sessions_dir
+    )
     session_id = str(uuid.uuid4())
     session_dir = sessions_dir / session_id
     session_dir.mkdir(parents=True)
@@ -172,7 +190,9 @@ async def test_generate_rejects_non_completed_session(client):
 
 @pytest.mark.asyncio
 async def test_report_survives_session_deletion(client):
-    sessions_dir = client._transport.app.state.session_manager.session_store.sessions_dir
+    sessions_dir = (
+        client._transport.app.state.session_manager.session_store.sessions_dir
+    )
 
     session_id = str(uuid.uuid4())
     make_completed_session_with_files(sessions_dir, session_id)

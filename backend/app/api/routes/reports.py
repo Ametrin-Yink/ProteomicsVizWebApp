@@ -16,21 +16,21 @@ stubs for now.
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from app.services.report_generator import generate_report
 from app.services.report_store import (
     create_report,
-    list_reports,
+    delete_report,
     get_report_dir,
     get_report_metadata,
     get_report_session,
+    list_reports,
     patch_report_state,
-    delete_report,
 )
-from app.services.report_generator import generate_report
 
 logger = logging.getLogger("proteomics")
 
@@ -98,7 +98,7 @@ async def generate_report_endpoint(session_id: str, request: Request):
         generate_report(session_id, metadata["report_id"])
     except ValueError as e:
         delete_report(metadata["report_id"])
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Update session_name from the session.json that was just copied in
     report_dir = get_report_dir(metadata["report_id"])
@@ -315,7 +315,7 @@ async def _report_background_gsea_run(
         "status": "running",
         "comparison": comparison,
         "databases": {db: "running" for db in databases if db in VALID_GSEA_DATABASES},
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "error": None,
     }
     gsea_output_dir.mkdir(parents=True, exist_ok=True)
@@ -429,9 +429,9 @@ async def get_report_gsea_results(
     )
 
     from app.api.routes.visualization import (
+        VALID_GSEA_DATABASES,
         create_response,
         load_gsea_results,
-        VALID_GSEA_DATABASES,
     )
 
     if database not in VALID_GSEA_DATABASES:
@@ -492,9 +492,9 @@ async def get_report_gsea_plot(
     )
 
     from app.api.routes.visualization import (
+        VALID_GSEA_DATABASES,
         create_response,
         load_gsea_results,
-        VALID_GSEA_DATABASES,
     )
 
     if database not in VALID_GSEA_DATABASES:
@@ -543,10 +543,10 @@ async def get_report_gsea_heatmap(
     )
 
     from app.api.routes.visualization import (
-        create_response,
-        load_gsea_results,
         VALID_GSEA_DATABASES,
+        create_response,
         gsea_service,
+        load_gsea_results,
     )
 
     if database not in VALID_GSEA_DATABASES:
@@ -612,7 +612,7 @@ async def _report_background_bionet_run(
     status_data: dict = {
         "status": "running",
         "comparison": request_body.get("comparison", ""),
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "error": None,
     }
     status_file = bionet_dir / "bionet_status.json"
@@ -652,7 +652,7 @@ async def _report_background_bionet_run(
         status_data["status"] = "completed"
         status_data["node_count"] = node_count
         status_data["edge_count"] = edge_count
-        status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        status_data["completed_at"] = datetime.now(UTC).isoformat()
         await asyncio.to_thread(
             lambda: status_file.write_text(
                 json.dumps(status_data, indent=2, default=str), encoding="utf-8"
@@ -805,7 +805,7 @@ def _report_compare_read_status(report_dir: Path, compute_type: str) -> dict:
     sp = _report_compare_status_path(report_dir, compute_type)
     if not sp.exists():
         return {"status": "idle"}
-    with open(sp, "r", encoding="utf-8") as f:
+    with open(sp, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -843,6 +843,7 @@ def _get_report_comparisons_from_dir(report_dir: Path) -> list[str]:
 def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
     """Background task: compute protein correlation analysis for a report."""
     import numpy as np
+
     from app.services.compare_service import (
         build_fold_change_matrix,
         compute_protein_similarities,
@@ -928,7 +929,7 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
             {
                 "status": "completed",
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
     except Exception as e:
@@ -941,7 +942,7 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
                 "status": "error",
                 "error": str(e),
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -949,12 +950,13 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
 def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
     """Background task: compute comparison correlation analysis for a report."""
     import numpy as np
+
     from app.services.compare_service import (
-        build_fold_change_matrix,
-        compute_similarity_matrix,
-        compute_hierarchical_order,
-        run_cluster,
         _load_de_file,
+        build_fold_change_matrix,
+        compute_hierarchical_order,
+        compute_similarity_matrix,
+        run_cluster,
     )
 
     compute_type = "comparison-correlation"
@@ -1076,7 +1078,7 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
             {
                 "status": "completed",
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
     except Exception as e:
@@ -1089,7 +1091,7 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
                 "status": "error",
                 "error": str(e),
                 "started_at": current_status.get("started_at"),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -1126,7 +1128,7 @@ async def run_report_protein_correlation(report_id: str, request: Request):
             "protein-correlation",
             {
                 "status": "running",
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -1180,7 +1182,7 @@ async def run_report_comparison_correlation(report_id: str, request: Request):
             "comparison-correlation",
             {
                 "status": "running",
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -1245,12 +1247,12 @@ async def get_report_compare_proteins(report_id: str):
     from app.services.compare_service import build_fold_change_matrix
 
     def _load():
-        matrix, accessions, gene_names = build_fold_change_matrix(
+        _matrix, accessions, gene_names = build_fold_change_matrix(
             str(report_dir), comparisons
         )
         return [
             {"accession": acc, "gene_name": gn}
-            for acc, gn in zip(accessions, gene_names)
+            for acc, gn in zip(accessions, gene_names, strict=False)
         ]
 
     return await asyncio.to_thread(_load)

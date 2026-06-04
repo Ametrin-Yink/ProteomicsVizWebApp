@@ -6,14 +6,12 @@ Uses pydantic-settings for environment-based configuration with .env file suppor
 
 import os
 from pathlib import Path
-from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 # Pipeline constants
-# MIN_PROTEOMICS_FILES enforces a stricter check (3 replicates × 2 conditions = 6 minimum)
+# MIN_PROTEOMICS_FILES enforces a stricter check (3 replicates x 2 conditions = 6 minimum)
 # than session_manager.py's per-condition validation. This provides defense-in-depth
 # for the most common experimental design while still allowing the per-condition
 # validator to handle edge cases with more conditions.
@@ -74,7 +72,7 @@ class Settings(BaseSettings):
     )
 
     # CORS settings
-    cors_origins: List[str] = Field(
+    cors_origins: list[str] = Field(
         default=[
             "http://localhost:3000",
             "http://127.0.0.1:3000",
@@ -178,7 +176,7 @@ class Settings(BaseSettings):
 
     @field_validator("sessions_dir", "protein_database_dir", mode="before")
     @classmethod
-    def resolve_path(cls, v: Optional[Path | str]) -> Path:
+    def resolve_path(cls, v: Path | str | None) -> Path:
         """Ensure paths are resolved Path objects."""
         if v is None:
             return v

@@ -5,7 +5,6 @@ Scans the protein database directory for available organisms.
 """
 
 from pathlib import Path
-from typing import List, Dict
 
 
 class OrganismScanner:
@@ -14,7 +13,7 @@ class OrganismScanner:
     def __init__(self, protein_database_dir: Path):
         self.protein_database_dir = Path(protein_database_dir)
 
-    def scan(self) -> List[Dict[str, str]]:
+    def scan(self) -> list[dict[str, str]]:
         """
         Scan for available organisms.
 
@@ -67,7 +66,7 @@ class OrganismScanner:
 
         return organisms
 
-    def get_organism_path(self, organism_id: str) -> Dict[str, Path]:
+    def get_organism_path(self, organism_id: str) -> dict[str, Path]:
         """
         Get paths for an organism.
 

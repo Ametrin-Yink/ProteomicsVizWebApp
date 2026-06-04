@@ -2,12 +2,12 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from app.core.config import settings
-from app.models.analysis import Organism
 from app.core.exceptions import ProcessingError
+from app.models.analysis import Organism
 
 logger = logging.getLogger("proteomics")
 

@@ -6,8 +6,8 @@ to session.json and restored on session retrieval.
 """
 
 import pytest
-from app.models.session import Session, SessionState, SessionConfig, SessionFiles
 from app.db.session_store import SessionStore
+from app.models.session import Session, SessionConfig, SessionFiles, SessionState
 
 
 @pytest.fixture
@@ -25,10 +25,9 @@ def store(sessions_dir):
 @pytest.fixture
 def sample_session():
     """Create a sample completed session."""
-    from datetime import datetime, timezone
 
     return Session(
-        id="integration-test-session",
+        id="550e8400-e29b-41d4-a716-446655440000",
         name="Integration Test",
         template="multi_condition_comparison",
         state=SessionState.COMPLETED,
@@ -53,12 +52,12 @@ class TestVisualizationStatePersistence:
 
         # Get session, add markers
         session = await store.get(sample_session.id)
-        session.markers = ["P00367", "Q9Y6Q9"]
+        session.markers = {"default": ["P00367", "Q9Y6Q9"]}
         await store.update(session)
 
         # Restore and verify
         restored = await store.get(sample_session.id)
-        assert restored.markers == ["P00367", "Q9Y6Q9"]
+        assert restored.markers == {"default": ["P00367", "Q9Y6Q9"]}
 
     @pytest.mark.asyncio
     async def test_save_and_restore_volcano_filters(self, store, sample_session):
@@ -86,7 +85,7 @@ class TestVisualizationStatePersistence:
         await store.create(sample_session)
 
         session = await store.get(sample_session.id)
-        session.markers = ["P00367"]
+        session.markers = {"default": ["P00367"]}
         session.volcano_filters = {
             "foldChange": 1.5,
             "pValue": 0.05,
@@ -103,6 +102,6 @@ class TestVisualizationStatePersistence:
             data = json.load(f)
 
         assert "markers" in data
-        assert data["markers"] == ["P00367"]
+        assert data["markers"] == {"default": ["P00367"]}
         assert "volcano_filters" in data
         assert data["volcano_filters"]["foldChange"] == 1.5

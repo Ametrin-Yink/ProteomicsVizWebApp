@@ -5,22 +5,23 @@ CRUD operations for analysis sessions.
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from datetime import UTC, datetime
 
-from app.models.session import (
-    Session,
-    SessionCreate,
-    SessionUpdate,
-    SessionSummary,
-    SessionState,
-    SessionConfig,
-    SessionFiles,
-    VisualizationStateUpdate,
-)
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import ValidationError
+
 from app.api.deps import get_session_store
 from app.db.session_store import SessionStore
+from app.models.session import (
+    Session,
+    SessionConfig,
+    SessionCreate,
+    SessionFiles,
+    SessionState,
+    SessionSummary,
+    SessionUpdate,
+    VisualizationStateUpdate,
+)
 
 router = APIRouter()
 
@@ -38,15 +39,15 @@ async def create_session(
         state=SessionState.CREATED,
         config=None,
         files=SessionFiles(),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     await store.create(session)
     return session
 
 
-@router.get("", response_model=List[SessionSummary])
+@router.get("", response_model=list[SessionSummary])
 async def list_sessions(store: SessionStore = Depends(get_session_store)):
     """List all sessions."""
     sessions = await store.list_all()
@@ -112,7 +113,7 @@ async def delete_session(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found",
-        )
+        ) from None
     return None
 
 
@@ -134,7 +135,15 @@ async def update_session_config(
 
     body = await request.json()
     pipeline = body.pop("pipeline", None)
-    config = SessionConfig(**body)
+    try:
+        config = SessionConfig(**body)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                e.errors() if hasattr(e, "errors") else str(e)
+            ),
+        ) from e
 
     session.config = config
     session.state = SessionState.CONFIGURING

@@ -1,6 +1,6 @@
 /**
  * Toast Component
- * 
+ *
  * Toast notifications with auto-dismiss.
  * Uses design system colors.
  */

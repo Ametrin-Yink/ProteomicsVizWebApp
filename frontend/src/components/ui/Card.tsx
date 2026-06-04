@@ -1,6 +1,6 @@
 /**
  * Card Component
- * 
+ *
  * Versatile card component with multiple variants.
  * Uses design system with subtle shadows and clean borders.
  */

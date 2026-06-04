@@ -61,13 +61,13 @@ export const ValidationPanel: React.FC = () => {
   const [replicatesExpanded, setReplicatesExpanded] = React.useState(true);
 
   const { warnings, selectedFiles, experiments, replicatesByCondition } = validation;
-  
+
   const errorWarnings = warnings.filter((w) => w.type === 'error');
   const infoWarnings = warnings.filter((w) => w.type === 'warning');
 
   // Determine status for each check
   const experimentStatus = experiments.length === 1 ? 'valid' : experiments.length > 1 ? 'neutral' : 'neutral';
-  
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -75,15 +75,15 @@ export const ValidationPanel: React.FC = () => {
         <h3 className="text-lg font-semibold text-text">Validation Status</h3>
         <div className={`
           px-3 py-1 rounded-full text-sm font-medium
-          ${canStart 
-            ? 'bg-success/10 text-success' 
+          ${canStart
+            ? 'bg-success/10 text-success'
             : 'bg-warning/10 text-warning'
           }
         `}>
           {canStart ? 'Ready to Start' : 'Validation Required'}
         </div>
       </div>
-      
+
       {/* Status Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <StatusItem
@@ -97,7 +97,7 @@ export const ValidationPanel: React.FC = () => {
           status={experimentStatus}
         />
       </div>
-      
+
       {/* Replicate Details — collapsible */}
       {Object.keys(replicatesByCondition).length > 0 && (
         <div className="bg-surface rounded-lg">
@@ -132,7 +132,7 @@ export const ValidationPanel: React.FC = () => {
           )}
         </div>
       )}
-      
+
       {/* Warnings */}
       {warnings.length > 0 && (
         <div className="space-y-3">
@@ -147,7 +147,7 @@ export const ValidationPanel: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* No Warnings */}
       {warnings.length === 0 && selectedFiles.length > 0 && (
         <div className="flex items-center gap-3 p-4 bg-success/5 border border-success/20 rounded-lg">
@@ -157,7 +157,7 @@ export const ValidationPanel: React.FC = () => {
           </p>
         </div>
       )}
-      
+
       {/* No Files */}
       {selectedFiles.length === 0 && (
         <div className="flex items-center gap-3 p-4 bg-surface border border-border rounded-lg">

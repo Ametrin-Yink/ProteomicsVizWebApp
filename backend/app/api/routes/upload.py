@@ -6,16 +6,16 @@ Handles proteomics and compound file uploads with validation.
 
 import logging
 from pathlib import Path
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.api.deps import get_session_store
 from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.db.session_store import SessionStore
 from app.models.session import FileInfo, ProteomicsFileInfo
-from app.utils.file_parser import parse_psm_filename
-from app.utils.file_parser import FileParser
 from app.services.compound_service import CompoundService
+from app.utils.file_parser import FileParser, parse_psm_filename
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
@@ -66,7 +66,9 @@ async def upload_proteomics_files(
             import traceback
 
             logger.error(f"Upload error for {file.filename}: {traceback.format_exc()}")
-            raise ValidationError(message=f"Error parsing {file.filename}: {str(e)}")
+            raise ValidationError(
+                message=f"Error parsing {file.filename}: {e!s}"
+            ) from e
 
     # Convert UploadedFileMetadata to ProteomicsFileInfo and update session
     response_files = []
@@ -135,7 +137,7 @@ async def upload_compound_file(
             session_dir=Path(settings.sessions_dir) / session_id,
         )
     except Exception as e:
-        raise ValidationError(message=f"Error parsing compound file: {str(e)}")
+        raise ValidationError(message=f"Error parsing compound file: {e!s}") from e
 
     # Parse compounds using CompoundService
     compound_service = CompoundService()

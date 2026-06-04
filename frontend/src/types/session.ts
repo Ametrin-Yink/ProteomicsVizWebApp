@@ -1,12 +1,12 @@
 /**
  * Session Types
- * 
+ *
  * Defines all TypeScript types related to analysis sessions.
  * Sessions represent a complete proteomics analysis workflow.
  */
 
 // Session status in the processing pipeline
-export type SessionStatus = 
+export type SessionStatus =
   | 'created'
   | 'uploading'
   | 'uploaded'
@@ -49,19 +49,19 @@ export interface AnalysisParameters {
   // Filtering parameters
   minPeptides: number;
   minSamples: number;
-  
+
   // Statistical parameters
   log2FoldChangeThreshold: number;
   pValueThreshold: number;
-  
+
   // GSEA parameters
   gseaDatabase: string;
   gseaMinSize: number;
   gseaMaxSize: number;
-  
+
   // QC parameters
   pcaComponents: number;
-  
+
   // Advanced parameters
   normalizationMethod: 'none' | 'median' | 'quantile';
   imputationMethod: 'none' | 'knn' | 'min';
@@ -80,11 +80,11 @@ export interface Session {
   updatedAt: string;
   completedAt: string | null;
   errorMessage: string | null;
-  
+
   // File references
   uploadedFiles: UploadedFile[];
   compoundFile: CompoundFile | null;
-  
+
   // Results
   results: SessionResults | null;
 }

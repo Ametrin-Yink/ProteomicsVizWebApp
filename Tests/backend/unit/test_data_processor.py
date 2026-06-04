@@ -4,11 +4,8 @@ Unit tests for data processing pipeline (Steps 1-5).
 Tests the DataProcessor class methods.
 """
 
-import pytest
 import pandas as pd
-import numpy as np
-from pathlib import Path
-
+import pytest
 from app.services.data_processor import DataProcessor, ProcessingConfig
 
 

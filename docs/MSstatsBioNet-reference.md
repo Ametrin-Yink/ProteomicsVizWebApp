@@ -1,9 +1,9 @@
 # MSstatsBioNet Reference
 
-**Package:** MSstatsBioNet v1.0.0  
-**Description:** Network Analysis for MS-based Proteomics Experiments  
-**Bioconductor:** 3.21 | R ≥ 4.4.0  
-**Authors:** Anthony Wu, Olga Vitek (Northeastern University)  
+**Package:** MSstatsBioNet v1.0.0
+**Description:** Network Analysis for MS-based Proteomics Experiments
+**Bioconductor:** 3.21 | R ≥ 4.4.0
+**Authors:** Anthony Wu, Olga Vitek (Northeastern University)
 **URL:** https://vitek-lab.github.io/MSstatsBioNet/
 
 ---

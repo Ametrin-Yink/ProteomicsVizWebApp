@@ -1,29 +1,29 @@
 """Pipeline step handlers."""
 
 from .combine_replicates import step_combine_replicates
-from .unique_psm import step_generate_unique_psm
-from .remove_razor import step_remove_razor
-from .remove_low_quality import step_remove_low_quality_default
 from .filter_criteria import step_filter_criteria_default
+from .group_comparison_multi import (
+    step_msstats_group_comparison,
+    step_msstats_protein_abundance,
+)
+from .multi_condition_de import step_multi_condition_de
 from .protein_abundance import step_protein_abundance_msqrob2
 from .qc_metrics import step_qc_metrics
 from .qc_metrics_msqrob2 import step_qc_metrics_msqrob2
-from .group_comparison_multi import (
-    step_msstats_protein_abundance,
-    step_msstats_group_comparison,
-)
-from .multi_condition_de import step_multi_condition_de
+from .remove_low_quality import step_remove_low_quality_default
+from .remove_razor import step_remove_razor
+from .unique_psm import step_generate_unique_psm
 
 __all__ = [
     "step_combine_replicates",
-    "step_generate_unique_psm",
-    "step_remove_razor",
-    "step_remove_low_quality_default",
     "step_filter_criteria_default",
+    "step_generate_unique_psm",
+    "step_msstats_group_comparison",
+    "step_msstats_protein_abundance",
+    "step_multi_condition_de",
     "step_protein_abundance_msqrob2",
     "step_qc_metrics",
     "step_qc_metrics_msqrob2",
-    "step_msstats_protein_abundance",
-    "step_msstats_group_comparison",
-    "step_multi_condition_de",
+    "step_remove_low_quality_default",
+    "step_remove_razor",
 ]

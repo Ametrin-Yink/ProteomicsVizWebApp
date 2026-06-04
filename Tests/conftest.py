@@ -3,7 +3,6 @@ Pytest configuration and shared fixtures for backend tests.
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add backend directory to Python path for imports
@@ -11,12 +10,11 @@ backend_dir = Path(__file__).parent.parent / "backend"
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-import pytest
 import shutil
-import tempfile
-from typing import Generator
+from collections.abc import Generator
+
 import pandas as pd
-import numpy as np
+import pytest
 
 
 @pytest.fixture

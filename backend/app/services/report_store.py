@@ -9,9 +9,8 @@ import json
 import logging
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from app.core.config import settings
 
@@ -39,7 +38,7 @@ def create_report(name: str, session_id: str, session_name: str) -> dict:
         "name": name,
         "session_id": session_id,
         "session_name": session_name,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     (report_dir / "report.json").write_text(
         json.dumps(metadata, indent=2), encoding="utf-8"
@@ -71,7 +70,7 @@ def list_reports() -> list[dict]:
     return reports
 
 
-def get_report_dir(report_id: str) -> Optional[Path]:
+def get_report_dir(report_id: str) -> Path | None:
     """Get report directory path, validating it exists."""
     rd = _reports_dir()
     report_dir = rd / report_id
@@ -80,7 +79,7 @@ def get_report_dir(report_id: str) -> Optional[Path]:
     return None
 
 
-def get_report_metadata(report_id: str) -> Optional[dict]:
+def get_report_metadata(report_id: str) -> dict | None:
     """Get report metadata dict."""
     report_dir = get_report_dir(report_id)
     if not report_dir:
@@ -88,7 +87,7 @@ def get_report_metadata(report_id: str) -> Optional[dict]:
     return json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
 
 
-def get_report_session(report_id: str) -> Optional[dict]:
+def get_report_session(report_id: str) -> dict | None:
     """Get the report's session.json content (config, markers, filters)."""
     report_dir = get_report_dir(report_id)
     if not report_dir:
@@ -105,8 +104,8 @@ def get_report_session(report_id: str) -> Optional[dict]:
 
 def patch_report_state(
     report_id: str,
-    markers: Optional[dict] = None,
-    volcano_filters: Optional[dict] = None,
+    markers: dict | None = None,
+    volcano_filters: dict | None = None,
 ) -> bool:
     """Update markers and/or volcano_filters in the report's session.json."""
     if markers is None and volcano_filters is None:

@@ -3,8 +3,8 @@ Unit tests for report_generator service.
 """
 
 import json
-import shutil
 from pathlib import Path
+
 import pytest
 
 
@@ -15,10 +15,12 @@ def temp_dirs(monkeypatch, tmp_path):
     reports_dir = tmp_path / "reports"
 
     from app.core import config
+
     monkeypatch.setattr(config.settings, "base_dir", tmp_path)
     monkeypatch.setattr(config.settings, "sessions_dir", sessions_dir)
 
     import app.services.report_store as store
+
     monkeypatch.setattr(store, "REPORTS_DIR", reports_dir)
 
     return sessions_dir, reports_dir
@@ -38,7 +40,10 @@ def make_completed_session(sessions_dir: Path, session_id: str) -> Path:
             "experiment_name": "Test Experiment",
             "conditions": ["Treatment", "Control"],
             "comparisons": [
-                {"group1": {"Condition": "Treatment"}, "group2": {"Condition": "Control"}}
+                {
+                    "group1": {"Condition": "Treatment"},
+                    "group2": {"Condition": "Control"},
+                }
             ],
         },
         "markers": {"Treatment_vs_Control": ["P12345"]},
@@ -47,7 +52,9 @@ def make_completed_session(sessions_dir: Path, session_id: str) -> Path:
     (session_dir / "session.json").write_text(json.dumps(session_json, indent=2))
 
     # pipeline_state.json (should be excluded)
-    (session_dir / "pipeline_state.json").write_text('{"current_step": 9, "state": "completed"}')
+    (session_dir / "pipeline_state.json").write_text(
+        '{"current_step": 9, "state": "completed"}'
+    )
 
     # results files
     (results_dir / "Diff_Expression_Treatment_vs_Control.tsv").write_text(
@@ -69,7 +76,9 @@ def make_completed_session(sessions_dir: Path, session_id: str) -> Path:
     # Compare results
     compare_dir = results_dir / "compare"
     compare_dir.mkdir(parents=True)
-    (compare_dir / "comparison-correlation_status.json").write_text('{"status": "completed"}')
+    (compare_dir / "comparison-correlation_status.json").write_text(
+        '{"status": "completed"}'
+    )
 
     # BioNet
     bionet_dir = session_dir / "bionet"
@@ -77,7 +86,9 @@ def make_completed_session(sessions_dir: Path, session_id: str) -> Path:
     (bionet_dir / "bionet_subnetwork.json").write_text('{"nodes": [], "edges": []}')
 
     # gsea_run_status.json
-    (session_dir / "gsea_run_status.json").write_text('{"Treatment_vs_Control": "completed"}')
+    (session_dir / "gsea_run_status.json").write_text(
+        '{"Treatment_vs_Control": "completed"}'
+    )
 
     # uploads (should be excluded)
     uploads_dir = session_dir / "uploads"
@@ -103,12 +114,18 @@ def test_generate_copies_all_expected_files(temp_dirs):
     generate_report(session_id, meta["report_id"])
 
     assert (report_dir / "session.json").exists()
-    assert (report_dir / "results" / "Diff_Expression_Treatment_vs_Control.tsv").exists()
+    assert (
+        report_dir / "results" / "Diff_Expression_Treatment_vs_Control.tsv"
+    ).exists()
     assert (report_dir / "results" / "Protein_Abundances.tsv").exists()
     assert (report_dir / "results" / "QC_Results.json").exists()
     assert (report_dir / "results" / "PSM_Abundances.parquet").exists()
-    assert (report_dir / "results" / "gsea" / "Treatment_vs_Control" / "GSEA_Results.json").exists()
-    assert (report_dir / "results" / "compare" / "comparison-correlation_status.json").exists()
+    assert (
+        report_dir / "results" / "gsea" / "Treatment_vs_Control" / "GSEA_Results.json"
+    ).exists()
+    assert (
+        report_dir / "results" / "compare" / "comparison-correlation_status.json"
+    ).exists()
     assert (report_dir / "bionet" / "bionet_subnetwork.json").exists()
     assert (report_dir / "gsea_run_status.json").exists()
 
@@ -135,11 +152,13 @@ def test_generate_excludes_uploads_and_pipeline_state(temp_dirs):
 def test_generate_rejects_non_completed_session(temp_dirs):
     from app.services.report_generator import generate_report
 
-    sessions_dir, reports_dir = temp_dirs
+    sessions_dir, _reports_dir = temp_dirs
     session_id = "incomplete-session"
     session_dir = sessions_dir / session_id
     session_dir.mkdir(parents=True)
-    (session_dir / "session.json").write_text('{"id": "incomplete", "state": "processing"}')
+    (session_dir / "session.json").write_text(
+        '{"id": "incomplete", "state": "processing"}'
+    )
 
     with pytest.raises(ValueError, match="not completed"):
         generate_report(session_id, "rpt_whatever")

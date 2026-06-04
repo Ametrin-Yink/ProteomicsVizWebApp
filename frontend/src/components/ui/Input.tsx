@@ -1,6 +1,6 @@
 /**
  * Input Component
- * 
+ *
  * Text input with label, error handling, and icon support.
  * Follows design system with focus states.
  */
@@ -97,14 +97,14 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             {label}
           </label>
         )}
-        
+
         <div className={inputWrapperClasses}>
           {leftIcon && (
             <div className={cn(iconClasses, 'left-3')}>
               {leftIcon}
             </div>
           )}
-          
+
           <input
             ref={ref}
             id={inputId}
@@ -114,14 +114,14 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             aria-describedby={error ? errorId : helperText ? helperId : undefined}
             {...props}
           />
-          
+
           {rightIcon && (
             <div className={cn(iconClasses, 'right-3')}>
               {rightIcon}
             </div>
           )}
         </div>
-        
+
         {(error || helperText) && (
           <p
             id={error ? errorId : helperId}
@@ -203,7 +203,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
             {label}
           </label>
         )}
-        
+
         <textarea
           ref={ref}
           id={textareaId}
@@ -214,7 +214,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           aria-describedby={error ? errorId : helperText ? helperId : undefined}
           {...props}
         />
-        
+
         {(error || helperText) && (
           <p
             id={error ? errorId : helperId}

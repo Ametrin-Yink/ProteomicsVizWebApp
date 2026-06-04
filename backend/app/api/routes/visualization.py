@@ -7,16 +7,16 @@ Plot data endpoints for results, QC, and GSEA.
 import asyncio
 import json
 import logging
+import math
 import re
 import threading
-import math
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -25,10 +25,10 @@ from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.gsea_service import gsea_service
 from app.services.task_manager import (
-    task_manager,
-    TaskKind,
     TaskCancelledError,
+    TaskKind,
     TaskTimeoutError,
+    task_manager,
 )
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
@@ -59,7 +59,7 @@ def _get_pathway_genes(database: str, term: str) -> set[str]:
         return set()
 
     gene_sets: dict[str, set[str]] = {}
-    with open(gmt_path, "r") as f:
+    with open(gmt_path) as f:
         for line in f:
             parts = line.strip().split("\t")
             if len(parts) >= 3:
@@ -93,7 +93,7 @@ def _cache_key(session_id: str, *args) -> str:
     return f"{session_id}:{':'.join(str(a) for a in args)}"
 
 
-def create_response(data: Any) -> Dict[str, Any]:
+def create_response(data: Any) -> dict[str, Any]:
     """Create standardized API response wrapper.
 
     Args:
@@ -105,7 +105,7 @@ def create_response(data: Any) -> Dict[str, Any]:
     return {
         "data": data,
         "meta": {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "request_id": str(uuid.uuid4()),
         },
     }
@@ -116,7 +116,7 @@ class FileCache:
 
     def __init__(self, max_size: int = 50):
         self._max_size = max_size
-        self._cache: Dict[str, tuple] = {}  # key -> (timestamp, result)
+        self._cache: dict[str, tuple] = {}  # key -> (timestamp, result)
 
     def get(self, key: str) -> Any:
         if key in self._cache:
@@ -128,7 +128,7 @@ class FileCache:
         if len(self._cache) >= self._max_size:
             oldest_key = min(self._cache, key=lambda k: self._cache[k][0])
             del self._cache[oldest_key]
-        self._cache[key] = (datetime.now(timezone.utc), value)
+        self._cache[key] = (datetime.now(UTC), value)
 
     def invalidate(self, session_id: str) -> None:
         """Remove all cached entries for a session."""
@@ -190,7 +190,7 @@ async def load_diff_expression_results(
     results_dir: Path,
     session_id: str = "",
     comparison: str = "",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Load differential expression results from TSV file.
 
     Args:
@@ -310,7 +310,7 @@ async def load_diff_expression_results(
         return []
 
 
-def load_qc_results(results_dir: Path) -> Dict[str, Any]:
+def load_qc_results(results_dir: Path) -> dict[str, Any]:
     """Load QC results from JSON file.
 
     Args:
@@ -350,7 +350,7 @@ def load_qc_results(results_dir: Path) -> Dict[str, Any]:
         return default_result
 
     try:
-        with open(qc_file, "r") as f:
+        with open(qc_file) as f:
             data = json.load(f)
 
         # Merge with defaults to ensure all fields exist
@@ -389,13 +389,13 @@ _gsea_file_cache = FileCache(max_size=5)
 
 def _load_gsea_json(filepath: Path) -> dict:
     """Load and parse a GSEA JSON file. Run via asyncio.to_thread to avoid blocking."""
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         return json.load(f)
 
 
 def load_gsea_results(
     results_dir: Path, database: str, session_id: str = ""
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Load GSEA results from JSON file with per-session memory caching.
 
     The GSEA results file can be hundreds of MB to multiple GB. We load it
@@ -776,7 +776,9 @@ async def get_gsea_plot_data(
     pathway_genes_upper = {g.upper() for g in pathway_genes}
     rank_metric_positions = [
         [gene, i, float(metric)]
-        for i, (gene, metric) in enumerate(zip(ranked_genes, ranked_metrics))
+        for i, (gene, metric) in enumerate(
+            zip(ranked_genes, ranked_metrics, strict=False)
+        )
         if gene.upper() in pathway_genes_upper
     ]
 
@@ -920,7 +922,7 @@ async def get_gsea_heatmap_data(
     # Filter to only comparison-relevant sample columns
     sample_filter = _build_sample_filter(session, comparison)
     if sample_filter and not protein_df.empty:
-        _METADATA_COLS = {
+        _metadata_cols = {
             "Master_Protein_Accessions",
             "Master Protein Accessions",
             "Gene_Name",
@@ -932,7 +934,7 @@ async def get_gsea_heatmap_data(
         keep_cols = [
             c
             for c in protein_df.columns
-            if c in _METADATA_COLS
+            if c in _metadata_cols
             or any(c.startswith(prefix) for prefix in sample_filter)
         ]
         protein_df = protein_df[keep_cols]
@@ -946,7 +948,9 @@ async def get_gsea_heatmap_data(
     # Reorder genes and z_scores by rank position if rank info is available
     if gene_rank_map and heatmap_data.get("genes"):
         genes_with_rank = []
-        z_scores_by_gene = dict(zip(heatmap_data["genes"], heatmap_data["z_scores"]))
+        z_scores_by_gene = dict(
+            zip(heatmap_data["genes"], heatmap_data["z_scores"], strict=False)
+        )
         for gene in heatmap_data["genes"]:
             genes_with_rank.append(
                 (
@@ -1162,8 +1166,10 @@ async def _background_gsea_run(
     status_data = {
         "status": "running",
         "comparison": comparison,
-        "databases": {db: "running" for db in request.databases if db in VALID_GSEA_DATABASES},
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "databases": {
+            db: "running" for db in request.databases if db in VALID_GSEA_DATABASES
+        },
+        "started_at": datetime.now(UTC).isoformat(),
         "error": None,
     }
     await _write_on_demand_status(session_id, "gsea", status_data)
@@ -1207,7 +1213,7 @@ async def _background_gsea_run(
             _gsea_file_cache.remove(str(results_file))
 
         status_data["status"] = "completed"
-        status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        status_data["completed_at"] = datetime.now(UTC).isoformat()
         await _write_on_demand_status(session_id, "gsea", status_data)
 
     except TaskCancelledError:
@@ -1267,8 +1273,10 @@ async def run_gsea_on_demand(
         {
             "status": "running",
             "comparison": request.comparison,
-            "databases": {db: "running" for db in request.databases if db in VALID_GSEA_DATABASES},
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "databases": {
+                db: "running" for db in request.databases if db in VALID_GSEA_DATABASES
+            },
+            "started_at": datetime.now(UTC).isoformat(),
             "error": None,
         },
     )
@@ -1384,8 +1392,9 @@ async def _background_bionet_run(
 ) -> None:
     """Background BioNet run dispatched through TaskManager."""
 
-    from app.services.bionet_service import bionet_service
     import pandas as pd
+
+    from app.services.bionet_service import bionet_service
 
     comparison = request.comparison
     bionet_output_dir = _bionet_output_dir(session_id)
@@ -1396,7 +1405,7 @@ async def _background_bionet_run(
     status_data = {
         "status": "running",
         "comparison": comparison,
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "error": None,
     }
     await _write_on_demand_status(session_id, "bionet", status_data)
@@ -1413,7 +1422,7 @@ async def _background_bionet_run(
     label = f"BioNet: {comparison}"
 
     try:
-        node_count, edge_count = await task_manager.submit(
+        _node_count, _edge_count = await task_manager.submit(
             session_id,
             TaskKind.BIONET,
             _run_bionet_sync,
@@ -1431,7 +1440,7 @@ async def _background_bionet_run(
         await asyncio.to_thread(_write_json_file, subnetwork_path, subnetwork)
 
         status_data["status"] = "completed"
-        status_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        status_data["completed_at"] = datetime.now(UTC).isoformat()
         await _write_on_demand_status(session_id, "bionet", status_data)
 
     except TaskCancelledError:
@@ -1488,7 +1497,7 @@ async def run_bionet_on_demand(
         {
             "status": "running",
             "comparison": request.comparison,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "error": None,
         },
     )
@@ -1590,7 +1599,7 @@ async def get_bionet_subnetwork(
             detail="No BioNet subnetwork computed yet. Run the analysis first.",
         )
 
-    with open(subnetwork_path, "r", encoding="utf-8") as f:
+    with open(subnetwork_path, encoding="utf-8") as f:
         subnetwork = json.load(f)
 
     return create_response(subnetwork)
@@ -1603,7 +1612,7 @@ async def load_protein_abundance(
     control: str = "",
     treatment: str = "",
     sample_filter: list[str] | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Load protein abundance data from TSV file.
 
     Args:
@@ -1738,7 +1747,7 @@ async def load_peptide_abundance(
     protein_id: str,
     session_id: str = "",
     sample_filter: list[str] | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Load peptide abundance data from Parquet or TSV file.
 
     Aggregates PSMs into peptides by summing abundances for each unique

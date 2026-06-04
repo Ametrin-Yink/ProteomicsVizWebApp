@@ -25,12 +25,12 @@ function AnalysisContent() {
   const [template, setTemplate] = useState<string>('');
   const [isCreatingSession, setIsCreatingSession] = useState(true);
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
-  
+
   const state = useAnalysisStore();
   const { config, setConfig } = state;
   const canStart = canStartAnalysis(state);
   const { addToast } = useUIStore();
-  
+
   // Reset analysis store when session ID changes
   const { reset: resetAnalysis } = useAnalysisStore();
   useEffect(() => {
@@ -43,19 +43,19 @@ function AnalysisContent() {
   useEffect(() => {
     const initSession = async () => {
       setIsCreatingSession(true);
-      
+
       try {
         // First, check for session ID in URL query params (from home page template selection)
         const urlSessionId = searchParams.get('session');
-        
+
         // Validate session ID - must be a valid UUID format, not "undefined" or invalid
-        const isValidSessionId = (id: string | null) => id && 
-          id !== 'undefined' && 
+        const isValidSessionId = (id: string | null) => id &&
+          id !== 'undefined' &&
           id !== 'null' &&
           id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-        
+
         let sessionIdToLoad: string | null = null;
-        
+
         if (isValidSessionId(urlSessionId)) {
           sessionIdToLoad = urlSessionId;
         } else {
@@ -67,7 +67,7 @@ function AnalysisContent() {
             router.replace(`/analysis?session=${storedSessionId}`);
           }
         }
-        
+
         if (sessionIdToLoad) {
           try {
             // Try to get the session
@@ -144,7 +144,7 @@ function AnalysisContent() {
           router.push('/');
           return;
         }
-        
+
         // No session in URL or localStorage - redirect to home page to create one
         // Don't auto-create sessions to avoid spam
         addToast('info', 'Please select a template to start analysis');
@@ -157,9 +157,9 @@ function AnalysisContent() {
         setIsCreatingSession(false);
       }
     };
-    
+
     initSession();
-    
+
     // Cleanup on unmount
     return () => {
       // Don't reset store on unmount to allow session persistence
@@ -167,7 +167,7 @@ function AnalysisContent() {
     // Only run on mount and when searchParams changes (URL query params)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-  
+
   const handleStartAnalysis = async () => {
     if (!canStart || !sessionId) return;
 
@@ -199,11 +199,11 @@ function AnalysisContent() {
       setIsStartingAnalysis(false);
     }
   };
-  
+
   const handleBack = () => {
     router.push('/');
   };
-  
+
   if (isCreatingSession) {
     return (
       <div className="flex-1 flex items-center justify-center bg-surface">
@@ -215,7 +215,7 @@ function AnalysisContent() {
       </div>
     );
   }
-  
+
   return (
     <div className="flex-1 overflow-y-auto bg-surface flex">
       {/* Left Sidebar - Session Manager */}
@@ -272,7 +272,7 @@ function AnalysisContent() {
           </div>
         </div>
       </header>
-      
+
       {/* Main Content */}
       <main className="mx-auto px-6 py-8 max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -330,7 +330,7 @@ function AnalysisContent() {
               </div>
             </section>
           </div>
-          
+
           {/* Right Column - Configuration */}
           <div className="lg:col-span-1">
             <div className="bg-background border border-border rounded-lg">

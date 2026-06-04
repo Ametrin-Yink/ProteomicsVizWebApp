@@ -10,11 +10,12 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 from app.core.config import settings
 
@@ -130,7 +131,7 @@ class TaskManager:
             session_id=session_id,
             label=label,
             status="queued",
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(UTC).isoformat(),
         )
 
         if cancel_event is None:
@@ -158,17 +159,20 @@ class TaskManager:
                 raise TaskCancelledError(f"Task {task_id} cancelled while queued")
 
             # Check if we're at head of queue
-            head_session, head_event, head_info = (
+            head_session, _head_event, head_info = (
                 queue[0] if queue else (None, None, None)
             )
-            if head_session == session_id and head_info.task_id == task_id:
-                if self._session_active.get(session_id) is None:
-                    break
+            if (
+                head_session == session_id
+                and head_info.task_id == task_id
+                and self._session_active.get(session_id) is None
+            ):
+                break
 
-            try:
+            import contextlib
+
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(ready_event.wait(), timeout=1.0)
-            except asyncio.TimeoutError:
-                pass
             ready_event.clear()
 
             try:
@@ -202,7 +206,7 @@ class TaskManager:
                     raise TaskCancelledError(f"Task {task_id} cancelled at semaphore")
 
                 info.status = "running"
-                info.started_at = datetime.now(timezone.utc).isoformat()
+                info.started_at = datetime.now(UTC).isoformat()
                 self._active_tasks[task_id] = info
                 self._write_task_status(session_id)
 
@@ -220,7 +224,7 @@ class TaskManager:
                     loop = asyncio.get_running_loop()
                     result = await loop.run_in_executor(self._pools[kind], fn, *args)
                     info.status = "completed"
-                    info.completed_at = datetime.now(timezone.utc).isoformat()
+                    info.completed_at = datetime.now(UTC).isoformat()
                     return result
                 except TaskCancelledError:
                     info.status = "cancelled"
@@ -296,7 +300,7 @@ class TaskManager:
 
     def get_queue_position(self, session_id: str, kind: TaskKind) -> int | None:
         """Return 1-based queue position for a session in a task kind's queue, or None."""
-        for i, (sid, _, info) in enumerate(self._queues.get(kind, [])):
+        for i, (sid, _, _info) in enumerate(self._queues.get(kind, [])):
             if sid == session_id:
                 return i + 1
         return None

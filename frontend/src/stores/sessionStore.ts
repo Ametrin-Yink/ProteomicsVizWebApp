@@ -1,6 +1,6 @@
 /**
  * Session Store using Zustand
- * 
+ *
  * Manages session state with proper actions - NEVER mutate state directly.
  * Follows AGENTS/05-state-management.md patterns.
  */
@@ -207,7 +207,7 @@ export const useSessionStore = create<SessionStore>()(
         if (sessionIndex === -1) return;
 
         state.sessions[sessionIndex].status = status;
-        
+
         if (status === 'completed') {
           state.sessions[sessionIndex].completedAt = new Date().toISOString();
         }
@@ -238,7 +238,7 @@ export const useSessionLoading = () => useSessionStore((state) => state.isLoadin
 export const useSessionError = () => useSessionStore((state) => state.error);
 
 // Get session by ID selector
-export const useSessionById = (id: string | null) => 
+export const useSessionById = (id: string | null) =>
   useSessionStore((state) => state.sessions.find((s) => s.id === id) ?? null);
 
 // Get sessions by status selector
