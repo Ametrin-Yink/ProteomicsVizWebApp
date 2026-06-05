@@ -18,9 +18,21 @@ from app.services.steps import (
 
 PIPELINES: dict[str, PipelineDefinition] = {}
 
+DEFAULT_PIPELINE: str = PipelineTool.MSQROB2
+
 
 def register(template: str, steps: list[PipelineStep]) -> None:
     PIPELINES[template] = PipelineDefinition(template, steps)
+
+
+def get_pipeline(template: str) -> PipelineDefinition:
+    """Return the PipelineDefinition for the given template key."""
+    return PIPELINES[template]
+
+
+def list_pipelines() -> dict[str, PipelineDefinition]:
+    """Return all registered pipeline definitions."""
+    return dict(PIPELINES)
 
 
 # Register msqrob2 consolidated pipeline (5 steps)
