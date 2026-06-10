@@ -6,7 +6,7 @@ import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
 import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
-import { getDEResults, getDataSource, updateVisualizationState } from '@/lib/api';
+import { visualizationApi, getDataSource, updateVisualizationState } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
@@ -49,7 +49,7 @@ function ResultsContent() {
       setLoading(true);
       setError(null);
       try {
-        const results = await getDEResults(apiPrefix, {
+        const results = await visualizationApi.getDEResults(apiPrefix, {
           page: 1,
           per_page: 20000,
           comparison: selectedComparison || undefined,
@@ -252,7 +252,7 @@ function ResultsContent() {
     try {
       const newMarked = { ...markedProteins };
       for (const comp of batchMarkComparisons) {
-        const results = await getDEResults(apiPrefix, {
+        const results = await visualizationApi.getDEResults(apiPrefix, {
           comparison: comp,
           per_page: 20000,
         });

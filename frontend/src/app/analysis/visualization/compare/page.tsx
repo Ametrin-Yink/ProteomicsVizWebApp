@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import ProteinCorrelationPanel from '@/components/visualization/compare/ProteinCorrelationPanel';
 import ComparisonCorrelationPanel from '@/components/visualization/compare/ComparisonCorrelationPanel';
-import { getDataSource } from '@/lib/api';
+import { getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 

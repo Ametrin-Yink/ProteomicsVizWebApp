@@ -7,7 +7,7 @@ import { VISUALIZATION_MODULES, getActiveModuleId } from '@/config/visualization
 import { SessionManager } from '@/components/session/SessionManager';
 import ExportButton from '@/components/visualization/ExportButton';
 import { ApiProvider } from '@/lib/api-context';
-import { sessionApiPrefix } from '@/lib/api';
+import { sessionApiPrefix } from '@/lib/api-client';
 
 function Navigation() {
   const pathname = usePathname();

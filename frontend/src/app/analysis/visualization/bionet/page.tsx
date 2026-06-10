@@ -142,7 +142,7 @@ function BioNetContent() {
     if (!selectedComparison) return;
     setRunError(null);
     try {
-      await runBioNet(apiPrefix, {
+      await visualizationApi.runBioNet(apiPrefix, {
         comparison: selectedComparison,
         pvalue_cutoff: adjPvalueCutoff,
         logfc_cutoff: logfcCutoff,

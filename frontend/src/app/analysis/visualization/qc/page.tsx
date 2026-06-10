@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import QCPlots from '@/components/visualization/QCPlots';
 import type { QCData } from '@/types/api';
-import { getQCData, getDataSource } from '@/lib/api';
+import { visualizationApi, getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 
@@ -25,7 +25,7 @@ function QCContent() {
       setError(null);
       try {
         const [qcData, session] = await Promise.all([
-          getQCData(apiPrefix),
+          visualizationApi.getQCData(apiPrefix),
           getDataSource(apiPrefix),
         ]);
         setData(qcData);

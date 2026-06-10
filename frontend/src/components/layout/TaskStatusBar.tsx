@@ -86,7 +86,6 @@ export function TaskStatusBar() {
       const sessionId = getCurrentSessionId();
       if (!sessionId) return;
       await visualizationApi.cancelTasks(sessionId);
-      fetchStatus();
     } catch {
       // silently ignore
     }

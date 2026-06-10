@@ -21,7 +21,6 @@ import type {
   SessionConfig,
   UploadedFile,
   CompoundFileData,
-  ProcessingStatus,
   Organism,
 } from '@/types';
 import type { Session, SessionStatus, AnalysisConfig } from '@/types/session';
@@ -556,7 +555,7 @@ export const processingApi = {
   /**
    * Get processing status
    */
-  getStatus: async (sessionId: string): Promise<ProcessingStatus & { queue_position?: number; queue_length?: number; state?: string; current_step?: number }> => {
+  getStatus: async (sessionId: string): Promise<{ queue_position?: number; queue_length?: number; state?: string; current_step?: number } & Record<string, unknown>> => {
     const response = await fetch(apiUrl(`/sessions/${sessionId}/status`));
     return handleResponse(response);
   },
