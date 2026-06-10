@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  maximumScale: 5,
   themeColor: '#2d3748',
 };
 
@@ -49,7 +49,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="antialiased font-sans bg-background overflow-hidden">
+      <body className="antialiased font-sans bg-background overflow-auto">
         <SidebarProvider>
           {/* Top Navigation Bar */}
           <TopNavigation />
