@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.session_store import SessionStore
 from app.models.analysis import STEP_DISPLAY_NAMES
+from app.services.pipeline_registry import get_pipeline as _get_pipeline_definition
 from app.services.session_manager import session_manager
 
 logger = logging.getLogger("proteomics")
@@ -318,6 +319,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                 pipeline_tool, STEP_DISPLAY_NAMES["msqrob2"]
                             )
 
+                            # Use actual pipeline step count for progress calculation
+                            try:
+                                pipeline_def = _get_pipeline_definition(pipeline_tool)
+                                total_steps = len(pipeline_def.steps)
+                            except Exception:
+                                total_steps = 9
+
                             # Send progress for completed steps
                             for step_num in completed_steps:
                                 try:
@@ -333,7 +341,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                             "progress": 100,
                                             "message": f"{step_display_name} completed",
                                             "overall_progress": int(
-                                                (len(completed_steps) / 9) * 100
+                                                (len(completed_steps) / total_steps) * 100
                                             ),
                                         },
                                     }

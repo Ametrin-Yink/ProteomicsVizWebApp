@@ -10,7 +10,7 @@ import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useProcessingStore } from '@/stores/processing-store';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { processingAPI } from '@/lib/api';
+import { processingApi } from '@/lib/api-client';
 import { LogPanel } from '@/components/processing/LogPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { formatDuration } from '@/lib/utils';
@@ -255,7 +255,7 @@ function ProcessingContent() {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
-        const logData = await processingAPI.getLogs(sessionId);
+        const logData = await processingApi.getLogs(sessionId);
         clearTimeout(timeoutId);
 
         if (!active) return;
@@ -269,7 +269,7 @@ function ProcessingContent() {
           // Check status endpoint for queue/processing state
           if (!isConnected) {
             try {
-              const statusData = await processingAPI.getStatus(sessionId);
+              const statusData = await processingApi.getStatus(sessionId);
               if (statusData.queue_position && statusData.queue_position > 0) {
                 setQueued(statusData.queue_position, statusData.queue_length ?? 0);
               } else if (statusData.state === 'queued') {
@@ -351,7 +351,7 @@ function ProcessingContent() {
     // This ensures we don't reset to all-not_started for an already-running session
     const initFromServer = async () => {
       try {
-        const logData = await processingAPI.getLogs(sessionId);
+        const logData = await processingApi.getLogs(sessionId);
 
         // Initialize steps based on server state
         initializeSteps(removeRazor, pipeline);
@@ -364,7 +364,7 @@ function ProcessingContent() {
         // If no pipeline state yet, check status endpoint for queue/processing state
         if (!logData || (logData.completed_steps.length === 0 && logData.current_step === 0)) {
           try {
-            const statusData = await processingAPI.getStatus(sessionId);
+            const statusData = await processingApi.getStatus(sessionId);
             if (statusData.queue_position && statusData.queue_position > 0) {
               setQueued(statusData.queue_position, statusData.queue_length ?? 0);
             } else if (statusData.state === 'queued') {
@@ -439,7 +439,7 @@ function ProcessingContent() {
     setStartError(null);
 
     try {
-      await processingAPI.retryProcessing(sessionId);
+      await processingApi.retryProcessing(sessionId);
       // Reset store only after retry succeeds
       retry();
     } catch (err) {
@@ -462,7 +462,7 @@ function ProcessingContent() {
 
     setIsCancelling(true);
     try {
-      await processingAPI.cancelProcessing(sessionId);
+      await processingApi.cancelProcessing(sessionId);
       setCancelled(true);
     } catch (err) {
       console.error('Failed to cancel processing:', err);

@@ -92,7 +92,7 @@ export default function ComparisonCorrelationPanel({ comparisons }: Props) {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
-        const result = await getComparisonCorrelationData(apiPrefix);
+        const result = await visualizationApi.getComparisonCorrelationData(apiPrefix);
         setData(result);
       } else if (newStatus.status === 'error') {
         if (pollIntervalRef.current) {
@@ -132,7 +132,7 @@ export default function ComparisonCorrelationPanel({ comparisons }: Props) {
       for (const [comp, set] of Object.entries(markedProteins)) {
         markersForApi[comp] = Array.from(set);
       }
-      await runComparisonCorrelation(apiPrefix, {
+      await visualizationApi.runComparisonCorrelation(apiPrefix, {
         primary_comparison: effectivePrimary,
         selected_comparisons: selectedComparisons,
         marked_proteins: markersForApi,
@@ -150,7 +150,7 @@ export default function ComparisonCorrelationPanel({ comparisons }: Props) {
     setVennLoading(true);
     setVennError(null);
     try {
-      const result = await computeVennData(apiPrefix, {
+      const result = await visualizationApi.computeVennData(apiPrefix, {
         comparisons: vennComparisons,
         pvalue_threshold: vennThresholds.adjPValue,
         logfc_threshold: vennThresholds.foldChange,

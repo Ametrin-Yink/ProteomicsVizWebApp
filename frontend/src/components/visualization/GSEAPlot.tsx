@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import type { GSEAResult, GSEAPlotData, GSEAHeatmapData, GSEADatabase } from '@/types/api';
-import { getGSEAPlotData, getGSEAHeatmapData } from '@/lib/api';
+import { visualizationApi } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -40,8 +40,8 @@ export default function GSEAPlot({ pathway, database, comparison, onPathwayUpdat
       setError(null);
       try {
         const [plot, heatmap] = await Promise.all([
-          getGSEAPlotData(apiPrefix, database, currentPathway.term, comparison),
-          getGSEAHeatmapData(apiPrefix, database, currentPathway.term, comparison),
+          visualizationApi.getGSEAPlotData(apiPrefix, database, currentPathway.term, comparison),
+          visualizationApi.getGSEAHeatmapData(apiPrefix, database, currentPathway.term, comparison),
         ]);
         if (!cancelled) {
           setPlotData(plot);
