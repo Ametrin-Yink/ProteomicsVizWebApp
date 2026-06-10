@@ -21,6 +21,7 @@ from app.models.analysis import (
     STEP_DISPLAY_NAMES,
     AnalysisConfig,
     AnalysisResult,
+    PipelineTool,
     ProcessingProgress,
 )
 
@@ -346,9 +347,13 @@ class PipelineEngine:
         overall_progress = int(((step - 1) * 100 + progress_pct) / total_steps)
         overall_progress = max(0, min(100, overall_progress))
 
+        pipeline_tool = ctx.config.pipeline
+        step_display_names = STEP_DISPLAY_NAMES.get(pipeline_tool, STEP_DISPLAY_NAMES.get(PipelineTool.MSQROB2, {}))
+        step_name = step_display_names.get(step, message)
+
         progress = ProcessingProgress(
             step=step,
-            step_name=STEP_DISPLAY_NAMES.get(step, f"Step {step}"),
+            step_name=step_name,
             status=status,
             progress=progress_pct,
             message=message,

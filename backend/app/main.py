@@ -298,10 +298,21 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             # Send current step progress
                             completed_steps = pipeline_state.get("completed_steps", [])
 
+                            # Determine pipeline tool from session config (default to msqrob2)
+                            pipeline_tool = "msqrob2"
+                            try:
+                                session = await session_store.get(session_id)
+                                pipeline_tool = session.pipeline
+                            except Exception:
+                                pass
+                            step_display_map = STEP_DISPLAY_NAMES.get(
+                                pipeline_tool, STEP_DISPLAY_NAMES["msqrob2"]
+                            )
+
                             # Send progress for completed steps
                             for step_num in completed_steps:
                                 try:
-                                    step_display_name = STEP_DISPLAY_NAMES.get(
+                                    step_display_name = step_display_map.get(
                                         step_num, f"Step {step_num}"
                                     )
                                     progress_msg = {
