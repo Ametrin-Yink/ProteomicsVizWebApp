@@ -75,7 +75,7 @@ function PipelineContent() {
         ...latest.config,
         pipeline: latest.selectedPipeline,
       });
-      router.push(`/new/comparisons?session=${sessionId}`);
+      router.replace(`/new/comparisons?session=${sessionId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save pipeline selection';
       addToast('error', `Failed to save: ${message}`);

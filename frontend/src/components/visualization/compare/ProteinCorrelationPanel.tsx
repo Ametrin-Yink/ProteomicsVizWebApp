@@ -13,12 +13,7 @@ import type {
   ProteinListEntry,
   ProteinFCResult,
 } from '@/types/api';
-import {
-  listProteins,
-  runProteinCorrelation,
-  getProteinCorrelationStatus,
-  getProteinCorrelationData,
-} from '@/lib/api';
+import { visualizationApi } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
 
@@ -52,14 +47,14 @@ export default function ProteinCorrelationPanel({ comparisons }: Props) {
 
   // Load available proteins on mount
   useEffect(() => {
-    listProteins(apiPrefix).then((list) => {
+    visualizationApi.listProteins(apiPrefix).then((list) => {
       setProteins(list);
     }).catch(() => {});
   }, [apiPrefix]);
 
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
-    getProteinCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
+    visualizationApi.getProteinCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
   }, [apiPrefix]);
 
   const proteinOptions = useMemo(() => {
@@ -76,14 +71,14 @@ export default function ProteinCorrelationPanel({ comparisons }: Props) {
 
   const pollStatus = useCallback(async () => {
     try {
-      const newStatus = await getProteinCorrelationStatus(apiPrefix);
+      const newStatus = await visualizationApi.getProteinCorrelationStatus(apiPrefix);
       setStatus(newStatus);
       if (newStatus.status === 'completed') {
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
-        const result = await getProteinCorrelationData(apiPrefix);
+        const result = await visualizationApi.getProteinCorrelationData(apiPrefix);
         setData(result);
         setSelectedSimilar(null);
       } else if (newStatus.status === 'error') {
@@ -120,7 +115,7 @@ export default function ProteinCorrelationPanel({ comparisons }: Props) {
     setSelectedSimilar(null);
     try {
       setStatus({ status: 'running' });
-      await runProteinCorrelation(apiPrefix, {
+      await visualizationApi.runProteinCorrelation(apiPrefix, {
         protein_id: selectedProtein,
         cluster_method: clusterMethod,
         color_comparison: effectiveColorComparison,

@@ -6,10 +6,10 @@
 
 :root {
   /* Core Colors */
-  --primary: #E73564;
-  --primary-dark: #C42A52;
+  --primary: #C42A52;
+  --primary-dark: #A82245;
   --primary-light: #FF6B8A;
-  --secondary: #00ADEF;
+  --secondary: #0077B5;
   --secondary-dark: #0088CC;
   --secondary-light: #4DD4FF;
 
@@ -24,14 +24,14 @@
   /* Text Colors */
   --text-primary: #1a1a2e;
   --text-secondary: #64748b;
-  --text-muted: #94a3b8;
+  --text-muted: #475569;
   --text-inverse: #ffffff;
 
   /* Semantic Colors */
   --success: #10b981;
   --warning: #f59e0b;
   --error: #ef4444;
-  --info: #00ADEF;
+  --info: #0077B5;
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -163,4 +163,16 @@ input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(231, 53, 100, 0.1);
+}
+
+/* Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

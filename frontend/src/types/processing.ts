@@ -14,8 +14,8 @@ export interface ProcessingStepDef {
   status: StepStatus;
   progress?: number; // 0-100 (legacy — no longer rendered by UI)
   message?: string;
-  package: string;
-  function: string;
+  moduleName: string;
+  method: string;
 }
 
 export interface LogEntry {
@@ -131,56 +131,56 @@ export const PROCESSING_STEPS: Omit<ProcessingStepDef, 'status' | 'progress' | '
     id: 1,
     name: 'Combine Replicates',
     description: 'Merge replicate data files into a single dataset',
-    package: 'Python/Pandas',
-    function: 'pd.concat()',
+    moduleName: 'Python/Pandas',
+    method: 'pd.concat()',
   },
   {
     id: 2,
     name: 'Generate Unique PSM',
     description: 'Create unique identifiers for each peptide-spectrum match',
-    package: 'Python/Pandas',
-    function: 'String concat',
+    moduleName: 'Python/Pandas',
+    method: 'String concat',
   },
   {
     id: 3,
     name: 'Remove Razor Information',
     description: 'Filter out razor peptide assignments',
-    package: 'Python',
-    function: 'Custom logic',
+    moduleName: 'Python',
+    method: 'Custom logic',
   },
   {
     id: 4,
     name: 'Remove Low Quality PSM',
     description: 'Filter low-quality peptide-spectrum matches',
-    package: 'Python/Pandas',
-    function: 'Filtering',
+    moduleName: 'Python/Pandas',
+    method: 'Filtering',
   },
   {
     id: 5,
     name: 'Filter Based on Configuration',
     description: 'Apply user-defined filtering criteria',
-    package: 'Python/Pandas',
-    function: 'df.dropna()',
+    moduleName: 'Python/Pandas',
+    method: 'df.dropna()',
   },
   {
     id: 6,
     name: 'Calculate Protein Abundance',
     description: 'Normalize, impute, and aggregate peptides to proteins via QFeatures',
-    package: '',
-    function: '',
+    moduleName: '',
+    method: '',
   },
   {
     id: 7,
     name: 'Differential Expression Analysis',
     description: 'Robust statistical testing via msqrob2 (M-estimation with empirical Bayes)',
-    package: '',
-    function: '',
+    moduleName: '',
+    method: '',
   },
   {
     id: 8,
     name: 'Calculate QC Metrics',
     description: 'Compute quality control metrics and PCA',
-    package: 'Python',
-    function: 'sklearn.decomposition.PCA',
+    moduleName: 'Python',
+    method: 'sklearn.decomposition.PCA',
   },
 ];

@@ -183,8 +183,14 @@ class TaskManager:
             except StopIteration:
                 pass
 
-        # Dequeue ourselves
-        queue.pop(0)
+        # Dequeue ourselves — verify against concurrent cancel()
+        popped = queue.pop(0)
+        if popped[0] != session_id or popped[2].task_id != task_id:
+            # A concurrent cancel() removed our task before we could pop.
+            # Put the popped item back and raise cancellation.
+            queue.insert(0, popped)
+            self._active_tasks.pop(task_id, None)
+            raise TaskCancelledError(f"Task {task_id} cancelled by concurrent cancel")
         info.queue_position = None
 
         if cancel_event.is_set():
@@ -272,8 +278,22 @@ class TaskManager:
                 cancelled = True
                 self._wake_next(kind)
 
+        # Kill any running R subprocess for this session
+        self._kill_r_processes()
+
         self._write_task_status(session_id)
         return cancelled
+
+    def _kill_r_processes(self) -> None:
+        """Kill any running R subprocesses managed by the pipeline wrappers."""
+        try:
+            from app.services.msqrob2_wrapper import msqrob2_wrapper
+            from app.services.msstats_wrapper import msstats_wrapper
+
+            msqrob2_wrapper.cancel()
+            msstats_wrapper.cancel()
+        except Exception as e:
+            logger.warning("Error killing R processes: %s", e)
 
     def get_status(self, session_id: str) -> dict:
         """Return all task states for a session (from in-memory state)."""

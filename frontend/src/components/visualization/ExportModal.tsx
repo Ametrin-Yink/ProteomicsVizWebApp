@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Loader2, Link, Copy, CheckCircle } from 'lucide-react';
 
 interface ExportModalProps {
@@ -17,6 +17,60 @@ export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProp
   const [resultUrl, setResultUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [copied, setCopied] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
+
+  // Focus trap: store previous active element, trap focus, restore on unmount
+  useEffect(() => {
+    previousActiveElement.current = document.activeElement;
+
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const getFocusableElements = () =>
+      Array.from(modal.querySelectorAll<HTMLElement>(focusableSelector));
+
+    // Focus the first focusable element on mount
+    const firstFocusable = getFocusableElements()[0];
+    if (firstFocusable) {
+      // Delay to let the browser render the modal before focusing
+      requestAnimationFrame(() => firstFocusable.focus());
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (e.key !== 'Tab') return;
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      // Restore focus
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [onClose]);
 
   const handleGenerate = useCallback(async () => {
     if (!name.trim()) return;
@@ -49,18 +103,36 @@ export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProp
   }, [resultUrl]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-background rounded-lg w-[480px] max-w-[90vw] shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-modal-heading"
+        className="bg-background rounded-lg w-[480px] max-w-[90vw] shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-lg font-semibold">Export Report</h3>
-          <button onClick={onClose} className="p-2 hover:bg-surface rounded-lg transition-colors"><X className="w-5 h-5" /></button>
+          <h3 id="export-modal-heading" className="text-lg font-semibold">Export Report</h3>
+          <button
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="p-2 hover:bg-surface rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="p-6">
           {state === 'input' && (
             <>
-              <label className="block text-sm font-medium mb-2">Report Name</label>
+              <label className="block text-sm font-medium mb-2" htmlFor="report-name-input">Report Name</label>
               <input
+                id="report-name-input"
                 data-testid="report-name-input"
                 type="text"
                 value={name}

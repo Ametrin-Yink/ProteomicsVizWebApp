@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import type { VolcanoFilters, GSEADatabase, GSEAData } from '@/types/api';
 import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
-import { getDEResults, getQCData, getDataSource, getGSEAStatus, getGSEAData, getComparisonCorrelationData, getBioNetSubnetwork, sessionApiPrefix } from '@/lib/api';
+import { visualizationApi, getDataSource, sessionApiPrefix } from '@/lib/api-client';
 import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
 import { buildQcExport } from '@/lib/figures/qc-figures';
 import { buildGseaExport } from '@/lib/figures/gsea-figures';
@@ -29,6 +29,11 @@ export interface VisualizationModule {
   getExportState?: (sessionId: string, session?: Awaited<ReturnType<typeof getDataSource>>) => Promise<ExportState | null>;
 }
 
+/** Cast any object to Record<string, unknown> for the serialized export data. */
+function toRecord<T>(obj: T): Record<string, unknown> {
+  return obj as unknown as Record<string, unknown>;
+}
+
 function firstComparison(config: { comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>; treatment?: string; control?: string } | undefined): { key: string; label: string } {
   if (config?.comparisons?.length) {
     const c = config.comparisons[0];
@@ -53,7 +58,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     getExportState: async (sessionId, session) => {
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       const comp = firstComparison(s?.config);
-      const deData = await getDEResults(sessionApiPrefix(sessionId), { per_page: 20000, comparison: comp.key || undefined });
+      const deData = await visualizationApi.getDEResults(sessionApiPrefix(sessionId), { per_page: 20000, comparison: comp.key || undefined });
 
       let filters: VolcanoFilters = { foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 };
       if (s?.volcano_filters) {
@@ -68,7 +73,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
       else if (m && typeof m === 'object') markedList = (m as Record<string, string[]>)[comp.key] || [];
 
       const exportData = buildVolcanoExport(deData.results, filters, comp.label, markedList);
-      return { tabId: 'volcano', data: exportData as unknown as Record<string, unknown> };
+      return { tabId: 'volcano', data: toRecord(exportData) };
     },
   },
   {
@@ -79,7 +84,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     description: 'Quality control plots for proteomics analysis',
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId, session) => {
-      const [qcData, s] = await Promise.all([getQCData(sessionApiPrefix(sessionId)), session || getDataSource(sessionApiPrefix(sessionId))]);
+      const [qcData, s] = await Promise.all([visualizationApi.getQCData(sessionApiPrefix(sessionId)), session || getDataSource(sessionApiPrefix(sessionId))]);
       const conditions = new Set<string>();
       s?.config?.comparisons?.forEach(c => {
         Object.keys(c.group1 || {}).forEach(k => conditions.add(k));
@@ -88,7 +93,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
       if (s?.config?.treatment) conditions.add(s.config.treatment);
       if (s?.config?.control) conditions.add(s.config.control);
       const exportData = buildQcExport({ data: qcData, conditionList: Array.from(conditions), selectedComparison: '' });
-      return { tabId: 'qc', data: exportData as unknown as Record<string, unknown> };
+      return { tabId: 'qc', data: toRecord(exportData) };
     },
   },
   {
@@ -100,19 +105,19 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId) => {
       const ALL_DBS: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
-      const status = await getGSEAStatus(sessionApiPrefix(sessionId)).catch(() => null);
+      const status = await visualizationApi.getGSEAStatus(sessionApiPrefix(sessionId)).catch(() => null);
       const dbsToFetch = ALL_DBS.filter(db => status?.databases?.[db] === 'completed');
       if (dbsToFetch.length === 0) return null;
 
       const results = await Promise.all(dbsToFetch.map(async db => {
-        try { const data = await getGSEAData(sessionApiPrefix(sessionId), db, { per_page: 10000 }); return data.results?.length ? { db, data } : null; }
+        try { const data = await visualizationApi.getGSEAData(sessionApiPrefix(sessionId), db, { per_page: 10000 }); return data.results?.length ? { db, data } : null; }
         catch { return null; }
       }));
       const gseaData: Record<string, GSEAData> = {};
       for (const r of results) { if (r) gseaData[r.db] = r.data; }
       if (Object.keys(gseaData).length === 0) return null;
       const exportData = buildGseaExport(gseaData);
-      return { tabId: 'gsea', data: exportData as unknown as Record<string, unknown> };
+      return { tabId: 'gsea', data: toRecord(exportData) };
     },
   },
   {
@@ -123,13 +128,13 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     description: 'Protein and comparison correlation analysis',
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId, session) => {
-      const data = await getComparisonCorrelationData(sessionApiPrefix(sessionId));
+      const data = await visualizationApi.getComparisonCorrelationData(sessionApiPrefix(sessionId));
       if (!data?.similarity_matrix) return null;
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       const comps = s?.config?.comparisons || [];
       const label = comps.length ? comps.map(c => `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`).join(', ') : 'Comparison Correlation';
       const exportData = buildCompareExport(data, label);
-      return { tabId: 'compare', data: exportData as unknown as Record<string, unknown> };
+      return { tabId: 'compare', data: toRecord(exportData) };
     },
   },
   {
@@ -140,7 +145,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     description: 'Protein-protein interaction network from INDRA database',
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId, session) => {
-      const subnetwork = await getBioNetSubnetwork(sessionApiPrefix(sessionId));
+      const subnetwork = await visualizationApi.getBioNetSubnetwork(sessionApiPrefix(sessionId));
       if (!subnetwork || !subnetwork.nodes?.length) return null;
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       let keyTargets: string[] = [];
@@ -148,7 +153,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
       if (Array.isArray(m)) keyTargets = m as string[];
       else if (m && typeof m === 'object') { const perComp = m as Record<string, string[]>; keyTargets = perComp[Object.keys(perComp)[0] || ''] || []; }
       const exportData = buildBioNetExport(subnetwork.nodes, subnetwork.edges, keyTargets, 0.05, 0.5, undefined);
-      return { tabId: 'bionet', data: exportData as unknown as Record<string, unknown> };
+      return { tabId: 'bionet', data: toRecord(exportData) };
     },
   },
 ];

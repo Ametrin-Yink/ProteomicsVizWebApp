@@ -12,6 +12,7 @@ import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 import { useUIStore } from '@/stores/ui-store';
 import { organismsApi } from '@/lib/api-client';
 import { formatGroup } from '@/lib/utils';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import type { Organism } from '@/types';
 
 export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
@@ -72,7 +73,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
   const Toggle: React.FC<{
     checked: boolean;
     onChange: (checked: boolean) => void;
-    label: string;
+    label: React.ReactNode;
     description?: string;
   }> = ({ checked, onChange, label, description }) => (
     <div className="flex items-center justify-between p-3 bg-background rounded-lg border border-border hover:border-border transition-colors">
@@ -248,7 +249,12 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
             <Toggle
               checked={config.remove_razor}
               onChange={(checked) => setConfig({ remove_razor: checked })}
-              label="Remove Razor Peptides"
+              label={
+                <span>
+                  Remove Razor Peptides
+                  <HelpTooltip text="Razor peptides are peptides that match multiple protein groups. Removing them ensures each peptide is uniquely assigned to one protein group, improving specificity of identification and quantification. Recommended for most analyses." />
+                </span>
+              }
               description="Remove peptides that map to multiple proteins (razor peptides). Recommended for most analyses."
             />
           </div>
@@ -273,7 +279,12 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
             <Toggle
               checked={config.strict_filtering}
               onChange={(checked) => setConfig({ strict_filtering: checked })}
-              label="Strict Filtering"
+              label={
+                <span>
+                  Strict Filtering
+                  <HelpTooltip text="Applies a 20% missing value threshold (removes proteins with >20% missing values across samples) and removes proteins identified by only a single peptide. This improves statistical reliability but reduces the total number of proteins analyzed." />
+                </span>
+              }
               description="Apply stricter quality filters to the data. Improves reliability but may reduce coverage."
             />
           </div>

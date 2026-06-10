@@ -110,6 +110,7 @@ class BaseRWrapper(ABC):
     ):
         self.r_executable = settings.r_executable
         self._optimal_ncores: int | None = None
+        self._current_process: subprocess.Popen | None = None
         self.timeout = settings.r_script_timeout
         self.scripts_dir = Path(__file__).resolve().parent.parent.parent / "scripts"
 
@@ -128,6 +129,18 @@ class BaseRWrapper(ABC):
     def get_optimal_ncores(self) -> int | None:
         """Return the cached optimal n_cores from calibration, or None."""
         return self._optimal_ncores
+
+    def cancel(self) -> None:
+        """Kill the currently running R subprocess, if any."""
+        proc = self._current_process
+        if proc is not None:
+            logger.warning("Killing running R subprocess (PID %d)", proc.pid)
+            try:
+                proc.kill()
+                proc.wait(timeout=5)
+            except Exception as e:
+                logger.error("Error killing R subprocess: %s", e)
+            self._current_process = None
 
     # ------------------------------------------------------------------
     # Abstract: subclass-specific config builders
@@ -360,6 +373,7 @@ class BaseRWrapper(ABC):
             bufsize=1,
             env=os.environ,
         )
+        self._current_process = process
 
         stdout_lines: list[str] = []
         stderr_lines: list[str] = []
@@ -430,6 +444,7 @@ class BaseRWrapper(ABC):
             stderr_thread.join(timeout=5)
             raise
         finally:
+            self._current_process = None
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=1)
 

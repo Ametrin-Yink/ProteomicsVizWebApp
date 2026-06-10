@@ -7,7 +7,7 @@ import PathwayTable from '@/components/visualization/PathwayTable';
 import GSEAPlot from '@/components/visualization/GSEAPlot';
 import type { GSEAData, GSEAResult, GSEADatabase, GSEARunStatus } from '@/types/api';
 import { GSEADatabaseLabels } from '@/types/api';
-import { getGSEAData, getDataSource, runGSEA, getGSEAStatus } from '@/lib/api';
+import { visualizationApi, getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
@@ -64,7 +64,7 @@ function GSEAAnalysisContent() {
       setError(null);
       setSelectedPathway(null);
       try {
-        const gseaData = await getGSEAData(apiPrefix, selectedDatabase, {
+        const gseaData = await visualizationApi.getGSEAData(apiPrefix, selectedDatabase, {
           page,
           per_page: pageSize,
           sort_by: sortBy,
@@ -118,7 +118,7 @@ function GSEAAnalysisContent() {
         const comp = formatGroup(c.group1) + '_vs_' + formatGroup(c.group2);
         return DATABASES.map(async (db) => {
           try {
-            const data = await getGSEAData(apiPrefix, db, { per_page: 1, comparison: comp });
+            const data = await visualizationApi.getGSEAData(apiPrefix, db, { per_page: 1, comparison: comp });
             if (data.total && data.total > 0) return { comp, db };
           } catch { /* no results for this combo */ }
           return null;
@@ -145,7 +145,7 @@ function GSEAAnalysisContent() {
   const pollStatus = useCallback(async () => {
     if (!apiPrefix) return;
     try {
-      const status = await getGSEAStatus(apiPrefix);
+      const status = await visualizationApi.getGSEAStatus(apiPrefix);
       if (lastStatusRef.current?.status === status.status) {
         const prev = lastStatusRef.current.databases || {};
         const next = status.databases || {};
@@ -164,7 +164,7 @@ function GSEAAnalysisContent() {
         }
         if (status.status === 'completed') {
           const p = fetchParamsRef.current;
-          const gseaData = await getGSEAData(apiPrefix, p.selectedDatabase, {
+          const gseaData = await visualizationApi.getGSEAData(apiPrefix, p.selectedDatabase, {
             page: 1, per_page: p.pageSize, sort_by: p.sortBy, sort_order: p.sortOrder,
             significant_only: p.significantOnly, search: p.debouncedSearch,
             comparison: p.selectedComparison || undefined,
@@ -179,7 +179,7 @@ function GSEAAnalysisContent() {
             const results = await Promise.all(
               DATABASES.map(async (db) => {
                 try {
-                  const data = await getGSEAData(apiPrefix, db, { per_page: 1, comparison: comp });
+                  const data = await visualizationApi.getGSEAData(apiPrefix, db, { per_page: 1, comparison: comp });
                   if (data.total && data.total > 0) return db;
                 } catch { /* ignore */ }
                 return null;
@@ -213,7 +213,7 @@ function GSEAAnalysisContent() {
   useEffect(() => {
     if (!apiPrefix) return;
     let cancelled = false;
-    getGSEAStatus(apiPrefix).then(async (status) => {
+    visualizationApi.getGSEAStatus(apiPrefix).then(async (status) => {
       if (cancelled) return;
       lastStatusRef.current = status;
       setGseaRunStatus(status);
@@ -221,7 +221,7 @@ function GSEAAnalysisContent() {
         startPolling();
       } else if (status.status === 'completed') {
         const p = fetchParamsRef.current;
-        const gseaData = await getGSEAData(apiPrefix, p.selectedDatabase, {
+        const gseaData = await visualizationApi.getGSEAData(apiPrefix, p.selectedDatabase, {
           page: 1, per_page: p.pageSize, sort_by: p.sortBy, sort_order: p.sortOrder,
           significant_only: p.significantOnly, search: p.debouncedSearch,
           comparison: p.selectedComparison || undefined,
@@ -251,7 +251,7 @@ function GSEAAnalysisContent() {
     if (!selectedComparison || runDatabases.length === 0) return;
     setRunError(null);
     try {
-      await runGSEA(apiPrefix, {
+      await visualizationApi.runGSEA(apiPrefix, {
         comparison: selectedComparison,
         databases: runDatabases,
         min_size: runParams.min_size,

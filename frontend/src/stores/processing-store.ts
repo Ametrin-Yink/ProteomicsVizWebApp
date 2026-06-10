@@ -61,12 +61,12 @@ const createInitialSteps = (
     .map((step) => {
       const patched = { ...step };
       if (step.id === 6) {
-        patched.package = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2+QFeatures';
-        patched.function = pipeline === 'msstats' ? 'dataProcess()' : 'dataProcess()';
+        patched.moduleName = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2+QFeatures';
+        patched.method = pipeline === 'msstats' ? 'dataProcess()' : 'dataProcess()';
       }
       if (step.id === 7) {
-        patched.package = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2';
-        patched.function = pipeline === 'msstats' ? 'groupComparison()' : 'msqrobLm()';
+        patched.moduleName = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2';
+        patched.method = pipeline === 'msstats' ? 'groupComparison()' : 'msqrobLm()';
       }
       return { ...patched, status: 'not_started' as const };
     });

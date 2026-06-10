@@ -248,13 +248,19 @@ export default function BioNetNetwork({
     });
   }, []);
 
+  // Check user's reduced-motion preference
+  const prefersReducedMotion = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  );
+
   // Change layout
   const applyLayout = useCallback((name: LayoutName) => {
     if (!cyRef.current) return;
     setSelectedLayout(name);
-    const opts = { name, animate: true };
+    const opts = { name, animate: !prefersReducedMotion };
     cyRef.current.layout(opts as unknown as cytoscape.LayoutOptions).run();
-  }, []);
+  }, [prefersReducedMotion]);
 
   // Search for a node and center on it
   const doSearch = useCallback((e: React.FormEvent) => {
@@ -426,9 +432,52 @@ export default function BioNetNetwork({
       {/* Cytoscape canvas */}
       <div
         ref={containerRef}
+        role="img"
+        aria-label={`Biological network graph showing ${nodes.length} nodes and ${edges.length} edges`}
         className="w-full rounded-lg border border-border bg-white"
         style={{ minHeight: 500 }}
       />
+
+      {/* Accessible data table toggle */}
+      <details className="mt-2">
+        <summary className="text-xs text-text-secondary cursor-pointer hover:text-text-primary select-none focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 rounded px-1">
+          View network data as table
+        </summary>
+        <div className="mt-2 overflow-x-auto border border-border rounded-lg" role="region" aria-label="Network node and edge data">
+          <table className="w-full text-xs text-left">
+            <caption className="sr-only">Biological network nodes and edges data</caption>
+            <thead>
+              <tr className="bg-surface border-b border-border">
+                <th scope="col" className="px-3 py-2 font-medium text-text-primary">Type</th>
+                <th scope="col" className="px-3 py-2 font-medium text-text-primary">ID</th>
+                <th scope="col" className="px-3 py-2 font-medium text-text-primary">HGNC Name</th>
+                <th scope="col" className="px-3 py-2 font-medium text-text-primary">log2FC</th>
+                <th scope="col" className="px-3 py-2 font-medium text-text-primary">Adj. p-value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((n) => (
+                <tr key={n.id} className="border-b border-border-subtle hover:bg-surface/50">
+                  <td className="px-3 py-1.5 text-text-muted">node</td>
+                  <td className="px-3 py-1.5 text-text-primary font-mono">{n.id}</td>
+                  <td className="px-3 py-1.5 text-text-primary">{n.hgncName}</td>
+                  <td className="px-3 py-1.5 text-text-primary">{n.logFC.toFixed(3)}</td>
+                  <td className="px-3 py-1.5 text-text-primary">{n.pvalue.toExponential(2)}</td>
+                </tr>
+              ))}
+              {edges.map((e, i) => (
+                <tr key={`e${i}`} className="border-b border-border-subtle hover:bg-surface/50">
+                  <td className="px-3 py-1.5 text-text-muted">edge</td>
+                  <td className="px-3 py-1.5 text-text-primary font-mono">{e.source} -&gt; {e.target}</td>
+                  <td className="px-3 py-1.5 text-text-primary">{e.interaction}</td>
+                  <td className="px-3 py-1.5 text-text-primary">{e.evidenceCount}</td>
+                  <td className="px-3 py-1.5 text-text-primary">{e.paperCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
 
       {/* Node detail tooltip (shown on click) */}
       <NodeTooltip cyRef={cyRef} />

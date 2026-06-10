@@ -14,13 +14,7 @@ import type {
   VennData,
   VolcanoFilters,
 } from '@/types/api';
-import {
-  runComparisonCorrelation,
-  getComparisonCorrelationStatus,
-  getComparisonCorrelationData,
-  computeVennData,
-  getDataSource,
-} from '@/lib/api';
+import { visualizationApi, getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { LoaderCircle, AlertCircle } from 'lucide-react';
 import { formatComparisonKeyWrapped } from '@/lib/utils';
@@ -82,7 +76,7 @@ export default function ComparisonCorrelationPanel({ comparisons }: Props) {
 
   // Load cached results on mount (survives tab switch / page reload)
   useEffect(() => {
-    getComparisonCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
+    visualizationApi.getComparisonCorrelationData(apiPrefix).then((d) => setData(d)).catch(() => {});
   }, [apiPrefix]);
 
   const availableVennComparisons = useMemo(() => {
@@ -91,14 +85,14 @@ export default function ComparisonCorrelationPanel({ comparisons }: Props) {
 
   const pollStatus = useCallback(async () => {
     try {
-      const newStatus = await getComparisonCorrelationStatus(apiPrefix);
+      const newStatus = await visualizationApi.getComparisonCorrelationStatus(apiPrefix);
       setStatus(newStatus);
       if (newStatus.status === 'completed') {
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
-        const result = await getComparisonCorrelationData(apiPrefix);
+        const result = await visualizationApi.getComparisonCorrelationData(apiPrefix);
         setData(result);
       } else if (newStatus.status === 'error') {
         if (pollIntervalRef.current) {
@@ -138,7 +132,7 @@ export default function ComparisonCorrelationPanel({ comparisons }: Props) {
       for (const [comp, set] of Object.entries(markedProteins)) {
         markersForApi[comp] = Array.from(set);
       }
-      await runComparisonCorrelation(apiPrefix, {
+      await visualizationApi.runComparisonCorrelation(apiPrefix, {
         primary_comparison: effectivePrimary,
         selected_comparisons: selectedComparisons,
         marked_proteins: markersForApi,
@@ -156,7 +150,7 @@ export default function ComparisonCorrelationPanel({ comparisons }: Props) {
     setVennLoading(true);
     setVennError(null);
     try {
-      const result = await computeVennData(apiPrefix, {
+      const result = await visualizationApi.computeVennData(apiPrefix, {
         comparisons: vennComparisons,
         pvalue_threshold: vennThresholds.adjPValue,
         logfc_threshold: vennThresholds.foldChange,

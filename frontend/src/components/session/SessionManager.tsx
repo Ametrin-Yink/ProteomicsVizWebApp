@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessionStore';
 import { useUIStore } from '@/stores/ui-store';
+import { useSidebar } from '@/components/layout/SidebarContext';
 import { sessionsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/Button';
 import type { Session } from '@/types/session';
@@ -48,6 +49,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const sessionError = useSessionStore((state) => state.error);
   const { setCurrentSession, loadSessions, deleteSession, deleteSessions, updateSession } = useSessionStore();
   const { sidebar, setSidebarCollapsed } = useUIStore();
+  const { isExpanded: sidebarExpanded, toggleSidebar } = useSidebar();
 
   const [activeTab, setActiveTab] = React.useState<'active' | 'completed'>('active');
   const [isScanning, setIsScanning] = React.useState(false);
@@ -215,245 +217,233 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
     }
   };
 
-  // Collapsed sidebar view
-  if (sidebar.isCollapsed) {
-    return (
-      <>
-        <div
-          data-testid="session-panel"
-          className={cn(
-            'fixed left-0 top-0 h-full bg-background border-r border-border',
-            'flex flex-col items-center py-4 z-40',
-            'w-16',
-            className
-          )}
-        >
-          {/* Logo */}
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center mb-6">
-            <FlaskConical className="w-5 h-5 text-white" />
-          </div>
-
-          {/* Recent sessions */}
-          <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
-            {sortedSessions.slice(0, 5).map((session) => (
-              <button
-                key={session.id}
-                onClick={() => handleSessionClick(session)}
-                className={cn(
-                  'w-10 h-10 rounded-lg flex items-center justify-center',
-                  'transition-colors',
-                  currentSession?.id === session.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'hover:bg-surface text-text-secondary'
-                )}
-                title={session.name}
-              >
-                <FlaskConical className="w-5 h-5" />
-              </button>
-            ))}
-          </div>
-
-          {/* Expand button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarCollapsed(false)}
-            className="mt-auto"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </Button>
-        </div>
-
-      </>
-    );
-  }
-
-  // Expanded sidebar view — fixed position to stay visible on scroll
+  // Responsive sidebar: collapsed (w-16) when !sidebarExpanded, expanded (w-80) when sidebarExpanded
   return (
     <>
       <div
         data-testid="session-panel"
         className={cn(
-          'fixed left-0 top-14 bottom-0 z-30 w-80 bg-background border-r border-border',
-          'flex flex-col',
+          'fixed left-0 top-14 bottom-0 z-30 bg-background border-r border-border',
+          'flex flex-col transition-all duration-200',
+          'overflow-hidden',
+          sidebarExpanded ? 'w-80' : 'w-16',
           className
         )}
       >
-        {/* Tabs */}
-        <div className="px-4 pb-2 flex-shrink-0">
-          <div className="flex gap-0.5 p-0.5 bg-surface rounded-lg">
-            <button
-              className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
-                activeTab === 'active'
-                  ? 'bg-background text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary'
-              )}
-              onClick={() => setActiveTab('active')}
-            >
-              <Loader2 className="w-3.5 h-3.5" />
-              Active ({groupedSessions.active.length})
-            </button>
-            <button
-              className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
-                activeTab === 'completed'
-                  ? 'bg-background text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary'
-              )}
-              onClick={() => setActiveTab('completed')}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Completed ({groupedSessions.completed.length})
-            </button>
-          </div>
-        </div>
-
-        {/* Search + Controls in one row */}
-        <div className="px-4 pb-2 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            {/* Search input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search sessions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-2 py-1.5 text-xs bg-surface border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-text-muted"
-              />
-            </div>
-            {/* Icon-only control buttons */}
-            <button
-              onClick={handleRefresh}
-              disabled={isScanning}
-              className={cn(
-                'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
-                'text-text-secondary hover:text-text-primary hover:bg-surface',
-                isScanning && 'opacity-60 cursor-not-allowed'
-              )}
-              title="Refresh sessions"
-              aria-label="Refresh sessions"
-              data-testid="refresh-sessions-btn"
-            >
-              <RefreshCw className={cn('w-4 h-4', isScanning && 'animate-spin')} />
-            </button>
-            <button
-              onClick={toggleSelectMode}
-              className={cn(
-                'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
-                isSelectMode
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface'
-              )}
-              title={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
-              aria-label={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
-              data-testid="select-mode-btn"
-            >
-              <ListChecks className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Select All bar */}
-        {isSelectMode && filteredTabSessions.length > 0 && (
-          <div className="px-4 pb-2 flex items-center gap-2 flex-shrink-0">
-            <input
-              type="checkbox"
-              checked={selectedIds.size === filteredTabSessions.length && filteredTabSessions.length > 0}
-              onChange={toggleSelectAll}
-              className="accent-primary w-4 h-4"
-              data-testid="select-all-checkbox"
-            />
-            <span className="text-xs text-text-secondary">
-              Select All ({filteredTabSessions.length})
-            </span>
-          </div>
-        )}
-
-        {/* Sessions list */}
-        <div data-testid="session-list" className="flex-1 overflow-y-auto px-4 pt-1 pb-4 space-y-1">
-          {sessionsList.length === 0 ? (
-            <div data-testid="no-sessions-message" className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-                <FlaskConical className="w-8 h-8 text-text-muted" />
+        {sidebarExpanded ? (
+          <>
+            {/* Expanded content */}
+            {/* Tabs */}
+            <div className="px-4 pb-2 flex-shrink-0">
+              <div className="flex gap-0.5 p-0.5 bg-surface rounded-lg">
+                <button
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
+                    activeTab === 'active'
+                      ? 'bg-background text-primary shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary'
+                  )}
+                  onClick={() => setActiveTab('active')}
+                >
+                  <Loader2 className="w-3.5 h-3.5" />
+                  Active ({groupedSessions.active.length})
+                </button>
+                <button
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs font-medium rounded-md transition-colors leading-tight',
+                    activeTab === 'completed'
+                      ? 'bg-background text-primary shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary'
+                  )}
+                  onClick={() => setActiveTab('completed')}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Completed ({groupedSessions.completed.length})
+                </button>
               </div>
-              <p className="text-sm text-text-secondary">
-                {sessionError ? 'Failed to load sessions' : 'No sessions yet'}
-              </p>
-              {sessionError && (
-                <p className="text-xs text-error mt-1">
-                  {sessionError}
-                </p>
-              )}
-              <p className="text-xs text-text-muted mt-1">
-                {sessionError ? 'Click Refresh Sessions to retry' : 'Create your first analysis'}
-              </p>
             </div>
-          ) : filteredTabSessions.length === 0 && searchQuery.trim() ? (
-            <div className="text-center py-8">
-              <Search className="w-8 h-8 text-text-muted mx-auto mb-3" />
-              <p className="text-sm text-text-secondary">
-                No sessions matching &ldquo;{searchQuery}&rdquo;
-              </p>
+
+            {/* Search + Controls in one row */}
+            <div className="px-4 pb-2 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search sessions..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-2 py-1.5 text-xs bg-surface border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-text-muted"
+                  />
+                </div>
+                <button
+                  onClick={handleRefresh}
+                  disabled={isScanning}
+                  className={cn(
+                    'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
+                    'text-text-secondary hover:text-text-primary hover:bg-surface',
+                    isScanning && 'opacity-60 cursor-not-allowed'
+                  )}
+                  title="Refresh sessions"
+                  aria-label="Refresh sessions"
+                  data-testid="refresh-sessions-btn"
+                >
+                  <RefreshCw className={cn('w-4 h-4', isScanning && 'animate-spin')} />
+                </button>
+                <button
+                  onClick={toggleSelectMode}
+                  className={cn(
+                    'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
+                    isSelectMode
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-surface'
+                  )}
+                  title={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
+                  aria-label={isSelectMode ? 'Exit selection mode' : 'Select sessions'}
+                  data-testid="select-mode-btn"
+                >
+                  <ListChecks className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          ) : filteredTabSessions.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-text-secondary">
-                No {activeTab} sessions
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {filteredTabSessions.map((session) => (
-                <MiniSessionCard
-                  key={session.id}
-                  session={session}
-                  isActive={currentSession?.id === session.id}
-                  isSelectMode={isSelectMode}
-                  isSelected={selectedIds.has(session.id)}
-                  onSelectChange={(checked) => toggleSelect(session.id, checked)}
-                  onClick={() => !isSelectMode && handleSessionClick(session)}
-                  onDelete={() => !isSelectMode && handleDeleteSession(session.id)}
-                  onRename={(newName) => !isSelectMode && handleRenameSession(session.id, newName)}
+
+            {/* Select All bar */}
+            {isSelectMode && filteredTabSessions.length > 0 && (
+              <div className="px-4 pb-2 flex items-center gap-2 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size === filteredTabSessions.length && filteredTabSessions.length > 0}
+                  onChange={toggleSelectAll}
+                  className="accent-primary w-4 h-4"
+                  data-testid="select-all-checkbox"
                 />
+                <span className="text-xs text-text-secondary">Select All ({filteredTabSessions.length})</span>
+              </div>
+            )}
+
+            {/* Sessions list */}
+            <div data-testid="session-list" className="flex-1 overflow-y-auto px-4 pt-1 pb-4 space-y-1">
+              {sessionsList.length === 0 ? (
+                <div data-testid="no-sessions-message" className="text-center py-8">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
+                    <FlaskConical className="w-8 h-8 text-text-muted" />
+                  </div>
+                  <p className="text-sm text-text-secondary">
+                    {sessionError ? 'Failed to load sessions' : 'No sessions yet'}
+                  </p>
+                  {sessionError && (<p className="text-xs text-error mt-1">{sessionError}</p>)}
+                  <p className="text-xs text-text-muted mt-1">
+                    {sessionError ? 'Click Refresh to retry' : 'Create your first analysis'}
+                  </p>
+                </div>
+              ) : filteredTabSessions.length === 0 && searchQuery.trim() ? (
+                <div className="text-center py-8">
+                  <Search className="w-8 h-8 text-text-muted mx-auto mb-3" />
+                  <p className="text-sm text-text-secondary">No sessions matching &ldquo;{searchQuery}&rdquo;</p>
+                </div>
+              ) : filteredTabSessions.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-text-secondary">No {activeTab} sessions</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredTabSessions.map((session) => (
+                    <MiniSessionCard
+                      key={session.id}
+                      session={session}
+                      isActive={currentSession?.id === session.id}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.has(session.id)}
+                      onSelectChange={(checked) => toggleSelect(session.id, checked)}
+                      onClick={() => !isSelectMode && handleSessionClick(session)}
+                      onDelete={() => !isSelectMode && handleDeleteSession(session.id)}
+                      onRename={(newName) => !isSelectMode && handleRenameSession(session.id, newName)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bulk delete bar */}
+            {isSelectMode && selectedIds.size > 0 && (
+              <div className="p-4 border-t border-border bg-error/5 flex-shrink-0">
+                <Button
+                  variant="primary"
+                  fullWidth
+                  leftIcon={<Trash2 className="w-4 h-4" />}
+                  onClick={handleDeleteSelected}
+                  className="!bg-error hover:!bg-error/90"
+                  data-testid="delete-selected-btn"
+                >
+                  Delete Selected ({selectedIds.size})
+                </Button>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="p-3 border-t border-border text-center flex-shrink-0">
+              <a
+                href="https://github.com/Ametrin-Yink"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-text-muted hover:text-primary transition-colors"
+              >
+                ProteomicsViz by Ametrin-Yink
+              </a>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Collapsed content — icon-only */}
+            {/* Logo */}
+            <div className="flex flex-col items-center pt-4 pb-2">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center mb-2">
+                <FlaskConical className="w-5 h-5 text-white" />
+              </div>
+            </div>
+
+            {/* Recent sessions */}
+            <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
+              {sortedSessions.slice(0, 5).map((session) => (
+                <button
+                  key={session.id}
+                  onClick={() => handleSessionClick(session)}
+                  className={cn(
+                    'w-10 h-10 rounded-lg flex items-center justify-center mx-auto',
+                    'transition-colors',
+                    currentSession?.id === session.id
+                      ? 'bg-primary/10 text-primary'
+                      : 'hover:bg-surface text-text-secondary'
+                  )}
+                  title={session.name}
+                >
+                  <FlaskConical className="w-5 h-5" />
+                </button>
               ))}
             </div>
-          )}
-        </div>
 
-        {/* Bulk delete bar */}
-        {isSelectMode && selectedIds.size > 0 && (
-          <div className="p-4 border-t border-border bg-error/5 flex-shrink-0">
-            <Button
-              variant="primary"
-              fullWidth
-              leftIcon={<Trash2 className="w-4 h-4" />}
-              onClick={handleDeleteSelected}
-              className="!bg-error hover:!bg-error/90"
-              data-testid="delete-selected-btn"
-            >
-              Delete Selected ({selectedIds.size})
-            </Button>
-          </div>
+            {/* Refresh button */}
+            <div className="flex flex-col items-center py-2">
+              <button
+                onClick={handleRefresh}
+                disabled={isScanning}
+                className={cn(
+                  'flex items-center justify-center w-10 h-10 rounded-lg transition-colors',
+                  'text-text-secondary hover:bg-surface',
+                  isScanning && 'opacity-60 cursor-not-allowed'
+                )}
+                title="Refresh sessions"
+                aria-label="Refresh sessions"
+              >
+                <RefreshCw className={cn('w-4 h-4', isScanning && 'animate-spin')} />
+              </button>
+            </div>
+          </>
         )}
-
-        {/* Footer */}
-        <div className="p-3 border-t border-border text-center flex-shrink-0">
-          <a
-            href="https://github.com/Ametrin-Yink"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-text-muted hover:text-primary transition-colors"
-          >
-            ProteomicsViz by Ametrin-Yink
-          </a>
-        </div>
       </div>
 
-      {/* Spacer to push main content to the right of the fixed sidebar */}
-      <div className="w-80 flex-shrink-0" aria-hidden="true" />
-
+      {/* Spacer to push main content to the right */}
+      <div className={sidebarExpanded ? 'w-80 flex-shrink-0' : 'w-16 flex-shrink-0'} aria-hidden="true" />
     </>
   );
 };

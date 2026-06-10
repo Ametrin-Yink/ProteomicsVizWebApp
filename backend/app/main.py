@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.session_store import SessionStore
 from app.models.analysis import STEP_DISPLAY_NAMES
+from app.services.pipeline_registry import get_pipeline as _get_pipeline_definition
 from app.services.session_manager import session_manager
 
 logger = logging.getLogger("proteomics")
@@ -83,9 +84,26 @@ async def lifespan(app: FastAPI):
             f"Session scanning failed: {e} - continuing with empty session list"
         )
 
+    # Clean up old sessions on startup
+    try:
+        cleaned = await session_store.cleanup_old_sessions()
+        if cleaned > 0:
+            logger.info(f"Cleaned up {cleaned} old sessions on startup")
+    except Exception as e:
+        logger.warning(f"Session cleanup on startup failed: {e}")
+
     yield
 
-    # Shutdown
+    # Shutdown: kill any running R subprocesses
+    try:
+        from app.services.msqrob2_wrapper import msqrob2_wrapper
+        from app.services.msstats_wrapper import msstats_wrapper
+
+        msqrob2_wrapper.cancel()
+        msstats_wrapper.cancel()
+        logger.info("Killed any running R subprocesses during shutdown")
+    except Exception as e:
+        logger.warning("Error killing R subprocesses during shutdown: %s", e)
 
 
 # Initialize FastAPI app
@@ -298,10 +316,28 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             # Send current step progress
                             completed_steps = pipeline_state.get("completed_steps", [])
 
+                            # Determine pipeline tool from session config (default to msqrob2)
+                            pipeline_tool = "msqrob2"
+                            try:
+                                session = await session_store.get(session_id)
+                                pipeline_tool = session.pipeline
+                            except Exception:
+                                pass
+                            step_display_map = STEP_DISPLAY_NAMES.get(
+                                pipeline_tool, STEP_DISPLAY_NAMES["msqrob2"]
+                            )
+
+                            # Use actual pipeline step count for progress calculation
+                            try:
+                                pipeline_def = _get_pipeline_definition(pipeline_tool)
+                                total_steps = len(pipeline_def.steps)
+                            except Exception:
+                                total_steps = 9
+
                             # Send progress for completed steps
                             for step_num in completed_steps:
                                 try:
-                                    step_display_name = STEP_DISPLAY_NAMES.get(
+                                    step_display_name = step_display_map.get(
                                         step_num, f"Step {step_num}"
                                     )
                                     progress_msg = {
@@ -313,7 +349,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                             "progress": 100,
                                             "message": f"{step_display_name} completed",
                                             "overall_progress": int(
-                                                (len(completed_steps) / 9) * 100
+                                                (len(completed_steps) / total_steps) * 100
                                             ),
                                         },
                                     }

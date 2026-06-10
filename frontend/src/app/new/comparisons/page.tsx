@@ -232,7 +232,7 @@ function ComparisonsContent() {
       return;
     }
     setIsSaving(false);
-    router.push(`/new/config?session=${sessionId}`);
+    router.replace(`/new/config?session=${sessionId}`);
   };
 
   const canContinue = comparisons.length > 0;

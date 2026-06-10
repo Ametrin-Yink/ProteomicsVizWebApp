@@ -1,7 +1,22 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { getTaskStatus, cancelTasks, type TaskStatus, type TaskInfo } from "@/lib/api";
+import { visualizationApi } from "@/lib/api-client";
+
+interface TaskInfo {
+  kind: string;
+  label: string;
+  status: "queued" | "running" | "completed" | "error" | "cancelled";
+  started_at: string | null;
+  completed_at: string | null;
+  error: string | null;
+  progress: { completed: number; total: number } | null;
+  queue_position: number | null;
+}
+
+interface TaskStatus {
+  tasks: TaskInfo[];
+}
 
 function getCurrentSessionId(): string | null {
   if (typeof window === "undefined") return null;
@@ -43,7 +58,7 @@ export function TaskStatusBar() {
       try {
         const sessionId = getCurrentSessionId();
         if (sessionId) {
-          const data = await getTaskStatus(sessionId);
+          const data = await visualizationApi.getTaskStatus(sessionId);
           const payload = JSON.stringify(data);
           if (payload !== lastPayload.current) {
             lastPayload.current = payload;
@@ -70,8 +85,7 @@ export function TaskStatusBar() {
     try {
       const sessionId = getCurrentSessionId();
       if (!sessionId) return;
-      await cancelTasks(sessionId);
-      fetchStatus();
+      await visualizationApi.cancelTasks(sessionId);
     } catch {
       // silently ignore
     }

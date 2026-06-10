@@ -34,26 +34,44 @@ class Organism(str, Enum):
     YEAST = "yeast"
 
 
-STEP_NAMES: dict[int, str] = {
-    1: "combine_replicates",
-    2: "generate_unique_psm",
-    3: "remove_razor",
-    4: "remove_low_quality",
-    5: "filter",
-    6: "protein_abundance",
-    7: "differential_expression",
-    8: "qc_metrics",
+STEP_NAMES: dict[str, dict[int, str]] = {
+    PipelineTool.MSQROB2: {
+        1: "combine_replicates",
+        2: "generate_unique_psm",
+        3: "protein_abundance",
+        4: "differential_expression",
+        5: "qc_metrics",
+    },
+    PipelineTool.MSSTATS: {
+        1: "combine_replicates",
+        2: "generate_unique_psm",
+        3: "remove_razor",
+        4: "remove_low_quality",
+        5: "filter",
+        6: "protein_abundance",
+        7: "differential_expression",
+        8: "qc_metrics",
+    },
 }
 
-STEP_DISPLAY_NAMES: dict[int, str] = {
-    1: "Combine Replicates",
-    2: "Generate Unique PSM",
-    3: "Remove Razor Peptides",
-    4: "Remove Low Quality",
-    5: "Filter by Criteria",
-    6: "Protein Abundance",
-    7: "Differential Expression",
-    8: "QC Metrics",
+STEP_DISPLAY_NAMES: dict[str, dict[int, str]] = {
+    PipelineTool.MSQROB2: {
+        1: "Combine Replicates",
+        2: "Generate Unique PSM",
+        3: "Protein Abundance (msqrob2/QFeatures)",
+        4: "Differential Expression (msqrob2)",
+        5: "QC Metrics (msqrob2)",
+    },
+    PipelineTool.MSSTATS: {
+        1: "Combine Replicates",
+        2: "Generate Unique PSM",
+        3: "Remove Razor Peptides",
+        4: "Remove Low Quality",
+        5: "Filter by Criteria",
+        6: "Protein Abundance (MSstats)",
+        7: "Differential Expression (MSstats)",
+        8: "QC Metrics",
+    },
 }
 
 
