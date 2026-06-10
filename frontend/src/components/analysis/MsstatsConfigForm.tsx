@@ -3,6 +3,7 @@
 import React from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { SessionConfig } from '@/types';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 
 interface MsstatsConfigFormProps {
   config: SessionConfig;
@@ -22,6 +23,7 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         <div className="mb-4">
           <label className="block text-sm font-medium text-text mb-2">
             Normalization Method
+            <HelpTooltip text="Normalization corrects for systematic technical variation across MS runs. 'Equalize Medians' shifts intensities so each run has the same median. 'Quantile' makes the entire distribution identical across runs. 'Global Standards' uses reference proteins with known abundances." />
           </label>
           <select
             data-testid="msstats-normalization-select"
@@ -41,6 +43,7 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         <div className="mb-4">
           <label className="block text-sm font-medium text-text mb-2">
             Summary Method
+            <HelpTooltip text="How peptide-level intensities are summarized into protein-level abundances. 'Tukey Median Polish' (TMP) is robust against outliers and is the MSstats default. 'Linear Mixed Model' uses a more flexible statistical approach but may be slower for large datasets." />
           </label>
           <select
             data-testid="msstats-summary-select"
@@ -58,6 +61,7 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         <div className="mb-4">
           <label className="block text-sm font-medium text-text mb-2">
             Feature Selection
+            <HelpTooltip text="Which features (peptide ions) to use for protein quantification. 'All Features' uses all available peptides. 'Top 3'/'Top N' uses only the highest-intensity features, reducing noise. 'High Quality' selects features passing quality criteria. Fewer features can improve robustness but reduce statistical power." />
           </label>
           <select
             data-testid="msstats-feature-select"
@@ -99,6 +103,7 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         <div className="mb-4">
           <label className="block text-sm font-medium text-text mb-2">
             Log Base
+            <HelpTooltip text="The logarithmic base for intensity transformation. Log2 is standard for most proteomics data and corresponds to fold changes (log2 FC of 1 = 2-fold change). Log10 may be used for certain specialized analyses. MSstats supports both." />
           </label>
           <select
             data-testid="msstats-logbase-select"
@@ -118,7 +123,10 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         {/* MBimpute */}
         <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors mb-4">
           <div>
-            <span className="text-sm font-medium text-text">MBimpute</span>
+            <span className="text-sm font-medium text-text">
+              MBimpute
+              <HelpTooltip text="Model-based imputation for missing values in MSstats. When enabled, missing intensities are imputed using an accelerated failure time model that accounts for censored values (missing not at random). This is the recommended approach for label-free DDA data." />
+            </span>
             <p className="text-xs text-text-muted mt-0.5">
               Model-based imputation for missing values
             </p>
@@ -141,6 +149,7 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         <div className="mb-4">
           <label className="block text-sm font-medium text-text mb-2">
             Censored Intensity
+            <HelpTooltip text="The value used to represent censored (missing) intensities in the MSstats model. 'NA' treats missing values as censored with unknown intensity. '0' treats them as censored at zero. NA is recommended as it provides more accurate variance estimation." />
           </label>
           <select
             data-testid="msstats-censored-select"
@@ -158,6 +167,7 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         <div className="mb-4">
           <label className="block text-sm font-medium text-text mb-2">
             Max Quantile for Normalization: {config.msstats_max_quantile ?? 0.999}
+            <HelpTooltip text="The maximum quantile used during normalization. Values close to 1.0 use nearly all data for normalization. Lower values truncate the highest intensities, which can help when the highest-intensity features are unreliable or saturate the detector." />
           </label>
           <input
             type="range"
@@ -174,7 +184,10 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         {/* Remove >50% Missing */}
         <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
           <div>
-            <span className="text-sm font-medium text-text">Remove Proteins &gt;50% Missing</span>
+            <span className="text-sm font-medium text-text">
+              Remove Proteins &gt;50% Missing
+              <HelpTooltip text="Removes proteins where more than 50% of the measurements across all runs are missing. This is a quality control filter that eliminates proteins with excessive missing data, which can cause problems in statistical modeling." />
+            </span>
             <p className="text-xs text-text-muted mt-0.5">
               Remove proteins with more than 50% missing values across runs
             </p>

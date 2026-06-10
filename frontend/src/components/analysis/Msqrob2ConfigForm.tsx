@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import type { SessionConfig } from '@/types';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 
 interface Msqrob2ConfigFormProps {
   config: SessionConfig;
@@ -34,6 +35,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
           Normalization Method
+          <HelpTooltip text="Normalization corrects for systematic technical variation across samples, such as differences in total peptide loading or labeling efficiency. 'Center Median' (shift to max) is the recommended default for most TMT-based experiments." />
         </label>
         <select
           data-testid="msqrob2-normalization-select"
@@ -59,6 +61,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
           Missing Value Imputation
+          <HelpTooltip text="Imputation fills in missing peptide intensities before protein aggregation. 'None' filters out peptides with missing values. KNN uses k-nearest neighbors to estimate missing values. BPCA and MLE use model-based approaches. MinDet/MinProb use distribution-based methods. Choose based on the missing data pattern in your dataset." />
         </label>
         <select
           data-testid="msqrob2-imputation-select"
@@ -84,6 +87,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
           Protein Aggregation Method
+          <HelpTooltip text="How peptide-level intensities are combined into protein-level abundance estimates. 'Robust Summary' (MAD-based) is recommended as it is resistant to outlier peptides. 'Median Polish' uses Tukey's additive model. 'Sum' and 'Mean' are simpler but more sensitive to outliers." />
         </label>
         <select
           data-testid="msqrob2-aggregation-select"
@@ -106,6 +110,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
           Differential Expression Model
+          <HelpTooltip text="The statistical model used for detecting differentially expressed proteins. 'msqrobLm' uses M-estimation with Huber weights, providing resistance to outliers. 'msqrobGlm' uses a generalized linear model, suitable for count-based or non-normal data." />
         </label>
         <select
           data-testid="msqrob2-model-select"
@@ -173,6 +178,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
           Batch Correction
+          <HelpTooltip text="If your samples were measured across multiple batches (e.g., different TMT runs), select the metadata column that identifies batch membership. The linear model will include batch as a covariate via limma's removeBatchEffect, reducing unwanted technical variation." />
         </label>
         <select
           data-testid="msqrob2-batch-column-select"
@@ -196,6 +202,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
           Multiple Testing Correction
+          <HelpTooltip text="When testing thousands of proteins simultaneously, p-values must be adjusted to control the false discovery rate (FDR). Benjamini-Hochberg (BH) is the standard method, controlling the expected proportion of false positives. Bonferroni is more conservative, controlling the family-wise error rate." />
         </label>
         <select
           data-testid="msqrob2-adjust-select"
