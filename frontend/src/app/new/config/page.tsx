@@ -21,6 +21,7 @@ import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { organismsApi, sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 import Msqrob2ConfigForm from '@/components/analysis/Msqrob2ConfigForm';
 
@@ -87,7 +88,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
     }
 
     setIsStarting(false);
-    router.push(`/new/summary?session=${sessionId}`);
+    router.replace(`/new/summary?session=${sessionId}`);
   };
 
   const pipelineLabel = selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2';
@@ -140,7 +141,10 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
           <div className="grid grid-cols-2 gap-5">
             <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
               <div>
-                <span className="text-sm font-medium text-text-primary">Remove Razor Peptides</span>
+                <span className="text-sm font-medium text-text-primary">
+                  Remove Razor Peptides
+                  <HelpTooltip text="Razor peptides are peptides that can be assigned to multiple protein groups. When enabled, only peptides uniquely mapping to a single protein group are used for quantification. This improves specificity and is recommended for most analyses." />
+                </span>
                 <p className="text-xs text-text-muted mt-0.5">
                   Exclude peptides matching multiple protein groups
                 </p>
@@ -160,7 +164,10 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
             </label>
             <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
               <div>
-                <span className="text-sm font-medium text-text-primary">Strict Filtering</span>
+                <span className="text-sm font-medium text-text-primary">
+                  Strict Filtering
+                  <HelpTooltip text="Applies a 20% missing value threshold (removes proteins with >20% missing values across samples). Also removes proteins identified by only a single peptide. This improves statistical reliability at the cost of reduced coverage." />
+                </span>
                 <p className="text-xs text-text-muted mt-0.5">
                   20% missing value threshold, remove single-peptide proteins
                 </p>
@@ -198,6 +205,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
               P-Value Threshold
+              <HelpTooltip text="The significance level used to determine differentially expressed proteins. Proteins with an adjusted p-value below this threshold are considered statistically significant. Lower values (e.g., 0.01) are more stringent; higher values (e.g., 0.1) are more permissive. The default of 0.05 is standard in most proteomics studies." />
             </label>
             <div className="flex items-center gap-3">
               <input
@@ -227,6 +235,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
               Log2 Fold Change Threshold
+              <HelpTooltip text="The minimum absolute log2 fold change for a protein to be considered biologically significant. A threshold of 1.0 corresponds to a 2-fold change. Statistical significance (p-value) and biological significance (fold change) are independent filters — both must be met. Increase this value to focus on proteins with larger magnitude changes." />
             </label>
             <div className="flex items-center gap-3">
               <input
@@ -255,7 +264,10 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
           {/* Exclude single-peptide proteins */}
           <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
             <div>
-              <span className="text-sm font-medium text-text-primary">Exclude Single-Peptide Proteins</span>
+              <span className="text-sm font-medium text-text-primary">
+                Exclude Single-Peptide Proteins
+                <HelpTooltip text="Proteins identified by only a single peptide are less reliable. Enabling this removes them from the analysis, improving confidence at the cost of reduced coverage. Proteins with multiple peptides provide more robust quantification." />
+              </span>
               <p className="text-xs text-text-muted mt-0.5">
                 Remove proteins with only one identified peptide from the analysis
               </p>

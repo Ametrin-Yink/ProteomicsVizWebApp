@@ -122,7 +122,7 @@ function SummaryContent() {
       return;
     }
 
-    router.push(`/analysis/processing?session_id=${sessionId}&pipeline=${selectedPipeline}`);
+    router.replace(`/analysis/processing?session_id=${sessionId}&pipeline=${selectedPipeline}`);
   };
 
   const pipelineLabel = selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2';

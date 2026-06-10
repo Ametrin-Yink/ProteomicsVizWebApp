@@ -104,7 +104,7 @@ function UploadContent() {
     setIsSaving(true);
     try {
       await sessionsApi.updateConfig(sessionId, config);
-      router.push(`/new/pipeline?session=${sessionId}`);
+      router.replace(`/new/pipeline?session=${sessionId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save configuration';
       addToast('error', `Failed to save: ${message}`);
