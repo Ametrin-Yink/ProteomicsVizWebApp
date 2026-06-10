@@ -14,6 +14,7 @@ import { TopNavigation } from '@/components/layout/TopNavigation';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
 import { TaskStatusBar } from '@/components/layout/TaskStatusBar';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Load Plus Jakarta Sans font
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -50,13 +51,19 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="antialiased font-sans bg-background overflow-auto">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded"
+        >
+          Skip to main content
+        </a>
         <SidebarProvider>
           {/* Top Navigation Bar */}
           <TopNavigation />
 
           {/* Main Layout Container */}
-          <div className="flex h-screen pt-14">
-            {children}
+          <div id="main-content" className="flex h-screen pt-14">
+            <ErrorBoundary>{children}</ErrorBoundary>
           </div>
 
           {/* Task Status Bar - bottom-right task monitor */}
