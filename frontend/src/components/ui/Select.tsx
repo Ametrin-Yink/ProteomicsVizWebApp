@@ -171,6 +171,9 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const [focusedIndex, setFocusedIndex] = React.useState(-1);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const optionRefs = React.useRef<(HTMLDivElement | null)[]>([]);
 
   // Close on click outside
   React.useEffect(() => {
@@ -183,6 +186,22 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reset focused index when dropdown opens/closes or options change
+  React.useEffect(() => {
+    if (isOpen) {
+      setFocusedIndex(0);
+    } else {
+      setFocusedIndex(-1);
+    }
+  }, [isOpen]);
+
+  // Scroll focused option into view
+  React.useEffect(() => {
+    if (focusedIndex >= 0 && optionRefs.current[focusedIndex]) {
+      optionRefs.current[focusedIndex]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [focusedIndex]);
 
   const toggleOption = (optionValue: string) => {
     if (value.includes(optionValue)) {
@@ -236,6 +255,45 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     error ? 'text-error' : 'text-text-secondary'
   );
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) return;
+
+    switch (e.key) {
+      case 'Escape':
+        e.preventDefault();
+        setIsOpen(false);
+        break;
+
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0));
+        break;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1));
+        break;
+
+      case 'Home':
+        e.preventDefault();
+        setFocusedIndex(0);
+        break;
+
+      case 'End':
+        e.preventDefault();
+        setFocusedIndex(options.length - 1);
+        break;
+
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        if (focusedIndex >= 0 && focusedIndex < options.length) {
+          toggleOption(options[focusedIndex].value);
+        }
+        break;
+    }
+  };
+
   return (
     <div className={containerClasses} ref={containerRef}>
       {label && (
@@ -252,6 +310,8 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
           disabled={disabled}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
+          aria-controls={isOpen ? 'multiselect-listbox' : undefined}
+          aria-activedescendant={focusedIndex >= 0 ? `multiselect-option-${focusedIndex}` : undefined}
         >
           <span className={cn('truncate', !value.length && 'text-text-muted')}>
             {value.length > 0
@@ -267,14 +327,28 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
         </button>
 
         {isOpen && (
-          <div className={dropdownClasses} role="listbox">
-            {options.map((option) => (
+          <div
+            ref={dropdownRef}
+            id="multiselect-listbox"
+            className={dropdownClasses}
+            role="listbox"
+            aria-multiselectable="true"
+            onKeyDown={handleKeyDown}
+            tabIndex={-1}
+          >
+            {options.map((option, index) => (
               <div
                 key={option.value}
-                className={optionClasses(value.includes(option.value))}
+                id={`multiselect-option-${index}`}
+                ref={(el) => { optionRefs.current[index] = el; }}
+                className={cn(
+                  optionClasses(value.includes(option.value)),
+                  focusedIndex === index && 'bg-primary/10 ring-1 ring-primary/30'
+                )}
                 onClick={() => toggleOption(option.value)}
                 role="option"
                 aria-selected={value.includes(option.value)}
+                tabIndex={-1}
               >
                 <input
                   type="checkbox"
