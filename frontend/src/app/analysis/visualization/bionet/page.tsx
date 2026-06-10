@@ -10,6 +10,7 @@ import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { LoaderCircle } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const DEFAULT_SOURCES = [...INDRA_SOURCES];
 const DEFAULT_STATEMENT_TYPES = [...INDRA_STATEMENT_TYPES];
@@ -506,7 +507,9 @@ export default function BioNetPage() {
         </div>
       }
     >
-      <BioNetContent />
+      <ErrorBoundary>
+        <BioNetContent />
+      </ErrorBoundary>
     </Suspense>
   );
 }

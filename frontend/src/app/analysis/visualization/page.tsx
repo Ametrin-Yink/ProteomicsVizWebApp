@@ -8,13 +8,16 @@ import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
 import { visualizationApi, getDataSource, updateVisualizationState } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
+import { useUIStore } from '@/stores/ui-store';
 
 
 function ResultsContent() {
   const { apiPrefix } = useApi();
+  const addToast = useUIStore((s) => s.addToast);
 
   const [data, setData] = useState<DEResultsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -262,7 +265,10 @@ function ResultsContent() {
         newMarked[comp] = new Set(significant);
       }
       setMarkedProteins(newMarked);
-    } catch { /* silently fail */ }
+    } catch (e) {
+      console.error('Batch mark failed:', e);
+      addToast('error', 'Failed to mark significant proteins across comparisons.');
+    }
     finally { setBatchMarkLoading(false); }
   };
 
@@ -551,7 +557,9 @@ export default function ResultsPage() {
         <p className="mt-4 text-text-secondary">Loading...</p>
       </div>
     </div>}>
-      <ResultsContent />
+      <ErrorBoundary>
+        <ResultsContent />
+      </ErrorBoundary>
     </Suspense>
   );
 }
