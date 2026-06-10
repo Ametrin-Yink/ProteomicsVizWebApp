@@ -535,7 +535,7 @@ export const ExperimentTable: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto border border-border rounded-lg">
+      <div className="overflow-x-auto border border-border rounded-lg relative">
         <table data-testid="file-table" className="min-w-full divide-y divide-border">
           <thead className="bg-surface">
             <tr>
