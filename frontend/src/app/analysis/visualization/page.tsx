@@ -13,6 +13,7 @@ import { FilterPanel } from '@/components/visualization/FilterPanel';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { useUIStore } from '@/stores/ui-store';
+import { useDebounce } from '@/hooks/use-debounce';
 
 
 function ResultsContent() {
@@ -33,6 +34,9 @@ function ResultsContent() {
     s0: 0.1, // 10% of foldChange threshold
   });
   const [markedProteins, setMarkedProteins] = useState<Record<string, Set<string>>>({});
+
+  // Debounce filters for Plotly computations (150ms) to avoid re-rendering on every slider mousemove
+  const debouncedFilters = useDebounce(filters, 150);
 
   // Persist filters to localStorage for export use
   useEffect(() => {
@@ -206,13 +210,13 @@ function ResultsContent() {
     const compKey = selectedComparison || comparisonOptions[0]?.value || '';
     if (!compKey) return;
     const significant = data.results
-      .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters))
+      .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, debouncedFilters))
       .map((r) => r.master_protein_accessions);
     setMarkedProteins((prev) => ({
       ...prev,
       [compKey]: new Set(significant),
     }));
-  }, [data, selectedComparison, filters, comparisonOptions]);
+  }, [data, selectedComparison, debouncedFilters, comparisonOptions]);
 
   // Batch mark: mark significant proteins across multiple comparisons
   const [batchMarkOpen, setBatchMarkOpen] = useState(false);
@@ -260,7 +264,7 @@ function ResultsContent() {
           per_page: 20000,
         });
         const significant = results.results
-          .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters))
+          .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, debouncedFilters))
           .map((r) => r.master_protein_accessions);
         newMarked[comp] = new Set(significant);
       }
@@ -312,12 +316,12 @@ function ResultsContent() {
     return undefined;
   }, [selectedComparison, sessionConfig]);
 
-  // Calculate DE counts based on current filters
+  // Calculate DE counts based on debounced filters (avoids re-rendering on every slider mousemove)
   const deCounts = useMemo(() => {
     if (!data) return { total: 0, up: 0, down: 0 };
 
     const significant = data.results.filter(
-      (r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, filters)
+      (r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, debouncedFilters)
     );
 
     return {
@@ -325,7 +329,7 @@ function ResultsContent() {
       up: significant.filter((r) => r.log_fc > 0).length,
       down: significant.filter((r) => r.log_fc < 0).length,
     };
-  }, [data, filters]);
+  }, [data, debouncedFilters]);
 
   if (loading) {
     return (
@@ -482,7 +486,7 @@ function ResultsContent() {
             {/* Volcano Plot */}
             <VolcanoPlot
               data={data.results}
-              filters={filters}
+              filters={debouncedFilters}
               selectedProteins={selectedProteins}
               markedProteins={markedProteins[selectedComparison || comparisonOptions[0]?.value || ''] ?? new Set()}
               onSelectProteins={handleSelectProteins}
@@ -505,7 +509,7 @@ function ResultsContent() {
               data={data.results}
               selectedProteins={selectedProteins}
               onSelectProtein={handleSelectProteinFromTable}
-              filters={filters}
+              filters={debouncedFilters}
               sessionConfig={sessionConfig}
               markedProteins={markedProteins[selectedComparison || comparisonOptions[0]?.value || ''] ?? new Set()}
               onToggleMark={handleToggleMark}
