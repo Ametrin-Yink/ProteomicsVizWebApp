@@ -86,7 +86,6 @@ export interface SessionConfig {
 
 export interface SessionFiles {
   proteomics: string[];
-  compound?: string;
 }
 
 // ============================================================================
@@ -116,17 +115,6 @@ export interface UploadProgress {
   progress: number;
   status: 'pending' | 'uploading' | 'completed' | 'error';
   error?: string;
-}
-
-export interface CompoundInfo {
-  corp_id: string;
-  smiles: string;
-}
-
-export interface CompoundFileData {
-  filename: string;
-  size: number;
-  compounds: CompoundInfo[];
 }
 
 // ============================================================================

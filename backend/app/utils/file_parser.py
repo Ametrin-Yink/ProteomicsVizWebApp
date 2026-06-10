@@ -1,7 +1,7 @@
 """
 CSV file parsing utilities with filename extraction.
 
-Handles parsing of PSM CSV files and extraction of metadata from filenames.
+Handles parsing of proteomics PSM CSV files and extraction of metadata from filenames.
 """
 
 import asyncio
@@ -47,7 +47,7 @@ PSM_FILENAME_PATTERN = re.compile(
 
 
 class FileParser:
-    """Parser for proteomics and compound files."""
+    """Parser for proteomics PSM files."""
 
     async def parse_proteomics_file(
         self, filename: str, content: bytes, session_dir: Path
@@ -100,72 +100,6 @@ class FileParser:
             uploaded_at=datetime.now().isoformat(),
             path=str(file_path),
         )
-
-    async def parse_compound_file(
-        self, filename: str, content: bytes, session_dir: Path
-    ) -> UploadedFileMetadata:
-        """
-        Parse and validate a compound CSV file.
-
-        Args:
-            filename: Original filename
-            content: File content as bytes
-            session_dir: Directory to save the file
-
-        Returns:
-            UploadedFileMetadata with file information
-
-        Raises:
-            InvalidFileFormatError: If file is invalid
-        """
-        # Sanitize filename
-        safe_filename = sanitize_filename(filename)
-
-        # Save file
-        file_path = session_dir / safe_filename
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(content)
-
-        # Validate CSV content
-        try:
-            df = await asyncio.to_thread(pd.read_csv, file_path)
-            # Check for required columns (case-insensitive, space/underscore agnostic)
-            columns_normalized = [
-                col.lower().replace(" ", "_").replace("-", "_") for col in df.columns
-            ]
-            if (
-                "corp_id" not in columns_normalized
-                and "compound_id" not in columns_normalized
-            ):
-                raise InvalidFileFormatError(
-                    message=f"Missing corp_id or compound_id column in {filename}",
-                    details={
-                        "filename": filename,
-                        "available_columns": list(df.columns),
-                    },
-                )
-        except Exception as e:
-            if not isinstance(e, InvalidFileFormatError):
-                e = InvalidFileFormatError(
-                    message=f"Invalid CSV content in {filename}",
-                    details={"filename": filename, "error": str(e)},
-                )
-            # Clean up saved file on validation error
-            if file_path.exists():
-                file_path.unlink()
-            raise e
-
-        return UploadedFileMetadata(
-            filename=safe_filename,
-            original_filename=filename,
-            size=len(content),
-            content_type="text/csv",
-            uploaded_at=datetime.now().isoformat(),
-            path=str(file_path),
-        )
-
 
 def parse_psm_filename(filename: str) -> ParsedFilename:
     """
@@ -302,40 +236,6 @@ def extract_columns_from_csv(file_path: Path) -> list[str]:
             message=f"Failed to read CSV columns: {file_path.name}",
             details={"filename": file_path.name, "error": str(e)},
         ) from e
-
-
-def parse_compound_csv(file_path: Path) -> pd.DataFrame:
-    """
-    Parse a compound ID CSV file.
-
-    Expected columns:
-    - corp_id: Corporate compound ID
-    - smiles: SMILES string
-
-    Args:
-        file_path: Path to the CSV file
-
-    Returns:
-        DataFrame with compound data
-    """
-    try:
-        df = pd.read_csv(file_path)
-    except Exception as e:
-        raise InvalidFileFormatError(
-            message=f"Failed to read compound CSV: {file_path.name}",
-            details={"filename": file_path.name, "error": str(e)},
-        ) from e
-
-    # Check for required columns (case-insensitive)
-    columns_lower = [col.lower() for col in df.columns]
-
-    if "corp_id" not in columns_lower and "compound_id" not in columns_lower:
-        raise InvalidFileFormatError(
-            message=f"Missing corp_id column in {file_path.name}",
-            details={"filename": file_path.name, "available_columns": list(df.columns)},
-        )
-
-    return df
 
 
 def get_file_size(file_path: Path) -> int:

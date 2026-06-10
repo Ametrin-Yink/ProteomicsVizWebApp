@@ -34,7 +34,6 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     completedAt: null,
     errorMessage: null,
     uploadedFiles: [],
-    compoundFile: null,
     results: null,
     ...overrides,
   };

@@ -20,7 +20,6 @@ import type {
   ApiError,
   SessionConfig,
   UploadedFile,
-  CompoundFileData,
   Organism,
 } from '@/types';
 import type { Session, SessionStatus, AnalysisConfig } from '@/types/session';
@@ -73,7 +72,6 @@ interface BackendSession {
   error_message: string | null;
   files?: {
     proteomics: unknown[];
-    compound: unknown | null;
   };
 }
 
@@ -318,7 +316,6 @@ export const sessionsApi = {
       completedAt: backendSession.completed_at ?? null,
       errorMessage: backendSession.error_message,
       uploadedFiles: [],
-      compoundFile: null,
       results: sessionStatus === 'completed' ? defaultSessionResults() : null,
     };
   },
@@ -349,7 +346,6 @@ export const sessionsApi = {
       completedAt: backendSession.completed_at ?? null,
       errorMessage: backendSession.error_message,
       uploadedFiles: [],
-      compoundFile: null,
       results: sessionStatus === 'completed' ? defaultSessionResults() : null,
     };
   },
@@ -380,8 +376,7 @@ export const sessionsApi = {
         completedAt: s.completed_at ?? null,
         errorMessage: s.error_message,
         uploadedFiles: [],
-        compoundFile: null,
-        results: sessionStatus === 'completed' ? defaultSessionResults() : null,
+          results: sessionStatus === 'completed' ? defaultSessionResults() : null,
       };
     });
   },
@@ -518,22 +513,6 @@ export const uploadApi = {
     return allResults;
   },
 
-  /**
-   * Upload compound file
-   */
-  uploadCompound: async (sessionId: string, file: File): Promise<CompoundFileData> => {
-    const formData = new FormData();
-    formData.append('file', file);  // Compound endpoint expects 'file' (singular)
-
-    const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/compound`), {
-      method: 'POST',
-      body: formData,
-    });
-
-    // Backend returns { message, file: {...} }, extract the file field
-    const responseData = await handleResponse<{ message: string; file: CompoundFileData }>(response);
-    return responseData.file;
-  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════

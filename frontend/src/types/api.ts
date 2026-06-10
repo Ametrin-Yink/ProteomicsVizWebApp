@@ -7,7 +7,6 @@ export type { ApiResponse, ApiError, SessionConfig } from './index';
 
 export interface SessionFiles {
   proteomics: string[];
-  compound?: string;
 }
 
 // Differential Expression Results

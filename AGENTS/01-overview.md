@@ -18,7 +18,7 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 ProteomicsVizWebApp/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routes/        # 8 route modules (sessions, upload, analysis, processing, visualization, reports, compounds, compare)
+│   │   ├── api/routes/        # 7 route modules (sessions, upload, analysis, processing, visualization, reports, compare)
 │   │   ├── core/              # config, exceptions
 │   │   ├── db/                # JSON session store
 │   │   ├── models/            # Pydantic models

@@ -83,7 +83,6 @@ export interface Session {
 
   // File references
   uploadedFiles: UploadedFile[];
-  compoundFile: CompoundFile | null;
 
   // Results
   results: SessionResults | null;
@@ -99,16 +98,6 @@ export interface UploadedFile {
   condition: string;
   replicate: number;
   uploadedAt: string;
-}
-
-// Compound file (combined replicates)
-export interface CompoundFile {
-  id: string;
-  filename: string;
-  size: number;
-  rowCount: number;
-  columnCount: number;
-  createdAt: string;
 }
 
 // Session results

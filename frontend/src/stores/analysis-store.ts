@@ -7,7 +7,6 @@ import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import type {
   ParsedFilename,
-  CompoundFileData,
   UploadProgress,
   SessionConfig,
   ValidationWarning,
@@ -22,7 +21,6 @@ interface AnalysisState {
   // File upload state
   uploadedFiles: ParsedFilename[];
   uploadProgress: UploadProgress[];
-  compoundFile: CompoundFileData | null;
 
   // Selection state
   selectedFiles: Set<string>;
@@ -50,7 +48,6 @@ interface AnalysisState {
   addUploadedFile: (file: ParsedFilename) => void;
   removeUploadedFile: (filename: string) => void;
   setUploadProgress: (filename: string, progress: number, status: UploadProgress['status']) => void;
-  setCompoundFile: (data: CompoundFileData | null) => void;
   toggleFileSelection: (filename: string) => void;
   selectAllFiles: () => void;
   deselectAllFiles: () => void;
@@ -102,7 +99,6 @@ export const useAnalysisStore = create<AnalysisState>()(
     // Initial state
     uploadedFiles: [],
     uploadProgress: [],
-    compoundFile: null,
     selectedFiles: new Set<string>(),
     selectedTemplate: 'protein',
     selectedPipeline: null,
@@ -170,12 +166,6 @@ export const useAnalysisStore = create<AnalysisState>()(
         } else {
           state.uploadProgress.push({ filename, progress, status });
         }
-      });
-    },
-
-    setCompoundFile: (data) => {
-      set((state) => {
-        state.compoundFile = data;
       });
     },
 
@@ -269,7 +259,6 @@ export const useAnalysisStore = create<AnalysisState>()(
       set((state) => {
         state.uploadedFiles = [];
         state.uploadProgress = [];
-        state.compoundFile = null;
         state.selectedFiles.clear();
         state.selectedTemplate = 'protein';
         state.selectedPipeline = null;

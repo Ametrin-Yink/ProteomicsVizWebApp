@@ -49,7 +49,7 @@ interface Session {
   pipeline: 'msqrob2' | 'msstats';
   state: 'created' | 'configuring' | 'queued' | 'processing' | 'completed' | 'error' | 'cancelled';
   config?: SessionConfig;
-  files?: { proteomics: string[]; compound?: string };
+  files?: { proteomics: string[] };
   created_at: string;
 }
 

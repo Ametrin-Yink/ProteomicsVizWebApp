@@ -21,7 +21,6 @@ Tests/
 │   ├── 07-queue-concurrency.spec.ts         # Concurrent session queue behavior
 │   └── 08-session-manager-improvements.spec.ts  # Scan, multi-select, tabs
 ├── fixtures/                 # Test data CSVs
-│   ├── compounds.csv
 │   ├── PSM_SampleData_*.csv
 │   └── test_*.tsv
 └── downloads/                # Generated test downloads

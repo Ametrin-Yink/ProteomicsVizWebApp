@@ -11,7 +11,6 @@ import { Play, ArrowLeft, Loader2 } from 'lucide-react';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
-import CompoundDisplay from '@/components/analysis/CompoundDisplay';
 import ConfigPanel from '@/components/analysis/ConfigPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
@@ -283,7 +282,7 @@ function AnalysisContent() {
               <div className="px-5 py-3 border-b border-border">
                 <h2 className="font-semibold text-text-primary">1. Data Input</h2>
                 <p className="text-sm text-text-muted mt-1">
-                  Upload proteomics data files and optional compound information
+                  Upload proteomics data files
                 </p>
               </div>
               <div className="p-5">
@@ -317,18 +316,6 @@ function AnalysisContent() {
               </div>
             </section>
 
-            {/* Compound Display Section */}
-            <section className="bg-background border border-border rounded-lg">
-              <div className="px-5 py-3 border-b border-border">
-                <h2 className="font-semibold text-text-primary">4. Compound Information</h2>
-                <p className="text-sm text-text-muted mt-1">
-                  View compound structures matched to conditions
-                </p>
-              </div>
-              <div className="p-5">
-                <CompoundDisplay />
-              </div>
-            </section>
           </div>
 
           {/* Right Column - Configuration */}
