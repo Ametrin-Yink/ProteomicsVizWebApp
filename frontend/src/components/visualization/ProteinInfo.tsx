@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import type { DEResult, ProteinAbundance, PeptideAbundanceData, VolcanoFilters } from '@/types/api';
 import { formatNumber, formatPValue, getSignificanceLabel, getVolcanoPointColor, parseDelimited } from '@/lib/utils';
-import { getProteinAbundance, getPeptideAbundance } from '@/lib/api';
+import { visualizationApi } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { ProteinAbundancePlot, PeptideAbundancePlot } from './AbundancePlot';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -67,8 +67,8 @@ export default function ProteinInfo({ protein, isLoading, filters, comparison }:
       setError(null);
       try {
         const [proteinData, peptideData] = await Promise.all([
-          getProteinAbundance(apiPrefix, accession, comparison),
-          getPeptideAbundance(apiPrefix, accession, comparison),
+          visualizationApi.getProteinAbundance(apiPrefix, accession, comparison),
+          visualizationApi.getPeptideAbundance(apiPrefix, accession, comparison),
         ]);
         setProteinAbundance(proteinData);
         setPeptideAbundance(peptideData);

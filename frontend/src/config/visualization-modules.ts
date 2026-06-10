@@ -140,7 +140,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     description: 'Protein-protein interaction network from INDRA database',
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId, session) => {
-      const subnetwork = await getBioNetSubnetwork(sessionApiPrefix(sessionId));
+      const subnetwork = await visualizationApi.getBioNetSubnetwork(sessionApiPrefix(sessionId));
       if (!subnetwork || !subnetwork.nodes?.length) return null;
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       let keyTargets: string[] = [];

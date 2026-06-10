@@ -183,8 +183,14 @@ class TaskManager:
             except StopIteration:
                 pass
 
-        # Dequeue ourselves
-        queue.pop(0)
+        # Dequeue ourselves — verify against concurrent cancel()
+        popped = queue.pop(0)
+        if popped[0] != session_id or popped[2].task_id != task_id:
+            # A concurrent cancel() removed our task before we could pop.
+            # Put the popped item back and raise cancellation.
+            queue.insert(0, popped)
+            self._active_tasks.pop(task_id, None)
+            raise TaskCancelledError(f"Task {task_id} cancelled by concurrent cancel")
         info.queue_position = None
 
         if cancel_event.is_set():
