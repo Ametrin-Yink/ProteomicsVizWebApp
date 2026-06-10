@@ -1,10 +1,10 @@
 """Shared FastAPI dependencies."""
 
-from app.core.config import settings
+from fastapi import Request
+
 from app.db.session_store import SessionStore
 
 
-def get_session_store() -> SessionStore:
-    """Retrieve the session store from app state."""
-    store = SessionStore(settings.sessions_dir)
-    return store
+def get_session_store(request: Request) -> SessionStore:
+    """Retrieve the singleton session store from app state."""
+    return request.app.state.session_store
