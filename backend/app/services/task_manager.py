@@ -272,8 +272,22 @@ class TaskManager:
                 cancelled = True
                 self._wake_next(kind)
 
+        # Kill any running R subprocess for this session
+        self._kill_r_processes()
+
         self._write_task_status(session_id)
         return cancelled
+
+    def _kill_r_processes(self) -> None:
+        """Kill any running R subprocesses managed by the pipeline wrappers."""
+        try:
+            from app.services.msqrob2_wrapper import msqrob2_wrapper
+            from app.services.msstats_wrapper import msstats_wrapper
+
+            msqrob2_wrapper.cancel()
+            msstats_wrapper.cancel()
+        except Exception as e:
+            logger.warning("Error killing R processes: %s", e)
 
     def get_status(self, session_id: str) -> dict:
         """Return all task states for a session (from in-memory state)."""

@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import type { VolcanoFilters, GSEADatabase, GSEAData } from '@/types/api';
 import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
-import { getDEResults, getQCData, getDataSource, getGSEAStatus, getGSEAData, getComparisonCorrelationData, getBioNetSubnetwork, sessionApiPrefix } from '@/lib/api';
+import { visualizationApi, getDataSource, sessionApiPrefix } from '@/lib/api-client';
 import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
 import { buildQcExport } from '@/lib/figures/qc-figures';
 import { buildGseaExport } from '@/lib/figures/gsea-figures';
@@ -53,7 +53,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     getExportState: async (sessionId, session) => {
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       const comp = firstComparison(s?.config);
-      const deData = await getDEResults(sessionApiPrefix(sessionId), { per_page: 20000, comparison: comp.key || undefined });
+      const deData = await visualizationApi.getDEResults(sessionApiPrefix(sessionId), { per_page: 20000, comparison: comp.key || undefined });
 
       let filters: VolcanoFilters = { foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 };
       if (s?.volcano_filters) {
@@ -79,7 +79,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     description: 'Quality control plots for proteomics analysis',
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId, session) => {
-      const [qcData, s] = await Promise.all([getQCData(sessionApiPrefix(sessionId)), session || getDataSource(sessionApiPrefix(sessionId))]);
+      const [qcData, s] = await Promise.all([visualizationApi.getQCData(sessionApiPrefix(sessionId)), session || getDataSource(sessionApiPrefix(sessionId))]);
       const conditions = new Set<string>();
       s?.config?.comparisons?.forEach(c => {
         Object.keys(c.group1 || {}).forEach(k => conditions.add(k));
@@ -100,12 +100,12 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId) => {
       const ALL_DBS: GSEADatabase[] = ['go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'];
-      const status = await getGSEAStatus(sessionApiPrefix(sessionId)).catch(() => null);
+      const status = await visualizationApi.getGSEAStatus(sessionApiPrefix(sessionId)).catch(() => null);
       const dbsToFetch = ALL_DBS.filter(db => status?.databases?.[db] === 'completed');
       if (dbsToFetch.length === 0) return null;
 
       const results = await Promise.all(dbsToFetch.map(async db => {
-        try { const data = await getGSEAData(sessionApiPrefix(sessionId), db, { per_page: 10000 }); return data.results?.length ? { db, data } : null; }
+        try { const data = await visualizationApi.getGSEAData(sessionApiPrefix(sessionId), db, { per_page: 10000 }); return data.results?.length ? { db, data } : null; }
         catch { return null; }
       }));
       const gseaData: Record<string, GSEAData> = {};
@@ -123,7 +123,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     description: 'Protein and comparison correlation analysis',
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId, session) => {
-      const data = await getComparisonCorrelationData(sessionApiPrefix(sessionId));
+      const data = await visualizationApi.getComparisonCorrelationData(sessionApiPrefix(sessionId));
       if (!data?.similarity_matrix) return null;
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       const comps = s?.config?.comparisons || [];

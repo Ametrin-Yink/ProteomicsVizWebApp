@@ -1,6 +1,18 @@
 /**
- * Extended API client for backend communication
- * Includes upload, session management, and processing APIs
+ * Unified API client for backend communication
+ * Merged from api-client.ts + api.ts — all API surfaces live here.
+ *
+ * Namespace guide:
+ *  - sessionsApi      : session CRUD
+ *  - uploadApi         : file upload
+ *  - processingApi     : pipeline start/status/retry/cancel/logs
+ *  - visualizationApi  : DE results, QC, GSEA, protein/peptide abundance,
+ *                        BioNet, Compare, Task status
+ *  - organismsApi      : organism listing
+ *  - exportApi         : report list/delete
+ *  - getDataSource     : fetch full session config (legacy)
+ *  - updateVisualizationState : persist markers/filters
+ *  - sessionApiPrefix / reportApiPrefix : URL prefix helpers
  */
 
 import type {
@@ -13,6 +25,26 @@ import type {
   Organism,
 } from '@/types';
 import type { Session, SessionStatus, AnalysisConfig } from '@/types/session';
+import type {
+  DEResultsData,
+  QCData,
+  GSEAData,
+  GSEADatabase,
+  GSEARunStatus,
+  ProteinAbundance,
+  PeptideAbundanceData,
+  GSEAPlotData,
+  GSEAHeatmapData,
+  CompareRunStatus,
+  ProteinCorrelationData,
+  ComparisonCorrelationData,
+  VennData,
+  ProteinListEntry,
+  ClusterMethod,
+  BioNetRunRequest,
+  BioNetRunStatus,
+  BioNetSubnetwork,
+} from '@/types/api';
 
 // Use empty base URL to go through Next.js proxy (avoids CORS)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -210,8 +242,50 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 /**
- * Sessions API
+ * Lightweight JSON fetch for endpoints that don't go through /api sessions.
+ * Used by visualizationApi functions that receive an apiPrefix from context.
  */
+async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: { message: 'Unknown error occurred', code: 'UNKNOWN_ERROR' },
+    }));
+    throw new APIError(
+      error.error?.message || `HTTP ${response.status}`,
+      'FETCH_ERROR',
+      response.status
+    );
+  }
+
+  const data: ApiResponse<T> = await response.json();
+  // Handle both wrapped ({ data: T }) and unwrapped (T) responses
+  return 'data' in data ? data.data : data as T;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  URL prefix helpers
+// ═══════════════════════════════════════════════════════════════════════
+
+export function sessionApiPrefix(sessionId: string): string {
+  return `/api/sessions/${sessionId}`;
+}
+
+export function reportApiPrefix(reportId: string): string {
+  return `/api/reports/${reportId}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Sessions API
+// ═══════════════════════════════════════════════════════════════════════
+
 export const sessionsApi = {
   /**
    * Create a new session
@@ -386,9 +460,10 @@ export const sessionsApi = {
   },
 };
 
-/**
- * File Upload API
- */
+// ═══════════════════════════════════════════════════════════════════════
+//  File Upload API
+// ═══════════════════════════════════════════════════════════════════════
+
 export const uploadApi = {
   /**
    * Upload proteomics files in batches to avoid Next.js proxy limitations
@@ -462,9 +537,10 @@ export const uploadApi = {
   },
 };
 
-/**
- * Processing API
- */
+// ═══════════════════════════════════════════════════════════════════════
+//  Processing API  (pipeline lifecycle)
+// ═══════════════════════════════════════════════════════════════════════
+
 export const processingApi = {
   /**
    * Start processing
@@ -480,15 +556,369 @@ export const processingApi = {
   /**
    * Get processing status
    */
-  getStatus: async (sessionId: string): Promise<ProcessingStatus> => {
+  getStatus: async (sessionId: string) => {
     const response = await fetch(apiUrl(`/sessions/${sessionId}/status`));
     return handleResponse<ProcessingStatus>(response);
   },
+
+  /**
+   * Retry processing after a failure
+   */
+  retry: async (sessionId: string): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/retry`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse<{ success: boolean; message: string }>(response);
+  },
+
+  /**
+   * Cancel processing
+   */
+  cancel: async (sessionId: string): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/cancel`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse<{ success: boolean; message: string }>(response);
+  },
+
+  /**
+   * Get processing logs
+   */
+  getLogs: async (sessionId: string): Promise<{
+    logs: Array<{
+      level: 'info' | 'warning' | 'error';
+      message: string;
+      step?: number;
+      timestamp: string;
+    }>;
+    completed_steps: number[];
+    current_step: number;
+    is_complete: boolean;
+    outputs: Record<string, string> | null;
+  }> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/logs`));
+    return handleResponse(response);
+  },
 };
 
+// ═══════════════════════════════════════════════════════════════════════
+//  Visualization API  (results, GSEA, BioNet, Compare, Tasks)
+// ═══════════════════════════════════════════════════════════════════════
+
+export const visualizationApi = {
+  // ── DE Results ──
+
+  getDEResults: (
+    apiPrefix: string,
+    params?: {
+      significant_only?: boolean;
+      page?: number;
+      per_page?: number;
+      sort_by?: string;
+      sort_order?: 'asc' | 'desc';
+      comparison?: string;
+    }
+  ): Promise<DEResultsData> => {
+    const queryParams = new URLSearchParams();
+    if (params?.significant_only) queryParams.append('significant_only', 'true');
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.per_page) queryParams.append('page_size', params.per_page.toString());
+    if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
+    if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+    if (params?.comparison) queryParams.append('comparison', params.comparison);
+
+    const query = queryParams.toString();
+    return fetchApi<DEResultsData>(`${apiPrefix}/results${query ? `?${query}` : ''}`);
+  },
+
+  // ── QC ──
+
+  getQCData: (apiPrefix: string): Promise<QCData> => {
+    return fetchApi<QCData>(`${apiPrefix}/qc/plots`);
+  },
+
+  // ── GSEA ──
+
+  getGSEAData: (
+    apiPrefix: string,
+    database: GSEADatabase,
+    params?: {
+      significant_only?: boolean;
+      page?: number;
+      per_page?: number;
+      sort_by?: string;
+      sort_order?: 'asc' | 'desc';
+      search?: string;
+      comparison?: string;
+    }
+  ): Promise<GSEAData> => {
+    const queryParams = new URLSearchParams();
+    if (params?.significant_only) queryParams.append('significant_only', 'true');
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.per_page) queryParams.append('page_size', params.per_page.toString());
+    if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
+    if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.comparison) queryParams.append('comparison', params.comparison);
+
+    const query = queryParams.toString();
+    return fetchApi<GSEAData>(`${apiPrefix}/gsea/${database}${query ? `?${query}` : ''}`);
+  },
+
+  /** GSEA plot data (on-demand) */
+  getGSEAPlotData: (
+    apiPrefix: string,
+    database: GSEADatabase,
+    term: string,
+    comparison?: string
+  ): Promise<GSEAPlotData> => {
+    const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
+    return fetchApi<GSEAPlotData>(`${apiPrefix}/gsea/${database}/plot?term=${encodeURIComponent(term)}${compParam}`);
+  },
+
+  /** GSEA heatmap data (on-demand) */
+  getGSEAHeatmapData: (
+    apiPrefix: string,
+    database: GSEADatabase,
+    term: string,
+    comparison?: string
+  ): Promise<GSEAHeatmapData> => {
+    const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
+    return fetchApi<GSEAHeatmapData>(`${apiPrefix}/gsea/${database}/heatmap?term=${encodeURIComponent(term)}${compParam}`);
+  },
+
+  /** Run GSEA on-demand */
+  runGSEA: (
+    apiPrefix: string,
+    body: {
+      comparison: string;
+      databases: string[];
+      min_size?: number;
+      max_size?: number;
+      permutations?: number;
+    }
+  ): Promise<{ comparison: string; databases: string[]; summary: Record<string, { total_pathways: number; significant_pathways: number }> }> => {
+    return fetchApi(`${apiPrefix}/gsea/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** GSEA run status */
+  getGSEAStatus: (apiPrefix: string): Promise<GSEARunStatus> => {
+    return fetchApi<GSEARunStatus>(`${apiPrefix}/gsea/status`);
+  },
+
+  // ── Protein Abundance ──
+
+  getProteinAbundance: (
+    apiPrefix: string,
+    proteinId: string,
+    comparison?: string
+  ): Promise<ProteinAbundance> => {
+    const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
+    return fetchApi<ProteinAbundance>(`${apiPrefix}/protein/${proteinId}/abundance${compParam}`);
+  },
+
+  /** Peptide abundance for a protein */
+  getPeptideAbundance: (
+    apiPrefix: string,
+    proteinId: string,
+    comparison?: string
+  ): Promise<PeptideAbundanceData> => {
+    const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
+    return fetchApi<PeptideAbundanceData>(`${apiPrefix}/protein/${proteinId}/peptide${compParam}`);
+  },
+
+  // ── BioNet ──
+
+  runBioNet: (apiPrefix: string, body: BioNetRunRequest): Promise<{ status: string; comparison: string }> => {
+    return fetchApi(`${apiPrefix}/bionet/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  },
+
+  getBioNetStatus: (apiPrefix: string): Promise<BioNetRunStatus> => {
+    return fetchApi<BioNetRunStatus>(`${apiPrefix}/bionet/status`);
+  },
+
+  getBioNetSubnetwork: (apiPrefix: string): Promise<BioNetSubnetwork> => {
+    return fetchApi<BioNetSubnetwork>(`${apiPrefix}/bionet/subnetwork`);
+  },
+
+  // ── Compare (protein/comparison correlation, Venn) ──
+
+  /** Trigger on-demand protein correlation computation */
+  runProteinCorrelation: (
+    apiPrefix: string,
+    body: {
+      protein_id: string;
+      cluster_method: ClusterMethod;
+      color_comparison: string;
+    }
+  ): Promise<{ status: string }> => {
+    return fetchApi(`${apiPrefix}/compare/protein-correlation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Poll protein correlation compute status */
+  getProteinCorrelationStatus: (apiPrefix: string): Promise<CompareRunStatus> => {
+    return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/protein-correlation/status`);
+  },
+
+  /** Get cached protein correlation results */
+  getProteinCorrelationData: (apiPrefix: string): Promise<ProteinCorrelationData> => {
+    return fetchApi<ProteinCorrelationData>(`${apiPrefix}/compare/protein-correlation`);
+  },
+
+  /** Trigger on-demand comparison correlation computation */
+  runComparisonCorrelation: (
+    apiPrefix: string,
+    body: {
+      primary_comparison: string;
+      selected_comparisons: string[];
+      marked_proteins: Record<string, string[]>;
+      cluster_method: ClusterMethod;
+    }
+  ): Promise<{ status: string }> => {
+    return fetchApi(`${apiPrefix}/compare/comparison-correlation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Poll comparison correlation compute status */
+  getComparisonCorrelationStatus: (apiPrefix: string): Promise<CompareRunStatus> => {
+    return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/comparison-correlation/status`);
+  },
+
+  /** Get cached comparison correlation results */
+  getComparisonCorrelationData: (apiPrefix: string): Promise<ComparisonCorrelationData> => {
+    return fetchApi<ComparisonCorrelationData>(`${apiPrefix}/compare/comparison-correlation`);
+  },
+
+  /** Compute Venn diagram data (synchronous, returns result directly) */
+  computeVennData: (
+    apiPrefix: string,
+    body: {
+      comparisons: string[];
+      pvalue_threshold: number;
+      logfc_threshold: number;
+    }
+  ): Promise<VennData> => {
+    return fetchApi<VennData>(`${apiPrefix}/compare/venn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** List all proteins across all comparisons for selector dropdowns */
+  listProteins: (apiPrefix: string): Promise<ProteinListEntry[]> => {
+    return fetchApi<ProteinListEntry[]>(`${apiPrefix}/compare/proteins`);
+  },
+
+  // ── Task Status ──
+
+  getTaskStatus: (sessionId: string): Promise<{ tasks: Array<{ kind: string; label: string; status: 'queued' | 'running' | 'completed' | 'error' | 'cancelled'; started_at: string | null; completed_at: string | null; error: string | null; progress: { completed: number; total: number } | null; queue_position: number | null }> }> => {
+    return fetchApi(`/api/sessions/${sessionId}/tasks`);
+  },
+
+  cancelTasks: (sessionId: string): Promise<{ cancelled: boolean; status: string }> => {
+    return fetchApi(`/api/sessions/${sessionId}/tasks/cancel`, { method: 'POST' });
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Standalone visualization helpers (used by pages + config)
+// ═══════════════════════════════════════════════════════════════════════
+
 /**
- * Organisms API
+ * Fetch full session config & metadata (includes comparisons, markers, filters).
+ * Used by visualization pages to restore state.
  */
+export async function getDataSource(
+  apiPrefix: string
+): Promise<{
+  id: string;
+  name: string;
+  config?: {
+    treatment?: string;
+    control?: string;
+    comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
+  };
+  files?: { proteomics: Array<{ experiment: string }> };
+  markers?: string[];
+  volcano_filters?: {
+    foldChange: number;
+    pValue: number;
+    adjPValue: number;
+    s0: number;
+  };
+}> {
+  const response = await fetch(`${API_BASE_URL}${apiPrefix}`, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: { message: 'Failed to fetch session', code: 'UNKNOWN_ERROR' },
+    }));
+    throw new Error(error.error?.message || `HTTP ${response.status}`);
+  }
+  const wrapper = await response.json();
+  // Backend wraps session responses in { data, meta }
+  return wrapper.data || wrapper;
+}
+
+/**
+ * Persist visualization state (markers + volcano filters) to the backend.
+ * Falls back to localStorage on failure.
+ */
+export async function updateVisualizationState(
+  apiPrefix: string,
+  data: {
+    markers?: Record<string, string[]>;
+    volcano_filters?: {
+      foldChange: number;
+      pValue: number;
+      adjPValue: number;
+      s0: number;
+    };
+  }
+): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}${apiPrefix}/visualization-state`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      console.warn(`Failed to save visualization state: ${response.status} ${response.statusText}`);
+      try {
+        localStorage.setItem(`viz_state_${apiPrefix}`, JSON.stringify(data));
+      } catch { /* localStorage may be full or unavailable */ }
+    }
+  } catch (err) {
+    console.warn('Failed to save visualization state:', err);
+    try {
+      localStorage.setItem(`viz_state_${apiPrefix}`, JSON.stringify(data));
+    } catch { /* localStorage unavailable */ }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Organisms API
+// ═══════════════════════════════════════════════════════════════════════
+
 export const organismsApi = {
   /**
    * List available organisms
@@ -529,9 +959,10 @@ export const organismsApi = {
   },
 };
 
-/**
- * Export API — report management
- */
+// ═══════════════════════════════════════════════════════════════════════
+//  Export API — report management
+// ═══════════════════════════════════════════════════════════════════════
+
 export const exportApi = {
   /** List all reports across sessions */
   listAll: async (): Promise<{ reports: Array<{ report_id: string; name: string; session_id: string; session_name: string; created_at: string }> }> => {

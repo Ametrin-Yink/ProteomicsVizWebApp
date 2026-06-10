@@ -85,7 +85,16 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
+    # Shutdown: kill any running R subprocesses
+    try:
+        from app.services.msqrob2_wrapper import msqrob2_wrapper
+        from app.services.msstats_wrapper import msstats_wrapper
+
+        msqrob2_wrapper.cancel()
+        msstats_wrapper.cancel()
+        logger.info("Killed any running R subprocesses during shutdown")
+    except Exception as e:
+        logger.warning("Error killing R subprocesses during shutdown: %s", e)
 
 
 # Initialize FastAPI app
