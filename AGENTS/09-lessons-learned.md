@@ -63,12 +63,6 @@
 - Visual confirmation required — screenshots at key steps, verify UI renders correctly
 - Fix before proceeding — if a test fails, stop and fix it
 
-## Compound File Upload
-
-**Problem:** Upload appeared to work but compounds weren't displayed
-**Cause:** Backend returned file metadata only, not parsed compound data
-**Fix:** Parse CSV with `CompoundService` and return `{ corp_id, smiles }` array
-
 ## Toggle Switch Icon Misalignment
 
 **Problem:** Checkmark/X icons not centered in toggle buttons

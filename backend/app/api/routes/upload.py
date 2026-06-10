@@ -1,7 +1,7 @@
 """
 File upload API routes.
 
-Handles proteomics and compound file uploads with validation.
+Handles proteomics file uploads with validation.
 """
 
 import logging
@@ -13,8 +13,7 @@ from app.api.deps import get_session_store
 from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.db.session_store import SessionStore
-from app.models.session import FileInfo, ProteomicsFileInfo
-from app.services.compound_service import CompoundService
+from app.models.session import ProteomicsFileInfo
 from app.utils.file_parser import FileParser, parse_psm_filename
 
 router = APIRouter()
@@ -107,69 +106,6 @@ async def upload_proteomics_files(
     }
 
 
-@router.post("/{session_id}/upload/compound")
-async def upload_compound_file(
-    session_id: str,
-    file: UploadFile = File(...),
-    store: SessionStore = Depends(get_session_store),
-):
-    """Upload compound CSV file."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    # Check file size
-    content = await file.read()
-    if len(content) > settings.max_upload_size_bytes:
-        raise ValidationError(
-            message=f"File exceeds maximum size of {settings.max_upload_size_mb}MB"
-        )
-
-    # Parse and validate
-    parser = FileParser()
-    try:
-        file_info = await parser.parse_compound_file(
-            filename=file.filename or "compound.csv",
-            content=content,
-            session_dir=Path(settings.sessions_dir) / session_id,
-        )
-    except Exception as e:
-        raise ValidationError(message=f"Error parsing compound file: {e!s}") from e
-
-    # Parse compounds using CompoundService
-    compound_service = CompoundService()
-    try:
-        compounds_data = compound_service.parse_compound_csv(Path(file_info.path))
-        compounds_list = [
-            {"corp_id": c.corp_id, "smiles": c.smiles} for c in compounds_data.values()
-        ]
-    except Exception as e:
-        logger = logging.getLogger("proteomics")
-        logger.error(f"Error parsing compounds: {e}")
-        compounds_list = []
-
-    # Prepare response with compounds
-    response_data = {
-        "filename": file_info.original_filename or file_info.filename,
-        "size": file_info.size,
-        "compounds": compounds_list,
-    }
-
-    # Update session with compound file info
-    session.files.compound = FileInfo(
-        filename=file_info.filename,
-        original_filename=file_info.original_filename or file_info.filename,
-        size=file_info.size,
-        uploaded_at=file_info.uploaded_at,
-    )
-    await store.save(session)
-
-    return {"message": "Successfully uploaded compound file", "file": response_data}
-
-
 @router.delete("/{session_id}/files/{file_type}/{filename}")
 async def delete_file(
     session_id: str,
@@ -197,21 +133,6 @@ async def delete_file(
                 file_path.unlink()
         except Exception as e:
             logger.warning(f"Failed to delete uploaded file {filename}: {e}")
-    elif file_type == "compound":
-        # Only delete if the filename matches the actual compound file
-        if session.files.compound and session.files.compound.filename == filename:
-            file_path = Path(settings.sessions_dir) / session_id / "uploads" / filename
-            try:
-                if file_path.exists():
-                    file_path.unlink()
-            except Exception as e:
-                logger.warning(f"Failed to delete compound file {filename}: {e}")
-            session.files.compound = None
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Compound file {filename} not found in session",
-            )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

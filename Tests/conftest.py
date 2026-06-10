@@ -224,7 +224,6 @@ def mock_session_with_config():
     session.files.proteomics = [
         MagicMock(filename=f"PSM_Exp_DrugA_{i}.csv") for i in range(1, 4)
     ] + [MagicMock(filename=f"PSM_Exp_DMSO_{i}.csv") for i in range(1, 4)]
-    session.files.compound = None
     session.created_at = datetime.now(UTC)
     session.updated_at = datetime.now(UTC)
     session.markers = {}

@@ -93,7 +93,7 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 ```
 
 **Key Modules:**
-- `app/api/routes/` - 8 route modules (sessions, upload, analysis, processing, visualization, reports, compounds, compare)
+- `app/api/routes/` - 7 route modules (sessions, upload, analysis, processing, visualization, reports, compare)
 - `app/services/pipeline_engine.py` - Plugin-based step execution engine with PipelineState tracking
 - `app/services/pipeline_registry.py` - Pipeline definitions for both msqrob2 and MSstats tools
 - `app/services/steps/` - Individual step handlers (10 handlers + helpers, one per pipeline step)
@@ -243,7 +243,7 @@ Steps 1-2 are shared with MSstats. Steps 3-5 replace the old 8-step pipeline: Py
 
 **Sessions:** `POST /` `GET /` `GET /{id}` `PUT /{id}` `DELETE /{id}` `PUT /{id}/config` `POST /{id}/config` `PATCH /{id}/visualization-state`
 
-**Upload:** `POST /{id}/upload/proteomics` `POST /{id}/upload/compound` `DELETE /{id}/files/{type}/{filename}`
+**Upload:** `POST /{id}/upload/proteomics` `DELETE /{id}/files/{type}/{filename}`
 
 **Processing:** `POST /{id}/process` `POST /{id}/cancel` `GET /{id}/status` `GET /{id}/logs` `POST /{id}/retry`
 
@@ -256,8 +256,6 @@ Steps 1-2 are shared with MSstats. Steps 3-5 replace the old 8-step pipeline: Py
 **Compare:** `POST /{id}/compare/protein` `POST /{id}/compare/matrix` `POST /{id}/compare/venn` `GET /{id}/compare/status` `GET /{id}/compare/result` `DELETE /{id}/compare/result`
 
 **Reports:** `POST /{id}/reports/generate` `GET /{id}/reports` `GET /{id}/reports/{rid}/download` `DELETE /{id}/reports/{rid}`
-
-**Compounds:** `GET /{id}/compounds` `GET /{id}/compounds/{condition}` `GET /{id}/compounds/{condition}/image` `GET /{id}/compounds/{condition}/properties` `POST /{id}/compounds/validate`
 
 **Tasks:** `GET /{id}/tasks` `POST /{id}/tasks/cancel`
 

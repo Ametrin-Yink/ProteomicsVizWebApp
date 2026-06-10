@@ -113,7 +113,6 @@ class SessionFiles(BaseModel):
     """Session files collection."""
 
     proteomics: list[ProteomicsFileInfo] = Field(default_factory=list)
-    compound: FileInfo | None = None
 
 
 class Session(BaseModel):
@@ -159,7 +158,7 @@ class Session(BaseModel):
                 "pipeline": "msqrob2",
                 "state": "created",
                 "config": None,
-                "files": {"proteomics": [], "compound": None},
+                "files": {"proteomics": []},
                 "created_at": "2026-03-16T10:00:00Z",
                 "updated_at": "2026-03-16T10:00:00Z",
             }
