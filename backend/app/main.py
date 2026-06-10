@@ -84,6 +84,14 @@ async def lifespan(app: FastAPI):
             f"Session scanning failed: {e} - continuing with empty session list"
         )
 
+    # Clean up old sessions on startup
+    try:
+        cleaned = await session_store.cleanup_old_sessions()
+        if cleaned > 0:
+            logger.info(f"Cleaned up {cleaned} old sessions on startup")
+    except Exception as e:
+        logger.warning(f"Session cleanup on startup failed: {e}")
+
     yield
 
     # Shutdown: kill any running R subprocesses

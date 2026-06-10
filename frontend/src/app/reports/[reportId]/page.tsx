@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork, Loader2, AlertCircle } from 'lucide-react';
 import { ApiProvider } from '@/lib/api-context';
-import { reportApiPrefix } from '@/lib/api';
+import { reportApiPrefix } from '@/lib/api-client';
 
 import { ResultsContent } from '@/app/analysis/visualization/page';
 import { QCContent } from '@/app/analysis/visualization/qc/page';

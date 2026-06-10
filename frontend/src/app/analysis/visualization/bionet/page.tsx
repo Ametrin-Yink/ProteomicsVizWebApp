@@ -5,7 +5,7 @@ import Link from 'next/link';
 import BioNetNetwork from '@/components/visualization/BioNetNetwork';
 import type { BioNetRunStatus, BioNetSubnetwork } from '@/types/api';
 import { INDRA_SOURCES, INDRA_STATEMENT_TYPES } from '@/types/api';
-import { getBioNetStatus, getBioNetSubnetwork, runBioNet, getDataSource } from '@/lib/api';
+import { visualizationApi, getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
@@ -73,7 +73,7 @@ function BioNetContent() {
   const pollStatus = useCallback(async () => {
     if (!apiPrefix) return;
     try {
-      const status = await getBioNetStatus(apiPrefix);
+      const status = await visualizationApi.getBioNetStatus(apiPrefix);
       if (
         lastStatusRef.current?.status === status.status &&
         lastStatusRef.current?.node_count === status.node_count
@@ -92,7 +92,7 @@ function BioNetContent() {
           setRunError(status.error || 'BioNet analysis failed');
         }
         if (status.status === 'completed') {
-          const data = await getBioNetSubnetwork(apiPrefix);
+          const data = await visualizationApi.getBioNetSubnetwork(apiPrefix);
           setSubnetwork(data);
           setLoading(false);
         }
@@ -112,14 +112,14 @@ function BioNetContent() {
   useEffect(() => {
     if (!apiPrefix) return;
     let cancelled = false;
-    getBioNetStatus(apiPrefix).then(async (status) => {
+    visualizationApi.getBioNetStatus(apiPrefix).then(async (status) => {
       if (cancelled) return;
       lastStatusRef.current = status;
       setRunStatus(status);
       if (status.status === 'running') {
         startPolling();
       } else if (status.status === 'completed') {
-        const data = await getBioNetSubnetwork(apiPrefix);
+        const data = await visualizationApi.getBioNetSubnetwork(apiPrefix);
         if (!cancelled) setSubnetwork(data);
       }
       setLoading(false);

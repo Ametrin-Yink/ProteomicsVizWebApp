@@ -439,7 +439,7 @@ function ProcessingContent() {
     setStartError(null);
 
     try {
-      await processingApi.retryProcessing(sessionId);
+      await processingApi.retry(sessionId);
       // Reset store only after retry succeeds
       retry();
     } catch (err) {
@@ -462,7 +462,7 @@ function ProcessingContent() {
 
     setIsCancelling(true);
     try {
-      await processingApi.cancelProcessing(sessionId);
+      await processingApi.cancel(sessionId);
       setCancelled(true);
     } catch (err) {
       console.error('Failed to cancel processing:', err);
