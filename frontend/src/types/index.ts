@@ -2,6 +2,9 @@
  * Core TypeScript types for the Proteomics Visualization Web App
  */
 
+// Re-export canonical Session type from session.ts
+export type { Session } from './session';
+
 // ============================================================================
 // API Types
 // ============================================================================
@@ -27,23 +30,6 @@ export interface ApiError {
 // ============================================================================
 // Session Types
 // ============================================================================
-
-export interface Session {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  currentStep: string | null;
-  progress: number;
-  config: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-  errorMessage: string | null;
-  uploadedFiles: unknown[];
-  compoundFile: unknown | null;
-  results: unknown;
-}
 
 export interface SessionConfig {
   treatment?: string;

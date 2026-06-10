@@ -1,91 +1,9 @@
 // API Types for Proteomics Visualization Web App
 
-// Base response
-export interface ApiResponse<T> {
-  data: T;
-  meta: {
-    timestamp: string;
-    request_id: string;
-  };
-}
-
-export interface ApiError {
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-    timestamp: string;
-    request_id: string;
-  };
-}
+// Re-export canonical types from types/index.ts
+export type { ApiResponse, ApiError, SessionConfig } from './index';
 
 // Session types
-export interface Session {
-  id: string;
-  name: string;
-  template: string;
-  state: 'created' | 'configuring' | 'processing' | 'completed' | 'error';
-  config?: SessionConfig;
-  files?: SessionFiles;
-  created_at: string;
-  updated_at: string;
-  markers?: Record<string, string[]> | string[];
-  volcano_filters?: {
-    foldChange: number;
-    pValue: number;
-    adjPValue: number;
-    s0: number;
-  };
-}
-
-export interface SessionConfig {
-  treatment?: string;
-  control?: string;
-  organism: string;
-  remove_razor: boolean;
-  strict_filtering: boolean;
-  // Pipeline selection
-  pipeline?: 'msqrob2' | 'msstats';
-  // Shared advanced params
-  pvalue_threshold?: number;
-  logfc_threshold?: number;
-  min_peptides_per_protein?: number;
-  // Multi-condition
-  comparisons?: Array<{
-    group1: Record<string, string>;
-    group2: Record<string, string>;
-  }>;
-  metadata_columns?: Record<string, Record<string, string>>;
-  // MSstats
-  msstats_normalization?: string;
-  msstats_feature_selection?: string;
-  msstats_summary_method?: string;
-  msstats_impute?: boolean;
-  msstats_log_base?: number;
-  msstats_censored_int?: string;
-  msstats_max_quantile?: number;
-  msstats_remove50missing?: boolean;
-  // MSstats advanced
-  msstats_n_top_feature?: number;
-  msstats_min_feature_count?: number;
-  msstats_remove_uninformative_feature_outlier?: boolean;
-  msstats_equal_feature_var?: boolean;
-  msstats_name_standards?: string;
-  msstats_save_fitted_models?: boolean;
-  msstats_n_cores?: number;
-  // msqrob2
-  msqrob2_normalization?: string;
-  msqrob2_imputation?: string;
-  msqrob2_aggregation?: string;
-  msqrob2_model?: string;
-  msqrob2_robust?: boolean;
-  msqrob2_ridge?: boolean;
-  msqrob2_adjust_method?: string;
-  msqrob2_min_peptides?: number;
-  msqrob2_n_cores?: number;
-  // Covariates
-  covariate_columns?: string[];
-}
 
 export interface SessionFiles {
   proteomics: string[];
