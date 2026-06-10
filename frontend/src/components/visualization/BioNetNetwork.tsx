@@ -248,13 +248,19 @@ export default function BioNetNetwork({
     });
   }, []);
 
+  // Check user's reduced-motion preference
+  const prefersReducedMotion = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  );
+
   // Change layout
   const applyLayout = useCallback((name: LayoutName) => {
     if (!cyRef.current) return;
     setSelectedLayout(name);
-    const opts = { name, animate: true };
+    const opts = { name, animate: !prefersReducedMotion };
     cyRef.current.layout(opts as unknown as cytoscape.LayoutOptions).run();
-  }, []);
+  }, [prefersReducedMotion]);
 
   // Search for a node and center on it
   const doSearch = useCallback((e: React.FormEvent) => {
