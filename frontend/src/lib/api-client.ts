@@ -618,7 +618,8 @@ export const visualizationApi = {
       sort_by?: string;
       sort_order?: 'asc' | 'desc';
       comparison?: string;
-    }
+    },
+    signal?: AbortSignal
   ): Promise<DEResultsData> => {
     const queryParams = new URLSearchParams();
     if (params?.significant_only) queryParams.append('significant_only', 'true');
@@ -629,13 +630,13 @@ export const visualizationApi = {
     if (params?.comparison) queryParams.append('comparison', params.comparison);
 
     const query = queryParams.toString();
-    return fetchApi<DEResultsData>(`${apiPrefix}/results${query ? `?${query}` : ''}`);
+    return fetchApi<DEResultsData>(`${apiPrefix}/results${query ? `?${query}` : ''}`, { signal });
   },
 
   // ── QC ──
 
-  getQCData: (apiPrefix: string): Promise<QCData> => {
-    return fetchApi<QCData>(`${apiPrefix}/qc/plots`);
+  getQCData: (apiPrefix: string, signal?: AbortSignal): Promise<QCData> => {
+    return fetchApi<QCData>(`${apiPrefix}/qc/plots`, { signal });
   },
 
   // ── GSEA ──
@@ -651,7 +652,8 @@ export const visualizationApi = {
       sort_order?: 'asc' | 'desc';
       search?: string;
       comparison?: string;
-    }
+    },
+    signal?: AbortSignal
   ): Promise<GSEAData> => {
     const queryParams = new URLSearchParams();
     if (params?.significant_only) queryParams.append('significant_only', 'true');
@@ -663,7 +665,7 @@ export const visualizationApi = {
     if (params?.comparison) queryParams.append('comparison', params.comparison);
 
     const query = queryParams.toString();
-    return fetchApi<GSEAData>(`${apiPrefix}/gsea/${database}${query ? `?${query}` : ''}`);
+    return fetchApi<GSEAData>(`${apiPrefix}/gsea/${database}${query ? `?${query}` : ''}`, { signal });
   },
 
   /** GSEA plot data (on-demand) */
@@ -671,10 +673,11 @@ export const visualizationApi = {
     apiPrefix: string,
     database: GSEADatabase,
     term: string,
-    comparison?: string
+    comparison?: string,
+    signal?: AbortSignal
   ): Promise<GSEAPlotData> => {
     const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
-    return fetchApi<GSEAPlotData>(`${apiPrefix}/gsea/${database}/plot?term=${encodeURIComponent(term)}${compParam}`);
+    return fetchApi<GSEAPlotData>(`${apiPrefix}/gsea/${database}/plot?term=${encodeURIComponent(term)}${compParam}`, { signal });
   },
 
   /** GSEA heatmap data (on-demand) */
@@ -682,7 +685,8 @@ export const visualizationApi = {
     apiPrefix: string,
     database: GSEADatabase,
     term: string,
-    comparison?: string
+    comparison?: string,
+    signal?: AbortSignal
   ): Promise<GSEAHeatmapData> => {
     const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
     return fetchApi<GSEAHeatmapData>(`${apiPrefix}/gsea/${database}/heatmap?term=${encodeURIComponent(term)}${compParam}`);
@@ -707,8 +711,8 @@ export const visualizationApi = {
   },
 
   /** GSEA run status */
-  getGSEAStatus: (apiPrefix: string): Promise<GSEARunStatus> => {
-    return fetchApi<GSEARunStatus>(`${apiPrefix}/gsea/status`);
+  getGSEAStatus: (apiPrefix: string, signal?: AbortSignal): Promise<GSEARunStatus> => {
+    return fetchApi<GSEARunStatus>(`${apiPrefix}/gsea/status`, { signal });
   },
 
   // ── Protein Abundance ──
@@ -716,20 +720,22 @@ export const visualizationApi = {
   getProteinAbundance: (
     apiPrefix: string,
     proteinId: string,
-    comparison?: string
+    comparison?: string,
+    signal?: AbortSignal
   ): Promise<ProteinAbundance> => {
     const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
-    return fetchApi<ProteinAbundance>(`${apiPrefix}/protein/${proteinId}/abundance${compParam}`);
+    return fetchApi<ProteinAbundance>(`${apiPrefix}/protein/${proteinId}/abundance${compParam}`, { signal });
   },
 
   /** Peptide abundance for a protein */
   getPeptideAbundance: (
     apiPrefix: string,
     proteinId: string,
-    comparison?: string
+    comparison?: string,
+    signal?: AbortSignal
   ): Promise<PeptideAbundanceData> => {
     const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
-    return fetchApi<PeptideAbundanceData>(`${apiPrefix}/protein/${proteinId}/peptide${compParam}`);
+    return fetchApi<PeptideAbundanceData>(`${apiPrefix}/protein/${proteinId}/peptide${compParam}`, { signal });
   },
 
   // ── BioNet ──
@@ -742,12 +748,12 @@ export const visualizationApi = {
     });
   },
 
-  getBioNetStatus: (apiPrefix: string): Promise<BioNetRunStatus> => {
-    return fetchApi<BioNetRunStatus>(`${apiPrefix}/bionet/status`);
+  getBioNetStatus: (apiPrefix: string, signal?: AbortSignal): Promise<BioNetRunStatus> => {
+    return fetchApi<BioNetRunStatus>(`${apiPrefix}/bionet/status`, { signal });
   },
 
-  getBioNetSubnetwork: (apiPrefix: string): Promise<BioNetSubnetwork> => {
-    return fetchApi<BioNetSubnetwork>(`${apiPrefix}/bionet/subnetwork`);
+  getBioNetSubnetwork: (apiPrefix: string, signal?: AbortSignal): Promise<BioNetSubnetwork> => {
+    return fetchApi<BioNetSubnetwork>(`${apiPrefix}/bionet/subnetwork`, { signal });
   },
 
   // ── Compare (protein/comparison correlation, Venn) ──
@@ -769,13 +775,13 @@ export const visualizationApi = {
   },
 
   /** Poll protein correlation compute status */
-  getProteinCorrelationStatus: (apiPrefix: string): Promise<CompareRunStatus> => {
-    return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/protein-correlation/status`);
+  getProteinCorrelationStatus: (apiPrefix: string, signal?: AbortSignal): Promise<CompareRunStatus> => {
+    return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/protein-correlation/status`, { signal });
   },
 
   /** Get cached protein correlation results */
-  getProteinCorrelationData: (apiPrefix: string): Promise<ProteinCorrelationData> => {
-    return fetchApi<ProteinCorrelationData>(`${apiPrefix}/compare/protein-correlation`);
+  getProteinCorrelationData: (apiPrefix: string, signal?: AbortSignal): Promise<ProteinCorrelationData> => {
+    return fetchApi<ProteinCorrelationData>(`${apiPrefix}/compare/protein-correlation`, { signal });
   },
 
   /** Trigger on-demand comparison correlation computation */
@@ -796,13 +802,13 @@ export const visualizationApi = {
   },
 
   /** Poll comparison correlation compute status */
-  getComparisonCorrelationStatus: (apiPrefix: string): Promise<CompareRunStatus> => {
-    return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/comparison-correlation/status`);
+  getComparisonCorrelationStatus: (apiPrefix: string, signal?: AbortSignal): Promise<CompareRunStatus> => {
+    return fetchApi<CompareRunStatus>(`${apiPrefix}/compare/comparison-correlation/status`, { signal });
   },
 
   /** Get cached comparison correlation results */
-  getComparisonCorrelationData: (apiPrefix: string): Promise<ComparisonCorrelationData> => {
-    return fetchApi<ComparisonCorrelationData>(`${apiPrefix}/compare/comparison-correlation`);
+  getComparisonCorrelationData: (apiPrefix: string, signal?: AbortSignal): Promise<ComparisonCorrelationData> => {
+    return fetchApi<ComparisonCorrelationData>(`${apiPrefix}/compare/comparison-correlation`, { signal });
   },
 
   /** Compute Venn diagram data (synchronous, returns result directly) */
@@ -822,14 +828,14 @@ export const visualizationApi = {
   },
 
   /** List all proteins across all comparisons for selector dropdowns */
-  listProteins: (apiPrefix: string): Promise<ProteinListEntry[]> => {
-    return fetchApi<ProteinListEntry[]>(`${apiPrefix}/compare/proteins`);
+  listProteins: (apiPrefix: string, signal?: AbortSignal): Promise<ProteinListEntry[]> => {
+    return fetchApi<ProteinListEntry[]>(`${apiPrefix}/compare/proteins`, { signal });
   },
 
   // ── Task Status ──
 
-  getTaskStatus: (sessionId: string): Promise<{ tasks: Array<{ kind: string; label: string; status: 'queued' | 'running' | 'completed' | 'error' | 'cancelled'; started_at: string | null; completed_at: string | null; error: string | null; progress: { completed: number; total: number } | null; queue_position: number | null }> }> => {
-    return fetchApi(`/api/sessions/${sessionId}/tasks`);
+  getTaskStatus: (sessionId: string, signal?: AbortSignal): Promise<{ tasks: Array<{ kind: string; label: string; status: 'queued' | 'running' | 'completed' | 'error' | 'cancelled'; started_at: string | null; completed_at: string | null; error: string | null; progress: { completed: number; total: number } | null; queue_position: number | null }> }> => {
+    return fetchApi(`/api/sessions/${sessionId}/tasks`, { signal });
   },
 
   cancelTasks: (sessionId: string): Promise<{ cancelled: boolean; status: string }> => {
@@ -846,7 +852,8 @@ export const visualizationApi = {
  * Used by visualization pages to restore state.
  */
 export async function getDataSource(
-  apiPrefix: string
+  apiPrefix: string,
+  signal?: AbortSignal
 ): Promise<{
   id: string;
   name: string;
@@ -866,6 +873,7 @@ export async function getDataSource(
 }> {
   const response = await fetch(`${API_BASE_URL}${apiPrefix}`, {
     headers: { 'Content-Type': 'application/json' },
+    signal,
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({
