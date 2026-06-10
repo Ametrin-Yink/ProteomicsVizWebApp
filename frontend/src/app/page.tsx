@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useAnalysisStore } from '@/stores/analysis-store';
+import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
 
 const workflowSteps = [
@@ -45,6 +46,7 @@ export default function HomePage() {
   const [isCreating, setIsCreating] = React.useState(false);
   const addSession = useSessionStore((s) => s.addSession);
   const resetAnalysis = useAnalysisStore((s) => s.reset);
+  const addToast = useUIStore((s) => s.addToast);
 
   const handleNewAnalysis = async () => {
     if (isCreating) return;
@@ -56,8 +58,9 @@ export default function HomePage() {
       resetAnalysis();
       addSession(newSession);
       router.push(`/new/upload?session=${newSession.id}`);
-    } catch {
-      // Error silently handled — button resets, user can try again
+    } catch (e) {
+      console.error('Failed to create session:', e);
+      addToast('error', 'Failed to create analysis session. Please try again.');
     } finally {
       setIsCreating(false);
     }
