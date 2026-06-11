@@ -102,7 +102,7 @@ function normalizeBoxData(
           const name = labelFn(key, subKey);
           traces.push({
             y: boxStatsToValues(stats as Record<string, unknown>),
-            x: [name], type: 'box', name,
+            type: 'box', name,
             marker: { color, size: 3, outliercolor: color + '66' },
             boxpoints: 'outliers', hovertemplate,
           });
@@ -112,7 +112,7 @@ function normalizeBoxData(
         const name = labelFn(key);
         traces.push({
           y: boxStatsToValues(val as Record<string, unknown>),
-          x: [name], type: 'box', name,
+          type: 'box', name,
           marker: { color, size: 3, outliercolor: color + '66' },
           boxpoints: 'outliers', hovertemplate,
         });
@@ -122,7 +122,7 @@ function normalizeBoxData(
           const arr = vals as number[];
           if (arr.length > 0) {
             traces.push({
-              y: arr, x: [labelFn(key, subKey)], type: 'box',
+              y: arr, type: 'box',
               name: labelFn(key, subKey),
               marker: { color, size: 3, outliercolor: color + '66' },
               boxpoints: 'outliers', hovertemplate,
@@ -134,7 +134,7 @@ function normalizeBoxData(
       // Old flat list format
       const name = labelFn(key);
       traces.push({
-        y: val, x: [name], type: 'box', name,
+        y: val, type: 'box', name,
         marker: { color, size: 3, outliercolor: color + '66' },
         boxpoints: 'outliers', hovertemplate,
       });

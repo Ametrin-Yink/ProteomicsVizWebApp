@@ -265,7 +265,6 @@ function GSEAAnalysisContent() {
         databases: Object.fromEntries(
           runDatabases.map((db) => [db, 'running'])
         ),
-        summary: result.summary || {},
       });
       startPolling();
     } catch (err) {
