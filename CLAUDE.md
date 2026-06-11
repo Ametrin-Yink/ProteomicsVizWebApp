@@ -96,7 +96,7 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 - `app/api/routes/` - 7 route modules (sessions, upload, analysis, processing, visualization, reports, compare)
 - `app/services/pipeline_engine.py` - Plugin-based step execution engine with PipelineState tracking
 - `app/services/pipeline_registry.py` - Pipeline definitions for both msqrob2 and MSstats tools
-- `app/services/steps/` - Individual step handlers (10 handlers + helpers, one per pipeline step)
+- `app/services/steps/` - Individual step handlers (13 handler functions, each pipeline has its own step 1-2)
 - `app/services/base_r_wrapper.py` - Template Method base class for R subprocess wrappers (shared by msqrob2/msstats)
 - `app/services/task_manager.py` - Thread-pool-isolated background computation with queuing (TaskKind: PIPELINE, GSEA, BIONET, COMPUTE, LIGHT)
 - `app/services/session_manager.py` - Centralized session lifecycle and scanning
@@ -150,20 +150,20 @@ Both pipelines are defined in `pipeline_registry.py`. GSEA and BioNet are on-dem
 
 | Step | Name | Tool |
 |------|------|------|
-| 1 | Combine Replicates | Python (DataProcessor) |
-| 2 | Generate Unique PSM | Python (DataProcessor) |
+| 1 | Combine Replicates | Python (DataProcessor, pipeline-specific) |
+| 2 | Generate Unique PSM | Python (DataProcessor, pipeline-specific) |
 | 3 | Protein Abundance | R (msqrob2/QFeatures) |
 | 4 | Differential Expression | R (msqrob2 v1.16: `msqrob()` + `makeContrast()` + `hypothesisTest()`) |
 | 5 | QC Metrics | Python (QCCalculator, msqrob2-specific) |
 
-Steps 1-2 are shared with MSstats. Steps 3-5 replace the old 8-step pipeline: Python preprocessing (old steps 3-5: razor, quality, filter) is now handled natively in the R QFeatures pipeline at step 3.
+Each pipeline has its own step 1-2 handlers (pipeline-specific files, not shared). This isolation prevents cross-pipeline contamination: msqrob2 step 2 frees `ctx.df` before R steps, while MSstats step 2 keeps it for Python steps 3-5. Steps 3-5 replace the old 8-step pipeline: Python preprocessing (old steps 3-5: razor, quality, filter) is now handled natively in the R QFeatures pipeline at step 3.
 
-**MSstats Pipeline (8 steps — unchanged):**
+**MSstats Pipeline (8 steps — pipeline-specific handlers for all steps):**
 
 | Step | Name | Tool |
 |------|------|------|
-| 1 | Combine Replicates | Python (DataProcessor) |
-| 2 | Generate Unique PSM | Python (DataProcessor) |
+| 1 | Combine Replicates | Python (DataProcessor, pipeline-specific) |
+| 2 | Generate Unique PSM | Python (DataProcessor, pipeline-specific) |
 | 3 | Remove Razor Peptides | Python (DataProcessor, conditional) |
 | 4 | Remove Low Quality | Python (DataProcessor) |
 | 5 | Filter by Criteria | Python (DataProcessor) |
@@ -192,6 +192,11 @@ Steps 1-2 are shared with MSstats. Steps 3-5 replace the old 8-step pipeline: Py
 **WebSocket for Real-Time Updates:**
 - Frontend connects to `ws://localhost:8000/ws/sessions/{session_id}`
 - Pipeline state persisted to `sessions/{session_id}/pipeline_state.json`
+
+**Pipeline E2E Chain Tests:**
+- `Tests/backend/unit/test_pipeline_chains.py` — runs ALL pipeline steps sequentially (Python steps real, R steps mocked) to verify the full pipeline works end-to-end
+- `Tests/conftest.py` — `pipeline_test_files` fixture generates ~1000-row PSM CSV files for chain tests
+- `PipelineEngine.run()` and `ProcessingOrchestrator.process_session()` now have direct test coverage
 
 ### Data Flow Patterns
 

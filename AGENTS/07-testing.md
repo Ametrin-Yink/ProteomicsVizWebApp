@@ -6,10 +6,17 @@ ALL tests go in `Tests/`. Never create `backend/tests/` or `frontend/tests/`.
 
 ```
 Tests/
-├── conftest.py               # Shared pytest fixtures
+├── conftest.py               # Shared pytest fixtures (pipeline_test_files, sample_psm_data, etc.)
 ├── backend/
-│   ├── unit/                 # test_validators.py, test_file_parser.py, test_data_processor.py, test_gsea_cache.py, test_session_model.py, test_sessions_api.py
-│   └── integration/          # test_api.py, test_processing.py, test_r_integration.py, test_visualization_state.py
+│   ├── unit/
+│   │   ├── test_pipeline_chains.py     # FULL pipeline E2E: all steps (Python real, R mocked)
+│   │   ├── test_pipeline_engine.py     # PipelineState + PipelineEngine.run() tests
+│   │   ├── test_pipeline_registry.py   # Pipeline definitions + handler independence
+│   │   ├── test_processing_orchestrator.py  # Orchestrator + process_session() tests
+│   │   ├── test_data_processor.py      # DataProcessor step methods
+│   │   ├── test_validators.py, test_sessions_api.py, test_gsea_cache.py, ...
+│   │   └── test_processing_routes.py   # API routes including cancel flow
+│   └── integration/          # test_api.py, test_processing.py, test_r_integration.py, ...
 ├── e2e/                      # Playwright E2E tests
 │   ├── helpers.ts            # Shared helpers (uploadFiles, createSession, configureAnalysis, startAnalysis)
 │   ├── 01-complete-analysis-flow.spec.ts    # Full pipeline: welcome → results
@@ -45,6 +52,20 @@ cd Tests && npx playwright test e2e/04-error-handling.spec.ts --headed
 3. **Visual confirmation:** Automated test assertions are necessary but not sufficient — verify UI renders correctly
 4. **Fix before proceeding:** If a test fails, stop and fix it before moving on
 
+## Pipeline Testing Patterns
+
+### Chain Tests (`test_pipeline_chains.py`)
+Run ALL pipeline steps sequentially through a shared `StepContext`. Python steps use real `DataProcessor`; R steps are mocked to create expected output files. This catches cross-step state corruption (e.g., `ctx.df` freed too early).
+
+### Pipeline Test Fixture (`pipeline_test_files`)
+Generates ~1000-row PSM CSV files (2 conditions × 3 replicates, shared PSMs) with multi-protein accessions, contaminants, and No Value rows. Used by chain tests to exercise all `DataProcessor` filtering logic.
+
+### PipelineEngine.run() Tests
+Use `AsyncMock` step handlers to verify the execution loop: success, error, timeout retry, cancellation, progress callbacks. The `run()` method was previously 0% covered.
+
+### Handler Independence Tests
+Verify each pipeline uses its own step 1-2 handler functions (not shared). Changing one pipeline's handler must never affect the other.
+
 ## Coverage Targets
 
 | Module | Target |
@@ -53,3 +74,6 @@ cd Tests && npx playwright test e2e/04-error-handling.spec.ts --headed
 | API routes | 90% |
 | Utility functions | 90% |
 | E2E critical paths | 100% |
+| PipelineEngine.run() | Covered |
+| ProcessingOrchestrator.process_session() | Covered |
+| Pipeline chain (all steps) | Covered |

@@ -75,6 +75,21 @@
 **Fix:** API client layer maps backend response to add `available: true`
 **Lesson:** Bridge data model gaps in the API client, not the backend
 
+## Shared Step Handler Cross-Pipeline Contamination
+
+**Problem:** MSstats pipeline crashed at step 3 with `'NoneType' object is not subscriptable`.
+**Root cause:** Step 2 (`unique_psm.py`) was shared between msqrob2 and MSstats. It unconditionally set `ctx.df = None` after completing — correct for msqrob2 (step 3+ are R scripts that read from disk) but fatal for MSstats (step 3 is a Python step that needs the DataFrame).
+**Why tests didn't catch it:** Every test ran steps in isolation with fresh DataFrames. No test chained steps sequentially through a shared `StepContext`. `PipelineEngine.run()` had zero test coverage. The old `test_shared_steps_have_same_handler` actively enforced the sharing pattern.
+**Fix:** Split step 1-2 handlers into pipeline-specific files (`combine_replicates_msqrob2.py`, `combine_replicates_msstats.py`, `unique_psm_msqrob2.py`, `unique_psm_msstats.py`). Added full-pipeline E2E chain tests and `PipelineEngine.run()` tests.
+**Lesson:** Never share step handlers between pipelines. Test steps chained sequentially, not just in isolation. Test the execution engine itself.
+
+## Cancel Flow on Errored Sessions
+
+**Problem:** Users couldn't leave the processing page when a session was in ERROR state. Clicking Cancel returned "Can only cancel sessions that are processing or queued" (400).
+**Root cause:** Backend cancel endpoint only allowed `QUEUED` and `PROCESSING` states. Frontend `handleConfirmCancel` trapped the error without navigating back.
+**Fix:** Backend now accepts `ERROR` state for cancellation. Frontend calls `handleBack()` on cancel error to navigate to configuration page regardless.
+**Lesson:** Error states need an exit path. The cancel/dismiss action should always let the user leave the processing page.
+
 ## Visual Confirmation Rule
 
 Automated test assertions are necessary but not sufficient. For every UI feature:

@@ -3,9 +3,11 @@
 from app.models.analysis import PipelineTool
 from app.services.pipeline_engine import PipelineDefinition, PipelineStep
 from app.services.steps import (
-    step_combine_replicates,
+    step_combine_replicates_msqrob2,
+    step_combine_replicates_msstats,
     step_filter_criteria_default,
-    step_generate_unique_psm,
+    step_generate_unique_psm_msqrob2,
+    step_generate_unique_psm_msstats,
     step_msstats_group_comparison,
     step_msstats_protein_abundance,
     step_multi_condition_de,
@@ -51,10 +53,10 @@ def _register_msqrob2() -> None:
         PipelineTool.MSQROB2,
         [
             PipelineStep(
-                1, "combine_replicates", "Combining Replicates", step_combine_replicates
+                1, "combine_replicates", "Combining Replicates", step_combine_replicates_msqrob2
             ),
             PipelineStep(
-                2, "generate_unique_psm", "Generate Unique PSM", step_generate_unique_psm
+                2, "generate_unique_psm", "Generate Unique PSM", step_generate_unique_psm_msqrob2
             ),
             PipelineStep(
                 3,
@@ -79,10 +81,10 @@ def _register_msstats() -> None:
         PipelineTool.MSSTATS,
         [
             PipelineStep(
-                1, "combine_replicates", "Combining Replicates", step_combine_replicates
+                1, "combine_replicates", "Combining Replicates", step_combine_replicates_msstats
             ),
             PipelineStep(
-                2, "generate_unique_psm", "Generate Unique PSM", step_generate_unique_psm
+                2, "generate_unique_psm", "Generate Unique PSM", step_generate_unique_psm_msstats
             ),
             PipelineStep(3, "remove_razor", "Remove Razor Peptides", step_remove_razor),
             PipelineStep(

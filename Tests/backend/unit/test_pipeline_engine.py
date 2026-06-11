@@ -1,20 +1,24 @@
 """Unit tests for PipelineState and PipelineEngine."""
 
+import asyncio
 import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pandas as pd
 import pytest
 
 from app.core.config import settings
 from app.core.exceptions import ProcessingError
+from app.models.analysis import AnalysisConfig, AnalysisTemplate, PipelineTool
 from app.services.pipeline_engine import (
     PipelineDefinition,
     PipelineEngine,
     PipelineState,
     PipelineStep,
+    StepContext,
 )
 
 
@@ -331,3 +335,173 @@ class TestPipelineEngine:
 
         assert engine.get_pipeline("pipeline_b") is pipe_b
         assert engine.get_pipeline("pipeline_a") is pipe_a
+
+
+# ── PipelineEngine.run() Tests ─────────────────────────────────────────
+
+
+# Use msqrob2 as the pipeline key so the engine's registry lookup works.
+# All tests below register their mock pipeline under PipelineTool.MSQROB2.
+_TEST_PIPELINE = PipelineTool.MSQROB2
+
+
+def _make_run_ctx(tmp_path: Path) -> StepContext:
+    """Create a minimal StepContext for PipelineEngine.run() tests."""
+    config = AnalysisConfig(
+        template=AnalysisTemplate.MULTI_CONDITION,
+        pipeline=_TEST_PIPELINE,
+    )
+    results_dir = tmp_path / "results"
+    uploads_dir = tmp_path / "uploads"
+    results_dir.mkdir(exist_ok=True)
+    uploads_dir.mkdir(exist_ok=True)
+    return StepContext(
+        config=config,
+        session_id="run-test-session",
+        file_paths=[],
+        results_dir=results_dir,
+        uploads_dir=uploads_dir,
+        df=pd.DataFrame({"x": [1, 2, 3]}),
+    )
+
+
+class TestPipelineEngineRun:
+    """Tests for PipelineEngine.run() — the main execution loop."""
+
+    def test_run_completes_all_steps(self, tmp_path):
+        """All mock handlers are called and result is returned."""
+        ctx = _make_run_ctx(tmp_path)
+        handler1 = AsyncMock()
+        handler2 = AsyncMock()
+        step1 = PipelineStep(1, "s1", "Step 1", handler1)
+        step2 = PipelineStep(2, "s2", "Step 2", handler2)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step1, step2])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        result = asyncio.run(engine.run(ctx))
+
+        handler1.assert_awaited_once_with(ctx)
+        handler2.assert_awaited_once_with(ctx)
+        assert result.steps_completed == [1, 2]
+        assert result.processing_time_seconds > 0
+
+    def test_run_stops_on_error(self, tmp_path):
+        """Engine stops at failing step, marks state, and re-raises."""
+        ctx = _make_run_ctx(tmp_path)
+        handler1 = AsyncMock()
+        handler2 = AsyncMock(side_effect=ValueError("step 2 failed"))
+        step1 = PipelineStep(1, "s1", "Step 1", handler1)
+        step2 = PipelineStep(2, "s2", "Step 2", handler2)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step1, step2])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        with pytest.raises(ValueError, match="step 2 failed"):
+            asyncio.run(engine.run(ctx))
+
+        handler1.assert_awaited_once()
+        handler2.assert_awaited_once()
+        assert ctx.state.data["failed_step"] == 2
+
+    def test_run_retries_on_timeout(self, tmp_path):
+        """Timeout errors are retried once."""
+        ctx = _make_run_ctx(tmp_path)
+        handler = AsyncMock(side_effect=[subprocess.TimeoutExpired("cmd", 300), None])
+        step = PipelineStep(1, "s1", "Step 1", handler)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        result = asyncio.run(engine.run(ctx))
+
+        assert handler.await_count == 2
+        assert result.steps_completed == [1]
+
+    def test_run_timeout_retry_fails(self, tmp_path):
+        """If retry also times out, engine gives up and re-raises."""
+        ctx = _make_run_ctx(tmp_path)
+        handler = AsyncMock(
+            side_effect=[
+                subprocess.TimeoutExpired("cmd", 300),
+                subprocess.TimeoutExpired("cmd", 600),
+            ]
+        )
+        step = PipelineStep(1, "s1", "Step 1", handler)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        with pytest.raises(subprocess.TimeoutExpired):
+            asyncio.run(engine.run(ctx))
+
+        assert handler.await_count == 2
+        assert ctx.state.data["failed_step"] == 1
+
+    def test_run_non_timeout_not_retried(self, tmp_path):
+        """Non-timeout errors are not retried."""
+        ctx = _make_run_ctx(tmp_path)
+        handler = AsyncMock(side_effect=ValueError("not a timeout"))
+        step = PipelineStep(1, "s1", "Step 1", handler)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        with pytest.raises(ValueError, match="not a timeout"):
+            asyncio.run(engine.run(ctx))
+
+        handler.assert_awaited_once()
+
+    def test_run_cancelled_before_start(self, tmp_path):
+        """Engine raises if cancelled before execution."""
+        ctx = _make_run_ctx(tmp_path)
+        ctx._cancel_event = asyncio.Event()
+        ctx._cancel_event.set()
+        handler = AsyncMock()
+        step = PipelineStep(1, "s1", "Step 1", handler)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        with pytest.raises(ProcessingError, match="cancelled"):
+            asyncio.run(engine.run(ctx))
+
+        handler.assert_not_awaited()
+
+    def test_run_records_step_outputs(self, tmp_path):
+        """Step outputs set by handlers are persisted to state."""
+        from pathlib import Path
+
+        ctx = _make_run_ctx(tmp_path)
+        out = Path("/tmp/fake_output.tsv")
+
+        async def set_output(ctx):
+            ctx.step_outputs[1] = out
+
+        step = PipelineStep(1, "s1", "Step 1", set_output)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        result = asyncio.run(engine.run(ctx))
+
+        assert result.steps_completed == [1]
+        assert ctx.state.data["outputs"]["step_1"] == str(out)
+
+    def test_run_unknown_pipeline_raises(self, tmp_path):
+        """Unknown pipeline raises ProcessingError before any steps run."""
+        ctx = _make_run_ctx(tmp_path)
+        # Override pipeline after construction to bypass Pydantic enum validation
+        ctx.config.pipeline = "nonexistent"
+        engine = PipelineEngine({})
+
+        with pytest.raises(ProcessingError, match="Unknown pipeline"):
+            asyncio.run(engine.run(ctx))
+
+    def test_run_sends_progress_callbacks(self, tmp_path):
+        """Progress callbacks receive started and completed events."""
+        ctx = _make_run_ctx(tmp_path)
+        handler = AsyncMock()
+        step = PipelineStep(1, "s1", "Step 1", handler)
+        pipeline = PipelineDefinition(_TEST_PIPELINE, [step])
+        engine = PipelineEngine({_TEST_PIPELINE: pipeline})
+
+        callback = AsyncMock()
+        ctx._progress_callbacks.append(callback)
+
+        asyncio.run(engine.run(ctx))
+
+        assert callback.await_count >= 2  # started + completed events

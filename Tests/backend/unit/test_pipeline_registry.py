@@ -70,12 +70,19 @@ class TestPipelineUniqueness:
         msstats = get_pipeline("msstats")
         assert len(msqrob2.steps) != len(msstats.steps)
 
-    def test_shared_steps_have_same_handler(self):
+    def test_step_handlers_are_pipeline_specific(self):
+        """Steps 1-2 have pipeline-specific handlers so modifications
+        to one pipeline never affect the other."""
         msqrob2 = get_pipeline("msqrob2")
         msstats = get_pipeline("msstats")
-        # Steps 1-2 should have identical handlers in both pipelines
-        assert msqrob2.steps[0].handler == msstats.steps[0].handler
-        assert msqrob2.steps[1].handler == msstats.steps[1].handler
+        # Step 1: each pipeline has its own handler
+        assert msqrob2.steps[0].handler is not None
+        assert msstats.steps[0].handler is not None
+        assert msqrob2.steps[0].handler != msstats.steps[0].handler
+        # Step 2: each pipeline has its own handler
+        assert msqrob2.steps[1].handler is not None
+        assert msstats.steps[1].handler is not None
+        assert msqrob2.steps[1].handler != msstats.steps[1].handler
 
 
 class TestListPipelines:

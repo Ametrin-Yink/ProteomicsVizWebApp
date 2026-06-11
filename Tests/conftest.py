@@ -200,6 +200,81 @@ def sample_ranked_genes() -> tuple[list[str], list[float]]:
 
 
 @pytest.fixture
+def pipeline_test_files(tmp_path: Path) -> list[Path]:
+    """Generate ~1000-row PSM CSV files for pipeline E2E chain tests.
+
+    2 conditions × 3 replicates = 6 files, ~167 rows each = ~1000 total.
+    Each PSM appears in all replicates of both conditions (shared PSMs),
+    so step 5 filtering (which requires PSMs present in all conditions)
+    keeps the data.
+
+    Includes multi-protein accessions for razor testing and some
+    contaminants / No Value rows for quality filtering coverage.
+
+    Columns use spaces (not underscores) matching real PSM CSV format.
+    """
+    rng = np.random.default_rng(42)
+
+    conditions = ["DrugA", "DMSO"]
+    replicates = [1, 2, 3]
+    psms_per_file = 167  # same PSMs in every file
+    single_proteins = [f"P{i:05d}" for i in range(1, 81)]
+
+    # Shared PSM definitions (used across all conditions/replicates)
+    sequences = [f"PEP_{i:04d}" for i in range(psms_per_file)]
+    mods = ["Oxidation" if i % 11 == 0 else "Unmodified" for i in range(psms_per_file)]
+    charges = [2 if i % 3 == 0 else 3 for i in range(psms_per_file)]
+    proteins = []
+    for i in range(psms_per_file):
+        if i % 7 == 0:
+            p1 = single_proteins[i % len(single_proteins)]
+            p2 = single_proteins[(i + 13) % len(single_proteins)]
+            proteins.append(f"{p1}; {p2}")
+        elif i % 7 == 1:
+            p1 = single_proteins[i % len(single_proteins)]
+            p2 = single_proteins[(i + 7) % len(single_proteins)]
+            p3 = single_proteins[(i + 21) % len(single_proteins)]
+            proteins.append(f"{p1}; {p2}; {p3}")
+        else:
+            proteins.append(single_proteins[i % len(single_proteins)])
+    contaminants = [
+        "TRUE" if i % 50 == 0 else "FALSE" for i in range(psms_per_file)
+    ]
+    quan_infos = [
+        "No Value" if i % 97 == 0 else "Valid" for i in range(psms_per_file)
+    ]
+    # Base abundance per PSM
+    base_abundance = rng.lognormal(mean=7.0, sigma=0.5, size=psms_per_file)
+
+    files = []
+    for condition in conditions:
+        for rep in replicates:
+            rows = []
+            for i in range(psms_per_file):
+                # Condition-specific abundance shift (simulates differential expression)
+                cond_shift = 1.5 if condition == "DrugA" else 1.0
+                rep_jitter = 1.0 + rng.uniform(-0.1, 0.1)
+                abundance = round(base_abundance[i] * cond_shift * rep_jitter, 1)
+                rows.append({
+                    "Sequence": sequences[i],
+                    "Modifications": mods[i],
+                    "Charge": charges[i],
+                    "Contaminant": contaminants[i],
+                    "Master Protein Accessions": proteins[i],
+                    "Quan Info": quan_infos[i],
+                    "Abundance F1 Sample": abundance,
+                })
+
+            df = pd.DataFrame(rows)
+            filename = f"PSM_TestExp_{condition}_{rep}.csv"
+            filepath = tmp_path / filename
+            df.to_csv(filepath, index=False)
+            files.append(filepath)
+
+    return files
+
+
+@pytest.fixture
 def mock_session_with_config():
     """Fully configured mock session for orchestrator/manager tests."""
     from datetime import UTC, datetime

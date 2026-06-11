@@ -5,7 +5,7 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 - **msqrob2** (default, 5 steps): Consolidated QFeatures-native pipeline using msqrob2 v1.16 API. Python preprocessing (razor, quality, filter) is handled inside the R QFeatures pipeline.
 - **MSstats** (8 steps): R/MSstats for protein abundance and DE. Steps 1-5 are Python preprocessing, steps 6-7 are R, step 8 is QC.
 
-Both share steps 1-2 (Python: combine replicates, generate Unique PSM). GSEA, BioNet, and Compare are on-demand — triggered from visualization/compare routes, not pipeline steps.
+Each pipeline has its own step 1-2 handlers (pipeline-specific files). This isolation prevents cross-pipeline contamination — msqrob2 step 2 frees `ctx.df` before R steps, while MSstats step 2 keeps it alive for downstream Python steps 3-5. GSEA, BioNet, and Compare are on-demand — triggered from visualization/compare routes, not pipeline steps.
 
 ## msqrob2 Pipeline (5 steps)
 
@@ -29,7 +29,7 @@ Step 5 (Python): qc_metrics → QC_Results.json
 ## MSstats Pipeline (8 steps, unchanged)
 
 ```
-Steps 1-2: Python (shared with msqrob2)
+Steps 1-2: Python (pipeline-specific: combine_replicates_msstats, unique_psm_msstats) — keeps ctx.df alive for steps 3-5
 Steps 3-5: Python preprocessing (remove_razor, remove_low_quality, filter_criteria)
 Step 6:    R (MSstats dataProcess) → Protein_Abundances.tsv
 Step 7:    R (MSstats groupComparison) → Diff_Expression_*.tsv
@@ -45,7 +45,9 @@ Step 8:    Python (QC metrics) → QC_Results.json
 
 **Step Handlers** (`services/steps/`):
 - Each step is a separate file exporting an async handler function
-- Steps 1-2 use `DataProcessor` methods; msqrob2 steps 3-4 call R via `Msqrob2Wrapper`; MSstats steps 6-7 call R via `MsstatsWrapper`
+- Steps 1-2 are **pipeline-specific** (e.g., `combine_replicates_msqrob2.py`, `combine_replicates_msstats.py`). This isolation means modifying one pipeline's handler never affects the other.
+- Key contract: msqrob2 step 2 frees `ctx.df = None` (R steps read from disk), MSstats step 2 keeps `ctx.df` alive (Python steps 3-5 need it)
+- msqrob2 steps 3-4 call R via `Msqrob2Wrapper`; MSstats steps 6-7 call R via `MsstatsWrapper`
 - `_helpers.py` provides shared utilities (gene mapping, PSM input validation, log callbacks)
 - `get_psm_input(ctx, step=5)` — parameterized step number for error messages
 

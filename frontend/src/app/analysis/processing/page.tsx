@@ -466,11 +466,13 @@ function ProcessingContent() {
       setCancelled(true);
     } catch (err) {
       console.error('Failed to cancel processing:', err);
+      // Still navigate back — the user wants to leave this page
+      handleBack();
     } finally {
       setIsCancelling(false);
       setShowCancelDialog(false);
     }
-  }, [sessionId, setCancelled]);
+  }, [sessionId, setCancelled, handleBack]);
 
   const handleDismissCancelDialog = useCallback(() => {
     setShowCancelDialog(false);

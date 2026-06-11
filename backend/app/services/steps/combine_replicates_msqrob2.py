@@ -1,4 +1,4 @@
-"""Step 1: Combine replicates — concatenate PSM CSV files, save to parquet."""
+"""Step 1 (msqrob2): Combine replicates — concatenate PSM CSV files, save to parquet."""
 
 import asyncio
 
@@ -7,7 +7,7 @@ from app.services.data_processor import DataProcessor, ProcessingConfig
 from app.services.pipeline_engine import StepContext
 
 
-async def step_combine_replicates(ctx: StepContext) -> None:
+async def step_combine_replicates_msqrob2(ctx: StepContext) -> None:
     processor = DataProcessor(
         ProcessingConfig(
             remove_razor=ctx.config.remove_razor,

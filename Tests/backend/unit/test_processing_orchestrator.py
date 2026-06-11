@@ -1,8 +1,9 @@
 """Unit tests for ProcessingOrchestrator — validation and state transitions."""
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.models.analysis import AnalysisConfig, PipelineTool
+from app.models.analysis import AnalysisConfig, AnalysisResult, PipelineTool
 from app.models.session import SessionState
 
 
@@ -95,3 +96,92 @@ class TestOrchestratorInit:
         orch.register_progress_callback(dummy_callback)
         assert len(orch.progress_callbacks) == 1
         assert orch.progress_callbacks[0] is dummy_callback
+
+
+# ── ProcessingOrchestrator.process_session() Tests ──────────────────────
+
+
+@pytest.fixture
+def mock_engine_result():
+    """Mock AnalysisResult returned by PipelineEngine.run()."""
+    return AnalysisResult(session_id="test-orch-id")
+
+
+@pytest.fixture
+def orch_config():
+    """Minimal AnalysisConfig for orchestrator tests."""
+    return AnalysisConfig(
+        pipeline=PipelineTool.MSQROB2,
+        organism="human",
+    )
+
+
+class TestOrchestratorProcessSession:
+    """Tests for process_session() — the main orchestration entry point."""
+
+    def test_success_transitions_to_completed(
+        self, mock_session, orch_config, mock_engine_result, tmp_path
+    ):
+        """Happy path: PROCESSING → COMPLETED state transition."""
+        from app.services.processing_orchestrator import ProcessingOrchestrator
+
+        uploads_dir = tmp_path / "uploads"
+        results_dir = tmp_path / "results"
+        uploads_dir.mkdir()
+        results_dir.mkdir()
+
+        orch = ProcessingOrchestrator(session_id="test-orch-id")
+
+        with patch(
+            "app.services.processing_orchestrator.PipelineEngine.run",
+            new=AsyncMock(return_value=mock_engine_result),
+        ), patch(
+            "app.services.processing_orchestrator.session_manager"
+        ) as mock_sm:
+            mock_sm.get_uploads_dir = AsyncMock(return_value=uploads_dir)
+            mock_sm.get_results_dir = AsyncMock(return_value=results_dir)
+            mock_sm.get_session = AsyncMock(return_value=mock_session)
+            mock_sm.update_session_state = AsyncMock()
+
+            import asyncio
+            result = asyncio.run(orch.process_session(orch_config))
+
+            assert result is mock_engine_result
+            mock_sm.update_session_state.assert_any_call(
+                "test-orch-id", SessionState.PROCESSING
+            )
+            mock_sm.update_session_state.assert_any_call(
+                "test-orch-id", SessionState.COMPLETED
+            )
+
+    def test_failure_transitions_to_error(
+        self, mock_session, orch_config, tmp_path
+    ):
+        """On engine failure: PROCESSING → ERROR with error message."""
+        from app.services.processing_orchestrator import ProcessingOrchestrator
+
+        uploads_dir = tmp_path / "uploads"
+        results_dir = tmp_path / "results"
+        uploads_dir.mkdir()
+        results_dir.mkdir()
+
+        orch = ProcessingOrchestrator(session_id="test-orch-id")
+
+        with patch(
+            "app.services.processing_orchestrator.PipelineEngine.run",
+            new=AsyncMock(side_effect=ValueError("step 3 failed")),
+        ), patch(
+            "app.services.processing_orchestrator.session_manager"
+        ) as mock_sm:
+            mock_sm.get_uploads_dir = AsyncMock(return_value=uploads_dir)
+            mock_sm.get_results_dir = AsyncMock(return_value=results_dir)
+            mock_sm.get_session = AsyncMock(return_value=mock_session)
+            mock_sm.update_session_state = AsyncMock()
+
+            import asyncio
+            with pytest.raises(ValueError, match="step 3 failed"):
+                asyncio.run(orch.process_session(orch_config))
+
+            mock_sm.update_session_state.assert_any_call(
+                "test-orch-id", SessionState.ERROR, "step 3 failed"
+            )

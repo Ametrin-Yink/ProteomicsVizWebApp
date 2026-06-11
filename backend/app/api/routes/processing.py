@@ -460,14 +460,14 @@ async def cancel_processing(
         await store.save(session)
         return {"data": {"status": "cancelled"}}
 
-    if session.state != SessionState.PROCESSING:
+    if session.state not in (SessionState.PROCESSING, SessionState.ERROR):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only cancel sessions that are processing or queued",
+            detail="Can only cancel sessions that are processing, queued, or in error",
         )
 
-    # Cancel processing — signal the background task to stop
-    if session_id in _cancel_events:
+    # Cancel processing — signal the background task to stop (if running)
+    if session.state == SessionState.PROCESSING and session_id in _cancel_events:
         _cancel_events[session_id].set()
         logger.info(f"Signalled cancel event for session {session_id}")
     session.state = SessionState.CANCELLED
