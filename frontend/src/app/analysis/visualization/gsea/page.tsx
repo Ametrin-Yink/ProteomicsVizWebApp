@@ -251,12 +251,21 @@ function GSEAAnalysisContent() {
     if (!selectedComparison || runDatabases.length === 0) return;
     setRunError(null);
     try {
-      await visualizationApi.runGSEA(apiPrefix, {
+      const result = await visualizationApi.runGSEA(apiPrefix, {
         comparison: selectedComparison,
         databases: runDatabases,
         min_size: runParams.min_size,
         max_size: runParams.max_size,
         permutations: runParams.permutations,
+      });
+      // Show running state immediately — don't wait for first poll
+      setGseaRunStatus({
+        status: 'running',
+        comparison: result.comparison || selectedComparison,
+        databases: Object.fromEntries(
+          runDatabases.map((db) => [db, 'running'])
+        ),
+        summary: result.summary || {},
       });
       startPolling();
     } catch (err) {

@@ -95,10 +95,17 @@ export function buildVolcanoExport(
   const hoverText = deResults.map((d) => {
     const accessions = parseDelimited(d.master_protein_accessions);
     const genes = d.gene_name ? parseDelimited(d.gene_name) : [];
-    const geneDisplay = genes.length > 0 ? genes.join(', ') : 'N/A';
+    const maxAcc = 5;
+    const accDisplay = accessions.length > maxAcc
+      ? accessions.slice(0, maxAcc).join(', ') + ` +${accessions.length - maxAcc} more`
+      : accessions.join(', ');
+    const maxGenes = 3;
+    const geneDisplay = genes.length > maxGenes
+      ? genes.slice(0, maxGenes).join(', ') + ` +${genes.length - maxGenes} more`
+      : genes.length > 0 ? genes.join(', ') : 'N/A';
 
     return (
-      `<b>${accessions.join(', ')}</b><br>` +
+      `<b>${accDisplay}</b><br>` +
       `Gene: ${geneDisplay}<br>` +
       `Log2 FC: ${(d.log_fc ?? 0).toFixed(3)}<br>` +
       `P-value: ${(d.pval ?? 1).toExponential(2)}<br>` +
@@ -123,6 +130,7 @@ export function buildVolcanoExport(
     },
     text: hoverText,
     hoverinfo: 'text',
+    hoverlabel: { namelength: -1, font: { size: 12 } },
     customdata: points.map((p) => p.customdata),
     name: 'Proteins',
   };
