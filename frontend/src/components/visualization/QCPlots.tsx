@@ -64,6 +64,23 @@ function hashColor(seed: string): string {
   return `hsl(${hue}, 65%, 55%)`;
 }
 
+// Reconstruct synthetic data from box statistics so Plotly renders
+// reliable normal box plots (its precomputed format is fragile).
+function boxStatsToValues(s: Record<string, unknown>): number[] {
+  const q1 = s.q1 as number, med = s.median as number, q3 = s.q3 as number;
+  const lf = s.lowerfence as number, uf = s.upperfence as number;
+  const out = (s.outliers as number[]) || [];
+  // Build ~30 synthetic points that reproduce the box shape
+  const vals: number[] = [lf, lf, lf];
+  for (let i = 0; i < 6; i++) vals.push(lf + (q1 - lf) * (i / 6));
+  for (let i = 0; i < 8; i++) vals.push(q1 + (med - q1) * (i / 8));
+  for (let i = 0; i < 8; i++) vals.push(med + (q3 - med) * (i / 8));
+  for (let i = 0; i < 6; i++) vals.push(q3 + (uf - q3) * (i / 6));
+  vals.push(uf, uf, uf);
+  vals.push(...out);
+  return vals;
+}
+
 // Convert old-style raw lists or new-style box-stats dicts into Plotly box traces.
 // Old: {condition: [values...]} or {condition: {replicate: [values...]}}
 // New: {condition: {q1, median, q3, lowerfence, upperfence, outliers}}
@@ -81,39 +98,31 @@ function normalizeBoxData(
       if (typeof first === 'object' && first !== null && !Array.isArray(first) && 'q1' in (first as object)) {
         // Nested box-stats: {condition: {replicate: stats}}
         for (const [subKey, stats] of Object.entries(val as Record<string, unknown>)) {
-          const s = stats as Record<string, unknown>;
           const name = labelFn(key, subKey);
           traces.push({
-            y: s.outliers || [],
-            q1: [s.q1], median: [s.median], q3: [s.q3],
-            lowerfence: [s.lowerfence], upperfence: [s.upperfence],
-            x: [name],  // explicit category label
-            type: 'box', name,
+            y: boxStatsToValues(stats as Record<string, unknown>),
+            x: [name], type: 'box', name,
             marker: { color, size: 3, outliercolor: color + '66' },
             boxpoints: 'outliers', hovertemplate,
           });
         }
       } else if ('q1' in (val as object)) {
         // Flat box-stats: {condition: stats}
-        const s = val as Record<string, unknown>;
         const name = labelFn(key);
         traces.push({
-          y: s.outliers || [],
-          q1: [s.q1], median: [s.median], q3: [s.q3],
-          lowerfence: [s.lowerfence], upperfence: [s.upperfence],
-          x: [name],  // explicit category label
-          type: 'box', name,
+          y: boxStatsToValues(val as Record<string, unknown>),
+          x: [name], type: 'box', name,
           marker: { color, size: 3, outliercolor: color + '66' },
           boxpoints: 'outliers', hovertemplate,
         });
       } else if (Array.isArray(first)) {
-        // Old nested list format: {condition: {replicate: [values]}}
+        // Old nested list format
         for (const [subKey, vals] of Object.entries(val as Record<string, unknown>)) {
           const arr = vals as number[];
           if (arr.length > 0) {
-            const name = labelFn(key, subKey);
             traces.push({
-              y: arr, x: [name], type: 'box', name,
+              y: arr, x: [labelFn(key, subKey)], type: 'box',
+              name: labelFn(key, subKey),
               marker: { color, size: 3, outliercolor: color + '66' },
               boxpoints: 'outliers', hovertemplate,
             });
@@ -121,7 +130,7 @@ function normalizeBoxData(
         }
       }
     } else if (Array.isArray(val)) {
-      // Old flat list format: {condition: [values]}
+      // Old flat list format
       const name = labelFn(key);
       traces.push({
         y: val, x: [name], type: 'box', name,
