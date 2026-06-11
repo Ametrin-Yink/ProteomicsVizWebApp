@@ -47,8 +47,8 @@ class QCData(BaseModel):
 
     pca: PCAResult | None = None
     pvalue_distribution: PValueDistribution | None = None
-    psm_cv: dict[str, list[float]] | None = None
-    protein_cv: dict[str, list[float]] | None = None
+    psm_cv: dict | None = None
+    protein_cv: dict | None = None
     data_completeness: list[DataCompleteness] | None = None
     psm_completeness: list[DataCompleteness] | None = None
     pvalue_distributions: dict[str, PValueDistribution] | None = None

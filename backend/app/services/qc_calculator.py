@@ -323,21 +323,12 @@ class QCCalculator:
 
         return PValueDistribution(bins=bin_edges.tolist(), counts=counts.tolist())
 
-    def _calculate_cv(self, psm_df: pd.DataFrame) -> dict[str, list[float]]:
+    def _calculate_cv(self, psm_df: pd.DataFrame) -> dict[str, dict]:
         """
         Calculate coefficient of variation per condition for PSM abundances.
 
-        For each unique PSM, calculate CV across replicates within each condition.
-        CV = std / mean for the abundance values across replicates.
-
-        Note: PSM Abundance values are already in RAW format (not log2-transformed),
-        so we calculate CV directly on these values.
-
-        Args:
-            psm_df: PSM abundances DataFrame
-
-        Returns:
-            Dictionary mapping condition to CV values (as percentages)
+        Returns precomputed box-plot statistics per condition to keep
+        QC_Results.json small. See _compute_box_stats for the output format.
         """
         if psm_df is None or "Condition" not in psm_df.columns:
             return {}
@@ -350,8 +341,8 @@ class QCCalculator:
             agg = grouped.agg(std="std", mean="mean", count="count")
             valid = (agg["count"] >= 2) & (agg["mean"] > 0)
             agg = agg[valid]
-            cvs = ((agg["std"] / agg["mean"]) * 100).tolist()
-            cv_by_condition[str(condition)] = cvs
+            cvs = ((agg["std"] / agg["mean"]) * 100).values
+            cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
 
         return cv_by_condition
 
@@ -410,7 +401,9 @@ class QCCalculator:
             stds = np.nanstd(raw, axis=1, ddof=1)
             # CV = (std / mean) * 100, filter out invalid values
             cv_values = np.where(means > 0, (stds / means) * 100, np.nan)
-            cv_by_condition[str(condition)] = cv_values[~np.isnan(cv_values)].tolist()
+            cv_by_condition[str(condition)] = self._compute_box_stats(
+                cv_values[~np.isnan(cv_values)]
+            )
 
         return cv_by_condition
 
@@ -638,15 +631,20 @@ class QCCalculator:
         return total_present // len(abundance_cols)
 
     def _calculate_average_cv(self, cv_by_condition: dict | None) -> float | None:
-        """Calculate overall average CV across all conditions."""
+        """Calculate overall average CV across all conditions.
+
+        Each condition value is now a box-stats dict with a 'median' key
+        (the median CV for that condition). We average those medians.
+        """
         if cv_by_condition is None or len(cv_by_condition) == 0:
             return None
-        all_cvs = []
-        for cv_list in cv_by_condition.values():
-            all_cvs.extend(cv_list)
-        if len(all_cvs) == 0:
+        medians = []
+        for stats in cv_by_condition.values():
+            if isinstance(stats, dict) and "median" in stats:
+                medians.append(stats["median"])
+        if len(medians) == 0:
             return None
-        return round(np.mean(all_cvs), 1)  # CVs are already percentages
+        return round(float(np.mean(medians)), 1)
 
     def _calculate_completeness_rate(self, completeness: list) -> float | None:
         """Calculate overall completeness rate across all samples."""

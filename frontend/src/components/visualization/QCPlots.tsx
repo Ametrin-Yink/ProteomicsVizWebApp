@@ -187,15 +187,20 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
   const psmCVPlot = useMemo(() => {
     if (!data.psm_cv) return null;
 
-    const traces = Object.entries(data.psm_cv).map(([condition, values]) => {
-      const sorted = [...values].sort((a, b) => a - b);
-      const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
+    const traces = Object.entries(data.psm_cv).map(([condition, stats]) => {
+      const s = stats as BoxStats;
       return {
-        y: values.filter(v => v <= p95),
+        y: s.outliers || [],
+        q1: [s.q1],
+        median: [s.median],
+        q3: [s.q3],
+        lowerfence: [s.lowerfence],
+        upperfence: [s.upperfence],
         type: 'box' as const,
         name: condition,
         marker: { color: getConditionColor(condition) },
-        boxpoints: false,
+        boxpoints: 'outliers' as const,
         hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
       };
     });
@@ -224,15 +229,20 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
 
-    const traces = Object.entries(data.protein_cv).map(([condition, values]) => {
-      const sorted = [...values].sort((a, b) => a - b);
-      const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
+    const traces = Object.entries(data.protein_cv).map(([condition, stats]) => {
+      const s = stats as BoxStats;
       return {
-        y: values.filter(v => v <= p95),
+        y: s.outliers || [],
+        q1: [s.q1],
+        median: [s.median],
+        q3: [s.q3],
+        lowerfence: [s.lowerfence],
+        upperfence: [s.upperfence],
         type: 'box' as const,
         name: condition,
         marker: { color: getConditionColor(condition) },
-        boxpoints: false,
+        boxpoints: 'outliers' as const,
         hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
       };
     });

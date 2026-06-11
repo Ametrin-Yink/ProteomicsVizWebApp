@@ -343,7 +343,7 @@ class TestCalculateCV:
     """Tests for _calculate_cv."""
 
     def test_identical_values_cv_zero(self, calculator):
-        """Identical abundance values produce CV of 0."""
+        """Identical abundance values produce CV of 0 — returns box stats."""
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM1", "PSM2", "PSM2", "PSM2"],
             "Condition": ["DMSO", "DMSO", "DMSO", "DMSO", "DMSO", "DMSO"],
@@ -354,12 +354,13 @@ class TestCalculateCV:
         result = calculator._calculate_cv(df)
 
         assert "DMSO" in result
-        for cv_list in result.values():
-            for cv in cv_list:
-                assert cv == 0.0
+        stats = result["DMSO"]
+        assert stats["q1"] == 0.0
+        assert stats["median"] == 0.0
+        assert stats["q3"] == 0.0
 
     def test_varied_values_cv_positive(self, calculator):
-        """Different abundance values produce CV > 0."""
+        """Different abundance values produce positive CV — returns box stats."""
         rng = np.random.default_rng(42)
         data = {
             "Unique_PSM": ["PSM1"] * 3 + ["PSM2"] * 3,
@@ -371,12 +372,13 @@ class TestCalculateCV:
         result = calculator._calculate_cv(df)
 
         assert "DMSO" in result
-        for cv_list in result.values():
-            for cv in cv_list:
-                assert cv > 0
+        stats = result["DMSO"]
+        assert stats["q3"] > 0
+        assert "outliers" in stats
+        assert "lowerfence" in stats
 
     def test_zero_mean_handled(self, calculator):
-        """PSMs with mean=0 are excluded from CV calculation."""
+        """PSMs with mean=0 return zeroed box stats."""
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM1"],
             "Condition": ["DMSO", "DMSO", "DMSO"],
@@ -387,10 +389,13 @@ class TestCalculateCV:
         result = calculator._calculate_cv(df)
 
         assert "DMSO" in result
-        assert len(result["DMSO"]) == 0
+        stats = result["DMSO"]
+        # All CVs are 0 → q1=median=q3=0
+        assert stats["q1"] == 0.0
+        assert stats["median"] == 0.0
 
     def test_multiple_conditions(self, calculator):
-        """Returns separate CV lists per condition."""
+        """Returns separate box stats per condition."""
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM2", "PSM2"],
             "Condition": ["DMSO", "DMSO", "Drug", "Drug"],
@@ -402,9 +407,10 @@ class TestCalculateCV:
 
         assert "DMSO" in result
         assert "Drug" in result
+        assert "q1" in result["DMSO"]
 
     def test_requires_minimum_two_replicates(self, calculator):
-        """PSMs with fewer than 2 replicates are excluded."""
+        """PSMs with fewer than 2 replicates are excluded — returns valid stats."""
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM1", "PSM2"],
             "Condition": ["DMSO", "DMSO", "DMSO", "DMSO"],
@@ -415,9 +421,9 @@ class TestCalculateCV:
         result = calculator._calculate_cv(df)
 
         assert "DMSO" in result
-        # PSM2 has only 1 replicate -> excluded
-        # PSM1 has 3 replicates -> included with CV=0
-        assert len(result["DMSO"]) == 1
+        stats = result["DMSO"]
+        # PSM2 excluded (1 replicate), PSM1 CV=0 → all stats zero
+        assert stats["q1"] == 0.0
 
     def test_no_condition_column_returns_empty(self, calculator):
         """Missing 'Condition' column returns empty dict."""
