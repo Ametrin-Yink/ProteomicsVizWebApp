@@ -325,29 +325,35 @@ class QCCalculator:
 
     def _calculate_cv(self, psm_df: pd.DataFrame) -> dict[str, dict]:
         """
-        Calculate variation per condition for PSM abundances.
+        Calculate exact CV% per condition for PSM abundances.
 
-        Computes SD of log2-transformed abundance × 100, which is the
-        standard metric in proteomics for "CV on log scale."  Unlike
-        raw-scale CV, log-scale SD is independent of mean abundance,
-        avoiding the inflated values that plague low-abundance peptides.
+        Log2-transforms each replicate's abundance, computes the actual
+        SD of log2 values across replicates per PSM, then converts to
+        CV% via the exact log-normal formula: CV = sqrt(exp(σ_ln²) - 1)×100.
+
+        This avoids both raw-scale instability (low-abundance CV inflation)
+        and the Taylor approximation error at large CV values.
 
         Returns precomputed box-plot statistics per condition.
         """
         if psm_df is None or "Condition" not in psm_df.columns:
             return {}
 
-        cv_by_condition = {}
+        # Log2-transform abundance, excluding zeros
+        df = psm_df[psm_df["Abundance"] > 0].copy()
+        df["log2_ab"] = np.log2(df["Abundance"])
 
-        for condition in psm_df["Condition"].unique():
-            condition_df = psm_df[psm_df["Condition"] == condition]
-            grouped = condition_df.groupby("Unique_PSM")["Abundance"]
-            agg = grouped.agg(std="std", mean="mean", count="count")
-            valid = (agg["count"] >= 2) & (agg["mean"] > 0)
-            agg = agg[valid]
-            # Taylor: SD(log2) ≈ (SD/mean) / ln(2), valid for CV < ~50%.
-            # Multiply by 100 to express as approximate percent variation.
-            cvs = ((agg["std"] / agg["mean"]) / np.log(2) * 100).values
+        cv_by_condition = {}
+        for condition in df["Condition"].unique():
+            cond_df = df[df["Condition"] == condition]
+            grouped = cond_df.groupby("Unique_PSM")["log2_ab"]
+            agg = grouped.agg(std="std", count="count")
+            valid = agg[agg["count"] >= 2]
+            if len(valid) == 0:
+                continue
+            sd_log2 = valid["std"].values
+            sd_ln = sd_log2 * np.log(2)
+            cvs = np.sqrt(np.exp(sd_ln ** 2) - 1) * 100
             cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
 
         return cv_by_condition
@@ -390,8 +396,10 @@ class QCCalculator:
         cv_by_condition = {}
         for condition, cols in condition_cols.items():
             mat = protein_df[cols].values.astype(float)
-            stds = np.nanstd(mat, axis=1, ddof=1)  # log2 SD
-            cvs = stds * 100  # approximate CV%
+            sd_log2 = np.nanstd(mat, axis=1, ddof=1)
+            sd_ln = sd_log2 * np.log(2)
+            # Exact CV for log-normal data
+            cvs = np.sqrt(np.exp(np.maximum(sd_ln, 0) ** 2) - 1) * 100
             cv_by_condition[str(condition)] = self._compute_box_stats(
                 cvs[~np.isnan(cvs)]
             )

@@ -378,7 +378,7 @@ class TestCalculateCV:
         assert "lowerfence" in stats
 
     def test_zero_mean_handled(self, calculator):
-        """PSMs with mean=0 return zeroed box stats."""
+        """PSMs with abundance=0 are excluded (log2(0) is undefined)."""
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM1"],
             "Condition": ["DMSO", "DMSO", "DMSO"],
@@ -388,11 +388,8 @@ class TestCalculateCV:
 
         result = calculator._calculate_cv(df)
 
-        assert "DMSO" in result
-        stats = result["DMSO"]
-        # All CVs are 0 → q1=median=q3=0
-        assert stats["q1"] == 0.0
-        assert stats["median"] == 0.0
+        # Zero-abundance PSMs filtered out — no valid data for this condition
+        assert result == {}
 
     def test_multiple_conditions(self, calculator):
         """Returns separate box stats per condition."""
