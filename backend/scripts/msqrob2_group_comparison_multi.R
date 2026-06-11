@@ -112,8 +112,17 @@ assign_condition <- function(sample_names, metadata) {
     matched <- FALSE
     for (fname in names(metadata)) {
       entry <- metadata[[fname]]
+      # Support both "condition_1"/"condition_2" (multi-condition) and
+      # "condition" (single condition, no numeric suffix) formats.
       cond_keys <- grep("^condition_", names(entry), value = TRUE)
-      if (length(cond_keys) == 0) next
+      if (length(cond_keys) == 0) {
+        # Fall back to plain "condition" key
+        if ("condition" %in% names(entry)) {
+          cond_keys <- "condition"
+        } else {
+          next
+        }
+      }
       cond_vals <- as.character(unlist(entry[cond_keys]))
       cond_vals <- cond_vals[nzchar(cond_vals)]
       if (length(cond_vals) > 0 &&
