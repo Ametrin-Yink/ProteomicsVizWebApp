@@ -64,19 +64,23 @@ function hashColor(seed: string): string {
   return `hsl(${hue}, 65%, 55%)`;
 }
 
-// Reconstruct synthetic data from box statistics so Plotly renders
-// reliable normal box plots (its precomputed format is fragile).
+// Reconstruct data from box statistics so Plotly computes the correct box.
+// Distributes 100 points across the four quartile ranges (25 each) so
+// Plotly's linear-interpolation quartile algorithm hits the target values.
 function boxStatsToValues(s: Record<string, unknown>): number[] {
   const q1 = s.q1 as number, med = s.median as number, q3 = s.q3 as number;
   const lf = s.lowerfence as number, uf = s.upperfence as number;
   const out = (s.outliers as number[]) || [];
-  // Build ~30 synthetic points that reproduce the box shape
-  const vals: number[] = [lf, lf, lf];
-  for (let i = 0; i < 6; i++) vals.push(lf + (q1 - lf) * (i / 6));
-  for (let i = 0; i < 8; i++) vals.push(q1 + (med - q1) * (i / 8));
-  for (let i = 0; i < 8; i++) vals.push(med + (q3 - med) * (i / 8));
-  for (let i = 0; i < 6; i++) vals.push(q3 + (uf - q3) * (i / 6));
-  vals.push(uf, uf, uf);
+  const vals: number[] = [];
+  // 25 points below q1 → q1 is the 25th percentile boundary
+  for (let i = 0; i < 25; i++) vals.push(lf + (q1 - lf) * (i / 24));
+  // 25 points q1→median → median is the 50th percentile boundary
+  for (let i = 0; i < 25; i++) vals.push(q1 + (med - q1) * (i / 24));
+  // 25 points median→q3 → q3 is the 75th percentile boundary
+  for (let i = 0; i < 25; i++) vals.push(med + (q3 - med) * (i / 24));
+  // 25 points q3→upperfence → upperfence is ~max
+  for (let i = 0; i < 25; i++) vals.push(q3 + (uf - q3) * (i / 24));
+  // Actual outliers
   vals.push(...out);
   return vals;
 }
