@@ -327,8 +327,11 @@ class QCCalculator:
         """
         Calculate coefficient of variation per condition for PSM abundances.
 
-        Returns precomputed box-plot statistics per condition to keep
-        QC_Results.json small. See _compute_box_stats for the output format.
+        Excludes PSMs with mean abundance below the 10th percentile per
+        condition — CV is unstable at very low signal levels where small
+        absolute variation produces extreme percentage values.
+
+        Returns precomputed box-plot statistics per condition.
         """
         if psm_df is None or "Condition" not in psm_df.columns:
             return {}
@@ -341,6 +344,10 @@ class QCCalculator:
             agg = grouped.agg(std="std", mean="mean", count="count")
             valid = (agg["count"] >= 2) & (agg["mean"] > 0)
             agg = agg[valid]
+            # Exclude bottom 10% by mean abundance — CV is unreliable there
+            if len(agg) > 10:
+                floor = agg["mean"].quantile(0.10)
+                agg = agg[agg["mean"] >= floor]
             cvs = ((agg["std"] / agg["mean"]) * 100).values
             cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
 
@@ -394,16 +401,21 @@ class QCCalculator:
         for condition, cols in condition_cols.items():
             # Extract matrix: (n_proteins, n_replicates)
             mat = protein_df[cols].values.astype(float)
-            # Convert log2 abundances back to raw values
-            raw = np.power(2, mat)
-            # Row-wise mean and std (ddof=1 for sample std, matching pandas .std())
+            # Convert log2 abundances back to raw values.
+            # Clip extreme log2 values to avoid overflow before exp2.
+            mat = np.clip(mat, -50, 50)
+            raw = np.exp2(mat)
+            # Row-wise mean and std (ddof=1 for sample std)
             means = np.nanmean(raw, axis=1)
             stds = np.nanstd(raw, axis=1, ddof=1)
             # CV = (std / mean) * 100, filter out invalid values
             cv_values = np.where(means > 0, (stds / means) * 100, np.nan)
-            cv_by_condition[str(condition)] = self._compute_box_stats(
-                cv_values[~np.isnan(cv_values)]
-            )
+            cv_values = cv_values[~np.isnan(cv_values)]
+            # Exclude bottom 10% by mean raw abundance — CV is unreliable there
+            if len(cv_values) > 10:
+                floor = np.percentile(means[~np.isnan(means)], 10)
+                cv_values = cv_values[means[~np.isnan(means)] >= floor]
+            cv_by_condition[str(condition)] = self._compute_box_stats(cv_values)
 
         return cv_by_condition
 
