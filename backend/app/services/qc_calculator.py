@@ -325,11 +325,12 @@ class QCCalculator:
 
     def _calculate_cv(self, psm_df: pd.DataFrame) -> dict[str, dict]:
         """
-        Calculate coefficient of variation per condition for PSM abundances.
+        Calculate variation per condition for PSM abundances.
 
-        Excludes PSMs with mean abundance below the 10th percentile per
-        condition — CV is unstable at very low signal levels where small
-        absolute variation produces extreme percentage values.
+        Computes SD of log2-transformed abundance × 100, which is the
+        standard metric in proteomics for "CV on log scale."  Unlike
+        raw-scale CV, log-scale SD is independent of mean abundance,
+        avoiding the inflated values that plague low-abundance peptides.
 
         Returns precomputed box-plot statistics per condition.
         """
@@ -344,78 +345,56 @@ class QCCalculator:
             agg = grouped.agg(std="std", mean="mean", count="count")
             valid = (agg["count"] >= 2) & (agg["mean"] > 0)
             agg = agg[valid]
-            # Exclude bottom 10% by mean abundance — CV is unreliable there
-            if len(agg) > 10:
-                floor = agg["mean"].quantile(0.10)
-                agg = agg[agg["mean"] >= floor]
-            cvs = ((agg["std"] / agg["mean"]) * 100).values
+            # Taylor: SD(log2) ≈ (SD/mean) / ln(2), valid for CV < ~50%.
+            # Multiply by 100 to express as approximate percent variation.
+            cvs = ((agg["std"] / agg["mean"]) / np.log(2) * 100).values
             cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
 
         return cv_by_condition
 
-    def _calculate_protein_cv(self, protein_df: pd.DataFrame) -> dict[str, list[float]]:
+    def _calculate_protein_cv(self, protein_df: pd.DataFrame) -> dict[str, dict]:
         """
-        Calculate coefficient of variation per condition for protein abundances.
+        Calculate variation per condition for protein abundances.
 
-        For each protein, calculate CV across replicates within each condition.
-        CV = std / mean for the abundance values across replicates.
-
-        Note: Abundance values are log2-transformed, so we convert to raw values
-        before calculating CV to get meaningful results.
-
-        Args:
-            protein_df: Protein abundances DataFrame
-
-        Returns:
-            Dictionary mapping condition to CV values (as percentages)
+        Computes SD of log2 abundance × 100 across replicates.  Protein
+        abundances are already log2-transformed, so no conversion is needed.
+        SD_log2 × 100 gives an approximate CV% that is stable across the
+        abundance range.
         """
         if protein_df is None:
             return {}
 
         # Get abundance columns (exclude ID columns)
-        id_cols = [
+        id_cols = {
             "Master Protein Accessions",
             "Gene_Name",
             "Protein",
             "Master_Protein_Accessions",
             "PSM_Count",
             "psm_count",
-        ]
+        }
         abundance_cols = [
             col
             for col in protein_df.columns
             if col not in id_cols
-            and protein_df[col].dtype in ["float64", "float32", "int64"]
+            and protein_df[col].dtype in ("float64", "float32", "int64")
         ]
 
         # Group columns by condition (extract condition from sample names)
         condition_cols = {}
         for col in abundance_cols:
             condition = self._extract_condition(col)
-            if condition not in condition_cols:
-                condition_cols[condition] = []
-            condition_cols[condition].append(col)
+            condition_cols.setdefault(condition, []).append(col)
 
-        # Calculate CV for each protein within each condition (vectorized)
+        # SD of log2 values × 100 per protein per condition (vectorized)
         cv_by_condition = {}
         for condition, cols in condition_cols.items():
-            # Extract matrix: (n_proteins, n_replicates)
             mat = protein_df[cols].values.astype(float)
-            # Convert log2 abundances back to raw values.
-            # Clip extreme log2 values to avoid overflow before exp2.
-            mat = np.clip(mat, -50, 50)
-            raw = np.exp2(mat)
-            # Row-wise mean and std (ddof=1 for sample std)
-            means = np.nanmean(raw, axis=1)
-            stds = np.nanstd(raw, axis=1, ddof=1)
-            # CV = (std / mean) * 100, filter out invalid values
-            cv_values = np.where(means > 0, (stds / means) * 100, np.nan)
-            cv_values = cv_values[~np.isnan(cv_values)]
-            # Exclude bottom 10% by mean raw abundance — CV is unreliable there
-            if len(cv_values) > 10:
-                floor = np.percentile(means[~np.isnan(means)], 10)
-                cv_values = cv_values[means[~np.isnan(means)] >= floor]
-            cv_by_condition[str(condition)] = self._compute_box_stats(cv_values)
+            stds = np.nanstd(mat, axis=1, ddof=1)  # log2 SD
+            cvs = stds * 100  # approximate CV%
+            cv_by_condition[str(condition)] = self._compute_box_stats(
+                cvs[~np.isnan(cvs)]
+            )
 
         return cv_by_condition
 
