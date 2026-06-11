@@ -77,29 +77,32 @@ function normalizeBoxData(
   for (const [key, val] of Object.entries(raw)) {
     const color = getColor(key);
     if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-      // New box-stats format: check if flat stats or nested replicates
       const first = Object.values(val as Record<string, unknown>)[0];
       if (typeof first === 'object' && first !== null && !Array.isArray(first) && 'q1' in (first as object)) {
-        // Nested: {condition: {replicate: stats}}
+        // Nested box-stats: {condition: {replicate: stats}}
         for (const [subKey, stats] of Object.entries(val as Record<string, unknown>)) {
           const s = stats as Record<string, unknown>;
+          const name = labelFn(key, subKey);
           traces.push({
             y: s.outliers || [],
             q1: [s.q1], median: [s.median], q3: [s.q3],
             lowerfence: [s.lowerfence], upperfence: [s.upperfence],
-            type: 'box', name: labelFn(key, subKey),
+            x: [name],  // explicit category label
+            type: 'box', name,
             marker: { color, size: 3, outliercolor: color + '66' },
             boxpoints: 'outliers', hovertemplate,
           });
         }
       } else if ('q1' in (val as object)) {
-        // Flat: {condition: stats}
+        // Flat box-stats: {condition: stats}
         const s = val as Record<string, unknown>;
+        const name = labelFn(key);
         traces.push({
           y: s.outliers || [],
           q1: [s.q1], median: [s.median], q3: [s.q3],
           lowerfence: [s.lowerfence], upperfence: [s.upperfence],
-          type: 'box', name: labelFn(key),
+          x: [name],  // explicit category label
+          type: 'box', name,
           marker: { color, size: 3, outliercolor: color + '66' },
           boxpoints: 'outliers', hovertemplate,
         });
@@ -108,8 +111,9 @@ function normalizeBoxData(
         for (const [subKey, vals] of Object.entries(val as Record<string, unknown>)) {
           const arr = vals as number[];
           if (arr.length > 0) {
+            const name = labelFn(key, subKey);
             traces.push({
-              y: arr, type: 'box', name: labelFn(key, subKey),
+              y: arr, x: [name], type: 'box', name,
               marker: { color, size: 3, outliercolor: color + '66' },
               boxpoints: 'outliers', hovertemplate,
             });
@@ -118,8 +122,9 @@ function normalizeBoxData(
       }
     } else if (Array.isArray(val)) {
       // Old flat list format: {condition: [values]}
+      const name = labelFn(key);
       traces.push({
-        y: val, type: 'box', name: labelFn(key),
+        y: val, x: [name], type: 'box', name,
         marker: { color, size: 3, outliercolor: color + '66' },
         boxpoints: 'outliers', hovertemplate,
       });
