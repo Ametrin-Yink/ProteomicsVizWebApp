@@ -1783,23 +1783,28 @@ async def load_peptide_abundance(
         except Exception as e:
             logger.warning(f"Could not load normalization coefficients: {e}")
 
-    # Pipeline uses Parquet for performance, fall back to TSV for compatibility
-    psm_parquet = results_dir / "PSM_Abundances.parquet"
-    psm_tsv = results_dir / "PSM_Abundances.tsv"
+    # Pipeline uses Parquet for performance, fall back to TSV for compatibility.
+    # MSstats saves PSM_Abundances.parquet; msqrob2 saves PSM_Combined.parquet.
+    psm_files = [
+        results_dir / "PSM_Abundances.parquet",
+        results_dir / "PSM_Combined.parquet",
+        results_dir / "PSM_Abundances.tsv",
+    ]
 
-    if psm_parquet.exists():
+    df = None
+    for psm_path in psm_files:
+        if not psm_path.exists():
+            continue
         try:
-            df = await asyncio.to_thread(pd.read_parquet, psm_parquet)
+            if psm_path.suffix == ".parquet":
+                df = await asyncio.to_thread(pd.read_parquet, psm_path)
+            else:
+                df = await asyncio.to_thread(pd.read_csv, psm_path, sep="\t")
+            break
         except Exception as e:
-            logger.error(f"Error reading Parquet file: {e}")
-            return {"peptides": []}
-    elif psm_tsv.exists():
-        try:
-            df = await asyncio.to_thread(pd.read_csv, psm_tsv, sep="\t")
-        except Exception as e:
-            logger.error(f"Error reading TSV file: {e}")
-            return {"peptides": []}
-    else:
+            logger.error(f"Error reading {psm_path.name}: {e}")
+
+    if df is None:
         return {"peptides": []}
 
     try:

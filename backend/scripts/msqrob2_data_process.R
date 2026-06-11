@@ -87,16 +87,19 @@ psm_data <- psm_data[Master_Protein_Accessions != "" & !is.na(Master_Protein_Acc
 cat("Filtered to", nrow(psm_data), "PSMs with valid accessions\n")
 if (nrow(psm_data) == 0) stop("No PSMs with valid protein accessions")
 
-# Remove contaminants and reverse sequences (if remove_razor configured)
-if (isTRUE(config$remove_razor)) {
-    if ("Contaminant" %in% names(psm_data)) {
-        psm_data <- psm_data[is.na(Contaminant) | Contaminant != "+"]
-        cat("After contaminant filter:", nrow(psm_data), "PSMs\n")
-    }
-    if ("Reverse" %in% names(psm_data)) {
-        psm_data <- psm_data[is.na(Reverse) | Reverse != "+"]
-        cat("After reverse filter:", nrow(psm_data), "PSMs\n")
-    }
+# Remove contaminants and reverse sequences (unconditional — always filter)
+if ("Contaminant" %in% names(psm_data)) {
+    before <- nrow(psm_data)
+    # Accept both "+" and "TRUE" (case-insensitive) as contaminant markers
+    psm_data <- psm_data[is.na(Contaminant) |
+                         (!toupper(as.character(Contaminant)) %in% c("+", "TRUE"))]
+    cat("After contaminant filter:", nrow(psm_data), "PSMs (removed", before - nrow(psm_data), ")\n")
+}
+if ("Reverse" %in% names(psm_data)) {
+    before <- nrow(psm_data)
+    psm_data <- psm_data[is.na(Reverse) |
+                         (!toupper(as.character(Reverse)) %in% c("+", "TRUE"))]
+    cat("After reverse filter:", nrow(psm_data), "PSMs (removed", before - nrow(psm_data), ")\n")
 }
 flush.console()
 

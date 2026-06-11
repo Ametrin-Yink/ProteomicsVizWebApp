@@ -52,6 +52,7 @@ class QCData(BaseModel):
     data_completeness: list[DataCompleteness] | None = None
     psm_completeness: list[DataCompleteness] | None = None
     pvalue_distributions: dict[str, PValueDistribution] | None = None
+    intensity_distributions: dict | None = None
     # Summary statistics
     total_psms: int | None = None
     avg_psms_per_sample: float | None = None
