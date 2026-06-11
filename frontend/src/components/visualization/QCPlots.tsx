@@ -64,6 +64,70 @@ function hashColor(seed: string): string {
   return `hsl(${hue}, 65%, 55%)`;
 }
 
+// Convert old-style raw lists or new-style box-stats dicts into Plotly box traces.
+// Old: {condition: [values...]} or {condition: {replicate: [values...]}}
+// New: {condition: {q1, median, q3, lowerfence, upperfence, outliers}}
+function normalizeBoxData(
+  raw: Record<string, unknown>,
+  getColor: (c: string) => string,
+  labelFn: (key: string, subKey?: string) => string,
+  hovertemplate: string,
+): Array<Record<string, unknown>> {
+  const traces: Array<Record<string, unknown>> = [];
+  for (const [key, val] of Object.entries(raw)) {
+    const color = getColor(key);
+    if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+      // New box-stats format: check if flat stats or nested replicates
+      const first = Object.values(val as Record<string, unknown>)[0];
+      if (typeof first === 'object' && first !== null && !Array.isArray(first) && 'q1' in (first as object)) {
+        // Nested: {condition: {replicate: stats}}
+        for (const [subKey, stats] of Object.entries(val as Record<string, unknown>)) {
+          const s = stats as Record<string, unknown>;
+          traces.push({
+            y: s.outliers || [],
+            q1: [s.q1], median: [s.median], q3: [s.q3],
+            lowerfence: [s.lowerfence], upperfence: [s.upperfence],
+            type: 'box', name: labelFn(key, subKey),
+            marker: { color, size: 3, outliercolor: color + '66' },
+            boxpoints: 'outliers', hovertemplate,
+          });
+        }
+      } else if ('q1' in (val as object)) {
+        // Flat: {condition: stats}
+        const s = val as Record<string, unknown>;
+        traces.push({
+          y: s.outliers || [],
+          q1: [s.q1], median: [s.median], q3: [s.q3],
+          lowerfence: [s.lowerfence], upperfence: [s.upperfence],
+          type: 'box', name: labelFn(key),
+          marker: { color, size: 3, outliercolor: color + '66' },
+          boxpoints: 'outliers', hovertemplate,
+        });
+      } else if (Array.isArray(first)) {
+        // Old nested list format: {condition: {replicate: [values]}}
+        for (const [subKey, vals] of Object.entries(val as Record<string, unknown>)) {
+          const arr = vals as number[];
+          if (arr.length > 0) {
+            traces.push({
+              y: arr, type: 'box', name: labelFn(key, subKey),
+              marker: { color, size: 3, outliercolor: color + '66' },
+              boxpoints: 'outliers', hovertemplate,
+            });
+          }
+        }
+      }
+    } else if (Array.isArray(val)) {
+      // Old flat list format: {condition: [values]}
+      traces.push({
+        y: val, type: 'box', name: labelFn(key),
+        marker: { color, size: 3, outliercolor: color + '66' },
+        boxpoints: 'outliers', hovertemplate,
+      });
+    }
+  }
+  return traces;
+}
+
 export default function QCPlots({ data, conditionList, selectedComparison, onComparisonChange, comparisonOptions }: QCPlotsProps) {
   // Build a deterministic condition→color map from the condition list
   const conditionColors = useMemo(() => {
@@ -186,24 +250,11 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
 
   const psmCVPlot = useMemo(() => {
     if (!data.psm_cv) return null;
-
-    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
-    const traces = Object.entries(data.psm_cv).map(([condition, stats]) => {
-      const s = stats as BoxStats;
-      return {
-        y: s.outliers || [],
-        q1: [s.q1],
-        median: [s.median],
-        q3: [s.q3],
-        lowerfence: [s.lowerfence],
-        upperfence: [s.upperfence],
-        type: 'box' as const,
-        name: condition,
-        marker: { color: getConditionColor(condition) },
-        boxpoints: 'outliers' as const,
-        hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
-      };
-    });
+    const traces = normalizeBoxData(
+      data.psm_cv, getConditionColor,
+      (c) => c,
+      'CV: %{y:.1f}%<extra></extra>',
+    );
 
     const nConditions = traces.length;
     const layout = {
@@ -228,24 +279,11 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
 
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
-
-    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
-    const traces = Object.entries(data.protein_cv).map(([condition, stats]) => {
-      const s = stats as BoxStats;
-      return {
-        y: s.outliers || [],
-        q1: [s.q1],
-        median: [s.median],
-        q3: [s.q3],
-        lowerfence: [s.lowerfence],
-        upperfence: [s.upperfence],
-        type: 'box' as const,
-        name: condition,
-        marker: { color: getConditionColor(condition) },
-        boxpoints: 'outliers' as const,
-        hovertemplate: 'CV: %{y:.1f}%<extra></extra>',
-      };
-    });
+    const traces = normalizeBoxData(
+      data.protein_cv, getConditionColor,
+      (c) => c,
+      'CV: %{y:.1f}%<extra></extra>',
+    );
 
     const nConditions = traces.length;
     const layout = {
@@ -271,30 +309,11 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
   const psmIntensityPlot = useMemo(() => {
     const boxData = data.intensity_distributions?.psm_boxplot;
     if (!boxData || Object.keys(boxData).length === 0) return null;
-
-    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
-    const traces: Array<Record<string, unknown>> = [];
-
-    Object.entries(boxData).forEach(([condition, replicates]) => {
-      const color = getConditionColor(condition);
-      Object.entries(replicates as Record<string, BoxStats>).forEach(([repKey, stats]) => {
-        if (stats && stats.q1 !== undefined) {
-          traces.push({
-            y: stats.outliers || [],
-            q1: [stats.q1],
-            median: [stats.median],
-            q3: [stats.q3],
-            lowerfence: [stats.lowerfence],
-            upperfence: [stats.upperfence],
-            type: 'box',
-            name: `${condition} - ${repKey}`,
-            marker: { color, size: 3, outliercolor: color + '66' },
-            boxpoints: 'outliers',
-            hovertemplate: `<b>${condition} - ${repKey}</b><br>Log2 Intensity: %{y:.2f}<extra></extra>`,
-          });
-        }
-      });
-    });
+    const traces = normalizeBoxData(
+      boxData, getConditionColor,
+      (c, r) => `${c} - ${r || ''}`,
+      'Log2 Intensity: %{y:.2f}<extra></extra>',
+    );
 
     const nTraces = traces.length;
     const layout = {
@@ -323,28 +342,13 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
   const proteinIntensityPlot = useMemo(() => {
     const boxData = data.intensity_distributions?.protein_boxplot;
     if (!boxData || Object.keys(boxData).length === 0) return null;
+    const traces = normalizeBoxData(
+      boxData, getConditionColor,
+      (c) => c,
+      'Intensity: %{y:.2f}<extra></extra>',
+    );
 
-    const sampleNames = Object.keys(boxData);
-    const nSamples = sampleNames.length;
-
-    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
-    const traces = sampleNames.map(sample => {
-      const stats = boxData[sample] as BoxStats;
-      return {
-        y: stats.outliers || [],
-        q1: [stats.q1],
-        median: [stats.median],
-        q3: [stats.q3],
-        lowerfence: [stats.lowerfence],
-        upperfence: [stats.upperfence],
-        type: 'box' as const,
-        name: sample,
-        marker: { color: getConditionColor(sample), size: 3, outliercolor: getConditionColor(sample) + '66' },
-        boxpoints: 'outliers' as const,
-        hovertemplate: `<b>${sample}</b><br>Intensity: %{y:.2f}<extra></extra>`,
-      };
-    });
-
+    const nSamples = traces.length;
     const layout = {
       title: { text: 'Protein Intensity Distribution', font: { size: 14, color: '#111827' } },
       yaxis: {
