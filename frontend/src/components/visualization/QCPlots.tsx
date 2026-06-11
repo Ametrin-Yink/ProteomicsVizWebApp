@@ -262,21 +262,20 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     const boxData = data.intensity_distributions?.psm_boxplot;
     if (!boxData || Object.keys(boxData).length === 0) return null;
 
-    const traces: Array<{
-      y: number[];
-      type: 'box';
-      name: string;
-      marker: { color: string; size: number; outliercolor: string };
-      boxpoints: 'outliers';
-      hovertemplate: string;
-    }> = [];
+    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
+    const traces: Array<Record<string, unknown>> = [];
 
     Object.entries(boxData).forEach(([condition, replicates]) => {
       const color = getConditionColor(condition);
-      Object.entries(replicates).forEach(([repKey, vals]) => {
-        if (vals && vals.length > 0) {
+      Object.entries(replicates as Record<string, BoxStats>).forEach(([repKey, stats]) => {
+        if (stats && stats.q1 !== undefined) {
           traces.push({
-            y: vals,
+            y: stats.outliers || [],
+            q1: [stats.q1],
+            median: [stats.median],
+            q3: [stats.q3],
+            lowerfence: [stats.lowerfence],
+            upperfence: [stats.upperfence],
             type: 'box',
             name: `${condition} - ${repKey}`,
             marker: { color, size: 3, outliercolor: color + '66' },
@@ -318,14 +317,23 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     const sampleNames = Object.keys(boxData);
     const nSamples = sampleNames.length;
 
-    const traces = sampleNames.map(sample => ({
-      y: boxData[sample],
-      type: 'box' as const,
-      name: sample,
-      marker: { color: getConditionColor(sample), size: 3, outliercolor: getConditionColor(sample) + '66' },
-      boxpoints: 'outliers' as const,
-      hovertemplate: `<b>${sample}</b><br>Intensity: %{y:.2f}<extra></extra>`,
-    }));
+    interface BoxStats { q1: number; median: number; q3: number; lowerfence: number; upperfence: number; outliers: number[]; }
+    const traces = sampleNames.map(sample => {
+      const stats = boxData[sample] as BoxStats;
+      return {
+        y: stats.outliers || [],
+        q1: [stats.q1],
+        median: [stats.median],
+        q3: [stats.q3],
+        lowerfence: [stats.lowerfence],
+        upperfence: [stats.upperfence],
+        type: 'box' as const,
+        name: sample,
+        marker: { color: getConditionColor(sample), size: 3, outliercolor: getConditionColor(sample) + '66' },
+        boxpoints: 'outliers' as const,
+        hovertemplate: `<b>${sample}</b><br>Intensity: %{y:.2f}<extra></extra>`,
+      };
+    });
 
     const layout = {
       title: { text: 'Protein Intensity Distribution', font: { size: 14, color: '#111827' } },

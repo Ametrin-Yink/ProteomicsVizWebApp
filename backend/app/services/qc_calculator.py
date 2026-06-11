@@ -474,22 +474,56 @@ class QCCalculator:
 
         return completeness
 
+    @staticmethod
+    def _compute_box_stats(values: np.ndarray, max_outliers: int = 500) -> dict:
+        """Compute box-plot statistics for a 1-D array of values.
+
+        Returns q1, median, q3, lowerfence, upperfence, and the most extreme
+        outlier values (capped). This avoids sending millions of raw data
+        points to the frontend while keeping QC_Results.json compact.
+
+        Args:
+            values: 1-D numpy array of numeric values
+            max_outliers: Maximum number of outlier points to include
+        """
+        valid = values[np.isfinite(values)]
+        if len(valid) == 0:
+            return {"q1": 0, "median": 0, "q3": 0, "lowerfence": 0, "upperfence": 0, "outliers": []}
+        q1 = float(np.percentile(valid, 25))
+        q3 = float(np.percentile(valid, 75))
+        med = float(np.percentile(valid, 50))
+        iqr = q3 - q1
+        lf = float(np.maximum(valid.min(), q1 - 1.5 * iqr))
+        uf = float(np.minimum(valid.max(), q3 + 1.5 * iqr))
+        outlier_mask = (valid < lf) | (valid > uf)
+        outlier_vals = valid[outlier_mask]
+        # Keep only the most extreme outliers (furthest from fences)
+        if len(outlier_vals) > max_outliers:
+            dist = np.maximum(lf - outlier_vals, outlier_vals - uf)
+            top_idx = np.argpartition(-dist, min(max_outliers, len(dist) - 1))[:max_outliers]
+            outlier_vals = outlier_vals[top_idx]
+        return {"q1": q1, "median": med, "q3": q3,
+                "lowerfence": lf, "upperfence": uf, "outliers": outlier_vals.tolist()}
+
     def _calculate_intensity_distributions(
         self, protein_df: pd.DataFrame, psm_df: pd.DataFrame | None
     ) -> dict:
         """
-        Calculate intensity distributions.
+        Calculate intensity distributions as precomputed box-plot statistics.
+
+        Returns q1/median/q3/fences + outlier values instead of raw arrays
+        to keep QC_Results.json small and frontend rendering fast.
 
         Args:
             protein_df: Protein abundances DataFrame
             psm_df: Optional PSM abundances DataFrame
 
         Returns:
-            Dictionary with intensity distributions
+            Dictionary with intensity distribution box-plot statistics
         """
         result = {"psm_boxplot": {}, "protein_boxplot": {}}
 
-        # PSM intensities by condition
+        # PSM intensities by condition — precomputed box stats
         if psm_df is not None and "Condition" in psm_df.columns:
             has_replicate = "Replicate" in psm_df.columns
             group_cols = ["Condition", "Replicate"] if has_replicate else ["Condition"]
@@ -508,35 +542,27 @@ class QCCalculator:
                     replicate = 1
                 else:
                     condition, replicate = group_key
-                vals = log2_vals[idx]
-                valid = vals[np.isfinite(vals)]
-                if len(valid) > 0:
-                    cond_str = str(condition)
-                    rep_key = f"replicate_{replicate}"
-                    result["psm_boxplot"].setdefault(cond_str, {})[rep_key] = (
-                        valid.tolist()
-                    )
+                stats = self._compute_box_stats(log2_vals[idx])
+                cond_str = str(condition)
+                rep_key = f"replicate_{replicate}"
+                result["psm_boxplot"].setdefault(cond_str, {})[rep_key] = stats
 
-        # Protein intensities — raw boxplot values per sample
-        id_cols = [
-            "Master Protein Accessions",
-            "Gene_Name",
-            "Protein",
-            "Master_Protein_Accessions",
-            "PSM_Count",
-            "psm_count",
-        ]
+        # Protein intensities — precomputed box stats per sample
+        id_cols = {
+            "Master Protein Accessions", "Gene_Name", "Protein",
+            "Master_Protein_Accessions", "PSM_Count", "psm_count",
+        }
         abundance_cols = [
             col
             for col in protein_df.columns
             if col not in id_cols
-            and protein_df[col].dtype in ["float64", "float32", "int64"]
+            and protein_df[col].dtype in ("float64", "float32", "int64")
         ]
 
         for col in abundance_cols:
             intensities = protein_df[col].dropna().values
             if len(intensities) > 0:
-                result["protein_boxplot"][col] = intensities.tolist()
+                result["protein_boxplot"][col] = self._compute_box_stats(intensities)
 
         return result
 
