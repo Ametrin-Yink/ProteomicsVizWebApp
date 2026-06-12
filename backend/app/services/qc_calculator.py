@@ -354,6 +354,8 @@ class QCCalculator:
             sd_log2 = valid["std"].values
             sd_ln = sd_log2 * np.log(2)
             cvs = np.sqrt(np.exp(sd_ln ** 2) - 1) * 100
+            # Cap at 1000% — beyond this the PSM is essentially undetected
+            cvs = np.clip(cvs, 0, 1000)
             cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
 
         return cv_by_condition
@@ -398,8 +400,9 @@ class QCCalculator:
             mat = protein_df[cols].values.astype(float)
             sd_log2 = np.nanstd(mat, axis=1, ddof=1)
             sd_ln = sd_log2 * np.log(2)
-            # Exact CV for log-normal data
+            # Exact CV for log-normal data, capped at 1000%
             cvs = np.sqrt(np.exp(np.maximum(sd_ln, 0) ** 2) - 1) * 100
+            cvs = np.clip(cvs, 0, 1000)
             cv_by_condition[str(condition)] = self._compute_box_stats(
                 cvs[~np.isnan(cvs)]
             )

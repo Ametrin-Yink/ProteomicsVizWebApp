@@ -90,6 +90,7 @@ function normalizeBoxData(
   getColor: (c: string) => string,
   labelFn: (key: string, subKey?: string) => string,
   hovertemplate: string,
+  showOutliers: boolean = true,
 ): Array<Record<string, unknown>> {
   const traces: Array<Record<string, unknown>> = [];
   for (const [key, val] of Object.entries(raw)) {
@@ -104,7 +105,7 @@ function normalizeBoxData(
             y: boxStatsToValues(stats as Record<string, unknown>),
             type: 'box', name,
             marker: { color, size: 3, outliercolor: color + '66' },
-            boxpoints: 'outliers', hovertemplate,
+            boxpoints: showOutliers ? 'outliers' : false, hovertemplate,
           });
         }
       } else if ('q1' in (val as object)) {
@@ -114,7 +115,7 @@ function normalizeBoxData(
           y: boxStatsToValues(val as Record<string, unknown>),
           type: 'box', name,
           marker: { color, size: 3, outliercolor: color + '66' },
-          boxpoints: 'outliers', hovertemplate,
+          boxpoints: showOutliers ? 'outliers' : false, hovertemplate,
         });
       } else if (Array.isArray(first)) {
         // Old nested list format
@@ -125,7 +126,7 @@ function normalizeBoxData(
               y: arr, type: 'box',
               name: labelFn(key, subKey),
               marker: { color, size: 3, outliercolor: color + '66' },
-              boxpoints: 'outliers', hovertemplate,
+              boxpoints: showOutliers ? 'outliers' : false, hovertemplate,
             });
           }
         }
@@ -136,7 +137,7 @@ function normalizeBoxData(
       traces.push({
         y: val, type: 'box', name,
         marker: { color, size: 3, outliercolor: color + '66' },
-        boxpoints: 'outliers', hovertemplate,
+        boxpoints: showOutliers ? 'outliers' : false, hovertemplate,
       });
     }
   }
@@ -269,11 +270,12 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
       data.psm_cv, getConditionColor,
       (c) => c,
       'CV: %{y:.1f}%<extra></extra>',
+      false,
     );
 
     const nConditions = traces.length;
     const layout = {
-      title: { text: 'PSM CVs by Condition (whiskers at 95th %ile)', font: { size: 14, color: '#111827' } },
+      title: { text: 'PSM CVs by Condition', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -298,11 +300,12 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
       data.protein_cv, getConditionColor,
       (c) => c,
       'CV: %{y:.1f}%<extra></extra>',
+      false,
     );
 
     const nConditions = traces.length;
     const layout = {
-      title: { text: 'Protein CVs by Condition (whiskers at 95th %ile)', font: { size: 14, color: '#111827' } },
+      title: { text: 'Protein CVs by Condition', font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
