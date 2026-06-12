@@ -1033,6 +1033,92 @@ async def _write_on_demand_status(session_id: str, kind: str, data: dict) -> Non
     await asyncio.to_thread(_write)
 
 
+async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
+    """Read on-disk status files for GSEA, BIONET, and compare tasks.
+
+    Returns synthetic task entries for any on-demand task whose status file
+    shows it is running (or queued).  This bridges the gap between when an
+    on-demand route writes its status file and when the background coroutine
+    calls task_manager.submit() — and also keeps the task visible after it
+    completes and is removed from TaskManager._active_tasks.
+    """
+    tasks: list[dict[str, Any]] = []
+    sessions_dir = settings.sessions_dir
+    session_dir = sessions_dir / session_id
+
+    # ── GSEA ──
+    gsea_file = session_dir / "gsea_run_status.json"
+    if gsea_file.exists():
+        try:
+            data = await asyncio.to_thread(
+                lambda: json.loads(gsea_file.read_text(encoding="utf-8"))
+            )
+        except Exception:
+            data = None
+        if data and isinstance(data, dict) and data.get("status") in ("running", "queued"):
+            tasks.append({
+                "kind": "gsea",
+                "label": f"GSEA: {data.get('comparison', 'unknown')}",
+                "status": data["status"],
+                "started_at": data.get("started_at"),
+                "completed_at": data.get("completed_at"),
+                "error": data.get("error"),
+                "progress": data.get("progress"),
+                "queue_position": data.get("queue_position"),
+            })
+
+    # ── BIONET ──
+    bionet_file = session_dir / "bionet_run_status.json"
+    if bionet_file.exists():
+        try:
+            data = await asyncio.to_thread(
+                lambda: json.loads(bionet_file.read_text(encoding="utf-8"))
+            )
+        except Exception:
+            data = None
+        if data and isinstance(data, dict) and data.get("status") in ("running", "queued"):
+            tasks.append({
+                "kind": "bionet",
+                "label": f"BioNet: {data.get('comparison', 'unknown')}",
+                "status": data["status"],
+                "started_at": data.get("started_at"),
+                "completed_at": data.get("completed_at"),
+                "error": data.get("error"),
+                "progress": data.get("progress"),
+                "queue_position": data.get("queue_position"),
+            })
+
+    # ── Compare (protein-correlation, comparison-correlation) ──
+    compare_dir = session_dir / "results" / "compare"
+    _COMPARE_KINDS = [
+        ("protein-correlation", "Protein Correlation"),
+        ("comparison-correlation", "Comparison Correlation"),
+    ]
+    for compute_type, label_prefix in _COMPARE_KINDS:
+        status_file = compare_dir / f"{compute_type}_status.json"
+        if not status_file.exists():
+            continue
+        try:
+            data = await asyncio.to_thread(
+                lambda f=status_file: json.loads(f.read_text(encoding="utf-8"))
+            )
+        except Exception:
+            continue
+        if data and isinstance(data, dict) and data.get("status") in ("running", "queued"):
+            tasks.append({
+                "kind": "compute",
+                "label": label_prefix,
+                "status": data["status"],
+                "started_at": data.get("started_at"),
+                "completed_at": data.get("completed_at"),
+                "error": data.get("error"),
+                "progress": data.get("progress"),
+                "queue_position": data.get("queue_position"),
+            })
+
+    return tasks
+
+
 # --- BioNet helpers ---
 
 _BIONET_OUTPUT_DIR_NAME = "bionet"
@@ -1122,7 +1208,14 @@ async def get_session_tasks(
     session_id: str,
     store: SessionStore = Depends(get_session_store),
 ):
-    """Return all task states for a session (from in-memory TaskManager)."""
+    """Return all task states for a session.
+
+    Merges in-memory TaskManager state with on-disk status files so the
+    TaskStatusBar sees on-demand tasks (GSEA, BIONET, compare) immediately
+    after they are triggered — before the background coroutine calls
+    task_manager.submit() — and after they complete and are removed from
+    the in-memory _active_tasks dict.
+    """
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
@@ -1130,7 +1223,18 @@ async def get_session_tasks(
             detail=f"Session {session_id} not found",
         )
 
-    return create_response(task_manager.get_status(session_id))
+    result = task_manager.get_status(session_id)
+
+    # Augment with on-disk status for on-demand tasks that may not be in
+    # _active_tasks yet (gap between trigger and submit()) or anymore
+    # (completed tasks removed from _active_tasks by the finally block).
+    disk_tasks = await _read_on_demand_task_status(session_id)
+    tm_kinds = {t["kind"] for t in result["tasks"]}
+    for dt in disk_tasks:
+        if dt["kind"] not in tm_kinds:
+            result["tasks"].append(dt)
+
+    return create_response(result)
 
 
 @router.post("/{session_id}/tasks/cancel")

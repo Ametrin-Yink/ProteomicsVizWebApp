@@ -69,7 +69,7 @@ export function TaskStatusBar() {
         // silently ignore fetch errors
       }
       if (active) {
-        timeoutRef.current = setTimeout(poll, 5000);
+        timeoutRef.current = setTimeout(poll, 2000);
       }
     };
 

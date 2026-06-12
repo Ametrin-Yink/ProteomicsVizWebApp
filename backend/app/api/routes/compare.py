@@ -345,6 +345,19 @@ async def trigger_protein_correlation(
     if existing:
         raise HTTPException(status_code=409, detail="Computation already in progress")
 
+    # Write "running" status before spawning so the TaskStatusBar sees it
+    # immediately (same pattern as GSEA).  The task function will overwrite
+    # this with "completed" or "error" when it finishes.
+    _write_status(
+        session_id,
+        "protein-correlation",
+        {
+            "status": "running",
+            "protein_id": req.protein_id,
+            "started_at": datetime.now(UTC).isoformat(),
+            "error": None,
+        },
+    )
     _schedule_background_task(_run_protein_correlation_task(session_id, req))
     return {"status": "running"}
 
@@ -414,6 +427,19 @@ async def trigger_comparison_correlation(
     if existing:
         raise HTTPException(status_code=409, detail="Computation already in progress")
 
+    # Write "running" status before spawning so the TaskStatusBar sees it
+    # immediately (same pattern as GSEA).  The task function will overwrite
+    # this with "completed" or "error" when it finishes.
+    _write_status(
+        session_id,
+        "comparison-correlation",
+        {
+            "status": "running",
+            "primary_comparison": req.primary_comparison,
+            "started_at": datetime.now(UTC).isoformat(),
+            "error": None,
+        },
+    )
     _schedule_background_task(_run_comparison_correlation_task(session_id, req))
     return {"status": "running"}
 
