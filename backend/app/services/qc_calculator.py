@@ -327,20 +327,24 @@ class QCCalculator:
         """
         Calculate exact CV% per condition for PSM abundances.
 
-        Log2-transforms each replicate's abundance, computes the actual
-        SD of log2 values across replicates per PSM, then converts to
-        CV% via the exact log-normal formula: CV = sqrt(exp(σ_ln²) - 1)×100.
-
-        This avoids both raw-scale instability (low-abundance CV inflation)
-        and the Taylor approximation error at large CV values.
+        Aggregates duplicate (PSM, Condition, Replicate) rows by summing
+        abundances — multiple MS fractions contribute to the same PSM in
+        the same sample. Then log2-transforms, computes SD of log2 values
+        across replicates per PSM, and converts to CV% via the exact
+        log-normal formula: CV = sqrt(exp(σ_ln²) - 1)×100.
 
         Returns precomputed box-plot statistics per condition.
         """
         if psm_df is None or "Condition" not in psm_df.columns:
             return {}
 
-        # Log2-transform abundance, excluding zeros
+        # Filter zeros and aggregate duplicates from multiple MS fractions.
+        # Sum abundances for the same (PSM, Condition, Replicate) — each
+        # fraction contributes a portion of the total peptide abundance.
         df = psm_df[psm_df["Abundance"] > 0].copy()
+        group_cols = ["Unique_PSM", "Condition", "Replicate"]
+        df = df.groupby(group_cols, as_index=False)["Abundance"].sum()
+
         df["log2_ab"] = np.log2(df["Abundance"])
 
         cv_by_condition = {}
@@ -354,8 +358,6 @@ class QCCalculator:
             sd_log2 = valid["std"].values
             sd_ln = sd_log2 * np.log(2)
             cvs = np.sqrt(np.exp(sd_ln ** 2) - 1) * 100
-            # Cap at 1000% — beyond this the PSM is essentially undetected
-            cvs = np.clip(cvs, 0, 1000)
             cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
 
         return cv_by_condition
@@ -400,9 +402,8 @@ class QCCalculator:
             mat = protein_df[cols].values.astype(float)
             sd_log2 = np.nanstd(mat, axis=1, ddof=1)
             sd_ln = sd_log2 * np.log(2)
-            # Exact CV for log-normal data, capped at 1000%
+            # Exact CV for log-normal data
             cvs = np.sqrt(np.exp(np.maximum(sd_ln, 0) ** 2) - 1) * 100
-            cvs = np.clip(cvs, 0, 1000)
             cv_by_condition[str(condition)] = self._compute_box_stats(
                 cvs[~np.isnan(cvs)]
             )

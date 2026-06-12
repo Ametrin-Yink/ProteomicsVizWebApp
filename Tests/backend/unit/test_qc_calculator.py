@@ -347,6 +347,7 @@ class TestCalculateCV:
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM1", "PSM2", "PSM2", "PSM2"],
             "Condition": ["DMSO", "DMSO", "DMSO", "DMSO", "DMSO", "DMSO"],
+            "Replicate":  [1, 2, 3, 1, 2, 3],
             "Abundance": [100.0, 100.0, 100.0, 200.0, 200.0, 200.0],
         }
         df = pd.DataFrame(data)
@@ -365,6 +366,7 @@ class TestCalculateCV:
         data = {
             "Unique_PSM": ["PSM1"] * 3 + ["PSM2"] * 3,
             "Condition": ["DMSO"] * 6,
+            "Replicate":  [1, 2, 3, 1, 2, 3],
             "Abundance": rng.uniform(50, 150, 6).tolist(),
         }
         df = pd.DataFrame(data)
@@ -382,6 +384,7 @@ class TestCalculateCV:
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM1"],
             "Condition": ["DMSO", "DMSO", "DMSO"],
+            "Replicate":  [1, 2, 3],
             "Abundance": [0.0, 0.0, 0.0],
         }
         df = pd.DataFrame(data)
@@ -396,6 +399,7 @@ class TestCalculateCV:
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM2", "PSM2"],
             "Condition": ["DMSO", "DMSO", "Drug", "Drug"],
+            "Replicate":  [1, 2, 1, 2],
             "Abundance": [100.0, 110.0, 200.0, 210.0],
         }
         df = pd.DataFrame(data)
@@ -411,6 +415,7 @@ class TestCalculateCV:
         data = {
             "Unique_PSM": ["PSM1", "PSM1", "PSM1", "PSM2"],
             "Condition": ["DMSO", "DMSO", "DMSO", "DMSO"],
+            "Replicate":  [1, 2, 3, 1],
             "Abundance": [100.0, 100.0, 100.0, 200.0],
         }
         df = pd.DataFrame(data)
