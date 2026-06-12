@@ -471,7 +471,7 @@ class QCCalculator:
         return completeness
 
     @staticmethod
-    def _compute_box_stats(values: np.ndarray, max_outliers: int = 500) -> dict:
+    def _compute_box_stats(values: np.ndarray, max_outliers: int = 20) -> dict:
         """Compute box-plot statistics for a 1-D array of values.
 
         Returns q1, median, q3, lowerfence, upperfence, and the most extreme

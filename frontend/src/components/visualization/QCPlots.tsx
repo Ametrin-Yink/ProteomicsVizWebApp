@@ -68,17 +68,21 @@ function hashColor(seed: string): string {
 // Plotly uses R-type-7: index = (N-1)*p + 1 with linear interpolation.
 // With 25×lf, 50×q1, 50×med, 50×q3, 25×uf (N=200), adjacent sorted
 // values at each percentile boundary are identical → interpolated = exact.
-function boxStatsToValues(s: Record<string, unknown>): number[] {
+// Outliers are excluded from the distribution — they would dominate
+// (500 outliers vs 200 synthetic points) and distort the quartiles.
+function boxStatsToValues(s: Record<string, unknown>, includeOutliers: boolean): number[] {
   const q1 = s.q1 as number, med = s.median as number, q3 = s.q3 as number;
   const lf = s.lowerfence as number, uf = s.upperfence as number;
-  const out = (s.outliers as number[]) || [];
   const vals: number[] = [];
   for (let i = 0; i < 25; i++) vals.push(lf);
   for (let i = 0; i < 50; i++) vals.push(q1);
   for (let i = 0; i < 50; i++) vals.push(med);
   for (let i = 0; i < 50; i++) vals.push(q3);
   for (let i = 0; i < 25; i++) vals.push(uf);
-  vals.push(...out);
+  if (includeOutliers) {
+    const out = (s.outliers as number[]) || [];
+    vals.push(...out.slice(0, 20));  // few enough not to distort the box
+  }
   return vals;
 }
 
@@ -103,7 +107,7 @@ function normalizeBoxData(
         for (const [subKey, stats] of Object.entries(val as Record<string, unknown>)) {
           const name = labelFn(key, subKey);
           traces.push({
-            y: boxStatsToValues(stats as Record<string, unknown>),
+            y: boxStatsToValues(stats as Record<string, unknown>, showOutliers),
             type: 'box', name,
             marker: { color, size: 3, outliercolor: color + '66' },
             boxpoints: bp, hovertemplate,
