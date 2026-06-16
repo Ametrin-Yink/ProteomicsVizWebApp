@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -23,22 +23,21 @@ function getStepIndex(pathname: string): number {
   return 1;
 }
 
+function getSessionIdFromURL(): string {
+  if (typeof window === 'undefined') return '';
+  const params = new URLSearchParams(window.location.search);
+  return params.get('session') || '';
+}
+
 export default function NewAnalysisLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [sessionId, setSessionId] = useState('');
+  const sessionId = getSessionIdFromURL();
   const currentStep = getStepIndex(pathname);
   const { isExpanded } = useSidebar();
-
-  // Extract session ID from URL search params without useSearchParams
-  // (layouts can't safely use useSearchParams per Next.js docs)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setSessionId(params.get('session') || '');
-  }, []);
 
   return (
     <div className="flex w-full h-full relative">

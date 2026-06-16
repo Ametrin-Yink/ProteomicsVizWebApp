@@ -11,7 +11,6 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  ChevronRight,
   Loader2,
   CheckCircle2,
   RefreshCw,
@@ -48,8 +47,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const currentSession = useCurrentSession();
   const sessionError = useSessionStore((state) => state.error);
   const { setCurrentSession, loadSessions, deleteSession, deleteSessions, updateSession } = useSessionStore();
-  const { sidebar, setSidebarCollapsed } = useUIStore();
-  const { isExpanded: sidebarExpanded, toggleSidebar } = useSidebar();
+  const { isExpanded: sidebarExpanded } = useSidebar();
 
   const [activeTab, setActiveTab] = React.useState<'active' | 'completed'>('active');
   const [isScanning, setIsScanning] = React.useState(false);

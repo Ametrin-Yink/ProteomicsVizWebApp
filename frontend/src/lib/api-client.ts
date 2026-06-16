@@ -666,7 +666,7 @@ export const visualizationApi = {
     database: GSEADatabase,
     term: string,
     comparison?: string,
-    signal?: AbortSignal
+    _signal?: AbortSignal
   ): Promise<GSEAHeatmapData> => {
     const compParam = comparison ? `&comparison=${encodeURIComponent(comparison)}` : '';
     return fetchApi<GSEAHeatmapData>(`${apiPrefix}/gsea/${database}/heatmap?term=${encodeURIComponent(term)}${compParam}`);
