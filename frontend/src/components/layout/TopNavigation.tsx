@@ -8,7 +8,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FlaskConical, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
 import { cn } from '@/lib/utils';
 import { useSidebar } from '@/components/layout/SidebarContext';
 
@@ -41,7 +42,7 @@ export const TopNavigation: React.FC = () => {
 
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 mr-4 lg:mr-8" data-testid="app-logo">
-          <FlaskConical className="w-5 h-5 lg:w-6 lg:h-6 text-secondary" />
+          <MassSpecIcon className="w-5 h-5 lg:w-6 lg:h-6 text-secondary" />
           <span className="text-lg lg:text-xl font-semibold tracking-tight" data-testid="app-name">
             ProteomicsViz
           </span>

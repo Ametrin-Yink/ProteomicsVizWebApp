@@ -4,7 +4,8 @@
  * Styled documentation page rendering the README content.
  */
 
-import { FlaskConical, Upload, Settings, BarChart3, FileDown, Cpu, Layers } from 'lucide-react';
+import { Upload, Settings, BarChart3, FileDown, Cpu, Layers } from 'lucide-react';
+import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
 
 const steps = [
   { icon: '1', title: 'Create a Session', desc: 'From the welcome page, create a new analysis session and give it a name.' },
@@ -29,7 +30,7 @@ export default function AboutPage() {
         {/* Hero */}
         <div className="text-center mb-10">
           <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-primary flex items-center justify-center shadow-sm">
-            <FlaskConical className="w-6 h-6 text-white" />
+            <MassSpecIcon className="w-6 h-6 text-white" />
           </div>
           <h1 className="font-bold text-text-primarymb-3">Proteomics Visualization Web App</h1>
           <p className="text-base text-text-secondary max-w-2xl mx-auto">

@@ -12,7 +12,6 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   ChevronRight,
-  FlaskConical,
   Loader2,
   CheckCircle2,
   RefreshCw,
@@ -26,6 +25,7 @@ import {
   X,
   Check,
 } from 'lucide-react';
+import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
 import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessionStore';
 import { useUIStore } from '@/stores/ui-store';
 import { useSidebar } from '@/components/layout/SidebarContext';
@@ -326,7 +326,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
               {sessionsList.length === 0 ? (
                 <div data-testid="no-sessions-message" className="text-center py-8">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-                    <FlaskConical className="w-8 h-8 text-text-muted" />
+                    <MassSpecIcon className="w-8 h-8 text-text-muted" />
                   </div>
                   <p className="text-sm text-text-secondary">
                     {sessionError ? 'Failed to load sessions' : 'No sessions yet'}
@@ -398,7 +398,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
             {/* Logo */}
             <div className="flex flex-col items-center pt-4 pb-2">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center mb-2">
-                <FlaskConical className="w-5 h-5 text-white" />
+                <MassSpecIcon className="w-5 h-5 text-white" />
               </div>
             </div>
 
@@ -417,7 +417,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                   )}
                   title={session.name}
                 >
-                  <FlaskConical className="w-5 h-5" />
+                  <MassSpecIcon className="w-5 h-5" />
                 </button>
               ))}
             </div>
@@ -454,7 +454,7 @@ export default SessionManager;
 // ===================== Status Configuration =====================
 
 const statusConfig: Record<Session['status'], {
-  icon: typeof FlaskConical;
+  icon: typeof MassSpecIcon;
   color: string;
   bgColor: string;
   label: string;

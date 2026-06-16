@@ -10,8 +10,8 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SessionManager } from '@/components/session/SessionManager';
+import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
 import {
-  FlaskConical,
   Upload,
   Sliders,
   TrendingUp,
@@ -75,7 +75,7 @@ export default function HomePage() {
           {/* Brand */}
           <div className="flex items-center gap-3 mb-8" data-testid="welcome-title">
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0">
-              <FlaskConical className="w-5 h-5 text-white" />
+              <MassSpecIcon className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-text-primary">

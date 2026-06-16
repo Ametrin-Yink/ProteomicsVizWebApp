@@ -7,7 +7,8 @@
 
 import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, Dna, BarChart3, Check, FlaskConical } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Dna, BarChart3, Check } from 'lucide-react';
+import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
 import { useAnalysisStore, getValidation } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
@@ -168,7 +169,7 @@ function PipelineContent() {
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center bg-background border border-border rounded-xl">
-          <FlaskConical className="w-12 h-12 text-text-muted mb-4" />
+          <MassSpecIcon className="w-12 h-12 text-text-muted mb-4" />
           <h3 className="font-semibold text-text-primary mb-2">Post-translational Modification Analysis</h3>
           <p className="text-sm text-text-muted max-w-md">
             Pipeline details are currently being developed. Check back soon for PTM-specific analysis tools.
