@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import type { VolcanoFilters, GSEADatabase, GSEAData } from '@/types/api';
-import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
+import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork, Dna, ScrollText } from 'lucide-react';
 import { visualizationApi, getDataSource, sessionApiPrefix } from '@/lib/api-client';
 import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
 import { buildQcExport } from '@/lib/figures/qc-figures';
@@ -171,6 +171,57 @@ export function getActiveModuleId(pathname: string): string {
 
 export function getModuleById(id: string): VisualizationModule | undefined {
   return VISUALIZATION_MODULES.find((m) => m.id === id);
+}
+
+/** PTM-specific visualization modules that link to placeholder pages. */
+export const PTM_VISUALIZATION_MODULES: VisualizationModule[] = [
+  {
+    id: 'volcano',
+    label: 'Volcano',
+    href: '/analysis/visualization/ptm-placeholder?tab=volcano',
+    icon: ChartScatter,
+    description: 'PTM differential expression volcano plot',
+  },
+  {
+    id: 'qc',
+    label: 'QC',
+    href: '/analysis/visualization/ptm-placeholder?tab=qc',
+    icon: Activity,
+    description: 'PTM quality control plots',
+  },
+  {
+    id: 'site-abundance',
+    label: 'Site Abundance',
+    href: '/analysis/visualization/ptm-placeholder?tab=site-abundance',
+    icon: Dna,
+    description: 'PTM site-level abundance analysis',
+  },
+  {
+    id: 'results',
+    label: 'Results',
+    href: '/analysis/visualization/ptm-placeholder?tab=results',
+    icon: ScrollText,
+    description: 'PTM analysis results table',
+  },
+  {
+    id: 'bionet',
+    label: 'BioNet',
+    href: '/analysis/visualization/ptm-placeholder?tab=bionet',
+    icon: ChartNetwork,
+    description: 'PTM protein-protein interaction network',
+  },
+];
+
+/**
+ * Return the set of visualization modules appropriate for the given pipeline.
+ * - 'ptm': shows only PTM-relevant tabs (placeholder content)
+ * - 'msqrob2' or 'msstats' or undefined/null: shows all existing tabs
+ */
+export function getModulesForPipeline(pipeline?: string | null): VisualizationModule[] {
+  if (pipeline === 'ptm') {
+    return PTM_VISUALIZATION_MODULES;
+  }
+  return VISUALIZATION_MODULES;
 }
 
 /**

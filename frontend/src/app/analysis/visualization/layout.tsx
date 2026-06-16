@@ -3,32 +3,44 @@
 import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { VISUALIZATION_MODULES, getActiveModuleId } from '@/config/visualization-modules';
+import { getActiveModuleId, getModulesForPipeline } from '@/config/visualization-modules';
 import { SessionManager } from '@/components/session/SessionManager';
 import ExportButton from '@/components/visualization/ExportButton';
 import { ApiProvider } from '@/lib/api-context';
 import { sessionApiPrefix } from '@/lib/api-client';
 
+function buildTabHref(href: string, sessionId: string): string {
+  const [path, qs] = href.split('?');
+  const params = new URLSearchParams(qs || '');
+  if (sessionId) params.set('session_id', sessionId);
+  const q = params.toString();
+  return q ? `${path}?${q}` : path;
+}
+
 function Navigation() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+  const pipeline = searchParams.get('pipeline');
 
-  const activeTab = getActiveModuleId(pathname);
+  const activeTab = pipeline === 'ptm'
+    ? (searchParams.get('tab') || 'volcano')
+    : getActiveModuleId(pathname);
+  const modules = getModulesForPipeline(pipeline);
 
   return (
     <div className="bg-background border-b border-border sticky top-0 z-10">
       <div className="mx-auto px-6">
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-1">
-            {VISUALIZATION_MODULES.map((mod) => {
+            {modules.map((mod) => {
               const Icon = mod.icon;
               const isActive = activeTab === mod.id;
 
               return (
                 <Link
                   key={mod.id}
-                  href={`${mod.href}?session_id=${sessionId}`}
+                  href={buildTabHref(mod.href, sessionId)}
                   data-testid={`${mod.id}-tab`}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive

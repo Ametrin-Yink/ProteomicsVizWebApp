@@ -426,11 +426,11 @@ function ProcessingContent() {
   useEffect(() => {
     if (isComplete && sessionId) {
       const timer = setTimeout(() => {
-        router.push(`/analysis/visualization?session_id=${sessionId}`);
+        router.push(`/analysis/visualization?session_id=${sessionId}&pipeline=${pipeline}`);
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isComplete, sessionId, router]);
+  }, [isComplete, sessionId, pipeline, router]);
 
   // Handlers
   const handleRetry = useCallback(async () => {
@@ -480,9 +480,9 @@ function ProcessingContent() {
 
   const handleNavigateToResults = useCallback(() => {
     if (sessionId) {
-      router.push(`/analysis/visualization?session_id=${sessionId}`);
+      router.push(`/analysis/visualization?session_id=${sessionId}&pipeline=${pipeline}`);
     }
-  }, [sessionId, router]);
+  }, [sessionId, pipeline, router]);
 
   // Validation
   if (!sessionId) {
