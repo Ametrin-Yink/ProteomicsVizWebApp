@@ -7,7 +7,7 @@
 
 import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, Dna, BarChart3, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Check } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
@@ -18,7 +18,6 @@ const pipelines = [
     id: 'msqrob2' as const,
     name: 'msqrob2',
     title: 'Robust Protein Analysis',
-    icon: Dna,
     summary: 'For large cohorts with moderate to high missing values',
     gradient: 'from-[#E73564] to-[#C42A52]',
   },
@@ -26,7 +25,6 @@ const pipelines = [
     id: 'msstats' as const,
     name: 'MSstats',
     title: 'Statistical Modeling',
-    icon: BarChart3,
     summary: 'For <50 samples with low missing values',
     gradient: 'from-[#00ADEF] to-[#0088CC]',
   },
@@ -34,7 +32,6 @@ const pipelines = [
     id: 'ptm' as const,
     name: 'MSstatsPTM',
     title: 'PTM Site Analysis',
-    icon: Dna,
     summary: 'Post-translational modification quantification and site-level adjustment',
     gradient: 'from-[#8B5CF6] to-[#7C3AED]',
   },
@@ -133,7 +130,6 @@ function PipelineContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {pipelines.filter((p) => p.id !== 'ptm').map((pipeline) => {
             const isSelected = selectedPipeline === pipeline.id;
-            const Icon = pipeline.icon;
 
             return (
               <button
@@ -152,15 +148,6 @@ function PipelineContent() {
                     <Check className="w-4 h-4" />
                   </div>
                 )}
-
-                <div
-                  className={cn(
-                    'inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br mb-4',
-                    pipeline.gradient
-                  )}
-                >
-                  <Icon className="w-6 h-6 text-white" />
-                </div>
 
                 <h3 className="font-semibold text-text-primary mb-1">{pipeline.name}</h3>
                 <p className="text-sm font-medium text-primary mb-2">{pipeline.title}</p>
@@ -173,7 +160,6 @@ function PipelineContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {pipelines.filter((p) => p.id === 'ptm').map((pipeline) => {
             const isSelected = selectedPipeline === pipeline.id;
-            const Icon = pipeline.icon;
 
             return (
               <button
@@ -192,15 +178,6 @@ function PipelineContent() {
                     <Check className="w-4 h-4" />
                   </div>
                 )}
-
-                <div
-                  className={cn(
-                    'inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br mb-4',
-                    pipeline.gradient
-                  )}
-                >
-                  <Icon className="w-6 h-6 text-white" />
-                </div>
 
                 <h3 className="font-semibold text-text-primary mb-1">{pipeline.name}</h3>
                 <p className="text-sm font-medium text-primary mb-2">{pipeline.title}</p>
