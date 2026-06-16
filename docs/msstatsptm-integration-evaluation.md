@@ -5,7 +5,7 @@
 **Date:** 2026-06-16
 **Evaluator:** Claude (DeepSeek v4 Pro)
 **Package Evaluated:** MSstatsPTM v2.15.0 (Vitek Lab, Northeastern University)
-**Current State:** PTM exists as a disabled frontend stub — a "PTM Analysis" toggle with a "Soon" badge, no backend implementation
+**Current State:** PTM exists as a disabled frontend stub — a "PTM Analysis" toggle with a "Soon" badge, no backend implementation. The wizard has been reordered to **pipeline-first** (Pipeline → Upload → Comparisons → Config → Summary) to support pipeline-aware upload pages. The upload page already has conditional scaffolding: a `selectedTemplate === 'protein'` branch (current single-zone) and a `'ptm'` branch (placeholder for multi-zone PTM upload). This reduces the frontend work needed for PTM integration.
 
 ---
 
@@ -174,24 +174,24 @@ The converter code is 1,700+ lines in `converters.R`. For Phase 1, we only need 
 
 ### Phase 1: Label-Free MVP (MaxQuant only)
 
-| Component | Files to Create/Modify | Est. Effort |
-|-----------|----------------------|-------------|
-| **R scripts** | `backend/scripts/ptm_summarization.R`, `ptm_group_comparison.R` | 2-3 days |
-| **PTM wrapper service** | `backend/app/services/ptm_wrapper.py` | 1-2 days |
-| **PTM step handlers** | `backend/app/services/steps/ptm_steps.py` (3-5 handlers) | 2-3 days |
-| **Pipeline definition** | `backend/app/services/pipeline_registry.py` (add PTM pipeline) | 0.5 day |
-| **Data models** | `backend/app/models/data.py` (add PTM DE model) | 1 day |
-| **API routes** | Extend `visualization.py`, `results.py`, add `upload.py` FASTA handling | 2-3 days |
-| **Upload handling** | FASTA file upload + dual-dataset upload | 1-2 days |
-| **Task manager** | Register PTM task kind | 0.5 day |
-| **Frontend: enable pipeline** | `pipeline/page.tsx`, `analysis-store.ts` | 1-2 days |
-| **Frontend: PTM results** | New visualization components (3-panel volcano, etc.) | 3-5 days |
-| **Frontend: upload UI** | FASTA upload + dual dataset UI | 1-2 days |
-| **Testing** | Backend unit + integration, frontend E2E | 3-4 days |
-| **R package installation** | `install_r_packages.R` update, verification script | 0.5 day |
-| **Documentation** | Update CLAUDE.md, pipeline docs, API contract | 1 day |
+| Component | Files to Create/Modify | Est. Effort | Notes |
+|-----------|----------------------|-------------|-------|
+| **R scripts** | `backend/scripts/ptm_summarization.R`, `ptm_group_comparison.R` | 2-3 days | |
+| **PTM wrapper service** | `backend/app/services/ptm_wrapper.py` | 1-2 days | |
+| **PTM step handlers** | `backend/app/services/steps/ptm_steps.py` (3-5 handlers) | 2-3 days | |
+| **Pipeline definition** | `backend/app/services/pipeline_registry.py` (add PTM pipeline) | 0.5 day | |
+| **Data models** | `backend/app/models/data.py` (add PTM DE model) | 1 day | |
+| **API routes** | Extend `visualization.py`, `results.py`, add `upload.py` FASTA handling | 2-3 days | |
+| **Upload handling** | FASTA file upload + dual-dataset upload | 1-2 days | Upload page already has PTM scaffolding (multi-zone placeholder) |
+| **Task manager** | Register PTM task kind | 0.5 day | |
+| **Frontend: enable pipeline** | `pipeline/page.tsx` — remove "Soon" badge, wire up PTM template; `analysis-store.ts` — add PTM pipeline option | 1 day | Wizard is already pipeline-first; template toggle and store types already exist |
+| **Frontend: PTM results** | New visualization components (3-panel volcano, etc.) | 3-5 days | |
+| **Frontend: upload UI** | Replace PTM placeholder with actual multi-zone upload (PTM + Protein + FASTA drop zones) | 1-2 days | Upload page already has conditional `selectedTemplate` rendering |
+| **Testing** | Backend unit + integration, frontend E2E | 3-4 days | |
+| **R package installation** | `install_r_packages.R` update, verification script | 0.5 day | |
+| **Documentation** | Update CLAUDE.md, pipeline docs, API contract | 1 day | |
 
-**Phase 1 total: ~18-28 working days (3.5-5.5 weeks for one developer)**
+**Phase 1 total: ~17-26 working days (3.5-5 weeks for one developer)** *(reduced from 18-28 due to completed wizard reorder and upload scaffolding)*
 
 ### Phase 2: TMT + Additional Converters
 
@@ -449,27 +449,32 @@ cat("MSstatsPTM packages OK\n")
 
 ## 10. Frontend Changes Summary
 
-| Page/Component | Change |
-|----------------|--------|
-| `pipeline/page.tsx` | Remove "Soon" badge, enable PTM template, show PTM pipeline steps |
-| `analysis-store.ts` | Add PTM pipeline option, enable pipeline selection for PTM |
-| Upload page | Add FASTA file drop zone, dual dataset upload (PTM + Protein), organism selector for pre-bundled FASTA |
-| Results view | New PTM-specific results: 3-panel volcano, site-level data table, protein adjustment status |
-| Visualization | New PTM visualizations or extend existing ones with PTM modes |
-| Types (`api.ts`) | PTM-specific API response types |
+The wizard was reordered to **pipeline-first** (Pipeline → Upload → Comparisons → Config → Summary) on 2026-06-16. The upload page now has conditional rendering based on `selectedTemplate`: a `'protein'` branch (existing single-zone) and a `'ptm'` branch (placeholder text). This scaffolding reduces the remaining frontend work:
+
+| Page/Component | Current State | Remaining PTM Work |
+|----------------|--------------|-------------------|
+| `pipeline/page.tsx` | Template toggle exists (Protein/PTM); PTM shows "Soon" badge and placeholder; PTM template clears pipeline selection | Remove "Soon" badge; add PTM pipeline card(s); allow continue when PTM template + pipeline selected |
+| `analysis-store.ts` | `selectedTemplate: 'protein' \| 'ptm'` type exists; `setTemplate('ptm')` clears pipeline to null | Add PTM pipeline option; stop clearing pipeline for PTM template |
+| Upload page (`upload/page.tsx`) | Pipeline-first order; conditional `selectedTemplate` rendering with PTM placeholder; back button, pipeline badge | Replace PTM placeholder with multi-zone upload: PTM data zone, optional Protein data zone, FASTA zone + organism selector |
+| `comparisons/page.tsx` | Back→Upload, no-files guard | Unchanged for PTM (same comparison-building UI) |
+| `config/page.tsx` | Pipeline-specific config forms | Add PTM-specific config options (adjustment toggle, mod type selector) |
+| Results view | Protein-only (volcano, QC, abundance) | New PTM-specific views: 3-panel volcano (PTM \| Protein \| Adjusted), site-level data table, protein adjustment status |
+| Visualization | Existing protein visualizations | Extend with PTM modes: per-site profile plots, adjusted fold-change heatmaps |
+| Types (`api.ts`) | Protein-only API response types | PTM-specific types for 3-model results, site-level queries |
 
 ---
 
 ## 11. Success Criteria
 
-1. User can select "PTM Analysis" template and proceed through the pipeline
-2. User can upload a MaxQuant LF PTM dataset (evidence.txt) + annotation + FASTA
-3. Pipeline completes through summarization → group comparison → QC
-4. Results display the ADJUSTED model as the primary output
-5. Volcano plot shows 3 panels (PTM, Protein, Adjusted) when protein data is available, 1 panel (PTM only) otherwise
-6. All existing protein pipelines continue to work without regression
-7. All new code has test coverage following existing patterns
-8. R package installation works on our R 4.5.1 environment
+1. User selects "PTM Analysis" template on the pipeline page (step 1), selects a PTM pipeline, and continues to upload — **wizard infrastructure ready; needs PTM pipeline cards**
+2. Upload page (step 2) shows multi-zone PTM upload: PTM enrichment data zone, optional global proteome zone, FASTA file zone with organism selector — **scaffolding ready; needs multi-zone implementation**
+3. User can upload a MaxQuant LF PTM dataset (evidence.txt) + annotation + FASTA
+4. Pipeline completes through summarization → group comparison → QC
+5. Results display the ADJUSTED model as the primary output when protein data is available; PTM.Model only when no protein data
+6. Volcano plot shows 3 panels (PTM, Protein, Adjusted) when protein data is available, 1 panel (PTM only) otherwise
+7. All existing protein pipelines continue to work without regression
+8. All new code has test coverage following existing patterns
+9. R package installation works on our R 4.5.1 environment
 
 ---
 
@@ -514,14 +519,17 @@ MSstatsPTM is the right foundation. It's from the same lab as the tools we alrea
 ### Frontend
 
 ```
-  frontend/src/app/new/pipeline/page.tsx              (modify: enable PTM)
-  frontend/src/stores/analysis-store.ts               (modify: PTM pipeline state)
+  frontend/src/app/new/pipeline/page.tsx              (modify: enable PTM — "Soon" badge removal, PTM pipeline cards)
+  frontend/src/app/new/upload/page.tsx                (modify: replace PTM placeholder with multi-zone upload)
+  frontend/src/stores/analysis-store.ts               (modify: add PTM pipeline option, stop clearing pipeline for PTM)
   frontend/src/stores/processing-store.ts             (may need changes)
   frontend/src/types/api.ts                           (modify: PTM types)
 ★ frontend/src/components/visualization/PTMVolcano.tsx
 ★ frontend/src/components/visualization/PTMResults.tsx
   frontend/src/app/sessions/[id]/page.tsx             (may need PTM tab)
 ```
+
+> **Already done (2026-06-16):** Wizard reordered to pipeline-first. Upload page has `selectedTemplate` conditional rendering with PTM placeholder. `selectedTemplate` type includes `'ptm'`. Template toggle on pipeline page exists. Comparisons page back button and no-files guard updated. These changes are committed on `main`.
 
 ### Tests
 
@@ -552,4 +560,4 @@ MSstatsPTM is the right foundation. It's from the same lab as the tools we alrea
 
 ## Appendix C: About the Vendored Package in docs/
 
-The `docs/msstatsptm-package/` directory contains a shallow clone of the MSstatsPTM GitHub repository. This was downloaded for the purpose of this evaluation. It is not imported or referenced by any backend code. After a build decision is made, this directory can be removed — the actual integration uses `BiocManager::install("MSstatsPTM")` to install the package into the system R library, not a vendored copy.
+The `docs/msstatsptm-package/` directory was a shallow clone of the MSstatsPTM GitHub repository, downloaded for the purpose of this evaluation. It has been **removed and gitignored** — the actual integration uses `BiocManager::install("MSstatsPTM")` to install the package into the system R library, not a vendored copy. The package introduction and this evaluation document remain in `docs/` as reference.
