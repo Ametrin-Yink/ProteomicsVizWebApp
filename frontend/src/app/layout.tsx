@@ -29,6 +29,9 @@ export const metadata: Metadata = {
   title: 'ProteomicsViz - Proteomics Analysis Platform',
   description: 'Analyze and visualize proteomics data with our powerful 8-step processing pipeline.',
   keywords: ['proteomics', 'bioinformatics', 'data analysis', 'visualization'],
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 // Viewport configuration
