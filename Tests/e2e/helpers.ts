@@ -65,8 +65,8 @@ export async function startNewAnalysis(page: Page, name?: string): Promise<strin
   await expect(newAnalysisBtn).toBeVisible({ timeout: 10000 });
   await newAnalysisBtn.click();
 
-  // Should navigate to the upload step of the wizard
-  await expect(page).toHaveURL(/\/new\/upload\?session=[a-f0-9-]+/, { timeout: 15000 });
+  // Should navigate to the pipeline step of the wizard
+  await expect(page).toHaveURL(/\/new\/pipeline\?session=[a-f0-9-]+/, { timeout: 15000 });
 
   const url = page.url();
   const match = url.match(/session=([a-f0-9-]+)/);
@@ -175,13 +175,23 @@ export async function configureExperiment(
 }
 
 /**
- * Click Continue on the upload page to proceed to pipeline selection.
+ * Click Continue on the pipeline page to proceed to upload.
  */
-export async function continueToPipeline(page: Page): Promise<void> {
+export async function continueToUpload(page: Page): Promise<void> {
+  const btn = page.locator('[data-testid="pipeline-continue-btn"]');
+  await expect(btn).toBeEnabled({ timeout: 10000 });
+  await btn.click();
+  await expect(page).toHaveURL(/\/new\/upload\?session=/, { timeout: 10000 });
+}
+
+/**
+ * Click Continue on the upload page to proceed to comparisons.
+ */
+export async function continueToComparisons(page: Page): Promise<void> {
   const btn = page.locator('[data-testid="upload-continue-btn"]');
   await expect(btn).toBeEnabled({ timeout: 10000 });
   await btn.click();
-  await expect(page).toHaveURL(/\/new\/pipeline\?session=/, { timeout: 10000 });
+  await expect(page).toHaveURL(/\/new\/comparisons\?session=/, { timeout: 10000 });
 }
 
 /**
@@ -193,10 +203,10 @@ export async function selectPipeline(page: Page, pipeline: 'msqrob2' | 'msstats'
 }
 
 /**
- * Click Continue on the pipeline page to proceed to config.
+ * Click Continue on the comparisons page to proceed to config.
  */
 export async function continueToConfig(page: Page): Promise<void> {
-  const btn = page.locator('[data-testid="pipeline-continue-btn"]');
+  const btn = page.locator('[data-testid="comparisons-continue-btn"]');
   await expect(btn).toBeEnabled({ timeout: 10000 });
   await btn.click();
   await expect(page).toHaveURL(/\/new\/config\?session=/, { timeout: 10000 });

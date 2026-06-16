@@ -1,5 +1,5 @@
 /**
- * Step 2: Pipeline Selection
+ * Step 1: Pipeline Selection
  * Choose between msqrob2 and MSstats analysis pipelines
  */
 
@@ -9,7 +9,7 @@ import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Loader2, Dna, BarChart3, Check } from 'lucide-react';
 import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
-import { useAnalysisStore, getValidation } from '@/stores/analysis-store';
+import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -40,27 +40,23 @@ function PipelineContent() {
 
   const state = useAnalysisStore();
   const { selectedTemplate, setTemplate, selectedPipeline, setPipeline } = state;
-  const validation = getValidation(state);
   const { addToast } = useUIStore();
 
   const [isSaving, setIsSaving] = React.useState(false);
 
-  // Redirect guard: no session or no uploaded files -> back to first step
+  // Redirect guard: no session
   React.useEffect(() => {
     if (!sessionId) {
       router.replace('/');
-    } else if (state.uploadedFiles.length === 0 && state.selectedFiles.size === 0) {
-      router.replace(`/new/upload?session=${sessionId}`);
     }
-  }, [sessionId, state.uploadedFiles.length, state.selectedFiles.size, router]);
+  }, [sessionId, router]);
 
   const canContinue =
     selectedTemplate === 'protein' &&
-    selectedPipeline !== null &&
-    validation.isValid;
+    selectedPipeline !== null;
 
   const handleBack = () => {
-    router.push(`/new/upload?session=${sessionId}`);
+    router.push('/');
   };
 
   const handleContinue = async () => {
@@ -76,7 +72,7 @@ function PipelineContent() {
         ...latest.config,
         pipeline: latest.selectedPipeline,
       });
-      router.replace(`/new/comparisons?session=${sessionId}`);
+      router.replace(`/new/upload?session=${sessionId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save pipeline selection';
       addToast('error', `Failed to save: ${message}`);
@@ -186,7 +182,7 @@ function PipelineContent() {
             hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Upload
+          Back to Home
         </button>
 
         <button
@@ -207,7 +203,7 @@ function PipelineContent() {
             </>
           ) : (
             <>
-              Continue to Comparisons
+              Continue to Upload
               <ArrowRight className="w-4 h-4" />
             </>
           )}

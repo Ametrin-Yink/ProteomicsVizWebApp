@@ -29,7 +29,7 @@ import { sessionsApi } from '@/lib/api-client';
 const workflowSteps = [
   {
     icon: Upload,
-    label: 'Upload PSM files',
+    label: 'Select pipeline',
   },
   {
     icon: Sliders,
@@ -57,7 +57,7 @@ export default function HomePage() {
       const newSession = await sessionsApi.create(name, 'multi_condition_comparison');
       resetAnalysis();
       addSession(newSession);
-      router.push(`/new/upload?session=${newSession.id}`);
+      router.push(`/new/pipeline?session=${newSession.id}`);
     } catch (e) {
       console.error('Failed to create session:', e);
       addToast('error', 'Failed to create analysis session. Please try again.');

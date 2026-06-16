@@ -79,7 +79,8 @@ function ComparisonsContent() {
   React.useEffect(() => {
     if (!sessionId) { router.replace('/'); }
     else if (!selectedPipeline) { router.replace(`/new/pipeline?session=${sessionId}`); }
-  }, [sessionId, selectedPipeline, router]);
+    else if (state.uploadedFiles.length === 0) { router.replace(`/new/upload?session=${sessionId}`); }
+  }, [sessionId, selectedPipeline, state.uploadedFiles.length, router]);
 
   // --- Derive condition cards from metadata ---
   const conditionCards = React.useMemo(() => {
@@ -215,7 +216,7 @@ function ComparisonsContent() {
 
   // --- Navigation ---
   const handleBack = () => {
-    router.push(`/new/pipeline?session=${sessionId}`);
+    router.push(`/new/upload?session=${sessionId}`);
   };
 
   const handleContinue = async () => {
@@ -494,9 +495,10 @@ function ComparisonsContent() {
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primarybg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Pipeline
+          Back to Upload
         </button>
         <button
+          data-testid="comparisons-continue-btn"
           onClick={handleContinue}
           disabled={!canContinue || isSaving}
           className={cn(

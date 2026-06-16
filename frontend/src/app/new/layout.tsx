@@ -1,6 +1,6 @@
 /**
  * Wizard layout for the new analysis flow.
- * 5-step indicator: Upload -> Pipeline -> Comparisons -> Configure -> Summary
+ * 5-step indicator: Pipeline -> Upload -> Comparisons -> Configure -> Summary
  */
 
 'use client';
@@ -18,7 +18,8 @@ function getStepIndex(pathname: string): number {
   if (pathname.includes('/new/summary')) return 5;
   if (pathname.includes('/new/config')) return 4;
   if (pathname.includes('/new/comparisons')) return 3;
-  if (pathname.includes('/new/pipeline')) return 2;
+  if (pathname.includes('/new/upload')) return 2;
+  if (pathname.includes('/new/pipeline')) return 1;
   return 1;
 }
 

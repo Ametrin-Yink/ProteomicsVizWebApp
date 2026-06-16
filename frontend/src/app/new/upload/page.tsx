@@ -1,5 +1,5 @@
 /**
- * Step 1: File Upload & Experiment Setup
+ * Step 2: File Upload & Experiment Setup
  * Upload PSM CSV files, review parsed metadata, configure experiment structure
  */
 
@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, Loader2, Upload, Database, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3 } from 'lucide-react';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
@@ -27,6 +27,7 @@ function UploadContent() {
   const { addToast } = useUIStore();
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(true);
 
   // Restore session state on page load
   useEffect(() => {
@@ -65,9 +66,19 @@ function UploadContent() {
               setConfig(updates);
             }
           }
+
+          // Restore pipeline selection from backend session (needed on page refresh)
+          if (raw.pipeline && (raw.pipeline === 'msqrob2' || raw.pipeline === 'msstats')) {
+            const store = useAnalysisStore.getState();
+            if (!store.selectedPipeline) {
+              store.setPipeline(raw.pipeline);
+            }
+          }
         }
       } catch {
         // Session restoration failed, user can start fresh
+      } finally {
+        setIsRestoring(false);
       }
     };
 
@@ -87,13 +98,16 @@ function UploadContent() {
     };
   }, [sessionId, config]);
 
-  // Validate session ID
+  // Validate session ID and pipeline selection (deferred until session restore completes)
   useEffect(() => {
+    if (isRestoring) return;
     if (!sessionId) {
       addToast('error', 'No session found. Please start a new analysis.');
       router.push('/');
+    } else if (!state.selectedPipeline) {
+      router.replace(`/new/pipeline?session=${sessionId}`);
     }
-  }, [sessionId, router, addToast]);
+  }, [sessionId, state.selectedPipeline, isRestoring, router, addToast]);
 
   const hasCriticalErrors = validation.warnings.filter((w) => w.type === 'error').length > 0;
   const canContinue = validation.selectedFiles.length > 0 && !hasCriticalErrors;
@@ -104,7 +118,7 @@ function UploadContent() {
     setIsSaving(true);
     try {
       await sessionsApi.updateConfig(sessionId, config);
-      router.replace(`/new/pipeline?session=${sessionId}`);
+      router.replace(`/new/comparisons?session=${sessionId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save configuration';
       addToast('error', `Failed to save: ${message}`);
@@ -130,54 +144,97 @@ function UploadContent() {
         </p>
       </div>
 
-      <section className="bg-background border border-border rounded-lg">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-          <Upload className="w-5 h-5 text-primary" />
-          <div>
-            <h2 className="font-semibold text-text-primary">Data Input</h2>
-            <p className="text-sm text-text-muted">
-              Format: PSM_ExperimentName_Condition_Replicate.csv
-            </p>
-          </div>
+      {/* Pipeline badge */}
+      {state.selectedPipeline && (
+        <div className="flex items-center gap-2">
+          {state.selectedPipeline === 'msstats' ? (
+            <BarChart3 className="w-4 h-4 text-primary" />
+          ) : (
+            <Dna className="w-4 h-4 text-primary" />
+          )}
+          <span className="text-sm font-medium text-primary">
+            {state.selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2'} Pipeline
+          </span>
         </div>
-        <div className="p-5">
-          <FileUploadZone sessionId={sessionId} />
-        </div>
-      </section>
+      )}
 
-      {state.uploadedFiles.length > 0 && (
+      {state.selectedTemplate === 'protein' ? (
+        <>
+          <section className="bg-background border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+              <Upload className="w-5 h-5 text-primary" />
+              <div>
+                <h2 className="font-semibold text-text-primary">Data Input</h2>
+                <p className="text-sm text-text-muted">
+                  Format: PSM_ExperimentName_Condition_Replicate.csv
+                </p>
+              </div>
+            </div>
+            <div className="p-5">
+              <FileUploadZone sessionId={sessionId} />
+            </div>
+          </section>
+
+          {state.uploadedFiles.length > 0 && (
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+                <Database className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="font-semibold text-text-primary">Experiment Structure</h2>
+                  <p className="text-sm text-text-muted">
+                    Review parsed files and select which to include
+                  </p>
+                </div>
+              </div>
+              <div className="p-5">
+                <ExperimentTable />
+              </div>
+            </section>
+          )}
+
+          {state.uploadedFiles.length > 0 && (
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="font-semibold text-text-primary">Validation</h2>
+                  <p className="text-sm text-text-muted">Check experiment setup requirements</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <ValidationPanel />
+              </div>
+            </section>
+          )}
+        </>
+      ) : (
         <section className="bg-background border border-border rounded-lg">
           <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-            <Database className="w-5 h-5 text-primary" />
+            <Upload className="w-5 h-5 text-primary" />
             <div>
-              <h2 className="font-semibold text-text-primary">Experiment Structure</h2>
+              <h2 className="font-semibold text-text-primary">PTM Analysis Files</h2>
               <p className="text-sm text-text-muted">
-                Review parsed files and select which to include
+                Upload PTM enrichment data, optional global proteome data, and a FASTA reference
               </p>
             </div>
           </div>
-          <div className="p-5">
-            <ExperimentTable />
+          <div className="p-5 text-sm text-text-muted italic">
+            Multi-zone upload coming soon for PTM analysis.
           </div>
         </section>
       )}
 
-      {state.uploadedFiles.length > 0 && (
-        <section className="bg-background border border-border rounded-lg">
-          <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-primary" />
-            <div>
-              <h2 className="font-semibold text-text-primary">Validation</h2>
-              <p className="text-sm text-text-muted">Check experiment setup requirements</p>
-            </div>
-          </div>
-          <div className="p-5">
-            <ValidationPanel />
-          </div>
-        </section>
-      )}
+      <div className="flex items-center justify-between pt-4 border-t border-border">
+        <button
+          data-testid="upload-back-btn"
+          onClick={() => router.push(`/new/pipeline?session=${sessionId}`)}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary
+            hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Pipeline
+        </button>
 
-      <div className="flex justify-end pt-4 border-t border-border">
         <button
           data-testid="upload-continue-btn"
           onClick={handleContinue}
@@ -196,7 +253,7 @@ function UploadContent() {
             </>
           ) : (
             <>
-              Continue to Pipeline Selection
+              Continue to Comparisons
               <ArrowRight className="w-4 h-4" />
             </>
           )}

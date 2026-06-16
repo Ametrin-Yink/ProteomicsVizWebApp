@@ -16,8 +16,8 @@ export interface WizardStep {
 }
 
 const WIZARD_STEPS: WizardStep[] = [
-  { number: 1, id: 'upload', label: 'Upload', route: '/new/upload' },
-  { number: 2, id: 'pipeline', label: 'Pipeline', route: '/new/pipeline' },
+  { number: 1, id: 'pipeline', label: 'Pipeline', route: '/new/pipeline' },
+  { number: 2, id: 'upload', label: 'Upload', route: '/new/upload' },
   { number: 3, id: 'comparisons', label: 'Comparisons', route: '/new/comparisons' },
   { number: 4, id: 'config', label: 'Configure', route: '/new/config' },
   { number: 5, id: 'summary', label: 'Summary', route: '/new/summary' },

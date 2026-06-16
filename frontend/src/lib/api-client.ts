@@ -59,6 +59,7 @@ interface BackendSession {
   template: string;
   state: string;
   status?: string;  // Alias for state
+  pipeline?: string;
   created_at: string;
   updated_at: string;
   completed_at?: string | null;

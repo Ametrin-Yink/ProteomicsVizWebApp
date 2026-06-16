@@ -9,8 +9,9 @@ import {
   startNewAnalysis,
   uploadFiles,
   configureExperiment,
-  continueToPipeline,
+  continueToUpload,
   selectPipeline,
+  continueToComparisons,
   continueToConfig,
   startAnalysis,
   cleanupSession,
@@ -48,9 +49,12 @@ test.describe('GSEA Analysis', () => {
   });
 
   test('complete pipeline then view GSEA results', async ({ page }) => {
-    // Navigate and start new analysis
-    await startNewAnalysis(page);
-    sessionId = page.url().match(/session_id=([^&]+)/)?.[1] || '';
+    // Navigate and start new analysis → pipeline page
+    sessionId = await startNewAnalysis(page);
+
+    // Select pipeline
+    await selectPipeline(page, 'msqrob2');
+    await continueToUpload(page);
 
     // Upload files
     await uploadFiles(page, TEST_FILES);
@@ -62,9 +66,8 @@ test.describe('GSEA Analysis', () => {
       organism: 'human',
     });
 
-    // Select pipeline
-    await continueToPipeline(page);
-    await selectPipeline(page, 'msqrob2');
+    // Comparisons + Config
+    await continueToComparisons(page);
     await continueToConfig(page);
 
     // Start processing

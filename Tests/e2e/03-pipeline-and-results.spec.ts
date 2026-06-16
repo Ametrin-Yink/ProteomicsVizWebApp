@@ -10,8 +10,9 @@ import {
   startNewAnalysis,
   uploadFiles,
   configureExperiment,
-  continueToPipeline,
+  continueToUpload,
   selectPipeline,
+  continueToComparisons,
   continueToConfig,
   startAnalysis,
   cleanupSession,
@@ -49,19 +50,22 @@ test.describe('Pipeline Selection & Results', () => {
   });
 
   test('MSstats pipeline with results verification', async ({ page }) => {
-    // === Wizard: Upload & Setup ===
+    // === Wizard: Select Pipeline ===
     sessionId = await startNewAnalysis(page);
+    await selectPipeline(page, 'msstats');
+    await takeScreenshot(page, TEST_PREFIX, 'results', '01-msstats-selected');
+    await continueToUpload(page);
+
+    // === Wizard: Upload & Setup ===
     await uploadFiles(page, TEST_FILES);
     await configureExperiment(page, {
       treatment: 'DMSO_24h',
       control: 'INCB224525_24h',
       organism: 'human',
     });
-    await continueToPipeline(page);
+    await continueToComparisons(page);
 
-    // === Wizard: Select MSstats ===
-    await selectPipeline(page, 'msstats');
-    await takeScreenshot(page, TEST_PREFIX, 'results', '01-msstats-selected');
+    // === Wizard: Comparisons ===
     await continueToConfig(page);
 
     // === Wizard: Verify MSstats params are visible ===
