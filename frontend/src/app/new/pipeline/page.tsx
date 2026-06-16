@@ -131,7 +131,7 @@ function PipelineContent() {
       {/* Pipeline cards */}
       {selectedTemplate === 'protein' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {pipelines.map((pipeline) => {
+          {pipelines.filter((p) => p.id !== 'ptm').map((pipeline) => {
             const isSelected = selectedPipeline === pipeline.id;
             const Icon = pipeline.icon;
 
