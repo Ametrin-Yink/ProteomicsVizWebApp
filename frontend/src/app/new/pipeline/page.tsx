@@ -8,7 +8,6 @@
 import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Loader2, Dna, BarChart3, Check } from 'lucide-react';
-import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
@@ -31,6 +30,14 @@ const pipelines = [
     summary: 'For <50 samples with low missing values',
     gradient: 'from-[#00ADEF] to-[#0088CC]',
   },
+  {
+    id: 'ptm' as const,
+    name: 'MSstatsPTM',
+    title: 'PTM Site Analysis',
+    icon: Dna,
+    summary: 'Post-translational modification quantification and site-level adjustment',
+    gradient: 'from-[#8B5CF6] to-[#7C3AED]',
+  },
 ];
 
 function PipelineContent() {
@@ -52,7 +59,7 @@ function PipelineContent() {
   }, [sessionId, router]);
 
   const canContinue =
-    selectedTemplate === 'protein' &&
+    (selectedTemplate === 'protein' || selectedTemplate === 'ptm') &&
     selectedPipeline !== null;
 
   const handleBack = () => {
@@ -117,7 +124,6 @@ function PipelineContent() {
             )}
           >
             PTM Analysis
-            <span className="ml-1.5 text-[10px] text-text-muted">Soon</span>
           </button>
         </div>
       </div>
@@ -164,12 +170,44 @@ function PipelineContent() {
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 text-center bg-background border border-border rounded-xl">
-          <MassSpecIcon className="w-12 h-12 text-text-muted mb-4" />
-          <h3 className="font-semibold text-text-primary mb-2">Post-translational Modification Analysis</h3>
-          <p className="text-sm text-text-muted max-w-md">
-            Pipeline details are currently being developed. Check back soon for PTM-specific analysis tools.
-          </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {pipelines.filter((p) => p.id === 'ptm').map((pipeline) => {
+            const isSelected = selectedPipeline === pipeline.id;
+            const Icon = pipeline.icon;
+
+            return (
+              <button
+                key={pipeline.id}
+                data-testid={`pipeline-card-${pipeline.id}`}
+                onClick={() => setPipeline(pipeline.id)}
+                className={cn(
+                  'relative text-left p-6 rounded-xl border-2 transition-all duration-200 bg-background',
+                  isSelected
+                    ? 'border-primary shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]'
+                    : 'border-border hover:border-primary/30 hover:shadow-sm'
+                )}
+              >
+                {isSelected && (
+                  <div className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-primary text-white shadow-[0_4px_14px_0_rgba(231,53,100,0.39)]">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
+
+                <div
+                  className={cn(
+                    'inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br mb-4',
+                    pipeline.gradient
+                  )}
+                >
+                  <Icon className="w-6 h-6 text-white" />
+                </div>
+
+                <h3 className="font-semibold text-text-primary mb-1">{pipeline.name}</h3>
+                <p className="text-sm font-medium text-primary mb-2">{pipeline.title}</p>
+                <p className="text-sm text-text-muted">{pipeline.summary}</p>
+              </button>
+            );
+          })}
         </div>
       )}
 

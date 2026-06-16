@@ -145,6 +145,20 @@ class Settings(BaseSettings):
         le=14400,
     )
 
+    r_ptm_summarization_timeout: int = Field(
+        default=7200,  # 2 hours — PD conversion + site localization + summarization
+        description="Timeout for PTM summarization (converter + dataSummarizationPTM) in seconds",
+        ge=30,
+        le=28800,
+    )
+
+    r_ptm_group_comparison_timeout: int = Field(
+        default=3600,  # 1 hour — per-contrast modeling + protein-level adjustment
+        description="Timeout for PTM groupComparison in seconds",
+        ge=30,
+        le=14400,
+    )
+
     # Performance optimization settings
     use_parquet: bool = Field(
         default=True,

@@ -5,5 +5,6 @@ if (!require("BiocManager", quietly = TRUE))
 # NOTE: No version pinning. Bioconductor packages may have API changes across versions.
 # Consider adding renv.lock for reproducible environments in production.
 BiocManager::install(c("msqrob2", "QFeatures", "limma"), ask = FALSE)
+BiocManager::install(c("MSstatsPTM", "Biostrings"), ask = FALSE)
 
 cat("Installation complete\n")

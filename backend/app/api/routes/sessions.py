@@ -147,7 +147,7 @@ async def update_session_config(
 
     session.config = config
     session.state = SessionState.CONFIGURING
-    if pipeline in ("msqrob2", "msstats"):
+    if pipeline in ("msqrob2", "msstats", "ptm"):
         session.pipeline = pipeline
     await store.update(session)
 

@@ -443,3 +443,36 @@ export const INDRA_SOURCES = [
 ] as const;
 
 export type IndraSource = (typeof INDRA_SOURCES)[number];
+
+// PTM Types
+export interface PTMUploadResponse {
+  filename: string;
+  size: number;
+  type: 'ptm_enrichment' | 'global_proteome' | 'fasta';
+}
+
+export type PTMModelType = 'ptm' | 'protein' | 'adjusted';
+
+export interface PTMDEResult {
+  site: string;
+  globalProtein: string;
+  comparison: string;
+  ptmLog2FC: number;
+  ptmPvalue: number;
+  ptmAdjPvalue: number;
+  proteinLog2FC?: number;
+  proteinPvalue?: number;
+  proteinAdjPvalue?: number;
+  adjustedLog2FC?: number;
+  adjustedSE?: number;
+  adjustedPvalue?: number;
+  adjustedAdjPvalue?: number;
+  isAdjusted: boolean;
+}
+
+export interface PTMSessionConfig {
+  ptm_labeling_type: 'LF' | 'TMT';
+  ptm_selected_mods: string[];
+  ptm_fasta_file: string | null;
+  ptm_global_proteome_files: string[];
+}

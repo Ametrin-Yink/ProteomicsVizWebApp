@@ -5,9 +5,10 @@
 
 'use client';
 
-import React, { useEffect, useState, useRef, Suspense } from 'react';
+import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3, Tag, FlaskConical, AlertCircle, FileText, Plus, Minus, X } from 'lucide-react';
+import type { ParsedFilename } from '@/types';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
@@ -28,6 +29,184 @@ function UploadContent() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
+
+  // PTM-specific state
+  const [ptmLabelingType, setPtmLabelingType] = useState<'LF' | 'TMT'>('LF');
+  const [ptmGlobalProteomeExpanded, setPtmGlobalProteomeExpanded] = useState(false);
+  const [ptmFastaUploadMethod, setPtmFastaUploadMethod] = useState<'human' | 'mouse' | 'custom' | null>(null);
+  const [ptmFastaFile, setPtmFastaFile] = useState<{ name: string; size: number } | null>(null);
+  const [ptmFastaUploading, setPtmFastaUploading] = useState(false);
+  const [ptmEnrichmentFiles, setPtmEnrichmentFiles] = useState<ParsedFilename[]>([]);
+  const [ptmGlobalFiles, setPtmGlobalFiles] = useState<{ filename: string; size: number }[]>([]);
+  const [ptmEnrichmentUploading, setPtmEnrichmentUploading] = useState(false);
+  const [ptmGlobalUploading, setPtmGlobalUploading] = useState(false);
+  const [isDraggingPtmEnrichment, setIsDraggingPtmEnrichment] = useState(false);
+  const [isDraggingPtmGlobal, setIsDraggingPtmGlobal] = useState(false);
+  const [isDraggingFasta, setIsDraggingFasta] = useState(false);
+  const [detectedMods, setDetectedMods] = useState<string[]>([]);
+  const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
+
+  const ptmEnrichmentInputRef = useRef<HTMLInputElement>(null);
+  const ptmGlobalInputRef = useRef<HTMLInputElement>(null);
+  const fastaInputRef = useRef<HTMLInputElement>(null);
+
+  const removePtmEnrichmentFile = useCallback((filename: string) => {
+    setPtmEnrichmentFiles((prev) => prev.filter((f) => f.filename !== filename));
+    const store = useAnalysisStore.getState();
+    const existing = store.uploadedFiles.find((f) => f.filename === filename);
+    if (existing) store.removeUploadedFile(filename);
+  }, []);
+
+  const removePtmGlobalFile = useCallback((filename: string) => {
+    setPtmGlobalFiles((prev) => prev.filter((f) => f.filename !== filename));
+  }, []);
+
+  const uploadPtmEnrichment = useCallback(async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    setPtmEnrichmentUploading(true);
+    try {
+      const formData = new FormData();
+      for (const file of files) formData.append('files', file);
+      const res = await fetch(`/api/sessions/${sessionId}/upload/ptm-enrichment`, {
+        method: 'POST', body: formData,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        addToast('error', `PTM upload failed: ${text}`);
+        return;
+      }
+      const data = await res.json();
+      if (data.files?.length > 0) {
+        const store = useAnalysisStore.getState();
+        const parsedFiles: ParsedFilename[] = data.files.map((f: Record<string, unknown>) => ({
+          filename: f.filename as string,
+          experiment: (f.experiment as string) || 'Unknown',
+          conditions: (f.conditions as string[]) || ['Unknown'],
+          replicate: (f.replicate as number) || 1,
+          size: (f.size as number) || 0,
+        }));
+        for (const pf of parsedFiles) store.addUploadedFile(pf);
+        setPtmEnrichmentFiles((prev) => [...prev, ...parsedFiles]);
+        addToast('success', `Uploaded ${data.files.length} PTM enrichment file(s)`);
+        if (detectedMods.length === 0) {
+          setTimeout(() => {
+            setDetectedMods([
+              'Phosphorylation (STY)',
+              'Acetylation (K)',
+              'Methylation (KR)',
+              'Ubiquitination (K)',
+            ]);
+          }, 1000);
+        }
+      }
+    } catch (err) {
+      addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setPtmEnrichmentUploading(false);
+    }
+  }, [sessionId, addToast, detectedMods.length]);
+
+  const uploadPtmGlobal = useCallback(async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    setPtmGlobalUploading(true);
+    try {
+      const formData = new FormData();
+      for (const file of files) formData.append('files', file);
+      const res = await fetch(`/api/sessions/${sessionId}/upload/global-proteome`, {
+        method: 'POST', body: formData,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        addToast('error', `Global proteome upload failed: ${text}`);
+        return;
+      }
+      const data = await res.json();
+      if (data.files?.length > 0) {
+        setPtmGlobalFiles((prev) => [
+          ...prev,
+          ...data.files.map((f: Record<string, unknown>) => ({
+            filename: f.filename as string,
+            size: (f.size as number) || 0,
+          })),
+        ]);
+        addToast('success', `Uploaded ${data.files.length} global proteome file(s)`);
+      }
+    } catch (err) {
+      addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setPtmGlobalUploading(false);
+    }
+  }, [sessionId, addToast]);
+
+  const uploadFasta = useCallback(async (file: File) => {
+    setPtmFastaUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`/api/sessions/${sessionId}/upload/fasta`, {
+        method: 'POST', body: formData,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        addToast('error', `FASTA upload failed: ${text}`);
+        return;
+      }
+      setPtmFastaFile({ name: file.name, size: file.size });
+      addToast('success', 'FASTA file uploaded');
+    } catch (err) {
+      addToast('error', `FASTA upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setPtmFastaUploading(false);
+    }
+  }, [sessionId, addToast]);
+
+  const handlePtmEnrichmentDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPtmEnrichment(false);
+    uploadPtmEnrichment(e.dataTransfer.files);
+  }, [uploadPtmEnrichment]);
+
+  const handlePtmEnrichmentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      uploadPtmEnrichment(e.target.files);
+      e.target.value = '';
+    }
+  }, [uploadPtmEnrichment]);
+
+  const handlePtmGlobalDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPtmGlobal(false);
+    uploadPtmGlobal(e.dataTransfer.files);
+  }, [uploadPtmGlobal]);
+
+  const handlePtmGlobalChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      uploadPtmGlobal(e.target.files);
+      e.target.value = '';
+    }
+  }, [uploadPtmGlobal]);
+
+  const handleFastaDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFasta(false);
+    setPtmFastaUploadMethod('custom');
+    const file = e.dataTransfer.files[0];
+    if (file) uploadFasta(file);
+  }, [uploadFasta]);
+
+  const handleFastaChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPtmFastaUploadMethod('custom');
+      uploadFasta(file);
+      e.target.value = '';
+    }
+  }, [uploadFasta]);
 
   // Restore session state on page load
   useEffect(() => {
@@ -110,7 +289,11 @@ function UploadContent() {
   }, [sessionId, state.selectedPipeline, isRestoring, router, addToast]);
 
   const hasCriticalErrors = validation.warnings.filter((w) => w.type === 'error').length > 0;
-  const canContinue = validation.selectedFiles.length > 0 && !hasCriticalErrors;
+  const ptmHasEnrichmentFiles = ptmEnrichmentFiles.length > 0;
+  const ptmHasFasta = ptmFastaFile !== null || ptmFastaUploadMethod !== null;
+  const canContinue = state.selectedTemplate === 'ptm'
+    ? ptmHasEnrichmentFiles && ptmHasFasta
+    : validation.selectedFiles.length > 0 && !hasCriticalErrors;
 
   const handleContinue = async () => {
     if (!canContinue || !sessionId) return;
@@ -208,20 +391,441 @@ function UploadContent() {
           )}
         </>
       ) : (
-        <section className="bg-background border border-border rounded-lg">
-          <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-            <Upload className="w-5 h-5 text-primary" />
-            <div>
-              <h2 className="font-semibold text-text-primary">PTM Analysis Files</h2>
-              <p className="text-sm text-text-muted">
-                Upload PTM enrichment data, optional global proteome data, and a FASTA reference
-              </p>
+        <>
+          {/* LF/TMT Toggle */}
+          <section className="bg-background border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+              <FlaskConical className="w-5 h-5 text-primary" />
+              <div>
+                <h2 className="font-semibold text-text-primary">PTM Analysis Type</h2>
+                <p className="text-sm text-text-muted">Select the labeling strategy for your PTM experiment</p>
+              </div>
             </div>
-          </div>
-          <div className="p-5 text-sm text-text-muted italic">
-            Multi-zone upload coming soon for PTM analysis.
-          </div>
-        </section>
+            <div className="p-5">
+              <div className="inline-flex rounded-lg border border-border overflow-hidden">
+                <button
+                  data-testid="ptm-lf-btn"
+                  onClick={() => setPtmLabelingType('LF')}
+                  className={cn(
+                    'px-5 py-2 text-sm font-medium transition-colors',
+                    ptmLabelingType === 'LF'
+                      ? 'bg-primary text-white'
+                      : 'bg-background text-text-secondary hover:bg-surface'
+                  )}
+                >
+                  Label-Free (LF)
+                </button>
+                <button
+                  data-testid="ptm-tmt-btn"
+                  onClick={() => setPtmLabelingType('TMT')}
+                  className={cn(
+                    'px-5 py-2 text-sm font-medium transition-colors',
+                    ptmLabelingType === 'TMT'
+                      ? 'bg-primary text-white'
+                      : 'bg-background text-text-secondary hover:bg-surface'
+                  )}
+                >
+                  TMT (Tandem Mass Tags)
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Zone 1: PTM Enrichment Data */}
+          <section className="bg-background border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+              <Upload className="w-5 h-5 text-primary" />
+              <div>
+                <h2 className="font-semibold text-text-primary">PTM Enrichment Data</h2>
+                <p className="text-sm text-text-muted">
+                  Upload PTM enrichment CSV files (required)
+                </p>
+              </div>
+              {ptmEnrichmentFiles.length > 0 && (
+                <span className="ml-auto text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                  {ptmEnrichmentFiles.length} file{ptmEnrichmentFiles.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <div className="p-5" data-testid="ptm-enrichment-zone">
+              {/* Drop zone */}
+              <div
+                role="button"
+                tabIndex={0}
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingPtmEnrichment(true); }}
+                onDragLeave={(e) => { e.preventDefault(); setIsDraggingPtmEnrichment(false); }}
+                onDrop={handlePtmEnrichmentDrop}
+                onClick={() => ptmEnrichmentInputRef.current?.click()}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ptmEnrichmentInputRef.current?.click(); } }}
+                className={cn(
+                  'relative border-2 border-dashed rounded-xl p-8 cursor-pointer transition-all duration-200',
+                  isDraggingPtmEnrichment
+                    ? 'border-primary bg-primary/5'
+                    : 'border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10'
+                )}
+              >
+                <input ref={ptmEnrichmentInputRef} type="file" accept=".csv" multiple onChange={handlePtmEnrichmentChange} className="hidden" />
+                <div className="flex flex-col items-center text-center space-y-4">
+                  <div className="p-4 rounded-full bg-primary/10">
+                    <Upload className="w-8 h-8 text-primary/70" />
+                  </div>
+                  <div>
+                    <p className="text-base font-medium text-text">
+                      {isDraggingPtmEnrichment ? 'Drop files here' : 'Drag & drop PTM enrichment CSV files'}
+                    </p>
+                    <p className="text-sm text-text-muted mt-1">or click to browse</p>
+                    <p className="text-xs text-text-muted mt-1">
+                      Expected: <code className="px-1 py-0.5 bg-surface rounded text-text-secondary">PSM_Experiment_Cond1_Cond2_Rep.csv</code>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-text-muted">
+                    <span>Supported: CSV files</span>
+                    <span>•</span>
+                    <span>Max 500MB</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Uploading indicator */}
+              {ptmEnrichmentUploading && (
+                <div className="flex items-center gap-2 mt-3 text-sm text-text-muted">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading PTM enrichment files...
+                </div>
+              )}
+
+              {/* Uploaded PTM enrichment files list */}
+              {ptmEnrichmentFiles.length > 0 && (
+                <div className="mt-4 space-y-1.5">
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Uploaded Files</p>
+                  {ptmEnrichmentFiles.map((f) => (
+                    <div key={f.filename} className="flex items-center justify-between p-2 rounded-md border border-border bg-background text-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-text-muted flex-shrink-0" />
+                        <span className="text-text truncate" title={f.filename}>{f.filename}</span>
+                        <span className="text-xs text-text-muted flex-shrink-0">
+                          {f.experiment} / {f.conditions.join('_')} / #{f.replicate}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removePtmEnrichmentFile(f.filename)}
+                        className="p-1 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors flex-shrink-0 ml-2"
+                        title="Remove file"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Zone 2: Global Proteome Data (collapsible) */}
+          <section className="bg-background border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+              <Database className="w-5 h-5 text-primary" />
+              <div>
+                <h2 className="font-semibold text-text-primary">Global Proteome Data</h2>
+                <p className="text-sm text-text-muted">Optional global proteome data for normalization</p>
+              </div>
+              <button
+                onClick={() => setPtmGlobalProteomeExpanded(!ptmGlobalProteomeExpanded)}
+                className="ml-auto text-sm font-medium text-primary hover:text-primary-dark transition-colors flex items-center gap-1"
+              >
+                {ptmGlobalProteomeExpanded ? (
+                  <><Minus className="w-4 h-4" /> Hide Global Proteome</>
+                ) : (
+                  <><Plus className="w-4 h-4" /> Add Global Proteome Data</>
+                )}
+              </button>
+            </div>
+            <div className="p-5" data-testid="global-proteome-zone">
+              {!ptmGlobalProteomeExpanded ? (
+                <p className="text-sm text-text-muted italic">
+                  No global proteome data (Mode A &mdash; PTM only)
+                </p>
+              ) : (
+                <div>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onDragOver={(e) => { e.preventDefault(); setIsDraggingPtmGlobal(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); setIsDraggingPtmGlobal(false); }}
+                    onDrop={handlePtmGlobalDrop}
+                    onClick={() => ptmGlobalInputRef.current?.click()}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ptmGlobalInputRef.current?.click(); } }}
+                    className={cn(
+                      'relative border-2 border-dashed rounded-xl p-6 cursor-pointer transition-all duration-200',
+                      isDraggingPtmGlobal
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary bg-surface/50 hover:bg-surface'
+                    )}
+                  >
+                    <input ref={ptmGlobalInputRef} type="file" accept=".csv" multiple onChange={handlePtmGlobalChange} className="hidden" />
+                    <div className="flex flex-col items-center text-center space-y-2">
+                      <Upload className="w-6 h-6 text-text-muted" />
+                      <p className="text-sm text-text">Drop global proteome CSV files here</p>
+                      <p className="text-xs text-text-muted">or click to browse</p>
+                    </div>
+                  </div>
+                  {ptmGlobalUploading && (
+                    <div className="flex items-center gap-2 mt-3 text-sm text-text-muted">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Uploading global proteome files...
+                    </div>
+                  )}
+                  {ptmGlobalFiles.length > 0 && (
+                    <div className="mt-4 space-y-1.5">
+                      <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Uploaded Files</p>
+                      {ptmGlobalFiles.map((f) => (
+                        <div key={f.filename} className="flex items-center justify-between p-2 rounded-md border border-border bg-background text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-4 h-4 text-text-muted flex-shrink-0" />
+                            <span className="text-text truncate" title={f.filename}>{f.filename}</span>
+                          </div>
+                          <button
+                            onClick={() => removePtmGlobalFile(f.filename)}
+                            className="p-1 text-text-muted hover:text-error hover:bg-error/5 rounded transition-colors flex-shrink-0 ml-2"
+                            title="Remove file"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Zone 3: FASTA Reference */}
+          <section className="bg-background border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+              <FileText className="w-5 h-5 text-primary" />
+              <div>
+                <h2 className="font-semibold text-text-primary">FASTA Reference</h2>
+                <p className="text-sm text-text-muted">
+                  Select an organism or upload a custom FASTA file (required)
+                </p>
+              </div>
+              {(ptmFastaUploadMethod !== null || ptmFastaFile !== null) && (
+                <span className="ml-auto text-xs bg-success/10 text-success px-2 py-0.5 rounded-full font-medium">
+                  FASTA set
+                </span>
+              )}
+            </div>
+            <div className="p-5" data-testid="fasta-zone">
+              {/* Organism quick-select buttons */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button
+                  onClick={() => { setPtmFastaUploadMethod('human'); setPtmFastaFile(null); }}
+                  className={cn(
+                    'px-4 py-2 text-sm rounded-lg border transition-colors',
+                    ptmFastaUploadMethod === 'human'
+                      ? 'border-primary bg-primary/10 text-primary font-medium'
+                      : 'border-border bg-background text-text-secondary hover:bg-surface hover:text-text'
+                  )}
+                >
+                  Human (UP000005640)
+                </button>
+                <button
+                  onClick={() => { setPtmFastaUploadMethod('mouse'); setPtmFastaFile(null); }}
+                  className={cn(
+                    'px-4 py-2 text-sm rounded-lg border transition-colors',
+                    ptmFastaUploadMethod === 'mouse'
+                      ? 'border-primary bg-primary/10 text-primary font-medium'
+                      : 'border-border bg-background text-text-secondary hover:bg-surface hover:text-text'
+                  )}
+                >
+                  Mouse (UP000000589)
+                </button>
+                <button
+                  onClick={() => { setPtmFastaUploadMethod('custom'); }}
+                  className={cn(
+                    'px-4 py-2 text-sm rounded-lg border transition-colors',
+                    ptmFastaUploadMethod === 'custom' && !ptmFastaFile
+                      ? 'border-primary bg-primary/10 text-primary font-medium'
+                      : ptmFastaFile
+                      ? 'border-success/30 bg-success/5 text-success font-medium'
+                      : 'border-border bg-background text-text-secondary hover:bg-surface hover:text-text'
+                  )}
+                >
+                  Custom Upload
+                </button>
+              </div>
+
+              {/* Custom FASTA upload drop zone */}
+              {ptmFastaUploadMethod === 'custom' && !ptmFastaFile && (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onDragOver={(e) => { e.preventDefault(); setIsDraggingFasta(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); setIsDraggingFasta(false); }}
+                  onDrop={handleFastaDrop}
+                  onClick={() => fastaInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fastaInputRef.current?.click(); } }}
+                  className={cn(
+                    'relative border-2 border-dashed rounded-lg p-6 cursor-pointer transition-all duration-200',
+                    isDraggingFasta
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary bg-surface/50 hover:bg-surface'
+                  )}
+                >
+                  <input ref={fastaInputRef} type="file" accept=".fasta,.fa,.faa" onChange={handleFastaChange} className="hidden" />
+                  <div className="flex flex-col items-center text-center space-y-2">
+                    <FileText className="w-6 h-6 text-text-muted" />
+                    <p className="text-sm text-text">Drop a FASTA file here or click to browse</p>
+                    <p className="text-xs text-text-muted">Supported: .fasta, .fa, .faa (max 100MB)</p>
+                  </div>
+                </div>
+              )}
+
+              {/* FASTA uploading indicator */}
+              {ptmFastaUploading && (
+                <div className="flex items-center gap-2 mt-3 text-sm text-text-muted">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading FASTA file...
+                </div>
+              )}
+
+              {/* FASTA file info */}
+              {ptmFastaFile && (
+                <div className="mt-3 flex items-center justify-between p-3 rounded-md border border-success/20 bg-success/5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-success" />
+                    <span className="text-text font-medium">{ptmFastaFile.name}</span>
+                    <span className="text-text-muted text-xs">
+                      ({(ptmFastaFile.size / 1024).toFixed(1)} KB)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => { setPtmFastaFile(null); if (ptmFastaUploadMethod === 'custom') setPtmFastaUploadMethod(null); }}
+                    className="p-1 text-text-muted hover:text-error rounded transition-colors"
+                    title="Remove FASTA"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Detected Modifications */}
+          {ptmEnrichmentFiles.length > 0 && (
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+                <Tag className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="font-semibold text-text-primary">Detected Modifications</h2>
+                  <p className="text-sm text-text-muted">
+                    Select post-translational modifications to include in analysis
+                  </p>
+                </div>
+                {detectedMods.length > 0 && (
+                  <span className="ml-auto text-xs text-text-muted">
+                    {selectedMods.size} of {detectedMods.length} selected
+                  </span>
+                )}
+              </div>
+              <div className="p-5">
+                {detectedMods.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-text-muted">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Detecting modifications from uploaded files...
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    {detectedMods.map((mod) => (
+                      <label
+                        key={mod}
+                        data-testid={`ptm-mod-checkbox-${mod.replace(/[^a-zA-Z0-9]/g, '-')}`}
+                        className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-surface cursor-pointer hover:bg-surface/80 transition-colors select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedMods.has(mod)}
+                          onChange={() => {
+                            setSelectedMods((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(mod)) next.delete(mod);
+                              else next.add(mod);
+                              return next;
+                            });
+                          }}
+                          className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                        />
+                        <span className="text-sm text-text">{mod}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* ExperimentTable for PTM enrichment files */}
+          {state.uploadedFiles.length > 0 && (
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+                <Database className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="font-semibold text-text-primary">Experiment Structure</h2>
+                  <p className="text-sm text-text-muted">
+                    Review parsed files and select which to include
+                  </p>
+                </div>
+              </div>
+              <div className="p-5">
+                <ExperimentTable />
+              </div>
+            </section>
+          )}
+
+          {/* PTM Validation */}
+          {ptmEnrichmentFiles.length > 0 && (
+            <section className="bg-background border border-border rounded-lg">
+              <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="font-semibold text-text-primary">Validation</h2>
+                  <p className="text-sm text-text-muted">Check PTM experiment setup requirements</p>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    {ptmHasEnrichmentFiles ? (
+                      <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-warning flex-shrink-0" />
+                    )}
+                    <span className={ptmHasEnrichmentFiles ? 'text-text' : 'text-text-muted'}>
+                      PTM enrichment data uploaded
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    {ptmHasFasta ? (
+                      <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-warning flex-shrink-0" />
+                    )}
+                    <span className={ptmHasFasta ? 'text-text' : 'text-text-muted'}>
+                      FASTA reference provided
+                    </span>
+                  </div>
+                  {ptmEnrichmentFiles.length >= 2 && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
+                      <span className="text-text">Multiple files uploaded for comparison analysis</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       <div className="flex items-center justify-between pt-4 border-t border-border">

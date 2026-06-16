@@ -42,6 +42,7 @@ import type {
   BioNetRunRequest,
   BioNetRunStatus,
   BioNetSubnetwork,
+  PTMUploadResponse,
 } from '@/types/api';
 
 // Use empty base URL to go through Next.js proxy (avoids CORS)
@@ -514,7 +515,111 @@ export const uploadApi = {
     return allResults;
   },
 
-};
+    /**
+     * Upload PTM enrichment files
+     */
+    uploadPTMEnrichment: async (
+      sessionId: string,
+      files: File[],
+      onProgress?: (filename: string, progress: number) => void
+    ): Promise<PTMUploadResponse[]> => {
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('files', file);
+        onProgress?.(file.name, 0);
+      }
+
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/ptm-enrichment`), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new APIError(
+          `PTM enrichment upload failed: ${response.status} ${errorText}`,
+          'UPLOAD_FAILED',
+          response.status
+        );
+      }
+
+      for (const file of files) {
+        onProgress?.(file.name, 100);
+      }
+
+      const responseData = await response.json();
+      return responseData.files || [];
+    },
+
+    /**
+     * Upload global proteome files
+     */
+    uploadGlobalProteome: async (
+      sessionId: string,
+      files: File[],
+      onProgress?: (filename: string, progress: number) => void
+    ): Promise<PTMUploadResponse[]> => {
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('files', file);
+        onProgress?.(file.name, 0);
+      }
+
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/global-proteome`), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new APIError(
+          `Global proteome upload failed: ${response.status} ${errorText}`,
+          'UPLOAD_FAILED',
+          response.status
+        );
+      }
+
+      for (const file of files) {
+        onProgress?.(file.name, 100);
+      }
+
+      const responseData = await response.json();
+      return responseData.files || [];
+    },
+
+    /**
+     * Upload FASTA file (single file)
+     */
+    uploadFASTA: async (
+      sessionId: string,
+      file: File,
+      onProgress?: (filename: string, progress: number) => void
+    ): Promise<PTMUploadResponse> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      onProgress?.(file.name, 0);
+
+      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/fasta`), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new APIError(
+          `FASTA upload failed: ${response.status} ${errorText}`,
+          'UPLOAD_FAILED',
+          response.status
+        );
+      }
+
+      onProgress?.(file.name, 100);
+
+      const responseData = await response.json();
+      return responseData.file || responseData;
+    },
+
+  };
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Processing API  (pipeline lifecycle)

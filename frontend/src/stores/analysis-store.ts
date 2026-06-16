@@ -28,8 +28,15 @@ interface AnalysisState {
   // Template selection
   selectedTemplate: 'protein' | 'ptm';
 
+  // PTM-specific state
+  ptmLabelingType: 'LF' | 'TMT';
+  ptmDetectedMods: string[];
+  ptmSelectedMods: string[];
+  ptmFastaFile: string | null;
+  ptmGlobalProteomeFiles: number;
+
   // Pipeline selection
-  selectedPipeline: 'msqrob2' | 'msstats' | null;
+  selectedPipeline: 'msqrob2' | 'msstats' | 'ptm' | null;
 
   // Configuration state
   config: SessionConfig;
@@ -53,12 +60,17 @@ interface AnalysisState {
   deselectAllFiles: () => void;
   updateFileMetadata: (filename: string, updates: Partial<Pick<ParsedFilename, 'experiment' | 'conditions'>>) => void;
   setTemplate: (template: 'protein' | 'ptm') => void;
-  setPipeline: (pipeline: 'msqrob2' | 'msstats') => void;
+  setPipeline: (pipeline: 'msqrob2' | 'msstats' | 'ptm') => void;
   setConfig: (config: Partial<SessionConfig>) => void;
   setAvailableOrganisms: (organisms: Organism[]) => void;
   setIsUploading: (isUploading: boolean) => void;
   setIsLoadingOrganisms: (isLoading: boolean) => void;
   setUploadError: (error: string | null) => void;
+  setPtmLabelingType: (labelingType: 'LF' | 'TMT') => void;
+  setPtmDetectedMods: (mods: string[]) => void;
+  togglePtmMod: (mod: string) => void;
+  setPtmFastaFile: (filename: string | null) => void;
+  setPtmGlobalProteomeFiles: (count: number) => void;
   reset: () => void;
 }
 
@@ -101,6 +113,11 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadProgress: [],
     selectedFiles: new Set<string>(),
     selectedTemplate: 'protein',
+    ptmLabelingType: 'LF',
+    ptmDetectedMods: [],
+    ptmSelectedMods: [],
+    ptmFastaFile: null,
+    ptmGlobalProteomeFiles: 0,
     selectedPipeline: null,
     config: { ...defaultConfig },
     availableOrganisms: [],
@@ -255,12 +272,52 @@ export const useAnalysisStore = create<AnalysisState>()(
       });
     },
 
+    setPtmLabelingType: (labelingType) => {
+      set((state) => {
+        state.ptmLabelingType = labelingType;
+      });
+    },
+
+    setPtmDetectedMods: (mods) => {
+      set((state) => {
+        state.ptmDetectedMods = mods;
+      });
+    },
+
+    togglePtmMod: (mod) => {
+      set((state) => {
+        const idx = state.ptmSelectedMods.indexOf(mod);
+        if (idx >= 0) {
+          state.ptmSelectedMods.splice(idx, 1);
+        } else {
+          state.ptmSelectedMods.push(mod);
+        }
+      });
+    },
+
+    setPtmFastaFile: (filename) => {
+      set((state) => {
+        state.ptmFastaFile = filename;
+      });
+    },
+
+    setPtmGlobalProteomeFiles: (count) => {
+      set((state) => {
+        state.ptmGlobalProteomeFiles = count;
+      });
+    },
+
     reset: () => {
       set((state) => {
         state.uploadedFiles = [];
         state.uploadProgress = [];
         state.selectedFiles.clear();
         state.selectedTemplate = 'protein';
+        state.ptmLabelingType = 'LF';
+        state.ptmDetectedMods = [];
+        state.ptmSelectedMods = [];
+        state.ptmFastaFile = null;
+        state.ptmGlobalProteomeFiles = 0;
         state.selectedPipeline = null;
         state.config = { ...defaultConfig };
         state.isUploading = false;

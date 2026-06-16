@@ -113,6 +113,9 @@ class SessionFiles(BaseModel):
     """Session files collection."""
 
     proteomics: list[ProteomicsFileInfo] = Field(default_factory=list)
+    ptm_enrichment: list[ProteomicsFileInfo] = Field(default_factory=list)
+    global_proteome: list[ProteomicsFileInfo] = Field(default_factory=list)
+    fasta: list[FileInfo] = Field(default_factory=list)
 
 
 class Session(BaseModel):

@@ -16,6 +16,10 @@ from app.services.steps import (
     step_qc_metrics_msqrob2,
     step_remove_low_quality_default,
     step_remove_razor,
+    step_ptm_prepare_data,
+    step_ptm_summarization,
+    step_ptm_group_comparison,
+    step_ptm_qc_metrics,
 )
 
 PIPELINES: dict[str, PipelineDefinition] = {}
@@ -45,6 +49,34 @@ def reset_registry() -> None:
     PIPELINES.clear()
     _register_msqrob2()
     _register_msstats()
+    _register_ptm()
+
+
+def _register_ptm() -> None:
+    """Register the PTM pipeline (4 steps — PD input via MSstatsPTM)."""
+    from app.services.steps import (  # noqa: F811 — created in Phase C
+        step_ptm_prepare_data,
+        step_ptm_summarization,
+        step_ptm_group_comparison,
+        step_ptm_qc_metrics,
+    )
+
+    register(
+        PipelineTool.PTM,
+        [
+            PipelineStep(1, "prepare_ptm_data", "Prepare PTM Data", step_ptm_prepare_data),
+            PipelineStep(
+                2, "ptm_summarization", "PTM Summarization (MSstatsPTM)", step_ptm_summarization
+            ),
+            PipelineStep(
+                3,
+                "ptm_group_comparison",
+                "PTM Group Comparison (MSstatsPTM)",
+                step_ptm_group_comparison,
+            ),
+            PipelineStep(4, "ptm_qc_metrics", "PTM QC Metrics", step_ptm_qc_metrics),
+        ],
+    )
 
 
 def _register_msqrob2() -> None:
@@ -114,3 +146,4 @@ def _register_msstats() -> None:
 # Register defaults at import time
 _register_msqrob2()
 _register_msstats()
+_register_ptm()

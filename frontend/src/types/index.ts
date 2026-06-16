@@ -38,7 +38,7 @@ export interface SessionConfig {
   remove_razor: boolean;
   strict_filtering: boolean;
   // Pipeline selection
-  pipeline?: 'msqrob2' | 'msstats';
+  pipeline?: 'msqrob2' | 'msstats' | 'ptm';
   // Multi-condition
   comparisons?: Array<{
     group1: Record<string, string>;

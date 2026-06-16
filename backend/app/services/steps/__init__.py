@@ -15,6 +15,10 @@ from .remove_low_quality import step_remove_low_quality_default
 from .remove_razor import step_remove_razor
 from .unique_psm_msqrob2 import step_generate_unique_psm_msqrob2
 from .unique_psm_msstats import step_generate_unique_psm_msstats
+from .ptm_step1_prepare import step_ptm_prepare_data
+from .ptm_step2_summarization import step_ptm_summarization
+from .ptm_step3_comparison import step_ptm_group_comparison
+from .ptm_step4_qc import step_ptm_qc_metrics
 
 __all__ = [
     "step_combine_replicates_msqrob2",
@@ -30,4 +34,8 @@ __all__ = [
     "step_qc_metrics_msqrob2",
     "step_remove_low_quality_default",
     "step_remove_razor",
+    "step_ptm_prepare_data",
+    "step_ptm_summarization",
+    "step_ptm_group_comparison",
+    "step_ptm_qc_metrics",
 ]

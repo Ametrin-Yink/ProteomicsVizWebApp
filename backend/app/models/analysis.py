@@ -23,6 +23,7 @@ class PipelineTool(str, Enum):
 
     MSQROB2 = "msqrob2"
     MSSTATS = "msstats"
+    PTM = "ptm"
 
 
 class Organism(str, Enum):
@@ -52,6 +53,12 @@ STEP_NAMES: dict[str, dict[int, str]] = {
         7: "differential_expression",
         8: "qc_metrics",
     },
+    PipelineTool.PTM: {
+        1: "prepare_ptm_data",
+        2: "ptm_summarization",
+        3: "ptm_group_comparison",
+        4: "ptm_qc_metrics",
+    },
 }
 
 STEP_DISPLAY_NAMES: dict[str, dict[int, str]] = {
@@ -71,6 +78,12 @@ STEP_DISPLAY_NAMES: dict[str, dict[int, str]] = {
         6: "Protein Abundance (MSstats)",
         7: "Differential Expression (MSstats)",
         8: "QC Metrics",
+    },
+    PipelineTool.PTM: {
+        1: "Prepare PTM Data",
+        2: "PTM Summarization (MSstatsPTM)",
+        3: "PTM Group Comparison (MSstatsPTM)",
+        4: "PTM QC Metrics",
     },
 }
 
@@ -181,6 +194,40 @@ class AnalysisConfig(BaseModel):
     # Covariate columns (selected metadata columns used as model covariates)
     covariate_columns: list[str] | None = Field(
         default=None, description="Metadata column names to use as covariates"
+    )
+
+    # PTM-specific parameters
+    ptm_labeling_type: str = Field(
+        default="LF",
+        description="Labeling type for PTM experiment: LF or TMT",
+    )
+    ptm_mod_ids: list[str] = Field(
+        default_factory=list,
+        description="PTM modification types to analyze (e.g., ['Phospho'])",
+    )
+    ptm_which_proteinid: str = Field(
+        default="Protein.Group.Accessions",
+        description="PD column for protein name",
+    )
+    ptm_which_quantification: str = Field(
+        default="Precursor.Area",
+        description="PD column for quantification: Precursor.Area, Intensity, or Area",
+    )
+    ptm_normalization: str = Field(
+        default="equalizeMedians",
+        description="Normalization method for PTM summarization",
+    )
+    ptm_summary_method: str = Field(
+        default="TMP",
+        description="Summary method for PTM summarization: TMP or linear",
+    )
+    ptm_mbimpute: bool = Field(
+        default=True,
+        description="Use accelerated failure model for missing value imputation",
+    )
+    ptm_save_fitted_models: bool = Field(
+        default=True,
+        description="Save fitted linear models in groupComparison output",
     )
 
 
