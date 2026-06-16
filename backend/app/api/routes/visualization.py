@@ -552,6 +552,7 @@ async def get_results(
             "significant_proteins": significant_proteins,
             "upregulated": upregulated,
             "downregulated": downregulated,
+            "pipeline": session.pipeline,
         }
     )
 
@@ -2000,3 +2001,167 @@ async def get_protein_peptide(
     )
 
     return create_response(peptide_data)
+
+
+# ---- PTM-specific endpoints ----
+
+_PTM_COMPARISONS_DIR = "ptm_comparisons"
+
+
+async def load_ptm_results(
+    session_id: str,
+    results_dir: Path,
+) -> list[dict[str, Any]]:
+    """Load PTM differential expression results from the ptm_comparisons directory.
+
+    Reads PTM_Model_{label}.tsv, PROTEIN_Model_{label}.tsv, and ADJUSTED_Model_{label}.tsv
+    files and groups them by comparison label.
+
+    Mode A comparisons only have the PTM model file; Mode B has all three.
+
+    Args:
+        session_id: Session ID for cache keying
+        results_dir: Path to session results directory
+
+    Returns:
+        List of comparison dicts with ptm_model, protein_model, adjusted_model entries
+    """
+    ptm_dir = results_dir / _PTM_COMPARISONS_DIR
+    if not ptm_dir.exists() or not ptm_dir.is_dir():
+        return []
+
+    # Find all PTM_Model_*.tsv files to discover available labels
+    ptm_files = sorted(ptm_dir.glob("PTM_Model_*.tsv"))
+    if not ptm_files:
+        return []
+
+    comparisons = []
+    for ptm_file in ptm_files:
+        label = ptm_file.stem[len("PTM_Model_"):]  # Extract label after "PTM_Model_"
+
+        comparison: dict[str, Any] = {"label": label}
+
+        # Load PTM model results
+        try:
+            df = await asyncio.to_thread(pd.read_csv, ptm_file, sep="\t")
+            comparison["ptm_model"] = df.to_dict(orient="records")
+        except Exception as e:
+            logger.error(f"Error loading PTM model {ptm_file.name}: {e}")
+            comparison["ptm_model"] = []
+
+        # Load protein model results (may not exist in Mode A)
+        protein_file = ptm_dir / f"PROTEIN_Model_{label}.tsv"
+        if protein_file.exists():
+            try:
+                df = await asyncio.to_thread(pd.read_csv, protein_file, sep="\t")
+                comparison["protein_model"] = df.to_dict(orient="records")
+            except Exception as e:
+                logger.error(f"Error loading protein model {protein_file.name}: {e}")
+                comparison["protein_model"] = []
+        else:
+            comparison["protein_model"] = []
+
+        # Load adjusted model results (may not exist in Mode A)
+        adjusted_file = ptm_dir / f"ADJUSTED_Model_{label}.tsv"
+        if adjusted_file.exists():
+            try:
+                df = await asyncio.to_thread(pd.read_csv, adjusted_file, sep="\t")
+                comparison["adjusted_model"] = df.to_dict(orient="records")
+            except Exception as e:
+                logger.error(f"Error loading adjusted model {adjusted_file.name}: {e}")
+                comparison["adjusted_model"] = []
+        else:
+            comparison["adjusted_model"] = []
+
+        comparisons.append(comparison)
+
+    return comparisons
+
+
+@router.get("/{session_id}/ptm/results")
+async def get_ptm_results(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Get PTM differential expression results with three-model output.
+
+    Returns grouped data for each comparison label, containing the PTM model,
+    protein model, and adjusted model results where available.
+    Mode A comparisons only have the PTM model; Mode B has all three.
+    """
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    results_dir = settings.sessions_dir / session_id / "results"
+
+    comparisons = await load_ptm_results(session_id, results_dir)
+
+    return create_response({"comparisons": comparisons})
+
+
+@router.get("/{session_id}/ptm/site/{site_id}/abundance")
+async def get_ptm_site_abundance(
+    session_id: str,
+    site_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Get per-site PTM abundance data across conditions.
+
+    Currently returns a placeholder -- full data will be available after
+    the PTM pipeline completes.
+    """
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    # Placeholder: data will be populated from pipeline results
+    return create_response({
+        "site": site_id,
+        "conditions": [],
+        "abundances": [],
+        "samples": [],
+    })
+
+
+@router.get("/{session_id}/ptm/qc/plots")
+async def get_ptm_qc_plots(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Get PTM-specific QC data."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    results_dir = settings.sessions_dir / session_id / "results"
+    qc_file = results_dir / "ptm_qc.json"
+
+    default_result: dict[str, Any] = {
+        "total_sites": 0,
+        "significant_hits": 0,
+        "up_regulated": 0,
+        "down_regulated": 0,
+        "comparisons": [],
+    }
+
+    if not qc_file.exists():
+        return create_response(default_result)
+
+    try:
+        data = await asyncio.to_thread(
+            lambda: json.loads(qc_file.read_text(encoding="utf-8"))
+        )
+        return create_response(data)
+    except Exception as e:
+        logger.error(f"Error loading PTM QC data: {e}")
+        return create_response(default_result)
