@@ -205,20 +205,30 @@ class SessionStore:
         if not self.sessions_dir.exists():
             return sessions
 
+        import re
+
+        _uuid_re = re.compile(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            re.IGNORECASE,
+        )
+
         for session_dir in self.sessions_dir.iterdir():
-            if session_dir.is_dir():
-                session_file = session_dir / "session.json"
-                if session_file.exists():
-                    try:
-                        async with aiofiles.open(session_file, encoding="utf-8") as f:
-                            content = await f.read()
-                            data = json.loads(content)
-                            sessions.append(Session(**data))
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to load session: {session_dir.name}",
-                            extra={"error": str(e)},
-                        )
+            if not session_dir.is_dir():
+                continue
+            if not _uuid_re.match(session_dir.name):
+                continue
+            session_file = session_dir / "session.json"
+            if session_file.exists():
+                try:
+                    async with aiofiles.open(session_file, encoding="utf-8") as f:
+                        content = await f.read()
+                        data = json.loads(content)
+                        sessions.append(Session(**data))
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to load session: {session_dir.name}",
+                        extra={"error": str(e)},
+                    )
 
         # Sort by updated_at descending (handle mixed naive/aware datetimes)
 

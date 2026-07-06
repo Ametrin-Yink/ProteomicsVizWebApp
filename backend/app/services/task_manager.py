@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -361,8 +362,21 @@ class TaskManager:
             _, ready_event, _ = queue[0]
             ready_event.set()
 
+    # Match SessionStore._get_session_dir() UUID validation to prevent
+    # non-UUID session directories from being created outside the store.
+    _UUID_RE = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        re.IGNORECASE,
+    )
+
     def _write_task_status(self, session_id: str) -> None:
-        """Persist current task state to disk (fire-and-forget)."""
+        """Persist current task state to disk (fire-and-forget).
+
+        Only writes for valid UUID session IDs — non-UUID IDs are silently
+        skipped to prevent creating session directories outside SessionStore.
+        """
+        if not self._UUID_RE.match(session_id):
+            return
         try:
             tasks_data = self.get_status(session_id)
             status_file = settings.sessions_dir / session_id / "task_status.json"

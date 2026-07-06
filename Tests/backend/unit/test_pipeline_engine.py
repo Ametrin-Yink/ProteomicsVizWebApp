@@ -357,7 +357,7 @@ def _make_run_ctx(tmp_path: Path) -> StepContext:
     uploads_dir.mkdir(exist_ok=True)
     return StepContext(
         config=config,
-        session_id="run-test-session",
+        session_id="550e8400-e29b-41d4-a716-446655440000",
         file_paths=[],
         results_dir=results_dir,
         uploads_dir=uploads_dir,

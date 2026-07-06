@@ -45,7 +45,7 @@ async def test_submit_heavy_task_completes():
         time.sleep(0.05)
         return x + 1
 
-    result = await tm.submit("sess-1", TaskKind.COMPUTE, slow_fn, 5, label="add")
+    result = await tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, slow_fn, 5, label="add")
     assert result == 6
 
 
@@ -61,7 +61,7 @@ async def test_per_session_serialization():
             order.append(f"{label}-end")
             return label
 
-        return await tm.submit("sess-1", TaskKind.COMPUTE, fn, label=label)
+        return await tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, fn, label=label)
 
     task_a = asyncio.create_task(run("a", 0.05))
     await asyncio.sleep(0.01)
@@ -87,8 +87,8 @@ async def test_cross_session_parallel():
 
         return await tm.submit(session_id, TaskKind.COMPUTE, fn, label=label)
 
-    task_1 = asyncio.create_task(run("sess-A", "A", 0.1))
-    task_2 = asyncio.create_task(run("sess-B", "B", 0.1))
+    task_1 = asyncio.create_task(run("550e8400-e29b-41d4-a716-44665544000a", "A", 0.1))
+    task_2 = asyncio.create_task(run("550e8400-e29b-41d4-a716-44665544000b", "B", 0.1))
 
     results = await asyncio.gather(task_1, task_2)
     assert set(results) == {"A", "B"}
@@ -109,14 +109,14 @@ async def test_cancel_queued_task():
         return "done"
 
     task_blocking = asyncio.create_task(
-        tm.submit("sess-1", TaskKind.COMPUTE, blocking_fn, label="blocker")
+        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, blocking_fn, label="blocker")
     )
     await asyncio.sleep(0)  # Let event loop start the coroutine
     assert blocking_started.wait(timeout=2), "blocker should start within 2s"
 
     task_queued = asyncio.create_task(
         tm.submit(
-            "sess-1",
+            "550e8400-e29b-41d4-a716-446655440001",
             TaskKind.COMPUTE,
             lambda: "never",
             label="queued",
@@ -125,7 +125,7 @@ async def test_cancel_queued_task():
     )
     await asyncio.sleep(0.05)
 
-    assert tm.cancel("sess-1") is True
+    assert tm.cancel("550e8400-e29b-41d4-a716-446655440001") is True
     blocking_done.set()
 
     with pytest.raises(TaskCancelledError):
@@ -148,7 +148,7 @@ async def test_timeout_event_fires():
 
     with pytest.raises(TaskTimeoutError):
         await tm.submit(
-            "sess-1",
+            "550e8400-e29b-41d4-a716-446655440001",
             TaskKind.COMPUTE,
             checking_fn,
             label="timeout-test",
@@ -170,20 +170,20 @@ async def test_get_status_shows_running_task():
         return "ok"
 
     task = asyncio.create_task(
-        tm.submit("sess-1", TaskKind.COMPUTE, slow_fn, label="test-task")
+        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, slow_fn, label="test-task")
     )
 
     # Yield to event loop until the task transitions to "running".
     # asyncio.sleep(0) yields control without a real delay.
     for _ in range(100):
         await asyncio.sleep(0)
-        status = tm.get_status("sess-1")
+        status = tm.get_status("550e8400-e29b-41d4-a716-446655440001")
         if any(
             t["kind"] == "compute" and t["status"] == "running" for t in status["tasks"]
         ):
             break
 
-    tasks = tm.get_status("sess-1")["tasks"]
+    tasks = tm.get_status("550e8400-e29b-41d4-a716-446655440001")["tasks"]
     assert any(
         t["kind"] == "compute" and t["status"] == "running" for t in tasks
     ), f"Expected running task, got: {tasks}"
@@ -205,7 +205,7 @@ async def test_queue_position_for_blocked_session():
         return "ok"
 
     task_a = asyncio.create_task(
-        tm.submit("sess-1", TaskKind.COMPUTE, slow_fn, label="blocker")
+        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, slow_fn, label="blocker")
     )
 
     # Yield enough cycles for task_a to reach the semaphore/executor and
@@ -216,13 +216,13 @@ async def test_queue_position_for_blocked_session():
 
     # Submit to same session — per-session lock keeps this queued
     task_b = asyncio.create_task(
-        tm.submit("sess-1", TaskKind.COMPUTE, lambda: "dummy", label="waiter")
+        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, lambda: "dummy", label="waiter")
     )
     # Yield to let task_b enter the queue
     for _ in range(20):
         await asyncio.sleep(0)
 
-    pos = tm.get_queue_position("sess-1", TaskKind.COMPUTE)
+    pos = tm.get_queue_position("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE)
     assert pos is not None, "Expected task_b to be queued, got pos=None"
     assert pos >= 1
 
