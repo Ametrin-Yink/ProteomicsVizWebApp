@@ -1,10 +1,13 @@
 """Unit tests for processing API routes — /process, /cancel, /retry, /logs."""
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from app.models.analysis import PipelineTool
 from app.models.session import Session, SessionConfig, SessionFiles, SessionState
 from app.main import app
+from app.api.routes.processing import _derive_pipeline
 
 
 @pytest.fixture
@@ -60,12 +63,26 @@ class TestStartProcessing:
         )
         assert response.status_code == 400
 
-    def test_requires_minimum_files(self, client, mock_store):
-        mock_store.get.return_value.files.proteomics = [MagicMock()] * 3
+    def test_requires_minimum_files_dia(self, client, mock_store):
+        """DIA session with fewer than 2 files raises 400."""
+        mock_store.get.return_value.config.file_type = "dia"
+        mock_store.get.return_value.files.proteomics = [MagicMock()]  # 1 file < 2
         response = client.post(
             "/api/sessions/550e8400-e29b-41d4-a716-446655440000/process"
         )
         assert response.status_code == 400
+
+    def test_single_file_tmt_passes(self, client, mock_store):
+        """TMT session with 1 file passes (MIN_PROTEOMICS_FILES=1)."""
+        mock_store.get.return_value.config.file_type = "tmt"
+        mock_store.get.return_value.files.proteomics = [MagicMock()]  # 1 file >= 1
+        response = client.post(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/process"
+        )
+        # Should pass validation and return 200 with "started" status
+        assert response.status_code == 200
+        data = response.json()
+        assert data["data"]["status"] == "started"
 
     def test_session_not_found(self, client, mock_store):
         mock_store.get.return_value = None
@@ -176,3 +193,46 @@ class TestGetStatus:
             "/api/sessions/550e8400-e29b-41d4-a716-446655440000/status"
         )
         assert response.status_code == 404
+
+
+class TestDerivePipeline:
+    """Test the _derive_pipeline helper function."""
+
+    def test_derive_pipeline_tmt(self):
+        """file_type='tmt' returns MSSTATS."""
+        session = Session(
+            id="derive-test-tmt",
+            name="TMT Test",
+            state=SessionState.CREATED,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            config=SessionConfig(file_type="tmt"),
+        )
+        result = _derive_pipeline(session)
+        assert result == PipelineTool.MSSTATS
+
+    def test_derive_pipeline_dia(self):
+        """file_type='dia' returns MSQROB2."""
+        session = Session(
+            id="derive-test-dia",
+            name="DIA Test",
+            state=SessionState.CREATED,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            config=SessionConfig(file_type="dia"),
+        )
+        result = _derive_pipeline(session)
+        assert result == PipelineTool.MSQROB2
+
+    def test_derive_pipeline_legacy(self):
+        """No file_type in config, session.pipeline='msqrob2' returns MSQROB2."""
+        session = Session(
+            id="derive-test-legacy",
+            name="Legacy Test",
+            state=SessionState.CREATED,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            pipeline="msqrob2",
+        )
+        result = _derive_pipeline(session)
+        assert result == PipelineTool.MSQROB2

@@ -13,7 +13,6 @@ from app.core.exceptions import (
     InvalidFileFormatError,
     ValidationError,
 )
-from app.utils.file_parser import PSM_FILENAME_PATTERN
 
 
 def validate_file_size(size_bytes: int, filename: str) -> None:
@@ -56,29 +55,6 @@ def validate_csv_extension(filename: str) -> None:
         raise InvalidFileFormatError(
             message=f"Invalid file format: {filename}",
             details={"filename": filename, "expected_extension": ".csv"},
-        )
-
-
-def validate_psm_filename_pattern(filename: str) -> None:
-    """
-    Validate PSM filename matches required pattern.
-
-    Pattern: PSM_ExperimentName_Condition1_Condition2_ReplicateNumber.csv
-
-    Args:
-        filename: Filename to validate
-
-    Raises:
-        InvalidFileFormatError: If filename doesn't match pattern
-    """
-    if not PSM_FILENAME_PATTERN.match(filename):
-        raise InvalidFileFormatError(
-            message=f"Invalid PSM filename format: {filename}",
-            details={
-                "filename": filename,
-                "expected_pattern": "PSM_ExperimentName_Condition1_Condition2_ReplicateNumber.csv",
-                "example": "PSM_SampleData_DMSO_1.csv",
-            },
         )
 
 

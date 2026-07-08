@@ -1,203 +1,182 @@
 """
 Unit tests for file parsing utilities.
 
-Tests filename parsing, CSV column validation, and column extraction.
+Tests delimiter detection, channel detection, column validation,
+and file parsing for TMT and DIA proteomics files.
 """
+
+from pathlib import Path
 
 import pandas as pd
 import pytest
 from app.core.exceptions import InvalidFileFormatError
 from app.utils.file_parser import (
-    REQUIRED_COLUMNS,
-    find_abundance_column,
-    parse_psm_filename,
-    sanitize_filename,
-    validate_psm_columns,
+    DIA_REQUIRED_COLUMNS,
+    TMT_ABUNDANCE_PATTERN,
+    TMT_REQUIRED_COLUMNS,
+    detect_delimiter,
+    detect_tmt_channels,
+    parse_proteomics_file,
+    read_file_columns,
+    validate_dia_columns,
+    validate_tmt_columns,
 )
 
 
-class TestParsePsmFilename:
-    """Test PSM filename parsing following pattern: PSM_ExperimentName_Condition_ReplicateNumber.csv"""
+class TestDetectDelimiter:
+    """Test delimiter auto-detection."""
 
-    def test_parse_valid_filename_standard(self):
-        """Parse standard PSM filename."""
-        result = parse_psm_filename("PSM_SampleData_DMSO_1.csv")
+    def test_detect_delimiter_tab(self, test_data_dir: Path):
+        """Detect tab delimiter from TMT fixture (tab-separated)."""
+        path = test_data_dir / "tmt_sample_1000rows.txt"
+        result = detect_delimiter(path)
+        assert result == "\t"
 
-        assert result.experiment == "SampleData"
-        assert result.conditions == ["DMSO"]
-        assert result.replicate == 1
-
-    def test_parse_valid_filename_with_numbers(self):
-        """Parse filename with numbers in condition."""
-        result = parse_psm_filename("PSM_SampleData_INCZ123456_3.csv")
-
-        assert result.experiment == "SampleData"
-        assert result.conditions == ["INCZ123456"]
-        assert result.replicate == 3
-
-    def test_parse_valid_filename_with_underscores(self):
-        """Parse filename with multiple underscore-separated conditions."""
-        result = parse_psm_filename("PSM_Exp_Name_Condition_5.csv")
-
-        assert result.experiment == "Exp"
-        assert result.conditions == ["Name", "Condition"]
-        assert result.replicate == 5
-
-    def test_parse_multi_condition_filename(self):
-        """Parse filename with multiple conditions."""
-        result = parse_psm_filename("PSM_Exp_A_B_B2_C_1.csv")
-
-        assert result.experiment == "Exp"
-        assert result.conditions == ["A", "B", "B2", "C"]
-        assert result.replicate == 1
-
-    def test_parse_invalid_filename_no_prefix(self):
-        """Reject filename without PSM_ prefix."""
-        with pytest.raises(InvalidFileFormatError) as exc_info:
-            parse_psm_filename("SampleData_DMSO_1.csv")
-
-        assert "Invalid filename" in str(exc_info.value.message)
-
-    def test_parse_invalid_filename_wrong_extension(self):
-        """Reject filename with wrong extension."""
-        with pytest.raises(InvalidFileFormatError) as exc_info:
-            parse_psm_filename("PSM_SampleData_DMSO_1.txt")
-
-        assert "Invalid filename" in str(exc_info.value.message)
-
-    def test_parse_invalid_filename_missing_replicate(self):
-        """Reject filename missing replicate number."""
-        with pytest.raises(InvalidFileFormatError) as exc_info:
-            parse_psm_filename("PSM_SampleData_DMSO.csv")
-
-        assert "Invalid filename" in str(exc_info.value.message)
-
-    def test_parse_invalid_filename_non_numeric_replicate(self):
-        """Reject filename with non-numeric replicate."""
-        with pytest.raises(InvalidFileFormatError) as exc_info:
-            parse_psm_filename("PSM_SampleData_DMSO_A.csv")
-
-        assert "Invalid filename" in str(exc_info.value.message)
-
-    def test_parse_replicate_zero(self):
-        """Parse filename with replicate 0."""
-        result = parse_psm_filename("PSM_SampleData_DMSO_0.csv")
-
-        assert result.replicate == 0
-
-    def test_parse_large_replicate_number(self):
-        """Parse filename with large replicate number."""
-        result = parse_psm_filename("PSM_SampleData_DMSO_100.csv")
-
-        assert result.replicate == 100
+    def test_detect_delimiter_comma(self, tmp_path: Path):
+        """Detect comma delimiter from a simple CSV file."""
+        path = tmp_path / "test.csv"
+        path.write_text("a,b,c\n1,2,3\n")
+        result = detect_delimiter(path)
+        assert result == ","
 
 
-class TestValidatePsmColumns:
-    """Test CSV column validation."""
+class TestDetectTmtChannels:
+    """Test TMT channel detection from column names."""
+
+    def test_detect_tmt_channels_16plex(self):
+        """Extract 16 TMT channels from a 16-plex column list."""
+        columns = [
+            "Abundance 126",
+            "Abundance 127N",
+            "Abundance 127C",
+            "Abundance 128N",
+            "Abundance 128C",
+            "Abundance 129N",
+            "Abundance 129C",
+            "Abundance 130N",
+            "Abundance 130C",
+            "Abundance 131N",
+            "Abundance 131C",
+            "Abundance 132N",
+            "Abundance 132C",
+            "Abundance 133N",
+            "Abundance 133C",
+            "Abundance 134N",
+        ]
+        channels = detect_tmt_channels(columns)
+        assert channels == [
+            "126",
+            "127N",
+            "127C",
+            "128N",
+            "128C",
+            "129N",
+            "129C",
+            "130N",
+            "130C",
+            "131N",
+            "131C",
+            "132N",
+            "132C",
+            "133N",
+            "133C",
+            "134N",
+        ]
+
+    def test_detect_tmt_channels_no_channels(self):
+        """Return empty list when no abundance columns present."""
+        columns = ["Sequence", "Charge", "Master Protein Accessions"]
+        channels = detect_tmt_channels(columns)
+        assert channels == []
+
+
+class TestValidateTmtColumns:
+    """Test TMT column validation."""
 
     @pytest.fixture
-    def valid_columns(self):
-        """Return valid column set for PSM CSV."""
-        return [
-            "Sequence",
-            "Modifications",
-            "Charge",
-            "Contaminant",
-            "Master Protein Accessions",
-            "Quan Info",
-            "Abundance F1 Sample",
-            "Abundance F2 Sample",
-        ]
+    def valid_tmt_df(self) -> pd.DataFrame:
+        """Create a valid TMT DataFrame with required columns and abundance columns."""
+        return pd.DataFrame(
+            {
+                "Sequence": ["PEPTIDE1", "PEPTIDE2", "PEPTIDE3"],
+                "Modifications": ["", "Oxidation", ""],
+                "Charge": [2, 3, 2],
+                "Contaminant": [False, False, False],
+                "Master Protein Accessions": ["P12345", "P67890", "P11111"],
+                "Quan Info": ["Valid", "Valid", "Valid"],
+                "Abundance 126": [100.0, 200.0, None],
+                "Abundance 127N": [150.0, None, 250.0],
+                "Abundance 127C": [175.0, 225.0, 275.0],
+            }
+        )
 
-    def test_validate_all_required_columns_present(self, valid_columns):
-        """Accept CSV with all required columns."""
-        df = pd.DataFrame(columns=valid_columns)
-        # Should not raise
-        validate_psm_columns(df, "test.csv")
+    def test_validate_tmt_columns_valid(self, valid_tmt_df):
+        """Valid TMT DataFrame passes validation without raising."""
+        validate_tmt_columns(valid_tmt_df, "test_tmt.txt")
 
-    @pytest.mark.parametrize("missing_col", REQUIRED_COLUMNS)
-    def test_missing_column_raises_error(self, missing_col, valid_columns):
-        """Reject CSV missing each required column."""
-        columns = [c for c in valid_columns if c != missing_col]
-        df = pd.DataFrame(columns=columns)
-
+    def test_validate_tmt_columns_missing_required(self, valid_tmt_df):
+        """Missing Sequence column raises InvalidFileFormatError."""
+        df = valid_tmt_df.drop(columns=["Sequence"])
         with pytest.raises(InvalidFileFormatError) as exc_info:
-            validate_psm_columns(df, "test.csv")
-
+            validate_tmt_columns(df, "test_tmt.txt")
         assert "Missing" in str(exc_info.value.message)
 
-    def test_validate_missing_abundance_column(self, valid_columns):
-        """Reject CSV missing abundance columns."""
-        columns = [c for c in valid_columns if not c.startswith("Abundance")]
-        df = pd.DataFrame(columns=columns)
-
+    def test_validate_tmt_columns_no_abundance(self):
+        """No abundance columns matching TMT pattern raises error."""
+        df = pd.DataFrame(
+            {
+                "Sequence": ["A"],
+                "Modifications": [""],
+                "Charge": [2],
+                "Contaminant": [False],
+                "Master Protein Accessions": ["P12345"],
+                "Quan Info": ["Valid"],
+            }
+        )
         with pytest.raises(InvalidFileFormatError) as exc_info:
-            validate_psm_columns(df, "test.csv")
-
-        assert "Missing abundance column" in str(exc_info.value.message)
-
-
-class TestFindAbundanceColumn:
-    """Test abundance column extraction."""
-
-    def test_find_single_abundance_column(self):
-        """Extract single abundance column."""
-        columns = ["Sequence", "Abundance F1 Sample", "Charge"]
-        result = find_abundance_column(columns)
-
-        assert result == "Abundance F1 Sample"
-
-    def test_find_multiple_abundance_columns_returns_first(self):
-        """Extract first abundance column when multiple exist."""
-        columns = ["Sequence", "Abundance F1 Sample", "Abundance F2 Sample", "Charge"]
-        result = find_abundance_column(columns)
-
-        assert result == "Abundance F1 Sample"
-
-    def test_find_no_abundance_columns_raises_error(self):
-        """Raise error when no abundance columns."""
-        columns = ["Sequence", "Charge", "Modifications"]
-
-        with pytest.raises(InvalidFileFormatError):
-            find_abundance_column(columns)
-
-    def test_find_abundance_with_various_codes(self):
-        """Extract abundance column with various F codes."""
-        columns = [
-            "Sequence",
-            "Abundance F100 Sample",
-            "Charge",
-        ]
-        result = find_abundance_column(columns)
-
-        assert result == "Abundance F100 Sample"
+            validate_tmt_columns(df, "test_tmt.txt")
+        assert "abundance columns" in str(exc_info.value.message).lower()
 
 
-class TestSanitizeFilename:
-    """Test filename sanitization."""
+class TestValidateDiaColumns:
+    """Test DIA column validation."""
 
-    def test_sanitize_valid_filename(self):
-        """Keep valid filename unchanged."""
-        result = sanitize_filename("PSM_SampleData_DMSO_1.csv")
+    @pytest.fixture
+    def valid_dia_df(self) -> pd.DataFrame:
+        """Create a valid DIA DataFrame with required columns and Quan Value."""
+        return pd.DataFrame(
+            {
+                "Sequence": ["PEPTIDE1", "PEPTIDE2"],
+                "Modifications": ["", "Oxidation"],
+                "Charge": [2, 3],
+                "Contaminant": [False, False],
+                "Master Protein Accessions": ["P12345", "P67890"],
+                "Quan Info": ["Valid", "Valid"],
+                "Quan Value": [1000.0, 2000.0],
+            }
+        )
 
-        assert result == "PSM_SampleData_DMSO_1.csv"
+    def test_validate_dia_columns_valid(self, valid_dia_df):
+        """Valid DIA DataFrame passes validation without raising."""
+        validate_dia_columns(valid_dia_df, "test_dia.txt")
 
-    def test_sanitize_path_traversal(self):
-        """Remove path traversal attempts."""
-        result = sanitize_filename("../../../etc/passwd")
+    def test_validate_dia_columns_missing_quan_value(self, valid_dia_df):
+        """Missing Quan Value column raises InvalidFileFormatError."""
+        df = valid_dia_df.drop(columns=["Quan Value"])
+        with pytest.raises(InvalidFileFormatError) as exc_info:
+            validate_dia_columns(df, "test_dia.txt")
+        assert "Quan Value" in str(exc_info.value.message)
 
-        assert result == ".._.._.._etc_passwd"
 
-    def test_sanitize_null_bytes(self):
-        """Remove null bytes from filename."""
-        result = sanitize_filename("file\x00name.csv")
+class TestReadFileColumns:
+    """Test reading column headers without loading data."""
 
-        # The implementation may or may not handle null bytes - just check it doesn't crash
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_sanitize_illegal_characters(self):
-        """Replace illegal characters with underscore."""
-        result = sanitize_filename("file<name>.csv")
-
-        assert result == "file_name_.csv"
+    def test_read_file_columns(self, test_data_dir: Path):
+        """Read column names from TMT fixture."""
+        path = test_data_dir / "tmt_sample_1000rows.txt"
+        columns = read_file_columns(path)
+        assert len(columns) == 78
+        assert "Sequence" in columns
+        assert "Quan Info" in columns
+        assert "Abundance 126" in columns
+        assert "Abundance 134N" in columns
