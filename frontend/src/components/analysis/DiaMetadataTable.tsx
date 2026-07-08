@@ -8,35 +8,16 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { Plus, Download, Upload, X, AlertCircle, FileText } from 'lucide-react';
+import { parseCSVLine } from '@/lib/csv';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') { current += '"'; i++; }
-        else { inQuotes = false; }
-      } else { current += ch; }
-    } else {
-      if (ch === '"') { inQuotes = true; }
-      else if (ch === ',') { result.push(current); current = ''; }
-      else { current += ch; }
-    }
-  }
-  result.push(current);
-  return result;
-}
 
 export const DiaMetadataTable: React.FC = () => {
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
+  const importMetadataColumns = useAnalysisStore((s) => s.importMetadataColumns);
   const { addToast } = useUIStore();
 
   const [newColName, setNewColName] = useState('');
@@ -164,19 +145,8 @@ export const DiaMetadataTable: React.FC = () => {
           imported[fn] = entry;
         }
 
-        // Atomically update metadata_columns
-        useAnalysisStore.setState((state) => {
-          if (!state.config.metadata_columns) state.config.metadata_columns = {};
-          Object.assign(state.config.metadata_columns, imported);
-          // Sync UploadedFileInfo
-          Object.entries(imported).forEach(([fn, entry]) => {
-            const fi = state.uploadedFiles.find((f) => f.filename === fn);
-            if (fi) {
-              if (entry.experiment) fi.experiment = entry.experiment;
-              if (entry.replicate) fi.replicate = parseInt(entry.replicate, 10) || 0;
-            }
-          });
-        });
+        // Atomically update metadata_columns via store action (preserves Immer immutability)
+        importMetadataColumns(imported);
 
         addToast('success', `Merged metadata for ${Object.keys(imported).length} file(s)`);
       } catch (err) {

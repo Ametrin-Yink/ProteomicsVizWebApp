@@ -8,6 +8,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { Plus, Download, Upload, X, AlertCircle } from 'lucide-react';
+import { parseCSVLine } from '@/lib/csv';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import type { UploadedFileInfo } from '@/types';
@@ -17,27 +18,6 @@ interface TmtChannelMappingProps {
   file: UploadedFileInfo;
   /** If true, render in a compact mode for collapsible sections */
   compact?: boolean;
-}
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') { current += '"'; i++; }
-        else { inQuotes = false; }
-      } else { current += ch; }
-    } else {
-      if (ch === '"') { inQuotes = true; }
-      else if (ch === ',') { result.push(current); current = ''; }
-      else { current += ch; }
-    }
-  }
-  result.push(current);
-  return result;
 }
 
 export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, compact }) => {

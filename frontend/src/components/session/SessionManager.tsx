@@ -115,7 +115,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       // Resume in the new wizard flow
       router.push(`/new/upload?session=${session.id}`);
     } else if (session.status === 'completed') {
-      const pipe = (session.config as Record<string, unknown>)?.pipeline || '';
+      const pipe = (session.config as unknown as Record<string, unknown>)?.pipeline || '';
       const pipeParam = pipe ? `&pipeline=${pipe}` : '';
       router.push(`/analysis/visualization?session_id=${session.id}${pipeParam}`);
     } else {

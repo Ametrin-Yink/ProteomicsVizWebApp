@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
+import { parseCSVLine } from '@/lib/csv';
 import type {
   UploadedFileInfo,
   UploadProgress,
@@ -84,6 +85,7 @@ interface AnalysisState {
   // TMT channel mapping actions
   updateChannelMapping: (channel: string, groups: Record<string, string | number>) => void;
   importChannelMapping: (csvData: string) => void;
+  importMetadataColumns: (data: Record<string, Record<string, string>>) => void;
   reset: () => void;
 }
 
@@ -326,13 +328,13 @@ export const useAnalysisStore = create<AnalysisState>()(
       set((state) => {
         const lines = csvData.split('\n').filter((l) => l.trim());
         if (lines.length < 2) return;
-        const headers = lines[0].split(',').map((h) => h.trim());
+        const headers = parseCSVLine(lines[0]);
         const channelIdx = headers.indexOf('Channel');
         if (channelIdx === -1) return;
         const groupHeaders = headers.filter((h) => h !== 'Channel');
         const mapping: Record<string, Record<string, string | number>> = {};
         for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map((v) => v.trim());
+          const values = parseCSVLine(lines[i]);
           const channel = values[channelIdx];
           if (!channel) continue;
           const entry: Record<string, string | number> = {};
@@ -347,6 +349,25 @@ export const useAnalysisStore = create<AnalysisState>()(
         }
         state.tmtChannelMapping = mapping;
         state.config.tmt_channel_mapping = { ...mapping };
+      });
+    },
+
+    importMetadataColumns: (data) => {
+      set((state) => {
+        if (!state.config.metadata_columns) {
+          state.config.metadata_columns = {};
+        }
+        Object.assign(state.config.metadata_columns, data);
+        // Sync to UploadedFileInfo for core fields
+        Object.entries(data).forEach(([fn, entry]) => {
+          const fi = state.uploadedFiles.find((f) => f.filename === fn);
+          if (fi) {
+            if (entry.experiment !== undefined) fi.experiment = entry.experiment;
+            if (entry.replicate !== undefined) {
+              fi.replicate = parseInt(entry.replicate, 10) || 0;
+            }
+          }
+        });
       });
     },
 

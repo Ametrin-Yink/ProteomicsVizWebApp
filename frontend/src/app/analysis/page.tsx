@@ -96,7 +96,7 @@ function AnalysisContent() {
               return;
             }
             if (session.status === 'completed') {
-              const pipe = (session.config as Record<string, unknown>)?.pipeline || '';
+              const pipe = (session.config as unknown as Record<string, unknown>)?.pipeline || '';
               const pipeParam = pipe ? `&pipeline=${pipe}` : '';
               router.replace(`/analysis/visualization?session_id=${session.id}${pipeParam}`);
               return;
