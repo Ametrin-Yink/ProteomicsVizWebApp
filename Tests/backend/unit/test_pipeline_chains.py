@@ -106,7 +106,8 @@ def _make_preseeded_ctx(tmp_path: Path) -> StepContext:
     """Create a StepContext with pre-built DataFrame (bypasses input step 1)."""
     ctx = _make_ctx(PipelineTool.MSSTATS, [], tmp_path)
     # Build a realistic DataFrame matching Step 1+2 output contract
-    rng = pd.np.random.default_rng(42) if hasattr(pd, 'np') else __import__('numpy').random.default_rng(42)
+    import numpy as np
+    rng = np.random.default_rng(42)
     n = 50
     conditions_list = ["DMSO", "DrugA"]
     rows = []

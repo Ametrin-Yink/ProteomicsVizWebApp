@@ -12,7 +12,7 @@ import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 
 
-type SortField = 'filename' | 'experiment' | 'condition' | 'replicate';
+type SortField = 'filename' | 'experiment' | 'replicate';
 type SortDirection = 'asc' | 'desc';
 
 interface SortState {
@@ -151,15 +151,18 @@ export const ExperimentTable: React.FC = () => {
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Derive condition column names from max conditions across all files
-  const maxConditions = useMemo(
-    () => uploadedFiles.reduce((max, f) => Math.max(max, f.conditions.length), 0),
-    [uploadedFiles],
-  );
-  const conditionCols = useMemo(
-    () => Array.from({ length: maxConditions }, (_, i) => `condition_${i + 1}`),
-    [maxConditions],
-  );
+  // Derive data column names from metadata_columns (exclude core fields)
+  const dataColumns = useMemo(() => {
+    if (!config.metadata_columns) return [];
+    const coreCols = new Set(['experiment', 'replicate', 'batch']);
+    const cols = new Set<string>();
+    Object.values(config.metadata_columns).forEach((row) => {
+      Object.keys(row).forEach((k) => {
+        if (!coreCols.has(k)) cols.add(k);
+      });
+    });
+    return Array.from(cols);
+  }, [config.metadata_columns]);
 
   // Auto-populate metadata_columns for any uploaded files missing entries
   React.useEffect(() => {
@@ -168,34 +171,18 @@ export const ExperimentTable: React.FC = () => {
     let hasChanges = false;
     uploadedFiles.forEach((f) => {
       if (!current[f.filename]) {
-        const entry: Record<string, string> = {
+        current[f.filename] = {
           experiment: f.experiment,
           replicate: String(f.replicate),
+          batch: f.batch,
         };
-        f.conditions.forEach((cond, i) => {
-          entry[`condition_${i + 1}`] = cond;
-        });
-        current[f.filename] = entry;
         hasChanges = true;
       }
     });
     if (hasChanges) {
       setConfig({ metadata_columns: current });
     }
-  }, [uploadedFiles, conditionCols]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Derive custom column names (exclude core columns: experiment, condition_N, replicate)
-  const customColumns = useMemo(() => {
-    if (!config.metadata_columns) return [];
-    const conditionColSet = new Set(conditionCols);
-    const cols = new Set<string>();
-    Object.values(config.metadata_columns).forEach((row) => {
-      Object.keys(row).forEach((k) => {
-        if (k !== 'experiment' && !conditionColSet.has(k) && k !== 'replicate') cols.add(k);
-      });
-    });
-    return Array.from(cols);
-  }, [config.metadata_columns, conditionCols]);
+  }, [uploadedFiles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Derived values from raw state (useMemo to avoid infinite re-render loop in React 19)
   const selected = useMemo(
@@ -206,22 +193,32 @@ export const ExperimentTable: React.FC = () => {
     () => Array.from(new Set(selected.map((f) => f.experiment))),
     [selected]
   );
-  const conditions = useMemo(
-    () => Array.from(new Set(selected.flatMap((f) => f.conditions))).filter(Boolean),
-    [selected]
-  );
+  const conditions = useMemo(() => {
+    if (!config.metadata_columns) return [];
+    const values = new Set<string>();
+    selected.forEach((file) => {
+      const meta = config.metadata_columns![file.filename];
+      if (meta) {
+        dataColumns.forEach((col) => {
+          if (meta[col]) values.add(meta[col]);
+        });
+      }
+    });
+    return Array.from(values);
+  }, [selected, config.metadata_columns, dataColumns]);
 
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
     const filtered = uploadedFiles.filter((file) => {
-      const conditionsText = file.conditions.join(' ');
+      const meta = config.metadata_columns?.[file.filename] || {};
+      const metaText = Object.values(meta).join(' ');
       const matchesText = filterText === '' ||
         file.filename.toLowerCase().includes(filterText.toLowerCase()) ||
         file.experiment.toLowerCase().includes(filterText.toLowerCase()) ||
-        conditionsText.toLowerCase().includes(filterText.toLowerCase());
+        metaText.toLowerCase().includes(filterText.toLowerCase());
 
       const matchesExperiment = filterExperiment === 'all' || file.experiment === filterExperiment;
-      const matchesCondition = filterCondition === 'all' || file.conditions.includes(filterCondition);
+      const matchesCondition = filterCondition === 'all' || Object.values(meta).includes(filterCondition);
 
       return matchesText && matchesExperiment && matchesCondition;
     });
@@ -236,9 +233,6 @@ export const ExperimentTable: React.FC = () => {
         case 'experiment':
           comparison = a.experiment.localeCompare(b.experiment);
           break;
-        case 'condition':
-          comparison = a.conditions.join('_').localeCompare(b.conditions.join('_'));
-          break;
         case 'replicate':
           comparison = a.replicate - b.replicate;
           break;
@@ -248,18 +242,18 @@ export const ExperimentTable: React.FC = () => {
     });
 
     return filtered;
-  }, [uploadedFiles, filterText, filterExperiment, filterCondition, sort]);
+  }, [uploadedFiles, filterText, filterExperiment, filterCondition, sort, config.metadata_columns]);
 
   const totalPages = Math.ceil(filteredAndSortedFiles.length / pageSize);
 
   // Reset page when filters change
   React.useEffect(() => { setPage(1); }, [filterText, filterExperiment, filterCondition]);
 
-  // --- Custom column management ---
+  // --- Data column management ---
   const addColumn = () => {
     const name = newColName.trim();
     if (!name) return;
-    if (customColumns.includes(name)) {
+    if (dataColumns.includes(name)) {
       addToast('warning', `Column "${name}" already exists`);
       return;
     }
@@ -273,7 +267,7 @@ export const ExperimentTable: React.FC = () => {
 
   const renameColumn = (oldName: string, newName: string) => {
     if (!newName || newName === oldName) return;
-    if (customColumns.filter(c => c !== oldName).includes(newName)) {
+    if (dataColumns.filter(c => c !== oldName).includes(newName)) {
       addToast('warning', `Column "${newName}" already exists`);
       return;
     }
@@ -309,7 +303,7 @@ export const ExperimentTable: React.FC = () => {
   // --- CSV Import/Export ---
   const handleExportCSV = () => {
     if (uploadedFiles.length === 0) return;
-    const allCols = ['experiment', ...conditionCols, ...customColumns, 'replicate'];
+    const allCols = ['experiment', ...dataColumns, 'replicate', 'batch'];
     const header = ['filename', ...allCols].join(',');
     const rows = uploadedFiles.map((file) => {
       const meta = config.metadata_columns?.[file.filename] || {};
@@ -350,6 +344,7 @@ export const ExperimentTable: React.FC = () => {
         const uploadedFilenames = new Set(uploadedFiles.map((f) => f.filename));
 
         const expIdx = headers.indexOf('experiment');
+        const replicateIdx = headers.indexOf('replicate');
 
         // Collect imported rows
         const imported: Record<string, Record<string, string>> = {};
@@ -365,26 +360,16 @@ export const ExperimentTable: React.FC = () => {
           imported[fn] = entry;
         }
 
-        // Atomically update metadata_columns and ParsedFilename
+        // Atomically update metadata_columns and UploadedFileInfo
         useAnalysisStore.setState((state) => {
           if (!state.config.metadata_columns) state.config.metadata_columns = {};
           Object.assign(state.config.metadata_columns, imported);
-          // Sync ParsedFilename so the table shows imported values
+          // Sync UploadedFileInfo so the table shows imported values
           Object.entries(imported).forEach(([fn, entry]) => {
-            const pf = state.uploadedFiles.find((f) => f.filename === fn);
-            if (pf) {
-              if (expIdx >= 0 && entry.experiment) pf.experiment = entry.experiment;
-              // Reconstruct conditions array from condition_N columns
-              const importedConditions: string[] = [];
-              for (let ci = 1; ; ci++) {
-                const col = `condition_${ci}`;
-                if (col in entry) {
-                  importedConditions.push(entry[col]);
-                } else {
-                  break;
-                }
-              }
-              if (importedConditions.length > 0) pf.conditions = importedConditions;
+            const fi = state.uploadedFiles.find((f) => f.filename === fn);
+            if (fi) {
+              if (expIdx >= 0 && entry.experiment) fi.experiment = entry.experiment;
+              if (replicateIdx >= 0 && entry.replicate) fi.replicate = parseInt(entry.replicate, 10) || 0;
             }
           });
         });
@@ -549,24 +534,7 @@ export const ExperimentTable: React.FC = () => {
               </th>
               <TableHeader field="filename" onSort={handleSort} sort={sort}>Filename</TableHeader>
               <TableHeader field="experiment" onSort={handleSort} sort={sort}>Experiment</TableHeader>
-              {conditionCols.map((col) => (
-                <th
-                  key={col}
-                  onClick={() => handleSort('condition')}
-                  className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-surface transition-colors select-none"
-                >
-                  <div className="flex items-center gap-1">
-                    <EditableHeader
-                      colName={col}
-                      onRename={renameColumn}
-                      onRemove={() => {}}
-                      hideRemove
-                    />
-                    <SortIcon field="condition" sort={sort} />
-                  </div>
-                </th>
-              ))}
-              {customColumns.map((col) => (
+              {dataColumns.map((col) => (
                 <th key={col} className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
                   <EditableHeader
                     colName={col}
@@ -576,6 +544,7 @@ export const ExperimentTable: React.FC = () => {
                 </th>
               ))}
               <TableHeader field="replicate" className="text-right" onSort={handleSort} sort={sort}>Replicate</TableHeader>
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Batch</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
                 Actions
               </th>
@@ -620,25 +589,7 @@ export const ExperimentTable: React.FC = () => {
                       data-testid="experiment-name"
                     />
                   </td>
-                  {conditionCols.map((col, ci) => (
-                    <td key={col} className="px-4 py-3">
-                      <EditableBadge
-                        value={file.conditions[ci] || ''}
-                        isEditing={editingCell === `${file.filename}-${col}`}
-                        onEdit={() => setEditingCell(`${file.filename}-${col}`)}
-                        onSave={(val) => {
-                          const newConditions = [...file.conditions];
-                          newConditions[ci] = val;
-                          updateFileMetadata(file.filename, { conditions: newConditions });
-                          setEditingCell(null);
-                        }}
-                        onCancel={() => setEditingCell(null)}
-                        colorClass="bg-success/10 text-success"
-                        data-testid={`condition-${col}-${file.conditions[ci] || 'empty'}`}
-                      />
-                    </td>
-                  ))}
-                  {customColumns.map((col) => (
+                  {dataColumns.map((col) => (
                     <td key={col} className="px-4 py-3">
                       <input
                         type="text"
@@ -651,6 +602,11 @@ export const ExperimentTable: React.FC = () => {
                   <td className="px-4 py-3 text-right">
                     <span className="text-sm text-text font-mono">
                       #{file.replicate}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-sm text-text font-mono">
+                      {config.metadata_columns?.[file.filename]?.batch || ''}
                     </span>
                   </td>
                   <td className="px-4 py-3">

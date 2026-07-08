@@ -37,8 +37,12 @@ export interface SessionConfig {
   organism: string;
   remove_razor: boolean;
   strict_filtering: boolean;
-  // Pipeline selection
+  // Pipeline derivation (deprecated — use file_type)
   pipeline?: 'msqrob2' | 'msstats' | 'ptm';
+  // Analysis type
+  file_type?: 'tmt' | 'dia';
+  // TMT channel-to-condition mapping
+  tmt_channel_mapping?: Record<string, Record<string, string | number>>;
   // Multi-condition
   comparisons?: Array<{
     group1: Record<string, string>;
@@ -92,14 +96,25 @@ export interface SessionFiles {
 // File Upload Types
 // ============================================================================
 
-export interface ParsedFilename {
+export interface UploadedFileInfo {
   filename: string;
-  experiment: string;
-  conditions: string[];
-  replicate: number;
   size: number;
   columns?: string[];
+  experiment: string;
+  replicate: number;
+  batch: string;
+  file_type: 'tmt' | 'dia' | null;
+  tmt_channels?: string[];
 }
+
+export interface FileDetectionResult {
+  file_type: 'tmt' | 'dia';
+  columns: string[];
+  tmt_channels?: string[];
+  warnings: string[];
+}
+
+export type AnalysisType = 'tmt' | 'dia' | 'ptm';
 
 export interface UploadedFile {
   filename: string;
@@ -239,7 +254,7 @@ export interface AnalysisConfig {
 export interface ExperimentValidation {
   isValid: boolean;
   warnings: ValidationWarning[];
-  selectedFiles: ParsedFilename[];
+  selectedFiles: UploadedFileInfo[];
   experiments: string[];
   conditions: string[];
   replicatesByCondition: Record<string, number>;

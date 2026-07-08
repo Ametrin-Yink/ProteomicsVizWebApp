@@ -319,14 +319,6 @@ def dia_fixture_path() -> Path:
     return Path(__file__).parent / "fixtures" / "dia_sample_1000rows.txt"
 
 
-@pytest.fixture(autouse=True)
-def reset_pipeline_registry() -> None:
-    """Reset pipeline registry before each test to prevent cross-test leakage."""
-    from app.services.pipeline_registry import reset_registry
-
-    reset_registry()
-
-
 # Pytest hooks for custom reporting
 
 

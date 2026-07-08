@@ -6,27 +6,41 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import type {
-  ParsedFilename,
+  UploadedFileInfo,
   UploadProgress,
   SessionConfig,
   ValidationWarning,
   ExperimentValidation,
   Organism,
+  AnalysisType,
 } from '@/types';
 
 // Enable MapSet plugin for Immer (required for using Set in state)
 enableMapSet();
 
+/** Derive pipeline label from analysis type */
+export function getPipelineFromType(analysisType: AnalysisType | null): 'msstats' | 'msqrob2' | 'ptm' | null {
+  if (!analysisType) return null;
+  switch (analysisType) {
+    case 'tmt': return 'msstats';
+    case 'dia': return 'msqrob2';
+    case 'ptm': return 'ptm';
+  }
+}
+
 interface AnalysisState {
   // File upload state
-  uploadedFiles: ParsedFilename[];
+  uploadedFiles: UploadedFileInfo[];
   uploadProgress: UploadProgress[];
 
   // Selection state
   selectedFiles: Set<string>;
 
-  // Template selection
-  selectedTemplate: 'protein' | 'ptm';
+  // Analysis type (replaces selectedTemplate + selectedPipeline)
+  analysisType: AnalysisType | null;
+
+  // TMT channel-to-condition mapping
+  tmtChannelMapping: Record<string, Record<string, string | number>>;
 
   // PTM-specific state
   ptmLabelingType: 'LF' | 'TMT';
@@ -34,9 +48,6 @@ interface AnalysisState {
   ptmSelectedMods: string[];
   ptmFastaFile: string | null;
   ptmGlobalProteomeFiles: number;
-
-  // Pipeline selection
-  selectedPipeline: 'msqrob2' | 'msstats' | 'ptm' | null;
 
   // Configuration state
   config: SessionConfig;
@@ -52,15 +63,14 @@ interface AnalysisState {
   uploadError: string | null;
 
   // Actions
-  addUploadedFile: (file: ParsedFilename) => void;
+  addUploadedFile: (file: UploadedFileInfo) => void;
   removeUploadedFile: (filename: string) => void;
   setUploadProgress: (filename: string, progress: number, status: UploadProgress['status']) => void;
   toggleFileSelection: (filename: string) => void;
   selectAllFiles: () => void;
   deselectAllFiles: () => void;
-  updateFileMetadata: (filename: string, updates: Partial<Pick<ParsedFilename, 'experiment' | 'conditions'>>) => void;
-  setTemplate: (template: 'protein' | 'ptm') => void;
-  setPipeline: (pipeline: 'msqrob2' | 'msstats' | 'ptm') => void;
+  updateFileMetadata: (filename: string, updates: Partial<Pick<UploadedFileInfo, 'experiment' | 'batch' | 'file_type'>>) => void;
+  setAnalysisType: (analysisType: AnalysisType) => void;
   setConfig: (config: Partial<SessionConfig>) => void;
   setAvailableOrganisms: (organisms: Organism[]) => void;
   setIsUploading: (isUploading: boolean) => void;
@@ -71,6 +81,9 @@ interface AnalysisState {
   togglePtmMod: (mod: string) => void;
   setPtmFastaFile: (filename: string | null) => void;
   setPtmGlobalProteomeFiles: (count: number) => void;
+  // TMT channel mapping actions
+  updateChannelMapping: (channel: string, groups: Record<string, string | number>) => void;
+  importChannelMapping: (csvData: string) => void;
   reset: () => void;
 }
 
@@ -79,6 +92,8 @@ const defaultConfig: SessionConfig = {
   control: '',
   organism: '',
   pipeline: undefined,
+  file_type: undefined,
+  tmt_channel_mapping: undefined,
   remove_razor: false,
   strict_filtering: false,
   pvalue_threshold: 0.05,
@@ -112,13 +127,13 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadedFiles: [],
     uploadProgress: [],
     selectedFiles: new Set<string>(),
-    selectedTemplate: 'protein',
+    analysisType: null,
+    tmtChannelMapping: {},
     ptmLabelingType: 'LF',
     ptmDetectedMods: [],
     ptmSelectedMods: [],
     ptmFastaFile: null,
     ptmGlobalProteomeFiles: 0,
-    selectedPipeline: null,
     config: { ...defaultConfig },
     availableOrganisms: [],
     isUploading: false,
@@ -126,40 +141,37 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadError: null,
 
     // Actions
-    setTemplate: (template) => {
+    setAnalysisType: (analysisType) => {
       set((state) => {
-        state.selectedTemplate = template;
-        if (template === 'ptm') {
-          state.selectedPipeline = null;
-          state.config.pipeline = undefined;
+        state.analysisType = analysisType;
+        // Derive pipeline from analysis type
+        if (analysisType === 'tmt') {
+          state.config.pipeline = 'msstats';
+          state.config.file_type = 'tmt';
+        } else if (analysisType === 'dia') {
+          state.config.pipeline = 'msqrob2';
+          state.config.file_type = 'dia';
+        } else if (analysisType === 'ptm') {
+          state.config.pipeline = 'ptm';
+          state.config.file_type = undefined;
         }
-      });
-    },
-
-    setPipeline: (pipeline) => {
-      set((state) => {
-        state.selectedPipeline = pipeline;
-        state.config.pipeline = pipeline;
       });
     },
 
     addUploadedFile: (file) => {
       set((state) => {
-        const exists = state.uploadedFiles.some((f: ParsedFilename) => f.filename === file.filename);
+        const exists = state.uploadedFiles.some((f: UploadedFileInfo) => f.filename === file.filename);
         if (!exists) {
           state.uploadedFiles.push(file);
           state.selectedFiles.add(file.filename);
-          // Initialize metadata_columns for this file so addColumn works immediately.
+          // Initialize metadata_columns for this file
           if (!state.config.metadata_columns) state.config.metadata_columns = {};
           if (!state.config.metadata_columns[file.filename]) {
             const entry: Record<string, string> = {
               experiment: file.experiment,
               replicate: String(file.replicate),
+              batch: file.batch,
             };
-            file.conditions.forEach((cond, i) => {
-              entry[`condition_${i + 1}`] = cond;
-            });
-            entry["batch"] = file.experiment;
             state.config.metadata_columns[file.filename] = entry;
           }
         }
@@ -168,7 +180,7 @@ export const useAnalysisStore = create<AnalysisState>()(
 
     removeUploadedFile: (filename) => {
       set((state) => {
-        state.uploadedFiles = state.uploadedFiles.filter((f: ParsedFilename) => f.filename !== filename);
+        state.uploadedFiles = state.uploadedFiles.filter((f: UploadedFileInfo) => f.filename !== filename);
         state.selectedFiles.delete(filename);
         state.uploadProgress = state.uploadProgress.filter((p: UploadProgress) => p.filename !== filename);
       });
@@ -188,11 +200,12 @@ export const useAnalysisStore = create<AnalysisState>()(
 
     updateFileMetadata: (filename, updates) => {
       set((state) => {
-        const file = state.uploadedFiles.find((f: ParsedFilename) => f.filename === filename);
+        const file = state.uploadedFiles.find((f: UploadedFileInfo) => f.filename === filename);
         if (file) {
           if (updates.experiment !== undefined) file.experiment = updates.experiment;
-          if (updates.conditions !== undefined) file.conditions = updates.conditions;
-          // Sync to metadata_columns so the unified panel and downstream consumers stay consistent
+          if (updates.batch !== undefined) file.batch = updates.batch;
+          if (updates.file_type !== undefined) file.file_type = updates.file_type;
+          // Sync to metadata_columns
           const mc = state.config.metadata_columns;
           if (!mc) {
             state.config.metadata_columns = {};
@@ -200,16 +213,10 @@ export const useAnalysisStore = create<AnalysisState>()(
           const meta = state.config.metadata_columns!;
           if (!meta[filename]) meta[filename] = {};
           if (updates.experiment !== undefined) {
-            const oldExperiment = meta[filename].experiment;
             meta[filename].experiment = updates.experiment;
-            if (meta[filename].batch === oldExperiment) {
-              meta[filename].batch = updates.experiment;
-            }
           }
-          if (updates.conditions !== undefined) {
-            updates.conditions.forEach((cond, i) => {
-              meta[filename][`condition_${i + 1}`] = cond;
-            });
+          if (updates.batch !== undefined) {
+            meta[filename].batch = updates.batch;
           }
         }
       });
@@ -227,7 +234,7 @@ export const useAnalysisStore = create<AnalysisState>()(
 
     selectAllFiles: () => {
       set((state) => {
-        state.uploadedFiles.forEach((file: ParsedFilename) => {
+        state.uploadedFiles.forEach((file: UploadedFileInfo) => {
           state.selectedFiles.add(file.filename);
         });
       });
@@ -307,18 +314,54 @@ export const useAnalysisStore = create<AnalysisState>()(
       });
     },
 
+    updateChannelMapping: (channel, groups) => {
+      set((state) => {
+        state.tmtChannelMapping[channel] = { ...(state.tmtChannelMapping[channel] || {}), ...groups };
+        // Also sync to config
+        state.config.tmt_channel_mapping = { ...state.tmtChannelMapping };
+      });
+    },
+
+    importChannelMapping: (csvData) => {
+      set((state) => {
+        const lines = csvData.split('\n').filter((l) => l.trim());
+        if (lines.length < 2) return;
+        const headers = lines[0].split(',').map((h) => h.trim());
+        const channelIdx = headers.indexOf('Channel');
+        if (channelIdx === -1) return;
+        const groupHeaders = headers.filter((h) => h !== 'Channel');
+        const mapping: Record<string, Record<string, string | number>> = {};
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map((v) => v.trim());
+          const channel = values[channelIdx];
+          if (!channel) continue;
+          const entry: Record<string, string | number> = {};
+          groupHeaders.forEach((h) => {
+            const idx = headers.indexOf(h);
+            if (idx >= 0 && idx < values.length) {
+              const val = values[idx];
+              entry[h] = h === 'Replicate' ? parseInt(val, 10) || 0 : val;
+            }
+          });
+          mapping[channel] = entry;
+        }
+        state.tmtChannelMapping = mapping;
+        state.config.tmt_channel_mapping = { ...mapping };
+      });
+    },
+
     reset: () => {
       set((state) => {
         state.uploadedFiles = [];
         state.uploadProgress = [];
         state.selectedFiles.clear();
-        state.selectedTemplate = 'protein';
+        state.analysisType = null;
+        state.tmtChannelMapping = {};
         state.ptmLabelingType = 'LF';
         state.ptmDetectedMods = [];
         state.ptmSelectedMods = [];
         state.ptmFastaFile = null;
         state.ptmGlobalProteomeFiles = 0;
-        state.selectedPipeline = null;
         state.config = { ...defaultConfig };
         state.isUploading = false;
         state.uploadError = null;
@@ -330,7 +373,7 @@ export const useAnalysisStore = create<AnalysisState>()(
 /**
  * Validation selectors
  */
-export const getSelectedFiles = (state: AnalysisState): ParsedFilename[] => {
+export const getSelectedFiles = (state: AnalysisState): UploadedFileInfo[] => {
   return state.uploadedFiles.filter((file) => state.selectedFiles.has(file.filename));
 };
 
@@ -340,15 +383,17 @@ export const getExperiments = (state: AnalysisState): string[] => {
 };
 
 function getConditionColumnNames(state: AnalysisState): string[] {
-  const maxConditions = state.uploadedFiles.reduce(
-    (max, f) => Math.max(max, f.conditions.length),
-    0,
-  );
-  const cols: string[] = [];
-  for (let i = 1; i <= maxConditions; i++) {
-    cols.push(`condition_${i}`);
-  }
-  return cols;
+  // Derive condition columns from metadata_columns (exclude core fields)
+  if (!state.config.metadata_columns) return [];
+  const cols = new Set<string>();
+  Object.values(state.config.metadata_columns).forEach((row) => {
+    Object.keys(row).forEach((k) => {
+      if (k !== 'experiment' && k !== 'replicate' && k !== 'batch') {
+        cols.add(k);
+      }
+    });
+  });
+  return Array.from(cols);
 }
 
 export const getConditions = (state: AnalysisState): string[] => {

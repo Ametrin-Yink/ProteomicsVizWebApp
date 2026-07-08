@@ -164,15 +164,6 @@ protein_psm_counts <- table(peptide_proteins)
 cat("PSM counts calculated for", length(protein_psm_counts), "proteins\n")
 flush.console()
 
-# Handle overlapping protein groups (if remove_razor)
-if (isTRUE(config$remove_razor)) {
-    cat("Removing overlapping protein groups...\n")
-    protein_filter <- rowData(pe[["peptide"]])$Proteins %in%
-        smallestUniqueGroups(rowData(pe[["peptide"]])$Proteins)
-    pe <- pe[protein_filter, , ]
-    cat("  After razor filter:", nrow(pe[["peptide"]]), "peptides\n")
-}
-
 # Calculate nNonZero per peptide
 rowData(pe[["peptide"]])$nNonZero <- rowSums(assay(pe[["peptide"]]) > 0, na.rm = TRUE)
 
