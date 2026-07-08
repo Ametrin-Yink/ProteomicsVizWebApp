@@ -315,7 +315,12 @@ function UploadContent() {
     setIsSaving(true);
     try {
       await sessionsApi.updateConfig(sessionId, config);
-      router.replace(`/new/comparisons?session=${sessionId}`);
+      // PTM skips metadata step, TMT/DIA goes to metadata
+      if (analysisType === 'ptm') {
+        router.replace(`/new/comparisons?session=${sessionId}`);
+      } else {
+        router.replace(`/new/metadata?session=${sessionId}`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save configuration';
       addToast('error', `Failed to save: ${message}`);
@@ -372,7 +377,7 @@ function UploadContent() {
             </div>
           </section>
 
-          {state.uploadedFiles.length > 0 && (
+          {uploadedFiles.length > 0 && (
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <Database className="w-5 h-5 text-primary" />
@@ -389,7 +394,7 @@ function UploadContent() {
             </section>
           )}
 
-          {state.uploadedFiles.length > 0 && (
+          {uploadedFiles.length > 0 && (
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-primary" />
@@ -783,7 +788,7 @@ function UploadContent() {
           )}
 
           {/* ExperimentTable for PTM enrichment files */}
-          {state.uploadedFiles.length > 0 && (
+          {uploadedFiles.length > 0 && (
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <Database className="w-5 h-5 text-primary" />
@@ -848,12 +853,12 @@ function UploadContent() {
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           data-testid="upload-back-btn"
-          onClick={() => router.push(`/new/pipeline?session=${sessionId}`)}
+          onClick={() => router.push(`/new/type?session=${sessionId}`)}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary
             hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Pipeline
+          Back to Type
         </button>
 
         <button

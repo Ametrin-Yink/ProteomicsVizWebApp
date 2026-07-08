@@ -13,7 +13,7 @@ import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
 import ConfigPanel from '@/components/analysis/ConfigPanel';
 import { SessionManager } from '@/components/session/SessionManager';
-import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
+import { useAnalysisStore, canStartAnalysis, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, processingApi, mapBackendFiles } from '@/lib/api-client';
 
@@ -193,7 +193,8 @@ function AnalysisContent() {
       }
 
       // Navigate to processing page - WebSocket will connect and receive updates
-      router.push(`/analysis/processing?session_id=${sessionId}&pipeline=${state.selectedPipeline || 'msqrob2'}`);
+      const pipeline = getPipelineFromType(state.analysisType) || 'msqrob2';
+      router.push(`/analysis/processing?session_id=${sessionId}&pipeline=${pipeline}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';
       addToast('error', `Failed to start analysis: ${message}`);

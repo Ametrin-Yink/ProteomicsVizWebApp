@@ -397,6 +397,19 @@ function getConditionColumnNames(state: AnalysisState): string[] {
 }
 
 export const getConditions = (state: AnalysisState): string[] => {
+  // TMT: derive conditions from tmt_channel_mapping
+  if (state.analysisType === 'tmt') {
+    const mapping = state.config.tmt_channel_mapping || {};
+    const condCols = getTmtConditionColumns(state);
+    const conditions = new Set<string>();
+    Object.values(mapping).forEach((entry) => {
+      const combined = condCols.map((col) => String(entry[col] || '')).join('+');
+      if (combined) conditions.add(combined);
+    });
+    return Array.from(conditions);
+  }
+
+  // DIA: derive conditions from metadata_columns
   const selected = getSelectedFiles(state);
   const metadataColumns = state.config.metadata_columns || {};
   const condCols = getConditionColumnNames(state);
@@ -406,6 +419,18 @@ export const getConditions = (state: AnalysisState): string[] => {
   });
   return Array.from(new Set(combined));
 };
+
+/** Get condition column names from TMT channel mapping */
+function getTmtConditionColumns(state: AnalysisState): string[] {
+  const mapping = state.config.tmt_channel_mapping || {};
+  const cols = new Set<string>();
+  Object.values(mapping).forEach((entry) => {
+    Object.keys(entry).forEach((k) => {
+      if (k !== 'replicate') cols.add(k);
+    });
+  });
+  return Array.from(cols);
+}
 
 /**
  * Generate all pairwise comparisons from conditions.
@@ -436,6 +461,19 @@ export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ group1:
 };
 
 export const getReplicatesByCondition = (state: AnalysisState): Record<string, number> => {
+  // TMT: count replicates from tmt_channel_mapping
+  if (state.analysisType === 'tmt') {
+    const mapping = state.config.tmt_channel_mapping || {};
+    const condCols = getTmtConditionColumns(state);
+    const counts: Record<string, number> = {};
+    Object.values(mapping).forEach((entry) => {
+      const combined = condCols.map((col) => String(entry[col] || '')).join('+');
+      if (combined) counts[combined] = (counts[combined] || 0) + 1;
+    });
+    return counts;
+  }
+
+  // DIA: count replicates from metadata_columns
   const selected = getSelectedFiles(state);
   const metadataColumns = state.config.metadata_columns || {};
   const condCols = getConditionColumnNames(state);
@@ -468,28 +506,41 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
     });
   }
 
-  // Check config validation
-  if (state.config.treatment && state.config.control && state.config.treatment === state.config.control) {
-    warnings.push({
-      type: 'error',
-      message: 'Treatment and Control must be different.',
-      code: 'SAME_TREATMENT_CONTROL',
+  // Soft warning for <3 replicates per condition
+  if (conditions.length >= 2) {
+    Object.entries(replicatesByCondition).forEach(([condition, count]) => {
+      if (count < 3) {
+        warnings.push({
+          type: 'warning',
+          message: `"${condition}" has ${count} replicate(s). Minimum 3 recommended.`,
+          code: 'FEW_REPLICATES',
+        });
+      }
     });
   }
 
-  if (selected.length > 0 && state.config.treatment && !conditions.includes(state.config.treatment)) {
-    warnings.push({
-      type: 'error',
-      message: `Treatment condition '${state.config.treatment}' not found in selected files`,
-      code: 'INVALID_TREATMENT',
-    });
+  // TMT-specific: check all channels mapped
+  if (state.analysisType === 'tmt' && Object.keys(state.tmtChannelMapping).length > 0) {
+    // Count channels from uploaded TMT files
+    const tmtFiles = selected.filter((f) => f.file_type === 'tmt');
+    const totalChannels = tmtFiles.reduce((sum, f) => sum + (f.tmt_channels?.length || 0), 0);
+    const mappedChannels = Object.keys(state.tmtChannelMapping).length;
+
+    if (mappedChannels < totalChannels) {
+      warnings.push({
+        type: 'warning',
+        message: `${totalChannels - mappedChannels} TMT channel(s) not yet mapped. Complete mapping on the Metadata page.`,
+        code: 'UNMAPPED_CHANNELS',
+      });
+    }
   }
 
-  if (selected.length > 0 && state.config.control && !conditions.includes(state.config.control)) {
+  // DIA-specific: check min 2 files
+  if (state.analysisType === 'dia' && selected.length > 0 && selected.length < 2) {
     warnings.push({
       type: 'error',
-      message: `Control condition '${state.config.control}' not found in selected files`,
-      code: 'INVALID_CONTROL',
+      message: 'DIA analysis requires at least 2 files',
+      code: 'MIN_DIA_FILES',
     });
   }
 

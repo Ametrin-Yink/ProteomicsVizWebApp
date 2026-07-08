@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, GitCompare, CheckSquare, Square,
   AlertCircle, Loader2, Plus, X, GripVertical, Trash2,
-  ChevronDown, ChevronRight, ArrowLeftRight,
+  ChevronDown, ChevronRight, ArrowLeftRight, Wand2,
 } from 'lucide-react';
-import { useAnalysisStore } from '@/stores/analysis-store';
+import { useAnalysisStore, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
 import { cn, formatGroup } from '@/lib/utils';
@@ -17,9 +17,16 @@ function ComparisonsContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || '';
 
-  const state = useAnalysisStore();
-  const { config, setConfig, selectedPipeline } = state;
+  const config = useAnalysisStore((s) => s.config);
+  const setConfig = useAnalysisStore((s) => s.setConfig);
+  const analysisType = useAnalysisStore((s) => s.analysisType);
+  const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
+  const tmtChannelMapping = useAnalysisStore((s) => s.tmtChannelMapping);
+  const selectedPipeline = getPipelineFromType(analysisType);
   const { addToast } = useUIStore();
+
+  // --- Auto-generate state ---
+  const [selectedReference, setSelectedReference] = React.useState<string>('');
 
   // --- Drag-drop state ---
   const [group1Cards, setGroup1Cards] = React.useState<Array<{col: string; val: string; id: string}>>([]);
@@ -78,28 +85,130 @@ function ComparisonsContent() {
   // --- Redirect guard ---
   React.useEffect(() => {
     if (!sessionId) { router.replace('/'); }
-    else if (!selectedPipeline) { router.replace(`/new/pipeline?session=${sessionId}`); }
-    else if (state.uploadedFiles.length === 0) { router.replace(`/new/upload?session=${sessionId}`); }
-  }, [sessionId, selectedPipeline, state.uploadedFiles.length, router]);
+    else if (!analysisType) { router.replace(`/new/type?session=${sessionId}`); }
+    else if (uploadedFiles.length === 0) { router.replace(`/new/upload?session=${sessionId}`); }
+  }, [sessionId, analysisType, uploadedFiles.length, router]);
 
-  // --- Derive condition cards from metadata ---
+  // --- Derive condition cards from metadata or TMT mapping ---
   const conditionCards = React.useMemo(() => {
-    if (!config.metadata_columns) return [];
     const cards: Array<{ col: string; val: string; id: string }> = [];
     const seen = new Set<string>();
-    Object.values(config.metadata_columns).forEach((row) => {
-      Object.entries(row).forEach(([col, val]) => {
-        if (col === 'experiment' || col === 'replicate') return;
-        if (!val || !val.trim()) return;
-        const id = `${col}:${val.trim()}`;
-        if (!seen.has(id)) {
-          seen.add(id);
-          cards.push({ col, val: val.trim(), id });
-        }
+
+    if (analysisType === 'tmt') {
+      // FR4.1: Derive from tmt_channel_mapping
+      const mapping = config.tmt_channel_mapping || {};
+      Object.values(mapping).forEach((entry) => {
+        Object.entries(entry).forEach(([col, val]) => {
+          if (col === 'replicate') return;
+          const strVal = String(val ?? '').trim();
+          if (!strVal) return;
+          const id = `${col}:${strVal}`;
+          if (!seen.has(id)) {
+            seen.add(id);
+            cards.push({ col, val: strVal, id });
+          }
+        });
       });
-    });
+    } else {
+      // Derive from metadata_columns (existing logic)
+      Object.values(config.metadata_columns || {}).forEach((row) => {
+        Object.entries(row).forEach(([col, val]) => {
+          if (col === 'experiment' || col === 'replicate') return;
+          if (!val || !val.trim()) return;
+          const id = `${col}:${val.trim()}`;
+          if (!seen.has(id)) {
+            seen.add(id);
+            cards.push({ col, val: val.trim(), id });
+          }
+        });
+      });
+    }
+
     return cards.sort((a, b) => a.col.localeCompare(b.col) || a.val.localeCompare(b.val));
-  }, [config.metadata_columns]);
+  }, [analysisType, config.tmt_channel_mapping, config.metadata_columns]);
+
+  // --- Derive unique condition strings for auto-generate ---
+  const conditionStrings = React.useMemo(() => {
+    const uniqueConditions = new Set<string>();
+    if (analysisType === 'tmt') {
+      const mapping = config.tmt_channel_mapping || {};
+      const groupCols = new Set<string>();
+      Object.values(mapping).forEach((entry) => {
+        Object.keys(entry).forEach((k) => {
+          if (k !== 'replicate') groupCols.add(k);
+        });
+      });
+      Object.values(mapping).forEach((entry) => {
+        const combined = Array.from(groupCols)
+          .map((col) => String(entry[col] ?? '').trim())
+          .filter(Boolean)
+          .join('+');
+        if (combined) uniqueConditions.add(combined);
+      });
+    } else {
+      Object.values(config.metadata_columns || {}).forEach((row) => {
+        const vals = Object.entries(row)
+          .filter(([k]) => k !== 'experiment' && k !== 'replicate' && k !== 'batch')
+          .map(([, v]) => v?.trim())
+          .filter(Boolean);
+        if (vals.length > 0) uniqueConditions.add(vals.join('+'));
+      });
+    }
+    return Array.from(uniqueConditions).sort();
+  }, [analysisType, config.tmt_channel_mapping, config.metadata_columns]);
+
+  // --- Auto-generate comparisons ---
+  const handleAutoGenerate = () => {
+    if (!selectedReference) {
+      addToast('warning', 'Select a reference condition');
+      return;
+    }
+    if (conditionStrings.length < 2) {
+      addToast('warning', 'Need at least 2 conditions to generate comparisons');
+      return;
+    }
+
+    const generated: Array<{ group1: Record<string, string>; group2: Record<string, string> }> = [];
+    const refParts = selectedReference.split('+');
+
+    conditionStrings.forEach((cond) => {
+      if (cond === selectedReference) return;
+
+      // Build group objects from condition string
+      const condParts = cond.split('+');
+      const group1: Record<string, string> = {};
+      const group2: Record<string, string> = {};
+
+      if (analysisType === 'tmt') {
+        // For TMT, derive from mapping
+        const mapping = config.tmt_channel_mapping || {};
+        const groupCols = Object.keys(Object.values(mapping)[0] || {}).filter(k => k !== 'replicate');
+        groupCols.forEach((col, idx) => {
+          group1[col] = condParts[idx] || '';
+          group2[col] = refParts[idx] || '';
+        });
+      } else {
+        // For DIA, derive from metadata columns
+        const sampleEntry = Object.values(config.metadata_columns || {})[0] || {};
+        const groupCols = Object.keys(sampleEntry).filter(k => k !== 'experiment' && k !== 'replicate' && k !== 'batch');
+        groupCols.forEach((col, idx) => {
+          group1[col] = condParts[idx] || '';
+          group2[col] = refParts[idx] || '';
+        });
+      }
+
+      generated.push({ group1, group2 });
+    });
+
+    setComparisons((prev) => {
+      // Merge with existing, avoid duplicates
+      const existing = new Set(prev.map((c) => JSON.stringify(c)));
+      const newComps = generated.filter((c) => !existing.has(JSON.stringify(c)));
+      return [...prev, ...newComps];
+    });
+
+    addToast('success', `Generated ${generated.length} comparison(s)`);
+  };
 
   // --- Derive condition column names from cards ---
   const conditionColumns = React.useMemo(() => {
@@ -111,18 +220,26 @@ function ComparisonsContent() {
   // --- Compute sample counts for each group ---
   const groupSampleCounts = React.useMemo(() => {
     const countMatching = (cards: Array<{col: string; val: string; id: string}>) => {
-      if (cards.length === 0 || !config.metadata_columns) return 0;
+      if (cards.length === 0) return 0;
       let count = 0;
-      Object.values(config.metadata_columns).forEach((row) => {
-        if (cards.every((c) => row[c.col] === c.val)) count++;
-      });
+
+      if (analysisType === 'tmt') {
+        const mapping = config.tmt_channel_mapping || {};
+        Object.values(mapping).forEach((entry) => {
+          if (cards.every((c) => String(entry[c.col] ?? '') === c.val)) count++;
+        });
+      } else {
+        Object.values(config.metadata_columns || {}).forEach((row) => {
+          if (cards.every((c) => row[c.col] === c.val)) count++;
+        });
+      }
       return count;
     };
     return {
       group1: countMatching(group1Cards),
       group2: countMatching(group2Cards),
     };
-  }, [group1Cards, group2Cards, config.metadata_columns]);
+  }, [group1Cards, group2Cards, analysisType, config.tmt_channel_mapping, config.metadata_columns]);
 
   // All cards are always available in palette (cards can be reused across groups)
   // Group palette cards by column name
@@ -215,9 +332,7 @@ function ComparisonsContent() {
   };
 
   // --- Navigation ---
-  const handleBack = () => {
-    router.push(`/new/upload?session=${sessionId}`);
-  };
+  const backRoute = analysisType === 'ptm' ? '/new/upload' : '/new/metadata';
 
   const handleContinue = async () => {
     if (comparisons.length === 0) {
@@ -246,11 +361,52 @@ function ComparisonsContent() {
           <GitCompare className="w-4 h-4" />
           {selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2'} Pipeline
         </div>
-        <h1 className="font-bold text-text-primary">Comparisons &amp; Metadata</h1>
+        <h1 className="font-bold text-text-primary">Comparisons</h1>
         <p className="text-text-muted mt-1">
-          Drag condition cards into groups to build comparisons
+          Define which conditions to compare in the differential expression analysis
         </p>
       </div>
+
+      {/* ===== SECTION 1: Auto-Generate Comparisons ===== */}
+      {conditionStrings.length >= 2 && (
+        <section className="bg-background border border-border rounded-lg">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="font-semibold text-text-primary">Auto-Generate Comparisons</h2>
+            <p className="text-sm text-text-muted">
+              Select a reference condition to generate all pairwise comparisons
+            </p>
+          </div>
+          <div className="p-5">
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-text-primary mb-2">
+                  Reference Condition
+                </label>
+                <select
+                  value={selectedReference}
+                  onChange={(e) => setSelectedReference(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-background"
+                >
+                  <option value="">-- Select reference condition --</option>
+                  {conditionStrings.map((cond) => (
+                    <option key={cond} value={cond}>{cond}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={handleAutoGenerate}
+                disabled={!selectedReference}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Wand2 className="w-4 h-4" /> Generate
+              </button>
+            </div>
+            <p className="text-xs text-text-muted mt-2">
+              Creates one comparison per unique condition vs the selected reference. Generated comparisons appear in the list below.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* ===== SECTION 2: Comparison Builder ===== */}
       <section className="bg-background border border-border rounded-lg">
@@ -269,7 +425,7 @@ function ComparisonsContent() {
           >
             <p className="text-xs text-text-muted mb-2 font-medium">Condition Palette (drag to groups or drop here to return)</p>
             {Object.keys(paletteGroups).length === 0 ? (
-              <p className="text-xs text-text-muted italic">No condition cards available. Define metadata columns on the Upload page.</p>
+              <p className="text-xs text-text-muted italic">No condition cards available. Configure metadata first.</p>
             ) : (
               <div className="space-y-2">
                 {Object.entries(paletteGroups).map(([colName, cards]) => {
@@ -441,7 +597,7 @@ function ComparisonsContent() {
         </div>
       </section>
 
-      {/* ===== SECTION 3: Covariates (MSstats only) ===== */}
+      {/* ===== SECTION 3: Covariates (MSstats only - TMT) ===== */}
       {selectedPipeline === 'msstats' && conditionColumns.length > 0 && (
         <section className="bg-background border border-border rounded-lg">
           <div className="px-5 py-3 border-b border-border">
@@ -491,11 +647,11 @@ function ComparisonsContent() {
       {/* Navigation */}
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
-          onClick={handleBack}
+          onClick={() => router.push(`${backRoute}?session=${sessionId}`)}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primarybg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Upload
+          {analysisType === 'ptm' ? 'Back to Upload' : 'Back to Metadata'}
         </button>
         <button
           data-testid="comparisons-continue-btn"

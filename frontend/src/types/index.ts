@@ -116,15 +116,6 @@ export interface FileDetectionResult {
 
 export type AnalysisType = 'tmt' | 'dia' | 'ptm';
 
-export interface UploadedFile {
-  filename: string;
-  experiment: string;
-  conditions: string[];
-  replicate: number;
-  size: number;
-  columns: string[];
-}
-
 export interface UploadProgress {
   filename: string;
   progress: number;

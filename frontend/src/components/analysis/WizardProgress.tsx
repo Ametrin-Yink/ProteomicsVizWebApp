@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import type { AnalysisType } from '@/types';
 
 export interface WizardStep {
   /** 1-based step number */
@@ -15,8 +16,19 @@ export interface WizardStep {
   route: string;
 }
 
-const WIZARD_STEPS: WizardStep[] = [
-  { number: 1, id: 'pipeline', label: 'Pipeline', route: '/new/pipeline' },
+/** Protein analysis steps (TMT/DIA) — 6 steps including Metadata */
+const PROTEIN_STEPS: WizardStep[] = [
+  { number: 1, id: 'type', label: 'Type', route: '/new/type' },
+  { number: 2, id: 'upload', label: 'Upload', route: '/new/upload' },
+  { number: 3, id: 'metadata', label: 'Metadata', route: '/new/metadata' },
+  { number: 4, id: 'comparisons', label: 'Comparisons', route: '/new/comparisons' },
+  { number: 5, id: 'config', label: 'Configure', route: '/new/config' },
+  { number: 6, id: 'summary', label: 'Summary', route: '/new/summary' },
+];
+
+/** PTM analysis steps — 5 steps, skips Metadata */
+const PTM_STEPS: WizardStep[] = [
+  { number: 1, id: 'type', label: 'Type', route: '/new/type' },
   { number: 2, id: 'upload', label: 'Upload', route: '/new/upload' },
   { number: 3, id: 'comparisons', label: 'Comparisons', route: '/new/comparisons' },
   { number: 4, id: 'config', label: 'Configure', route: '/new/config' },
@@ -26,15 +38,20 @@ const WIZARD_STEPS: WizardStep[] = [
 interface WizardProgressProps {
   currentStep: number;
   sessionId: string;
+  analysisType?: AnalysisType | null;
   className?: string;
 }
 
-export function WizardProgress({ currentStep, sessionId, className }: WizardProgressProps) {
+export function WizardProgress({ currentStep, sessionId, analysisType, className }: WizardProgressProps) {
+  const steps = analysisType === 'ptm' ? PTM_STEPS : PROTEIN_STEPS;
+
   return (
     <div className={cn('flex items-center justify-center gap-2', className)}>
-      {WIZARD_STEPS.map((step, idx) => {
+      {steps.map((step, idx) => {
         const isActive = step.number === currentStep;
         const isCompleted = step.number < currentStep;
+
+        // Build the route with session ID (only for completed steps that are clickable)
         const stepRoute = `${step.route}?session=${sessionId}`;
 
         return (
@@ -73,7 +90,7 @@ export function WizardProgress({ currentStep, sessionId, className }: WizardProg
                 {step.label}
               </span>
             </div>
-            {idx < WIZARD_STEPS.length - 1 && (
+            {idx < steps.length - 1 && (
               <div
                 className={cn(
                   'flex-1 h-0.5 -mt-6 mx-0.5 rounded-full transition-colors',
