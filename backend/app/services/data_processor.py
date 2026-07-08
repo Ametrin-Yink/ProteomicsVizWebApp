@@ -1,7 +1,7 @@
 """Data processing pipeline - Steps 1-5.
 
 This module implements the initial data processing steps:
-1. Combine Replicates
+1. Combine Replicates (TMT and DIA variants)
 2. Generate Unique PSM
 3. Remove Razor Information (optional)
 4. Remove Low Quality
@@ -16,6 +16,26 @@ from pathlib import Path
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+def _detect_delimiter(file_path) -> str:
+    """Auto-detect tab vs comma delimiter from first line."""
+    with open(file_path, encoding="utf-8", errors="replace") as f:
+        first_line = f.readline()
+    if "\t" in first_line:
+        return "\t"
+    return ","
+
+
+def _detect_tmt_abundance_columns(columns: list[str]) -> list[str]:
+    """Detect columns matching 'Abundance <number>[NC]?' pattern."""
+    pattern = re.compile(r"^Abundance\s+\d+[NC]?$")
+    return [col for col in columns if pattern.match(col)]
+
+
+def _sanitize_filename(name: str) -> str:
+    """Strip non-alphanumeric characters and lowercase for comparison."""
+    return re.sub(r"[^a-zA-Z0-9]", "", name).lower()
 
 
 @dataclass
@@ -203,13 +223,13 @@ class DataProcessor:
         """
         logger.info("Step 2: Generating unique PSM identifiers")
 
-        # Create unique PSM identifier
+        # Create unique PSM identifier (fillna to handle pd.NA propagation in string dtype)
         df["Unique_PSM"] = (
-            df["Sequence"].astype(str)
+            df["Sequence"].fillna("").astype(str)
             + "|"
-            + df["Modifications"].astype(str)
+            + df["Modifications"].fillna("").astype(str)
             + "|"
-            + df["Charge"].astype(str)
+            + df["Charge"].fillna("").astype(str)
         )
 
         unique_count = df["Unique_PSM"].nunique()
@@ -507,3 +527,222 @@ class DataProcessor:
         logger.info(f"Saved processed data to {output_path}")
 
         return df
+
+    def step1_combine_replicates_tmt(
+        self,
+        file_paths: list[Path],
+        tmt_channel_mapping: dict[str, dict],
+    ) -> pd.DataFrame:
+        """Step 1 (TMT): Read TMT file(s), melt channels, map to conditions.
+
+        Args:
+            file_paths: List of TMT file paths (tab-delimited .txt)
+            tmt_channel_mapping: Channel -> {group: value, ..., replicate: N} mapping
+
+        Returns:
+            Melted and mapped DataFrame with Abundance, Condition, Sample_Origination, etc.
+        """
+        logger.info(f"Step 1 (TMT): Processing {len(file_paths)} file(s)")
+
+        all_dfs = []
+        for file_path in file_paths:
+            delimiter = _detect_delimiter(file_path)
+            df = pd.read_csv(
+                file_path, sep=delimiter, encoding="utf-8", low_memory=False,
+            )
+
+            abundance_cols = _detect_tmt_abundance_columns(list(df.columns))
+            if not abundance_cols:
+                raise ValueError(
+                    f"No TMT abundance columns found in {file_path.name}. "
+                    f"Pattern: 'Abundance <number>[NC]?'"
+                )
+
+            non_abundance_cols = [
+                col for col in df.columns if col not in abundance_cols
+            ]
+
+            # Melt wide format to long format
+            melted = pd.melt(
+                df,
+                id_vars=non_abundance_cols,
+                value_vars=abundance_cols,
+                var_name="Channel",
+                value_name="Abundance",
+            )
+
+            # Extract channel label
+            melted["Channel"] = melted["Channel"].str.extract(
+                r"Abundance\s+(.+)", expand=False
+            )
+
+            # Map channel to condition groups
+            mapping_df = pd.DataFrame.from_dict(
+                tmt_channel_mapping, orient="index"
+            ).reset_index()
+            mapping_df = mapping_df.rename(columns={"index": "Channel"})
+            mapping_df["Channel"] = mapping_df["Channel"].astype(str)
+            melted = melted.merge(mapping_df, on="Channel", how="left")
+
+            # Drop Channel column after mapping
+            melted = melted.drop(columns=["Channel"])
+
+            # Rename replicate (lowercase from mapping) to Replicate (uppercase) for consistency
+            if "replicate" in melted.columns:
+                melted = melted.rename(columns={"replicate": "Replicate"})
+
+            # Clean abundance
+            melted["Abundance"] = pd.to_numeric(melted["Abundance"], errors="coerce")
+            melted = melted.dropna(subset=["Abundance"])
+            melted = melted[melted["Abundance"] != 0]
+
+            # Build Condition from group columns
+            sample_mapping = next(iter(tmt_channel_mapping.values()))
+            group_cols = [k for k in sample_mapping if k != "replicate"]
+
+            melted["Condition"] = melted[group_cols[0]].astype(str)
+            for col in group_cols[1:]:
+                melted["Condition"] = (
+                    melted["Condition"] + "_" + melted[col].astype(str)
+                )
+
+            # Build Sample_Origination and ensure Replicate is int
+            melted["Replicate"] = pd.to_numeric(
+                melted["Replicate"], errors="coerce"
+            ).astype(int)
+            melted["Sample_Origination"] = (
+                melted["Condition"].astype(str)
+                + "_"
+                + melted["Replicate"].astype(str)
+            )
+
+            # Rename spaces to underscores in non-abundance columns
+            rename_map = {
+                col: col.replace(" ", "_")
+                for col in melted.columns
+                if " " in col and col not in abundance_cols
+            }
+            melted = melted.rename(columns=rename_map)
+
+            all_dfs.append(melted)
+
+        result = pd.concat(all_dfs, ignore_index=True)
+        logger.info(
+            f"Step 1 (TMT) complete: {len(result)} rows, "
+            f"{result['Condition'].nunique()} conditions"
+        )
+        return result
+
+    def step1_combine_replicates_dia(
+        self,
+        file_paths: list[Path],
+        metadata_columns: dict[str, dict],
+    ) -> pd.DataFrame:
+        """Step 1 (DIA): Read N DIA files, apply per-file metadata.
+
+        Args:
+            file_paths: List of DIA file paths
+            metadata_columns: Per-file metadata keyed by sanitized filename
+
+        Returns:
+            Combined DataFrame with Abundance, Condition, Sample_Origination, etc.
+        """
+        logger.info(f"Step 1 (DIA): Processing {len(file_paths)} file(s)")
+
+        all_dfs = []
+        for file_path in file_paths:
+            delimiter = _detect_delimiter(file_path)
+            df = pd.read_csv(
+                file_path, sep=delimiter, encoding="utf-8", low_memory=False,
+            )
+
+            # Look up metadata for this file
+            file_meta = None
+            file_name = file_path.name
+            file_sanitized = _sanitize_filename(file_name)
+            file_stem = file_path.stem
+            file_stem_sanitized = _sanitize_filename(file_stem)
+
+            for key, meta in metadata_columns.items():
+                key_sanitized = _sanitize_filename(key)
+                key_stem_sanitized = _sanitize_filename(
+                    key.rsplit(".", 1)[0] if "." in key else key
+                )
+                if (
+                    key_sanitized in (file_sanitized, file_stem_sanitized)
+                    or key_stem_sanitized in (file_stem_sanitized, file_sanitized)
+                ):
+                    file_meta = meta
+                    break
+
+            if file_meta is None:
+                raise ValueError(
+                    f"No metadata found for file '{file_name}'. "
+                    f"Available keys: {list(metadata_columns.keys())}"
+                )
+
+            # Rename Quan Value -> Abundance FIRST
+            if "Quan Value" in df.columns and "Abundance" in df.columns:
+                logger.warning(
+                    f"File '{file_name}' has both 'Quan Value' and 'Abundance'. "
+                    f"Renaming 'Quan Value' to 'Abundance_DIA'."
+                )
+                df = df.rename(columns={"Quan Value": "Abundance_DIA"})
+            elif "Quan Value" in df.columns:
+                df = df.rename(columns={"Quan Value": "Abundance"})
+
+            # Rename spaces to underscores in all other columns
+            rename_map = {
+                col: col.replace(" ", "_")
+                for col in df.columns
+                if " " in col and col != "Abundance"
+            }
+            df = df.rename(columns=rename_map)
+
+            # Ensure Abundance is numeric
+            abund_col = (
+                "Abundance"
+                if "Abundance" in df.columns
+                else "Abundance_DIA" if "Abundance_DIA" in df.columns
+                else None
+            )
+            if abund_col is None:
+                raise ValueError(f"No abundance column found in {file_name}")
+            df[abund_col] = pd.to_numeric(df[abund_col], errors="coerce")
+            df = df.dropna(subset=[abund_col])
+
+            # Build Condition and Sample_Origination from metadata
+            meta_keys = list(file_meta.keys())
+            reserved = {"experiment", "batch", "replicate"}
+            group_cols = [k for k in meta_keys if k not in reserved]
+
+            if not group_cols:
+                raise ValueError(
+                    f"No condition group columns in metadata for '{file_name}'"
+                )
+
+            # Build Condition by joining group values with "_"
+            df["Condition"] = str(file_meta[group_cols[0]])
+            for col in group_cols[1:]:
+                df["Condition"] = (
+                    df["Condition"].astype(str) + "_" + str(file_meta[col])
+                )
+
+            replicate = int(file_meta.get("replicate", 1))
+            df["Replicate"] = replicate
+            df["Sample_Origination"] = (
+                df["Condition"].astype(str) + "_" + str(replicate)
+            )
+
+            # Add condition group columns to DataFrame
+            for col in group_cols:
+                df[col] = file_meta[col]
+
+            all_dfs.append(df)
+
+        result = pd.concat(all_dfs, ignore_index=True)
+        logger.info(
+            f"Step 1 (DIA) complete: {len(result)} rows, "
+            f"{result['Condition'].nunique()} conditions"
+        )
+        return result
