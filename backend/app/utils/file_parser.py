@@ -5,6 +5,7 @@ Handles delimiter detection, TMT/DIA column validation, and
 file format detection for TMT and DIA proteomics files.
 """
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -48,7 +49,8 @@ def detect_delimiter(file_path: Path) -> str:
         InvalidFileFormatError: If delimiter cannot be determined.
     """
     try:
-        first_line = file_path.read_text(encoding="utf-8").split("\n")[0]
+        with open(file_path, encoding="utf-8") as f:
+            first_line = f.readline()
     except Exception as e:
         raise InvalidFileFormatError(
             message=f"Failed to read file: {file_path.name}",
@@ -80,8 +82,6 @@ def detect_tmt_channels(columns: list[str]) -> list[str]:
     Returns:
         Sorted list of TMT channel labels (e.g. ['126', '127N', ..., '134N']).
     """
-    import re
-
     pattern = re.compile(TMT_ABUNDANCE_PATTERN)
     channels = []
     for col in columns:
@@ -155,8 +155,6 @@ def validate_tmt_columns(df: pd.DataFrame, filename: str) -> None:
         )
 
     # Check for at least 2 abundance columns matching TMT pattern
-    import re
-
     pattern = re.compile(TMT_ABUNDANCE_PATTERN)
     abundance_cols = [col for col in df.columns if pattern.match(str(col))]
     if len(abundance_cols) < 2:
@@ -169,6 +167,23 @@ def validate_tmt_columns(df: pd.DataFrame, filename: str) -> None:
                 "available_columns": list(columns),
             },
         )
+
+    # Validate abundance values are numeric (sample first 100 rows)
+    sample = df[abundance_cols].head(100)
+    for col in abundance_cols:
+        numeric = pd.to_numeric(sample[col], errors="coerce")
+        # Only flag rows where the original value is non-null AND non-numeric
+        mask = numeric.isna() & sample[col].notna()
+        if mask.any():
+            non_numeric_rows = sample[col][mask].head(5)
+            raise InvalidFileFormatError(
+                message=f"Non-numeric values found in abundance column '{col}' in {filename}",
+                details={
+                    "filename": filename,
+                    "column": col,
+                    "non_numeric_values": non_numeric_rows.to_list(),
+                },
+            )
 
 
 def validate_dia_columns(df: pd.DataFrame, filename: str) -> None:
@@ -205,6 +220,22 @@ def validate_dia_columns(df: pd.DataFrame, filename: str) -> None:
             details={
                 "filename": filename,
                 "available_columns": list(columns),
+            },
+        )
+
+    # Validate Quan Value values are numeric (sample first 100 rows)
+    sample = df[["Quan Value"]].head(100)
+    numeric = pd.to_numeric(sample["Quan Value"], errors="coerce")
+    # Only flag rows where the original value is non-null AND non-numeric
+    mask = numeric.isna() & sample["Quan Value"].notna()
+    if mask.any():
+        non_numeric_rows = sample["Quan Value"][mask].head(5)
+        raise InvalidFileFormatError(
+            message=f"Non-numeric values found in 'Quan Value' column in {filename}",
+            details={
+                "filename": filename,
+                "column": "Quan Value",
+                "non_numeric_values": non_numeric_rows.to_list(),
             },
         )
 

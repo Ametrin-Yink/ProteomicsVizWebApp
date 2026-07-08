@@ -11,12 +11,8 @@ import pandas as pd
 import pytest
 from app.core.exceptions import InvalidFileFormatError
 from app.utils.file_parser import (
-    DIA_REQUIRED_COLUMNS,
-    TMT_ABUNDANCE_PATTERN,
-    TMT_REQUIRED_COLUMNS,
     detect_delimiter,
     detect_tmt_channels,
-    parse_proteomics_file,
     read_file_columns,
     validate_dia_columns,
     validate_tmt_columns,
@@ -137,6 +133,25 @@ class TestValidateTmtColumns:
             validate_tmt_columns(df, "test_tmt.txt")
         assert "abundance columns" in str(exc_info.value.message).lower()
 
+    def test_validate_tmt_columns_non_numeric(self):
+        """Non-numeric abundance values raise InvalidFileFormatError."""
+        df = pd.DataFrame(
+            {
+                "Sequence": ["PEPTIDE1", "PEPTIDE2"],
+                "Modifications": ["", "Oxidation"],
+                "Charge": [2, 3],
+                "Contaminant": [False, False],
+                "Master Protein Accessions": ["P12345", "P67890"],
+                "Quan Info": ["Valid", "Valid"],
+                "Abundance 126": [100.0, "NOT_A_NUMBER"],
+                "Abundance 127N": [150.0, 250.0],
+            }
+        )
+        with pytest.raises(InvalidFileFormatError) as exc_info:
+            validate_tmt_columns(df, "test_tmt.txt")
+        assert "Non-numeric" in str(exc_info.value.message)
+        assert "Abundance 126" in str(exc_info.value.message)
+
 
 class TestValidateDiaColumns:
     """Test DIA column validation."""
@@ -165,6 +180,24 @@ class TestValidateDiaColumns:
         df = valid_dia_df.drop(columns=["Quan Value"])
         with pytest.raises(InvalidFileFormatError) as exc_info:
             validate_dia_columns(df, "test_dia.txt")
+        assert "Quan Value" in str(exc_info.value.message)
+
+    def test_validate_dia_columns_non_numeric(self):
+        """Non-numeric Quan Value raises InvalidFileFormatError."""
+        df = pd.DataFrame(
+            {
+                "Sequence": ["PEPTIDE1", "PEPTIDE2"],
+                "Modifications": ["", "Oxidation"],
+                "Charge": [2, 3],
+                "Contaminant": [False, False],
+                "Master Protein Accessions": ["P12345", "P67890"],
+                "Quan Info": ["Valid", "Valid"],
+                "Quan Value": [1000.0, "NOT_NUMERIC"],
+            }
+        )
+        with pytest.raises(InvalidFileFormatError) as exc_info:
+            validate_dia_columns(df, "test_dia.txt")
+        assert "Non-numeric" in str(exc_info.value.message)
         assert "Quan Value" in str(exc_info.value.message)
 
 

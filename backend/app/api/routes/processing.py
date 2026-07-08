@@ -6,6 +6,7 @@ Processing status and control endpoints.
 
 import asyncio
 import logging
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -230,7 +231,7 @@ async def start_processing(
     if not session.files or not session.files.proteomics:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No proteomics files uploaded. Please upload at least 6 PSM files.",
+            detail="No proteomics files uploaded. Please upload proteomics files before starting processing.",
         )
 
     # Validate minimum file count (TMT: 1, DIA: 2)
@@ -273,8 +274,6 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         session_id: Session ID
         session: Session object with config
     """
-    import traceback
-
     logger.info(f"BACKGROUND TASK STARTED for session {session_id}")
 
     # Don't wait for WebSocket - start processing immediately

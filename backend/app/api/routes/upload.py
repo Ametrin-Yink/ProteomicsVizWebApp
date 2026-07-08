@@ -4,7 +4,9 @@ File upload API routes.
 Handles proteomics file uploads with validation.
 """
 
+import asyncio
 import logging
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -57,7 +59,6 @@ async def upload_proteomics_files(
     session_uploads_dir = Path(settings.sessions_dir) / session_id / "uploads"
     session_uploads_dir.mkdir(parents=True, exist_ok=True)
 
-    uploaded_files = []
     response_files = []
 
     for file in files:
@@ -82,8 +83,6 @@ async def upload_proteomics_files(
             # Clean up saved file on error
             if file_path.exists():
                 file_path.unlink()
-            import traceback
-
             logger.error(f"Upload validation error for {file.filename}: {traceback.format_exc()}")
             raise ValidationError(
                 message=f"Error parsing {file.filename}: {e!s}"
@@ -123,8 +122,6 @@ async def upload_proteomics_files(
 
 async def _run_parse_proteomics_file(file_path: Path, file_type: str) -> dict:
     """Run parse_proteomics_file in a thread to avoid blocking the event loop."""
-    import asyncio
-
     return await asyncio.to_thread(parse_proteomics_file, file_path, file_type)
 
 
@@ -147,7 +144,6 @@ async def upload_ptm_enrichment_files(
     )
     session_uploads_dir.mkdir(parents=True, exist_ok=True)
 
-    uploaded_files = []
     response_files = []
 
     for file in files:
@@ -218,7 +214,6 @@ async def upload_global_proteome_files(
     )
     session_uploads_dir.mkdir(parents=True, exist_ok=True)
 
-    uploaded_files = []
     response_files = []
 
     for file in files:
@@ -430,6 +425,4 @@ async def delete_file(
 
 def asyncio_to_thread(func, *args, **kwargs):
     """Run a synchronous function in a thread to avoid blocking the event loop."""
-    import asyncio
-
     return asyncio.to_thread(func, *args, **kwargs)
