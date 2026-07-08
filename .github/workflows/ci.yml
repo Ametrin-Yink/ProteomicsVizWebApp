@@ -123,9 +123,19 @@ jobs:
         run: npm ci
         working-directory: Tests
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright/
+          key: playwright-${{ runner.os }}-${{ hashFiles('Tests/package-lock.json') }}
+
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
         working-directory: Tests
+        # --with-deps installs system libs (fast if already present).
+        # The browser binary is restored from cache above, so the
+        # download is skipped on cache hits.
 
       - name: Start frontend
         run: |
