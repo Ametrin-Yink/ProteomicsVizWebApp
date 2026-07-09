@@ -130,6 +130,35 @@ class Settings(BaseSettings):
         description="Max BiocParallel cores per R subprocess",
     )
 
+    # --- DuckDB streaming (Phase 1) ---
+    use_duckdb_streaming: bool = Field(
+        default=True,
+        description="Use DuckDB for streaming DIA file ingestion (Steps 1-2). "
+        "Falls back to pandas if DuckDB is not installed.",
+    )
+
+    # --- msqrob2 Step 7 batching ---
+    msqrob2_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Comparisons per R subprocess batch for msqrob2 Step 7",
+    )
+
+    msqrob2_max_workers: int = Field(
+        default=min((os.cpu_count() or 4) // 2, 32),
+        ge=1,
+        le=64,
+        description="Max concurrent R subprocesses for msqrob2 Step 7 batching",
+    )
+
+    msqrob2_n_cores_cap: int = Field(
+        default=32,
+        ge=1,
+        le=64,
+        description="Max BiocParallel cores per R subprocess for msqrob2",
+    )
+
     r_msqrob2_data_process_timeout: int = Field(
         default=7200,  # 2 hours — QFeatures aggregateFeatures is the heaviest step
         description="Timeout for msqrob2 dataProcess (protein abundance) in seconds",

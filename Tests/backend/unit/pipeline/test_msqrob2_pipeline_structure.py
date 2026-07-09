@@ -65,7 +65,7 @@ class TestMsqrob2Config:
         assert config.msqrob2_aggregation == "robustSummary"
         assert config.msqrob2_model == "msqrobLm"
         assert config.msqrob2_robust is True
-        assert config.msqrob2_ridge is False
+        assert config.msqrob2_ridge is True
         assert config.msqrob2_adjust_method == "BH"
 
     def test_config_serialization(self):
