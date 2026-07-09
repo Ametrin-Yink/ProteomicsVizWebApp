@@ -5,9 +5,6 @@ Tests session CRUD, file upload, config, and results endpoints.
 All tests use specific assertions (no status code ranges).
 """
 
-import pytest
-
-
 class TestSessionAPI:
     """Test session management endpoints."""
 
