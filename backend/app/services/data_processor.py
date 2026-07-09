@@ -384,8 +384,9 @@ class DataProcessor:
         df["Contaminant"] = df["Contaminant"].astype(str).str.lower()
         df = df[df["Contaminant"] != "true"].copy()
 
-        # Remove "No Value" quantification
-        df = df[df["Quan_Info"] != "No Value"].copy()
+        # Remove "No Value" quantification (skip if column absent — DIA files lack Quan_Info)
+        if "Quan_Info" in df.columns:
+            df = df[df["Quan_Info"] != "No Value"].copy()
 
         # Remove low abundance (< 1)
         df["Abundance"] = pd.to_numeric(df["Abundance"], errors="coerce")

@@ -25,14 +25,13 @@ TMT_REQUIRED_COLUMNS = [
     "Quan Info",
 ]
 
-# Required columns for DIA files (same as TMT)
+# Required columns for DIA files (Quan Info NOT required — DIA PD exports lack it)
 DIA_REQUIRED_COLUMNS = [
     "Sequence",
     "Modifications",
     "Charge",
     "Contaminant",
     "Master Protein Accessions",
-    "Quan Info",
 ]
 
 
