@@ -179,7 +179,8 @@ class TestTMTPipelineE2E:
         r = requests.get(f"{API}/{sid}/qc/plots")
         assert r.status_code == 200
         qc = r.json()
-        total_proteins = qc.get("total_proteins", 0)
+        qc_data = qc.get("data", {})
+        total_proteins = qc_data.get("total_proteins", 0)
         assert total_proteins > 100, f"Expected >100 proteins, got {total_proteins}"
 
         # Verify DE results per comparison

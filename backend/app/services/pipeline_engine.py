@@ -315,6 +315,10 @@ class PipelineEngine:
                 datetime.now(UTC) - start_time
             ).total_seconds()
         ctx.result.steps_completed = ctx.state.data["completed_steps"]
+
+        # Persist result summary into pipeline state for API consumers
+        ctx.state.data["result"] = ctx.result.model_dump(mode="json")
+
         ctx.state.mark_completed()
 
         return ctx.result
