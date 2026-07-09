@@ -19,39 +19,39 @@ from app.services.steps import (
 class TestMsqrob2PipelineStructure:
     """Verify msqrob2 pipeline definition is correctly structured."""
 
-    def test_five_steps(self):
-        """Pipeline has exactly 5 steps."""
+    def test_eight_steps(self):
+        """Pipeline has exactly 8 steps."""
         from app.services.pipeline_registry import PIPELINES
 
         pipeline = PIPELINES[PipelineTool.MSQROB2]
-        assert len(pipeline.steps) == 5
+        assert len(pipeline.steps) == 8
 
     def test_step_numbers_sequential(self):
-        """Steps are numbered 1 through 5."""
+        """Steps are numbered 1 through 8."""
         from app.services.pipeline_registry import PIPELINES
 
         pipeline = PIPELINES[PipelineTool.MSQROB2]
         numbers = [s.number for s in pipeline.steps]
-        assert numbers == list(range(1, 6))
+        assert numbers == list(range(1, 9))
 
-    def test_step_3_is_protein_abundance(self):
-        """Step 3 uses msqrob2 protein abundance handler."""
+    def test_step_6_is_protein_abundance(self):
+        """Step 6 uses msqrob2 protein abundance handler."""
         from app.services.pipeline_registry import PIPELINES
 
         pipeline = PIPELINES[PipelineTool.MSQROB2]
-        step3 = pipeline.steps[2]
-        assert step3.number == 3
-        assert "msqrob2" in step3.display_name.lower() or "protein" in step3.display_name.lower()
-        assert step3.handler == step_protein_abundance_msqrob2
+        step6 = pipeline.steps[5]
+        assert step6.number == 6
+        assert "msqrob2" in step6.display_name.lower() or "protein" in step6.display_name.lower()
+        assert step6.handler == step_protein_abundance_msqrob2
 
-    def test_step_4_is_multi_condition_de(self):
-        """Step 4 uses msqrob2 multi-condition DE handler."""
+    def test_step_7_is_multi_condition_de(self):
+        """Step 7 uses msqrob2 multi-condition DE handler."""
         from app.services.pipeline_registry import PIPELINES
 
         pipeline = PIPELINES[PipelineTool.MSQROB2]
-        step4 = pipeline.steps[3]
-        assert step4.number == 4
-        assert step4.handler == step_multi_condition_de
+        step7 = pipeline.steps[6]
+        assert step7.number == 7
+        assert step7.handler == step_multi_condition_de
 
 
 class TestMsqrob2Config:

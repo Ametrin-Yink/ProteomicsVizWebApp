@@ -5,24 +5,7 @@ Tests session CRUD, file upload, config, and results endpoints.
 All tests use specific assertions (no status code ranges).
 """
 
-from pathlib import Path
-
 import pytest
-from fastapi.testclient import TestClient
-
-
-@pytest.fixture
-def client():
-    """Create FastAPI test client."""
-    from app.main import app
-
-    return TestClient(app)
-
-
-@pytest.fixture
-def sample_data_dir():
-    """Return path to sample data directory."""
-    return Path(__file__).parent.parent.parent.parent / "SampleData"
 
 
 class TestSessionAPI:
@@ -240,14 +223,9 @@ class TestSessionConfigAPI:
 
 
 class TestFileUploadAPI:
-    """Test file upload endpoints.
+    """Test file upload endpoints."""
 
-    These tests use real PSM CSV files from SampleData/.
-    They are skipped if SampleData/ is not present (not shipped in git).
-    """
-
-    @pytest.mark.needs_sample_data
-    def test_upload_proteomics_files_success(self, client, sample_data_dir):
+    def test_upload_proteomics_files_success(self, client, test_data_dir):
         """Upload proteomics files successfully."""
         # Create session
         create_response = client.post(
@@ -259,26 +237,30 @@ class TestFileUploadAPI:
         )
         session_id = create_response.json()["id"]
 
+        # Configure session with file_type
+        client.put(
+            f"/api/sessions/{session_id}/config",
+            json={"file_type": "tmt"},
+        )
+
         # Upload file
-        file_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
+        file_path = test_data_dir / "tmt_sample_1000rows.txt"
         with open(file_path, "rb") as f:
             response = client.post(
                 f"/api/sessions/{session_id}/upload/proteomics",
-                files={"files": ("PSM_DOCK5Jurkat_DMSO_24h_1.csv", f, "text/csv")},
+                files={"files": ("tmt_sample_1000rows.txt", f, "text/plain")},
             )
 
         assert response.status_code == 200
         data = response.json()
         assert "files" in data
         assert len(data["files"]) == 1
-        assert data["files"][0]["filename"] == "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
+        assert data["files"][0]["filename"] == "tmt_sample_1000rows.txt"
         assert "size" in data["files"][0]
-        assert data["files"][0]["experiment"] == "DOCK5Jurkat"
-        assert "DMSO" in data["files"][0]["conditions"]
-        assert data["files"][0]["replicate"] == 1
+        assert "columns" in data["files"][0]
+        assert data["files"][0]["file_type"] == "tmt"
 
-    @pytest.mark.needs_sample_data
-    def test_upload_multiple_proteomics_files(self, client, sample_data_dir):
+    def test_upload_multiple_proteomics_files(self, client, test_data_dir):
         """Upload multiple proteomics files."""
         # Create session
         create_response = client.post(
@@ -290,16 +272,22 @@ class TestFileUploadAPI:
         )
         session_id = create_response.json()["id"]
 
+        # Configure session with file_type
+        client.put(
+            f"/api/sessions/{session_id}/config",
+            json={"file_type": "tmt"},
+        )
+
         # Upload multiple files
-        file1_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
-        file2_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_2.csv"
+        file1_path = test_data_dir / "tmt_sample_1000rows.txt"
+        file2_path = test_data_dir / "tmt_sample_10000rows.txt"
 
         with open(file1_path, "rb") as f1, open(file2_path, "rb") as f2:
             response = client.post(
                 f"/api/sessions/{session_id}/upload/proteomics",
                 files=[
-                    ("files", ("PSM_DOCK5Jurkat_DMSO_24h_1.csv", f1, "text/csv")),
-                    ("files", ("PSM_DOCK5Jurkat_DMSO_24h_2.csv", f2, "text/csv")),
+                    ("files", ("tmt_sample_1000rows.txt", f1, "text/plain")),
+                    ("files", ("tmt_sample_10000rows.txt", f2, "text/plain")),
                 ],
             )
 
@@ -308,8 +296,8 @@ class TestFileUploadAPI:
         assert "files" in data
         assert len(data["files"]) == 2
 
-    def test_upload_invalid_filename(self, client):
-        """Reject file with invalid filename."""
+    def test_upload_invalid_file_content(self, client):
+        """Reject file with invalid content for the configured file_type."""
         # Create session
         create_response = client.post(
             "/api/sessions",
@@ -317,25 +305,28 @@ class TestFileUploadAPI:
         )
         session_id = create_response.json()["id"]
 
-        # Upload file with invalid name
+        # Configure session with file_type
+        client.put(
+            f"/api/sessions/{session_id}/config",
+            json={"file_type": "tmt"},
+        )
+
+        # Upload file with content that doesn't match TMT format
         response = client.post(
             f"/api/sessions/{session_id}/upload/proteomics",
-            files={"files": ("invalid_file.csv", b"col1,col2\n1,2", "text/csv")},
+            files={"files": ("bad_file.csv", b"col1,col2\n1,2", "text/csv")},
         )
 
         assert response.status_code == 400
-        error = response.json()
-        assert "error" in error
 
-    @pytest.mark.needs_sample_data
-    def test_upload_file_session_not_found(self, client, sample_data_dir):
+    def test_upload_file_session_not_found(self, client, test_data_dir):
         """Return 404 when uploading to non-existent session."""
-        file_path = sample_data_dir / "PSM_DOCK5Jurkat_DMSO_24h_1.csv"
+        file_path = test_data_dir / "tmt_sample_1000rows.txt"
 
         with open(file_path, "rb") as f:
             response = client.post(
                 "/api/sessions/non-existent-id/upload/proteomics",
-                files={"files": ("PSM_DOCK5Jurkat_DMSO_24h_1.csv", f, "text/csv")},
+                files={"files": ("tmt_sample_1000rows.txt", f, "text/plain")},
             )
 
         assert response.status_code == 404

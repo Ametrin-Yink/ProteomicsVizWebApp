@@ -16,11 +16,12 @@ import pytest
 
 @pytest.fixture
 def client():
-    """Create FastAPI test client."""
+    """Create FastAPI test client with lifespan startup."""
     from app.main import app
     from fastapi.testclient import TestClient
 
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 @pytest.fixture

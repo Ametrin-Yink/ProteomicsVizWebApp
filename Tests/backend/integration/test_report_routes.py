@@ -9,12 +9,11 @@ from pathlib import Path
 
 import pytest
 from app.main import app
-from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
-    """Create an async test client with temp directories."""
+    """Create a test client with temp directories."""
     sessions_dir = tmp_path / "sessions"
     reports_dir = tmp_path / "reports"
     sessions_dir.mkdir(parents=True)
@@ -40,8 +39,9 @@ def client(monkeypatch, tmp_path):
 
     monkeypatch.setattr(report_store, "REPORTS_DIR", reports_dir)
 
-    transport = ASGITransport(app=app)
-    return AsyncClient(transport=transport, base_url="http://test")
+    from fastapi.testclient import TestClient
+
+    return TestClient(app)
 
 
 def make_completed_session_with_files(sessions_dir: Path, session_id: str):
@@ -99,24 +99,20 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
     (session_dir / "gsea_run_status.json").write_text('{"Trt_vs_Ctrl": "completed"}')
 
 
-@pytest.mark.asyncio
-async def test_list_reports_empty(client):
-    response = await client.get("/api/reports")
+def test_list_reports_empty(client):
+    response = client.get("/api/reports")
     assert response.status_code == 200
     assert response.json() == {"reports": []}
 
 
-@pytest.mark.asyncio
-async def test_generate_and_view_report(client):
+def test_generate_and_view_report(client):
     """End-to-end: create session, generate report, view all endpoints."""
-    sessions_dir = (
-        client._transport.app.state.session_manager.session_store.sessions_dir
-    )
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
 
     session_id = str(uuid.uuid4())
     make_completed_session_with_files(sessions_dir, session_id)
 
-    response = await client.post(
+    response = client.post(
         f"/api/sessions/{session_id}/reports/generate",
         json={"name": "Integration Test Report"},
     )
@@ -127,77 +123,71 @@ async def test_generate_and_view_report(client):
     assert report_id.startswith("rpt_")
 
     # GET report metadata
-    response = await client.get(f"/api/reports/{report_id}")
+    response = client.get(f"/api/reports/{report_id}")
     assert response.status_code == 200
     meta = response.json()
     assert meta["_report"]["name"] == "Integration Test Report"
     assert "config" in meta  # session fields at top level
 
     # GET results
-    response = await client.get(f"/api/reports/{report_id}/results")
+    response = client.get(f"/api/reports/{report_id}/results")
     assert response.status_code == 200
 
     # GET QC
-    response = await client.get(f"/api/reports/{report_id}/qc/plots")
+    response = client.get(f"/api/reports/{report_id}/qc/plots")
     assert response.status_code == 200
 
     # GET GSEA status
-    response = await client.get(f"/api/reports/{report_id}/gsea/status")
+    response = client.get(f"/api/reports/{report_id}/gsea/status")
     assert response.status_code == 200
 
     # GET GSEA data
-    response = await client.get(f"/api/reports/{report_id}/gsea/go_bp")
+    response = client.get(f"/api/reports/{report_id}/gsea/go_bp")
     assert response.status_code == 200
 
     # GET protein abundance
-    response = await client.get(f"/api/reports/{report_id}/protein/P12345/abundance")
+    response = client.get(f"/api/reports/{report_id}/protein/P12345/abundance")
     assert response.status_code == 200
 
     # GET bionet subnetwork
-    response = await client.get(f"/api/reports/{report_id}/bionet/subnetwork")
+    response = client.get(f"/api/reports/{report_id}/bionet/subnetwork")
     assert response.status_code == 200
 
     # PATCH visualization state
-    response = await client.patch(
+    response = client.patch(
         f"/api/reports/{report_id}/visualization-state",
         json={"markers": {"Trt_vs_Ctrl": ["P12345"]}},
     )
     assert response.status_code == 200
 
     # DELETE report
-    response = await client.delete(f"/api/reports/{report_id}")
+    response = client.delete(f"/api/reports/{report_id}")
     assert response.status_code == 200
-    response = await client.get(f"/api/reports/{report_id}")
+    response = client.get(f"/api/reports/{report_id}")
     assert response.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_generate_rejects_non_completed_session(client):
-    sessions_dir = (
-        client._transport.app.state.session_manager.session_store.sessions_dir
-    )
+def test_generate_rejects_non_completed_session(client):
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
     session_id = str(uuid.uuid4())
     session_dir = sessions_dir / session_id
     session_dir.mkdir(parents=True)
     (session_dir / "session.json").write_text('{"id": "x", "state": "processing"}')
 
-    response = await client.post(
+    response = client.post(
         f"/api/sessions/{session_id}/reports/generate",
         json={"name": "Should Fail"},
     )
     assert response.status_code == 400
 
 
-@pytest.mark.asyncio
-async def test_report_survives_session_deletion(client):
-    sessions_dir = (
-        client._transport.app.state.session_manager.session_store.sessions_dir
-    )
+def test_report_survives_session_deletion(client):
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
 
     session_id = str(uuid.uuid4())
     make_completed_session_with_files(sessions_dir, session_id)
 
-    response = await client.post(
+    response = client.post(
         f"/api/sessions/{session_id}/reports/generate",
         json={"name": "Persistent Report"},
     )
@@ -208,21 +198,19 @@ async def test_report_survives_session_deletion(client):
     shutil.rmtree(sessions_dir / session_id)
 
     # Report should still work
-    response = await client.get(f"/api/reports/{report_id}")
+    response = client.get(f"/api/reports/{report_id}")
     assert response.status_code == 200
-    response = await client.get(f"/api/reports/{report_id}/results")
+    response = client.get(f"/api/reports/{report_id}/results")
     assert response.status_code == 200
-    response = await client.get(f"/api/reports/{report_id}/protein/P12345/abundance")
+    response = client.get(f"/api/reports/{report_id}/protein/P12345/abundance")
     assert response.status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_report_not_found(client):
-    response = await client.get("/api/reports/rpt_nonexistent")
+def test_report_not_found(client):
+    response = client.get("/api/reports/rpt_nonexistent")
     assert response.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_delete_nonexistent_report(client):
-    response = await client.delete("/api/reports/rpt_nonexistent")
+def test_delete_nonexistent_report(client):
+    response = client.delete("/api/reports/rpt_nonexistent")
     assert response.status_code == 404

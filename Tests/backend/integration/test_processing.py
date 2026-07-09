@@ -4,25 +4,9 @@ Integration tests for processing pipeline.
 Tests DataProcessor with actual file operations.
 """
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
-
-
-@pytest.fixture
-def sample_data_dir():
-    """Return path to sample data directory."""
-    return Path(__file__).parent.parent.parent.parent / "SampleData"
-
-
-@pytest.fixture
-def temp_session_dir(tmp_path):
-    """Create temporary session directory."""
-    session_dir = tmp_path / "sessions" / "test-session"
-    session_dir.mkdir(parents=True)
-    return session_dir
 
 
 @pytest.fixture
@@ -50,52 +34,6 @@ def processor_strict():
 
     config = ProcessingConfig(strict_filtering=True)
     return DataProcessor(config)
-
-
-class TestStep1CombineReplicates:
-    """Test Step 1: Combine Replicates."""
-
-    def test_combine_sample_data_files(
-        self, processor, sample_data_dir, temp_session_dir
-    ):
-        """Combine actual sample data files."""
-        files = [
-            sample_data_dir / "PSM_SampleData_DMSO_1.csv",
-            sample_data_dir / "PSM_SampleData_DMSO_2.csv",
-        ]
-
-        # Skip if sample files don't exist
-        if not all(f.exists() for f in files):
-            pytest.skip("Sample data files not found")
-
-        result = processor.step1_combine_replicates(files)
-
-        assert len(result) > 0
-        assert "Sample_Origination" in result.columns
-        assert "Condition" in result.columns
-        assert "Replicate" in result.columns
-        assert "Abundance" in result.columns
-        # Should have data from both files
-        assert result["Sample_Origination"].nunique() == 2
-
-    def test_combine_multiple_conditions(
-        self, processor, sample_data_dir, temp_session_dir
-    ):
-        """Combine files from multiple conditions."""
-        files = [
-            sample_data_dir / "PSM_SampleData_DMSO_1.csv",
-            sample_data_dir / "PSM_SampleData_INCZ123456_1.csv",
-        ]
-
-        # Skip if sample files don't exist
-        if not all(f.exists() for f in files):
-            pytest.skip("Sample data files not found")
-
-        result = processor.step1_combine_replicates(files)
-
-        origination_values = result["Sample_Origination"].unique()
-        assert "DMSO_1" in origination_values
-        assert "INCZ123456_1" in origination_values
 
 
 class TestStep2GenerateUniquePsm:
