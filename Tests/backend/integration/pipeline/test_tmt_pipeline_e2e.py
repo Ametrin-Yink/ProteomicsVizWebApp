@@ -138,9 +138,12 @@ def tmt_session(channel_mapping):
     state = wait_for_completion(sid)
     assert state == "completed", f"Pipeline ended with state '{state}', expected 'completed'"
 
-    # 7. Return session data for assertions
+    # 7. Yield session data for assertions
     r = requests.get(f"{API}/{sid}")
-    return r.json()
+    yield r.json()
+
+    # Cleanup: delete session after all tests complete
+    requests.delete(f"{API}/{sid}")
 
 
 # ── Tests ──
@@ -169,13 +172,25 @@ class TestTMTPipelineE2E:
         assert r.status_code == 200
 
     def test_protein_abundances_produced(self, tmt_session):
-        """Protein_Abundances.tsv is generated with data."""
+        """Pipeline produces protein abundances and DE results."""
         sid = tmt_session["id"]
-        # Check via API that results endpoint returns data
+
+        # Verify protein count via QC endpoint
+        r = requests.get(f"{API}/{sid}/qc/plots")
+        assert r.status_code == 200
+        qc = r.json()
+        total_proteins = qc.get("total_proteins", 0)
+        assert total_proteins > 100, f"Expected >100 proteins, got {total_proteins}"
+
+        # Verify DE results per comparison
         r = requests.get(f"{API}/{sid}/results")
         data = r.json()
         results = data.get("data", {}).get("results", [])
         assert len(results) > 0, "No DE results returned"
+
+        # Verify at least some proteins have real p-values
+        proteins_with_pval = [r for r in results if r.get("pval") is not None]
+        assert len(proteins_with_pval) > 0, "No proteins with p-values"
 
     def test_qc_metrics_available(self, tmt_session):
         """QC metrics are calculated."""

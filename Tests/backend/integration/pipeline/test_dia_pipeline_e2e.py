@@ -110,7 +110,10 @@ def dia_session():
     assert state == "completed", f"Pipeline ended with state '{state}', expected 'completed'"
 
     r = requests.get(f"{API}/{sid}")
-    return r.json()
+    yield r.json()
+
+    # Cleanup: delete session after all tests complete
+    requests.delete(f"{API}/{sid}")
 
 
 class TestDIAPipelineE2E:
