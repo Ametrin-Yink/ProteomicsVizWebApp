@@ -113,7 +113,7 @@ def dia_session():
     yield r.json()
 
     # Cleanup: delete session after all tests complete
-        requests.delete(f"{API}/{sid}")
+    requests.delete(f"{API}/{sid}")
 
 
 class TestDIAPipelineE2E:
