@@ -4,37 +4,33 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 
 ## Features
 
-- **Data Input:** Upload proteomics CSV files with automatic validation
-- **Processing Pipeline:** 9-step analysis pipeline with real-time progress tracking
-- **Visualization:** Interactive volcano plots, QC plots, and GSEA enrichment plots
+- **Data Input:** Upload TMT or DIA proteomics data files (tab-delimited `.txt` or `.csv`)
+- **Processing Pipeline:** 8-step analysis pipeline with TMT→MSstats or DIA→msqrob2 paths
+- **Visualization:** Interactive volcano plots, QC metrics, GSEA enrichment, BioNet networks
 - **Session Management:** Persistent sessions that survive server restarts
-- **PDF Reports:** Export comprehensive analysis reports
+- **Reports:** Export comprehensive HTML analysis reports
 
 ## Prerequisites
 
-- **Python 3.11+**
+- **Python 3.12+**
 - **Node.js 20+**
-- **R 4.3+** with bioinformatics packages
+- **R 4.5+** with bioinformatics packages (msqrob2, QFeatures, limma, MSstats)
 
 ## Installation
 
 ### 1. Install R Packages
 
 ```bash
-Rscript -e "
-if (!require('BiocManager', quietly = TRUE))
-    install.packages('BiocManager')
-BiocManager::install(c('msqrob2', 'QFeatures', 'limma'))
-"
+Rscript scripts/setup/install_r_packages.R
 ```
 
 ### 2. Install Dependencies
 
 ```bash
 # Backend (from project root)
-pip install -r backend/requirements.txt
+backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
 
-# Frontend (from project root)
+# Frontend
 cd frontend && npm install
 ```
 
@@ -62,17 +58,12 @@ From the welcome page, create a new analysis session and give it a name.
 
 ### 2. Upload Data
 
-Upload PSM (Peptide-Spectrum Match) CSV files. Filenames must follow this pattern:
+Upload Proteome Discoverer export files (`.txt` or `.csv`, tab or comma delimited). Any filename is accepted.
 
-```
-PSM_ExperimentName_Condition_ReplicateNumber.csv
-```
+- **TMT data:** Multiplexed reporter ion channels (e.g., `Abundance 126` through `Abundance 134N`)
+- **DIA data:** Label-free with single `Quan Value` column per PSM
 
-For example: `PSM_Exp1_Control_1.csv`, `PSM_Exp1_Control_2.csv`, `PSM_Exp1_Treated_1.csv`
-
-**Required CSV columns:** Sequence, Modifications, Charge, Contaminant, Master Protein Accessions, Quan Info, Abundance
-
-**Minimum replicates:** 3 per condition for reliable statistical analysis.
+Select the analysis type (TMT or DIA) when creating a session. The pipeline is auto-derived from your file type.
 
 ### 3. Configure and Process
 
@@ -92,23 +83,28 @@ Download results as CSV or generate a comprehensive PDF report.
 
 ## Processing Pipeline
 
-| Step | Description | Technology |
-|------|-------------|------------|
-| 1-5 | Combine, filter, and clean PSM data | Python/Pandas |
-| 6 | Protein abundance aggregation | R/msqrob2 |
-| 7 | Differential expression analysis | R/msqrob2 |
-| 8 | QC metrics (PCA, CV, distributions) | Python/sklearn |
-| 9 | Gene Set Enrichment Analysis | Python/gseapy |
+8-step symmetric pipeline. TMT data uses MSstats; DIA data uses msqrob2.
+
+| Step | TMT (MSstats) | DIA (msqrob2) |
+|------|--------------|----------------|
+| 1 | Melt TMT channels, map groups | Rename Quan Value, metadata |
+| 2-5 | Shared: unique PSM, remove razor, low-quality filter, criteria filter | Same |
+| 6 | MSstats protein abundance (R) | msqrob2 protein abundance (R) |
+| 7 | MSstats group comparison (R) | msqrob2 DE contrasts (R) |
+| 8 | QC metrics (PCA, CV, distributions) | Same |
+
+On-demand analysis: GSEA (enrichment), BioNet (INDRA subnetworks), Compare (PCA/UMAP/t-SNE clustering).
 
 ## Project Structure
 
 ```
 ProteomicsVizWebApp/
-├── backend/            # FastAPI server + R scripts
+├── backend/            # FastAPI server + R pipeline scripts
 ├── frontend/           # Next.js web application
-├── Tests/              # All test files
+├── Tests/              # All test files (unit + integration, organized by domain)
+├── scripts/setup/      # Setup scripts (R package installation)
 ├── AGENTS/             # Developer documentation
-└── docs/               # API specification
+└── docs/               # API specification + design specs
 ```
 
 ## Documentation
@@ -122,17 +118,19 @@ ProteomicsVizWebApp/
 ```bash
 # Backend unit tests (from project root)
 backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -v
-backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration -v
 
-# Frontend E2E tests
-cd Tests && npx playwright test
+# Specific test group
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit/pipeline -v
+
+# Backend integration tests
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration -v
 ```
 
 ## Tech Stack
 
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js
-- **Backend:** FastAPI, Python 3.11+, Pydantic, asyncio
-- **Analysis:** R 4.3+, msqrob2, QFeatures, limma, gseapy
+- **Backend:** FastAPI, Python 3.12+, Pydantic, asyncio
+- **Analysis:** R 4.5+, msqrob2, QFeatures, limma, MSstats, gseapy
 
 ## Contact
 
