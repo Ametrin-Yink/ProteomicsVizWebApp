@@ -63,6 +63,7 @@ cat("  strict_filtering:", config$strict_filtering, "\n")
 cat("  numberOfCores:", config$numberOfCores, "\n")
 cat("  batch_column:", ifelse(is.null(batch_column), "(none)", batch_column), "\n")
 cat("Input file:", input_file, "\n")
+cat(sprintf("[TIMING] data_process_start %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
 if (!file.exists(input_file)) stop(paste("Input file not found:", input_file))
@@ -101,6 +102,7 @@ if ("Reverse" %in% names(psm_data)) {
                          (!toupper(as.character(Reverse)) %in% c("+", "TRUE"))]
     cat("After reverse filter:", nrow(psm_data), "PSMs (removed", before - nrow(psm_data), ")\n")
 }
+cat(sprintf("[TIMING] data_load_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
 # ==========================================================================
@@ -172,6 +174,7 @@ rowData(pe[["peptide"]])$nNonZero <- rowSums(assay(pe[["peptide"]]) > 0, na.rm =
 # ==========================================================================
 cat("Log2 transforming peptide abundances...\n")
 pe <- logTransform(pe, base = 2, i = "peptide", name = "peptideLog")
+cat(sprintf("[TIMING] log2_transform_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
 # ==========================================================================
@@ -203,6 +206,7 @@ if (tolower(config$normalization) != "none") {
 } else {
     cat("Normalization: none (skipping)\n")
 }
+cat(sprintf("[TIMING] normalize_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
 # ==========================================================================
@@ -216,6 +220,7 @@ if (tolower(config$imputation) != "none") {
 } else {
     cat("Imputation: none (skipping)\n")
 }
+cat(sprintf("[TIMING] impute_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
 # Filter by observation count
@@ -263,6 +268,23 @@ pe <- tryCatch({
 })
 
 cat("Aggregation complete:", nrow(pe[["protein"]]), "proteins\n")
+cat(sprintf("[TIMING] aggregate_done %s", Sys.time()), "\n", file=stderr())
+flush.console()
+
+# ==========================================================================
+# Remove peptide-level assays to free memory
+# ==========================================================================
+keep_intermediates <- isTRUE(config$keep_intermediate_assays)
+if (!keep_intermediates) {
+    cat("Removing peptide-level assays to free memory...\n")
+    assay_names <- names(pe)
+    peptide_assays <- setdiff(assay_names, c("protein", "proteinBatchCorrected"))
+    for (assay_name in peptide_assays) {
+        pe <- removeAssay(pe, assay_name)
+    }
+    gc()
+    cat("Remaining assays:", paste(names(pe), collapse = ", "), "\n")
+}
 flush.console()
 
 # ==========================================================================
@@ -304,6 +326,7 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
 }
 na_mask <- is.na(gene_names)
 if (any(na_mask)) gene_names[na_mask] <- sub("-[0-9]+$", "", protein_ids[na_mask])
+cat(sprintf("[TIMING] gene_map_done %s", Sys.time()), "\n", file=stderr())
 
 # PSM counts
 first_accessions <- vapply(strsplit(protein_ids, ";", fixed = TRUE), function(x) x[1], character(1))
@@ -413,6 +436,7 @@ if (!is.null(batch_column) && length(metadata) > 0) {
     pe <- addAssay(pe, se_bc, name = "proteinBatchCorrected")
     cat("  Batch-corrected assay saved as 'proteinBatchCorrected'\n")
 }
+cat(sprintf("[TIMING] batch_correct_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
 # ==========================================================================
@@ -450,6 +474,7 @@ if (!file.exists(norm_coeff_file)) {
 cat("Saving QFeatures RDS to:", rds_output, "\n")
 saveRDS(pe, file = rds_output)
 cat("RDS checkpoint saved:", file.info(rds_output)$size, "bytes\n")
+cat(sprintf("[TIMING] data_process_complete %s", Sys.time()), "\n", file=stderr())
 
 cat("\nStep 3 complete: msqrob2 data process finished successfully\n")
 flush.console()

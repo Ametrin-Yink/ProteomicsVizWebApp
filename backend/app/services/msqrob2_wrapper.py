@@ -126,6 +126,7 @@ class Msqrob2Wrapper(BaseRWrapper):
             "numberOfCores": n_cores,
             "batch_column": config.msqrob2_batch_column,
             "metadata": _translate_metadata(config.metadata),
+            "keep_intermediate_assays": getattr(config, "msqrob2_keep_intermediate_assays", False),
         }
 
     def _build_gc_config(self, config: AnalysisConfig, n_cores: int, **extra) -> dict:
