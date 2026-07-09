@@ -379,27 +379,17 @@ taskkill /F /PID <PID>
 
 **Always run from project root:**
 ```powershell
-# Backend unit tests
+# Backend unit tests (recursive, auto-discovers subdirectories)
 backend\.venv\Scripts\python.exe -m pytest Tests/backend/unit -v
 
-# Backend integration tests (some require SampleData — use -m "not needs_sample_data" to skip)
+# Specific test group
+backend\.venv\Scripts\python.exe -m pytest Tests/backend/unit/pipeline -v
+
+# Backend integration tests
 backend\.venv\Scripts\python.exe -m pytest Tests/backend/integration -v
 
 # Run everything
 backend\.venv\Scripts\python.exe -m pytest Tests/backend/ -v --tb=short
-```
-
-**E2E tests (Playwright):**
-```powershell
-cd Tests
-npx playwright install chromium   # first time only
-npx playwright test               # run all specs
-npx playwright show-report        # view HTML report
-```
-
-**Clean test artifacts before re-running:**
-```powershell
-Remove-Item -Recurse -Force Tests/test-results, Tests/screenshots, Tests/playwright-report -ErrorAction SilentlyContinue
 ```
 
 ### Linting and formatting
@@ -451,6 +441,22 @@ python -m venv .venv
 ### Testing
 - **Always run tests from project root** - `backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit` not `cd backend && pytest`
 - **Use valid UUIDs in test session IDs** — `"550e8400-e29b-41d4-a716-446655440000"` not `"test-session-1"`
+
+
+## Testing Conventions
+
+- **HTTP client:** Use `TestClient` (shared `client` fixture from `Tests/conftest.py`), never `httpx.AsyncClient`
+- **Test data:** Use committed `Tests/fixtures/` files via `test_data_dir` or named fixture-path fixtures. Never depend on external `SampleData/`
+- **File extensions:** `.txt` and `.csv` both accepted. `validate_csv_extension` has been removed
+- **Organization:** Tests grouped by domain in subdirectories:
+  - `unit/pipeline/` — pipeline engine, registry, chains, orchestrator, structure
+  - `unit/processing/` — data processing, file parsing, QC, R wrappers, batch
+  - `unit/services/` — GSEA, compare, BioNet, reports
+  - `unit/routes/` — API route handlers
+  - `unit/infrastructure/` — sessions, tasks, validation, organisms, WebSocket
+  - `integration/pipeline/` — E2E pipeline + R integration
+  - `integration/routes/` — API integration tests
+- **Fixtures audit:** `Tests/conftest.py` fixtures are periodically audited for usage. Remove unused ones
 
 
 ## Project-Specific Guidelines
