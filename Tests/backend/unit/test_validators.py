@@ -7,11 +7,9 @@ Tests various validation functions for sessions, files, and configurations.
 import pytest
 from app.core.exceptions import (
     FileTooLargeError,
-    InvalidFileFormatError,
     ValidationError,
 )
 from app.utils.validators import (
-    validate_csv_extension,
     validate_file_size,
     validate_session_name,
 )
@@ -31,27 +29,6 @@ class TestValidateFileSize:
             validate_file_size(600 * 1024 * 1024, "test.csv")  # 600MB
 
         assert "exceeds maximum" in str(exc_info.value.message).lower()
-
-
-class TestValidateCsvExtension:
-    """Test CSV extension validation."""
-
-    def test_valid_csv_extension(self):
-        """Accept .csv file."""
-        # Should not raise
-        validate_csv_extension("test.csv")
-
-    def test_invalid_extension(self):
-        """Reject non-CSV file."""
-        with pytest.raises(InvalidFileFormatError) as exc_info:
-            validate_csv_extension("test.txt")
-
-        assert "Invalid file format" in str(exc_info.value.message)
-
-    def test_case_insensitive(self):
-        """Accept .CSV in uppercase."""
-        # Should not raise
-        validate_csv_extension("test.CSV")
 
 
 class TestValidateSessionName:

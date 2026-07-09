@@ -10,7 +10,6 @@ import re
 from app.core.config import settings
 from app.core.exceptions import (
     FileTooLargeError,
-    InvalidFileFormatError,
     ValidationError,
 )
 
@@ -38,23 +37,6 @@ def validate_file_size(size_bytes: int, filename: str) -> None:
                 "size_mb": round(size_bytes / (1024 * 1024), 2),
                 "max_size_mb": settings.max_upload_size_mb,
             },
-        )
-
-
-def validate_csv_extension(filename: str) -> None:
-    """
-    Validate that file has CSV extension.
-
-    Args:
-        filename: Filename to validate
-
-    Raises:
-        InvalidFileFormatError: If file is not a CSV
-    """
-    if not filename.lower().endswith(".csv"):
-        raise InvalidFileFormatError(
-            message=f"Invalid file format: {filename}",
-            details={"filename": filename, "expected_extension": ".csv"},
         )
 
 

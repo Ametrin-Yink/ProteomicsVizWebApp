@@ -326,7 +326,7 @@ class TestMSstatsFullPipeline:
     """MSstats (TMT): ALL 8 steps with mocked R steps 6-7."""
 
     @pytest.mark.asyncio
-    async def test_all_8_steps(self, pipeline_test_files, tmp_path):
+    async def test_all_8_steps(self, tmp_path):
         from app.services.steps.engines.step_msstats_abundance import (
             step_msstats_protein_abundance,
         )
@@ -400,7 +400,7 @@ class TestMsqrob2FullPipeline:
     """msqrob2 (DIA): ALL 8 steps with mocked R steps 6-7."""
 
     @pytest.mark.asyncio
-    async def test_all_8_steps(self, pipeline_test_files, tmp_path):
+    async def test_all_8_steps(self, tmp_path):
         from app.services.steps.engines.step_msqrob2_abundance import (
             step_protein_abundance_msqrob2,
         )
