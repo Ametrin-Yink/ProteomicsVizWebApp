@@ -15,7 +15,7 @@ import requests
 API = "http://localhost:8000/api/sessions"
 FIXTURE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "fixtures"
 TMT_FILE = FIXTURE_DIR / "tmt_sample_10000rows.txt"
-CHANNEL_DESIGN = Path(__file__).resolve().parent.parent.parent.parent.parent / "SampleData" / "real_PD_files" / "TMT-Channel-design.csv"
+CHANNEL_DESIGN = FIXTURE_DIR / "tmt_channel_design.csv"
 
 # ── Helpers ──
 
