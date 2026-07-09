@@ -18,11 +18,12 @@ import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { useSessionValidation } from '@/hooks/use-session-validation';
 import TmtChannelMapping from '@/components/analysis/TmtChannelMapping';
 import DiaMetadataTable from '@/components/analysis/DiaMetadataTable';
 import type { UploadedFileInfo } from '@/types';
 
-function MetadataContent() {
+function MetadataContentInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || '';
@@ -37,6 +38,16 @@ function MetadataContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+  const resetAnalysis = useAnalysisStore((s) => s.reset);
+
+  // Reset analysis store when session changes — prevents stale file/config leakage
+  useEffect(() => {
+    resetAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  useSessionValidation(sessionId || null);
 
   // TMT files
   const tmtFiles = useMemo(
@@ -75,6 +86,11 @@ function MetadataContent() {
     const restore = async () => {
       try {
         const sessionResp = await fetch(`/api/sessions/${sessionId}`);
+        if (sessionResp.status === 404) {
+          addToast('error', 'Session not found. Please start a new analysis.');
+          router.push('/');
+          return;
+        }
         if (sessionResp.ok) {
           const raw = await sessionResp.json();
           const cfg = raw.config as Record<string, unknown> | null;
@@ -97,7 +113,7 @@ function MetadataContent() {
           }
         }
       } catch {
-        // Restoration failed; user can continue editing
+        // Network error — allow continuing offline
       } finally {
         setIsRestoring(false);
       }
@@ -404,6 +420,12 @@ function MetadataContent() {
       </div>
     </div>
   );
+}
+
+function MetadataContent() {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session') || '';
+  return <MetadataContentInner key={sessionId || 'no-session'} />;
 }
 
 export default function MetadataPage() {
