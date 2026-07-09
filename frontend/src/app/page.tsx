@@ -19,6 +19,8 @@ import {
   Plus,
   ArrowRight,
   Loader2,
+  Dna,
+  BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useSessionStore } from '@/stores/sessionStore';
@@ -29,11 +31,11 @@ import { sessionsApi } from '@/lib/api-client';
 const workflowSteps = [
   {
     icon: Upload,
-    label: 'Select pipeline',
+    label: 'Upload & configure',
   },
   {
     icon: Sliders,
-    label: 'Configure pipeline',
+    label: 'Set parameters',
   },
   {
     icon: TrendingUp,
@@ -43,26 +45,51 @@ const workflowSteps = [
 
 export default function HomePage() {
   const router = useRouter();
-  const [isCreating, setIsCreating] = React.useState(false);
+  const [isCreating, setIsCreating] = React.useState<Record<string, boolean>>({});
   const addSession = useSessionStore((s) => s.addSession);
   const resetAnalysis = useAnalysisStore((s) => s.reset);
+  const setAnalysisType = useAnalysisStore((s) => s.setAnalysisType);
   const addToast = useUIStore((s) => s.addToast);
 
+  const handleCreateSession = async (type: 'tmt' | 'dia' | 'ptm') => {
+    if (isCreating[type]) return;
+    setIsCreating((prev) => ({ ...prev, [type]: true }));
+    try {
+      const now = new Date();
+      const name = `Analysis ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const newSession = await sessionsApi.create(name, 'multi_condition_comparison');
+      resetAnalysis();
+      setAnalysisType(type);
+      // Save file_type to backend session config
+      await sessionsApi.updateConfig(newSession.id, {
+        ...useAnalysisStore.getState().config,
+        file_type: type === 'ptm' ? undefined : type,
+      }).catch(() => {});
+      addSession(newSession);
+      router.push(`/new/upload?session=${newSession.id}&type=${type}`);
+    } catch (e) {
+      console.error('Failed to create session:', e);
+      addToast('error', 'Failed to create analysis session. Please try again.');
+    } finally {
+      setIsCreating((prev) => ({ ...prev, [type]: false }));
+    }
+  };
+
   const handleNewAnalysis = async () => {
-    if (isCreating) return;
-    setIsCreating(true);
+    if (isCreating['new']) return;
+    setIsCreating((prev) => ({ ...prev, ['new']: true }));
     try {
       const now = new Date();
       const name = `Analysis ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const newSession = await sessionsApi.create(name, 'multi_condition_comparison');
       resetAnalysis();
       addSession(newSession);
-      router.push(`/new/pipeline?session=${newSession.id}`);
+      router.push(`/new/type?session=${newSession.id}`);
     } catch (e) {
       console.error('Failed to create session:', e);
       addToast('error', 'Failed to create analysis session. Please try again.');
     } finally {
-      setIsCreating(false);
+      setIsCreating((prev) => ({ ...prev, ['new']: false }));
     }
   };
 
@@ -87,21 +114,57 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Primary CTA */}
-          <div className="mb-8">
+          {/* Quick-start buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <Button
               variant="primary"
-              size="lg"
+              size="md"
               fullWidth
-              leftIcon={isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+              leftIcon={isCreating['tmt'] ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+              onClick={() => handleCreateSession('tmt')}
+              disabled={isCreating['tmt']}
+              data-testid="new-tmt-btn"
+            >
+              New TMT Analysis
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              fullWidth
+              leftIcon={isCreating['dia'] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Dna className="w-4 h-4" />}
+              onClick={() => handleCreateSession('dia')}
+              disabled={isCreating['dia']}
+              data-testid="new-dia-btn"
+            >
+              New DIA Analysis
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              fullWidth
+              leftIcon={isCreating['ptm'] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              onClick={() => handleCreateSession('ptm')}
+              disabled={isCreating['ptm']}
+              data-testid="new-ptm-btn"
+            >
+              New PTM Analysis
+            </Button>
+          </div>
+
+          {/* Guided flow link */}
+          <div className="mb-8 text-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={isCreating['new'] ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
               onClick={handleNewAnalysis}
-              disabled={isCreating}
+              disabled={isCreating['new']}
               data-testid="new-analysis-btn"
             >
-              New Analysis
+              New Analysis (guided)
             </Button>
-            <p className="text-xs text-text-muted mt-2 text-center">
-              Upload PSM data and start a new analysis session
+            <p className="text-xs text-text-muted mt-1">
+              Choose analysis type step by step
             </p>
           </div>
 

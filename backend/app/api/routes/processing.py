@@ -6,11 +6,12 @@ Processing status and control endpoints.
 
 import asyncio
 import logging
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_session_store
-from app.core.config import MIN_PROTEOMICS_FILES
+from app.core.config import MIN_DIA_FILES, MIN_PROTEOMICS_FILES
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
 from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism, PipelineTool
@@ -31,12 +32,15 @@ _background_tasks: set[asyncio.Task] = set()
 
 def _derive_pipeline(session: Session) -> PipelineTool:
     """Derive pipeline tool from session, with backward compat for old sessions."""
+    ft = getattr(session.config, "file_type", None) if session.config else None
+    if ft == "tmt":
+        return PipelineTool.MSSTATS
+    if ft == "dia":
+        return PipelineTool.MSQROB2
+    # Legacy fallback for old sessions without file_type
     raw = getattr(session, "pipeline", None)
     if raw in ("msqrob2", "msstats"):
         return PipelineTool(raw)
-    # Fallback: old sessions only had template
-    if session.template == "msstats":
-        return PipelineTool.MSSTATS
     return PipelineTool.MSQROB2
 
 
@@ -165,10 +169,15 @@ async def retry_processing(
             detail="No proteomics files found. Cannot retry without uploaded files.",
         )
 
-    if len(session.files.proteomics) < MIN_PROTEOMICS_FILES:
+    min_files = (
+        MIN_DIA_FILES
+        if (session.config and session.config.file_type == "dia")
+        else MIN_PROTEOMICS_FILES
+    )
+    if len(session.files.proteomics) < min_files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"At least {MIN_PROTEOMICS_FILES} proteomics files required. Current: {len(session.files.proteomics)}",
+            detail=f"At least {min_files} proteomics files required. Current: {len(session.files.proteomics)}",
         )
 
     # Reset to PROCESSING state and clear error
@@ -222,14 +231,19 @@ async def start_processing(
     if not session.files or not session.files.proteomics:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No proteomics files uploaded. Please upload at least 6 PSM files.",
+            detail="No proteomics files uploaded. Please upload proteomics files before starting processing.",
         )
 
-    # Validate minimum file count (at least 3 per condition, 2 conditions = 6 minimum)
-    if len(session.files.proteomics) < MIN_PROTEOMICS_FILES:
+    # Validate minimum file count (TMT: 1, DIA: 2)
+    min_files = (
+        MIN_DIA_FILES
+        if (session.config and session.config.file_type == "dia")
+        else MIN_PROTEOMICS_FILES
+    )
+    if len(session.files.proteomics) < min_files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"At least 6 proteomics files required (3 per condition). Current: {len(session.files.proteomics)}",
+            detail=f"At least {min_files} proteomics files required. Current: {len(session.files.proteomics)}",
         )
 
     # Update session state to processing
@@ -260,8 +274,6 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         session_id: Session ID
         session: Session object with config
     """
-    import traceback
-
     logger.info(f"BACKGROUND TASK STARTED for session {session_id}")
 
     # Don't wait for WebSocket - start processing immediately
@@ -317,6 +329,9 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             "comparisons",
             # Batch correction (msqrob2)
             "msqrob2_batch_column",
+            # Pipeline reform: file type and TMT channel mapping
+            "file_type",
+            "tmt_channel_mapping",
         ]
 
         sc = session.config

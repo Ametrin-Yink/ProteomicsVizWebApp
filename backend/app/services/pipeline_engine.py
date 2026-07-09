@@ -179,6 +179,7 @@ class StepContext:
     step_outputs: dict[int, Path] = field(default_factory=dict)
     state: PipelineState | None = None
     result: AnalysisResult | None = None
+    current_step_number: int = 0  # Set by engine before each step handler call
     _progress_callbacks: list[Callable] = field(default_factory=list)
     _cancel_event: asyncio.Event | None = None
     timeout_multiplier: int = 1  # Set to 2 on retry after TimeoutExpired
@@ -249,6 +250,9 @@ class PipelineEngine:
 
             # Reset timeout multiplier for each step
             ctx.timeout_multiplier = 1
+
+            # Set current step number before calling handler
+            ctx.current_step_number = step.number
 
             try:
                 await step.handler(ctx)

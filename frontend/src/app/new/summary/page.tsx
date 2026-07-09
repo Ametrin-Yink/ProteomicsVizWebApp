@@ -7,7 +7,7 @@ import {
   FileText, Table2, GitCompare, Sliders, CheckCircle,
   ChevronDown, ChevronRight,
 } from 'lucide-react';
-import { useAnalysisStore } from '@/stores/analysis-store';
+import { useAnalysisStore, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, processingApi } from '@/lib/api-client';
 import { cn, formatGroup } from '@/lib/utils';
@@ -47,9 +47,10 @@ function SummaryContent() {
   const sessionId = searchParams.get('session') || '';
 
   const config = useAnalysisStore((s) => s.config);
-  const selectedPipeline = useAnalysisStore((s) => s.selectedPipeline);
+  const analysisType = useAnalysisStore((s) => s.analysisType);
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const availableOrganisms = useAnalysisStore((s) => s.availableOrganisms);
+  const selectedPipeline = getPipelineFromType(analysisType);
   const { addToast } = useUIStore();
 
   const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
@@ -66,27 +67,21 @@ function SummaryContent() {
 
   React.useEffect(() => {
     if (!sessionId) { router.replace('/'); }
-    else if (!selectedPipeline) { router.replace(`/new/pipeline?session=${sessionId}`); }
-  }, [sessionId, selectedPipeline, router]);
+    else if (!analysisType) { router.replace(`/new/type?session=${sessionId}`); }
+  }, [sessionId, analysisType, router]);
 
-  const maxConditions = React.useMemo(
-    () => uploadedFiles.reduce((max, f) => Math.max(max, f.conditions.length), 0),
-    [uploadedFiles],
-  );
-
-  const customColumns = React.useMemo(() => {
+  // Derive data column names from metadata_columns
+  const dataColumns = React.useMemo(() => {
     if (!config.metadata_columns) return [];
-    const conditionColSet = new Set(
-      Array.from({ length: maxConditions }, (_, i) => `condition_${i + 1}`),
-    );
+    const coreCols = new Set(['experiment', 'replicate', 'batch']);
     const cols = new Set<string>();
     Object.values(config.metadata_columns).forEach((row) => {
       Object.keys(row).forEach((k) => {
-        if (k !== 'experiment' && !conditionColSet.has(k) && k !== 'replicate') cols.add(k);
+        if (!coreCols.has(k)) cols.add(k);
       });
     });
     return Array.from(cols);
-  }, [config.metadata_columns, maxConditions]);
+  }, [config.metadata_columns]);
 
   const totalSize = React.useMemo(
     () => uploadedFiles.reduce((sum, f) => sum + f.size, 0),
@@ -185,13 +180,11 @@ function SummaryContent() {
                 <tr className="border-b border-border">
                   <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Filename</th>
                   <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Experiment</th>
-                  {Array.from({ length: maxConditions }, (_, i) => (
-                    <th key={`cond-${i}`} className="text-left py-2 px-3 text-text-muted font-medium text-xs">Condition {i + 1}</th>
-                  ))}
-                  <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Replicate</th>
-                  {customColumns.map((col) => (
+                  {dataColumns.map((col) => (
                     <th key={col} className="text-left py-2 px-3 text-text-muted font-medium text-xs">{col}</th>
                   ))}
+                  <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Replicate</th>
+                  <th className="text-left py-2 px-3 text-text-muted font-medium text-xs">Batch</th>
                 </tr>
               </thead>
               <tbody>
@@ -203,13 +196,11 @@ function SummaryContent() {
                         {file.filename}
                       </td>
                       <td className="py-1.5 px-3 text-text-primarytext-xs">{meta.experiment || file.experiment}</td>
-                      {Array.from({ length: maxConditions }, (_, i) => (
-                        <td key={`cond-${i}`} className="py-1.5 px-3 text-text-primarytext-xs">{file.conditions[i] || '—'}</td>
-                      ))}
-                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono">#{meta.replicate || file.replicate}</td>
-                      {customColumns.map((col) => (
+                      {dataColumns.map((col) => (
                         <td key={col} className="py-1.5 px-3 text-text-primarytext-xs">{meta[col] || '—'}</td>
                       ))}
+                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono">#{meta.replicate || file.replicate}</td>
+                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono">{meta.batch || file.batch || '—'}</td>
                     </tr>
                   );
                 })}

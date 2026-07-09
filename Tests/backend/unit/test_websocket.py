@@ -1,10 +1,10 @@
 """Unit tests for WebSocket endpoint — connection lifecycle and message handling."""
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -100,7 +100,7 @@ class TestWebSocketConnection:
         client = TestClient(app)
         with client.websocket_connect(
             "/ws/sessions/550e8400-e29b-41d4-a716-446655440000"
-        ) as ws:
+        ):
             pass  # Context exit triggers disconnect
 
         mock_session_manager.unregister_websocket.assert_awaited()

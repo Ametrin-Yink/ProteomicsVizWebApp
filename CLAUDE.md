@@ -137,39 +137,47 @@ const sessions = useSessionStore((state) => state.sessions);  // GOOD
 const state = useSessionStore();  // BAD - causes re-renders
 ```
 
-### Processing Pipeline
+### Processing Pipeline — Composable Architecture
 
-The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step handlers registered via `pipeline_registry.py`. Two statistical pipelines are available, selected via `PipelineTool` (not `AnalysisTemplate`):
+The pipeline uses a **composable step library** (`pipeline_engine.py` + `pipeline_registry.py`). Pipelines are composed from shared building blocks organized by concern:
 
-- **msqrob2** (default): R/msqrob2 + QFeatures for protein abundance and DE
-- **MSstats**: R/MSstats for protein abundance and DE
+```
+backend/app/services/steps/
+├── inputs/        # File-format-specific input handlers
+│   ├── step_input_tmt.py   # Melt TMT channels, map groups
+│   └── step_input_dia.py   # Rename Quan_Value→Abundance, per-file metadata
+├── shared/        # Unified handlers (both pipelines)
+│   ├── step_unique_psm.py
+│   ├── step_remove_razor.py
+│   ├── step_remove_low_quality.py
+│   ├── step_filter_criteria.py
+│   └── step_qc_metrics.py
+└── engines/       # Statistical engine R wrappers
+    ├── step_msqrob2_abundance.py  # QFeatures
+    ├── step_msqrob2_de.py         # msqrob2 contrasts
+    ├── step_msstats_abundance.py   # dataProcess
+    └── step_msstats_de.py          # groupComparison
+```
 
-Both pipelines are defined in `pipeline_registry.py`. GSEA and BioNet are on-demand, triggered from visualization routes — not pipeline steps. The `TIME_SERIES` template is reserved for future use.
+**Pipeline → File Type Mapping (auto-derived):**
+- **TMT** → MSstats (8 steps): TMT multiplexed data with reporter ion channels
+- **DIA** → msqrob2 (8 steps): Label-free DIA data with single Quan_Value per PSM
+- User selects analysis type (TMT/DIA) up front; pipeline is auto-derived via `_derive_pipeline()` from `session.config.file_type`
 
-**msqrob2 Pipeline (5 steps — consolidated for v1.16 API):**
+**Both pipelines are 8-step symmetric:**
 
-| Step | Name | Tool |
-|------|------|------|
-| 1 | Combine Replicates | Python (DataProcessor, pipeline-specific) |
-| 2 | Generate Unique PSM | Python (DataProcessor, pipeline-specific) |
-| 3 | Protein Abundance | R (msqrob2/QFeatures) |
-| 4 | Differential Expression | R (msqrob2 v1.16: `msqrob()` + `makeContrast()` + `hypothesisTest()`) |
-| 5 | QC Metrics | Python (QCCalculator, msqrob2-specific) |
+| Step | TMT (MSstats) | DIA (msqrob2) |
+|------|--------------|----------------|
+| 1 | INPUT_TMT — melt channels, map groups | INPUT_DIA — rename Quan_Value, metadata |
+| 2 | UNIQUE_PSM (shared) | UNIQUE_PSM (shared) |
+| 3 | REMOVE_RAZOR (shared) | REMOVE_RAZOR (shared) |
+| 4 | REMOVE_LOW_QUALITY (shared) | REMOVE_LOW_QUALITY (shared) |
+| 5 | FILTER_CRITERIA (shared) | FILTER_CRITERIA (shared) |
+| 6 | MSSTATS_ABUNDANCE (R) | MSQROB2_ABUNDANCE (R) |
+| 7 | MSSTATS_DE (R) | MSQROB2_DE (R) |
+| 8 | QC_METRICS (shared) | QC_METRICS (shared) |
 
-Each pipeline has its own step 1-2 handlers (pipeline-specific files, not shared). This isolation prevents cross-pipeline contamination: msqrob2 step 2 frees `ctx.df` before R steps, while MSstats step 2 keeps it for Python steps 3-5. Steps 3-5 replace the old 8-step pipeline: Python preprocessing (old steps 3-5: razor, quality, filter) is now handled natively in the R QFeatures pipeline at step 3.
-
-**MSstats Pipeline (8 steps — pipeline-specific handlers for all steps):**
-
-| Step | Name | Tool |
-|------|------|------|
-| 1 | Combine Replicates | Python (DataProcessor, pipeline-specific) |
-| 2 | Generate Unique PSM | Python (DataProcessor, pipeline-specific) |
-| 3 | Remove Razor Peptides | Python (DataProcessor, conditional) |
-| 4 | Remove Low Quality | Python (DataProcessor) |
-| 5 | Filter by Criteria | Python (DataProcessor) |
-| 6 | Protein Abundance | R (MSstats dataProcess) |
-| 7 | Differential Expression | R (MSstats groupComparison) |
-| 8 | QC Metrics | Python (QCCalculator) |
+Step numbering is positional (list index + 1). PipelineEngine sets `ctx.current_step_number` before each handler.
 
 **On-Demand Analysis (triggered from visualization, not pipeline steps):**
 - **GSEA**: Gene set enrichment via `visualization.py` POST endpoint, cached by `gsea_cache_service.py`
@@ -178,12 +186,12 @@ Each pipeline has its own step 1-2 handlers (pipeline-specific files, not shared
 
 **R Scripts Reference:**
 
-| Script | Step | Purpose |
-|--------|------|---------|
-| `msqrob2_data_process.R` | 3 (msqrob2) | Full QFeatures pipeline: filter, log2, normalize, impute, aggregate, gene map, batch correct |
-| `msqrob2_group_comparison_multi.R` | 4 (msqrob2) | Multi-condition DE via msqrob v1.16 API (`msqrob()` + `makeContrast()` + `hypothesisTest()`) |
-| `msstats_data_process.R` | 6 (MSstats) | MSstats protein abundance |
-| `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison |
+| Script | Pipeline Step | Purpose |
+|--------|-------------|---------|
+| `msqrob2_data_process.R` | 6 (msqrob2) | Full QFeatures pipeline: filter, log2, normalize, impute, aggregate, gene map, batch correct |
+| `msqrob2_group_comparison_multi.R` | 7 (msqrob2) | Multi-condition DE via msqrob v1.16 API (`msqrob()` + `makeContrast()` + `hypothesisTest()`) |
+| `msstats_data_process.R` | 6 (MSstats) | MSstats protein abundance (DDARawData → OpenMStoMSstatsFormat → dataProcess) |
+| `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison (contrast matrix → groupComparison) |
 | `bionet_network.R` | on-demand | INDRA subnetwork analysis via MSstatsBioNet |
 | `install_r_packages.R` | setup | Installs Bioconductor packages |
 | `verify_r_packages.R` | setup | Verifies msqrob2/QFeatures/limma are installed |
@@ -193,10 +201,18 @@ Each pipeline has its own step 1-2 handlers (pipeline-specific files, not shared
 - Frontend connects to `ws://localhost:8000/ws/sessions/{session_id}`
 - Pipeline state persisted to `sessions/{session_id}/pipeline_state.json`
 
-**Pipeline E2E Chain Tests:**
-- `Tests/backend/unit/test_pipeline_chains.py` — runs ALL pipeline steps sequentially (Python steps real, R steps mocked) to verify the full pipeline works end-to-end
-- `Tests/conftest.py` — `pipeline_test_files` fixture generates ~1000-row PSM CSV files for chain tests
-- `PipelineEngine.run()` and `ProcessingOrchestrator.process_session()` now have direct test coverage
+**Pipeline E2E Tests:**
+- `Tests/backend/integration/test_tmt_pipeline_e2e.py` — Full TMT pipeline (10k-row PD extract, 16-plex channels, 8 steps, 4 comparisons vs DMSO_24h)
+- `Tests/backend/unit/test_pipeline_chains.py` — Chain tests with mocked R steps; column contract verification
+- `Tests/backend/unit/test_pipeline_registry.py` — Composition, step ordering, positional numbering
+- `Tests/fixtures/` — Real PD data extracts: `tmt_sample_10000rows.txt` (TMT, 78 cols), `dia_sample_01-12_1000rows.txt` (DIA, 61 cols each)
+- Old Playwright E2E tests archived as `.spec.ts.skip` (reference dropped `PSM_*.csv` format)
+
+**Input File Formats (Proteome Discoverer exports only):**
+- **TMT:** Tab-delimited `.txt`, 78 columns, `Abundance 126` through `Abundance 134N` (16-plex). Channel detection pattern: `^"?Abundance\s+(\d+)([NC])?"?$`. Any plex size accepted (6, 10, 16, 18).
+- **DIA:** Tab-delimited `.txt`, 61 columns, single `Quan Value` column. No TMT abundance columns. No requirement for `Quan Info` column.
+- Both `.txt` and `.csv` accepted. Auto-detect delimiter (tab vs comma). No filename pattern required.
+- Old `PSM_Experiment_Condition_Replicate.csv` format is **dropped**.
 
 ### Data Flow Patterns
 
@@ -225,9 +241,11 @@ Each pipeline has its own step 1-2 handlers (pipeline-specific files, not shared
 - **R script receives args positionally:** Check argument count in R with `length(args)`
 
 ### File Patterns (Immutable)
-- **Filename format:** `PSM_ExperimentName_Condition_ReplicateNumber.csv`
-- **Abundance column:** `Abundance F{code} Sample` (dynamic F-code per TMT channel)
-- **Minimum replicates:** 3 per condition
+- **Filename format:** Any filename accepted (no pattern requirement)
+- **TMT Abundance columns:** `Abundance 126`, `Abundance 127N`, …, `Abundance 134N` (PD export format)
+- **DIA quantification:** `Quan Value` column (single value per PSM)
+- **Minimum replicates:** 3 per condition recommended (soft warning); 1 per condition accepted
+- **Supported extensions:** `.txt` (tab-delimited) and `.csv` (comma-delimited), auto-detected
 
 ### TypeScript / State Management
 - **strict: true** required in tsconfig.json

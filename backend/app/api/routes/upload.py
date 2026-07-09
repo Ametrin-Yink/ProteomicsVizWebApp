@@ -4,7 +4,9 @@ File upload API routes.
 Handles proteomics file uploads with validation.
 """
 
+import asyncio
 import logging
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,7 +18,11 @@ from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.db.session_store import SessionStore
 from app.models.session import FileInfo, ProteomicsFileInfo
-from app.utils.file_parser import FileParser, parse_psm_filename, sanitize_filename
+from app.utils.file_parser import (
+    parse_proteomics_file,
+    read_file_columns,
+    sanitize_filename,
+)
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
@@ -28,7 +34,7 @@ async def upload_proteomics_files(
     files: list[UploadFile] = File(...),
     store: SessionStore = Depends(get_session_store),
 ):
-    """Upload proteomics CSV files."""
+    """Upload proteomics PD export files (.csv or .txt, TMT or DIA)."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
@@ -36,8 +42,24 @@ async def upload_proteomics_files(
             detail=f"Session {session_id} not found",
         )
 
-    parser = FileParser()
-    uploaded_files = []
+    if not session.config or not session.config.file_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session must have a configured file_type ('tmt' or 'dia'). "
+            "Please configure the session before uploading files.",
+        )
+
+    file_type = session.config.file_type
+    if file_type not in ("tmt", "dia"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file_type: {file_type}. Must be 'tmt' or 'dia'.",
+        )
+
+    session_uploads_dir = Path(settings.sessions_dir) / session_id / "uploads"
+    session_uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    response_files = []
 
     for file in files:
         # Check file size
@@ -47,65 +69,60 @@ async def upload_proteomics_files(
                 message=f"File {file.filename} exceeds maximum size of {settings.max_upload_size_mb}MB"
             )
 
-        # Parse and validate
-        try:
-            session_uploads_dir = Path(settings.sessions_dir) / session_id / "uploads"
-            session_uploads_dir.mkdir(parents=True, exist_ok=True)
-            file_info = await parser.parse_proteomics_file(
-                filename=file.filename, content=content, session_dir=session_uploads_dir
-            )
-            uploaded_files.append(file_info)
-        except Exception as e:
-            # Clean up any files already written for this batch
-            for prev in uploaded_files:
-                try:
-                    prev_path = session_uploads_dir / prev.original_filename
-                    if prev_path.exists():
-                        prev_path.unlink()
-                except Exception:
-                    pass
-            import traceback
+        # Sanitize and save file
+        safe_filename = sanitize_filename(file.filename)
+        file_path = session_uploads_dir / safe_filename
 
-            logger.error(f"Upload error for {file.filename}: {traceback.format_exc()}")
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
+
+        # Validate and detect features using parse_proteomics_file
+        try:
+            result = await _run_parse_proteomics_file(file_path, file_type)
+        except Exception as e:
+            # Clean up saved file on error
+            if file_path.exists():
+                file_path.unlink()
+            logger.error(f"Upload validation error for {file.filename}: {traceback.format_exc()}")
             raise ValidationError(
                 message=f"Error parsing {file.filename}: {e!s}"
             ) from e
 
-    # Convert UploadedFileMetadata to ProteomicsFileInfo and update session
-    response_files = []
-    for file_metadata in uploaded_files:
-        # Parse filename to get experiment, condition, replicate
-        parsed = parse_psm_filename(file_metadata.original_filename)
-
+        # Build ProteomicsFileInfo (no conditions field — removed in pipeline reform)
         proteomics_file = ProteomicsFileInfo(
-            filename=file_metadata.original_filename,
-            size=file_metadata.size,
-            uploaded_at=file_metadata.uploaded_at,
-            columns=[],  # Will be populated later if needed
-            experiment=parsed.experiment,
-            conditions=parsed.conditions,
-            replicate=parsed.replicate,
+            filename=file.filename,
+            size=len(content),
+            uploaded_at=datetime.now(UTC),
+            columns=result["columns"],
+            file_type=file_type,
         )
         session.files.proteomics.append(proteomics_file)
 
-        # Build frontend-compatible response with parsed metadata
-        response_files.append(
-            {
-                "filename": file_metadata.original_filename,
-                "size": file_metadata.size,
-                "experiment": parsed.experiment,
-                "conditions": parsed.conditions,
-                "replicate": parsed.replicate,
-                "columns": [],
-            }
-        )
+        # Build frontend-compatible response with detection results
+        file_response = {
+            "filename": file.filename,
+            "size": len(content),
+            "columns": result["columns"],
+            "file_type": file_type,
+        }
+        if result.get("tmt_channels"):
+            file_response["tmt_channels"] = result["tmt_channels"]
+        if result.get("has_quan_value"):
+            file_response["has_quan_value"] = result["has_quan_value"]
+
+        response_files.append(file_response)
 
     await store.save(session)
 
     return {
-        "message": f"Successfully uploaded {len(uploaded_files)} files",
+        "message": f"Successfully uploaded {len(response_files)} files",
         "files": response_files,
     }
+
+
+async def _run_parse_proteomics_file(file_path: Path, file_type: str) -> dict:
+    """Run parse_proteomics_file in a thread to avoid blocking the event loop."""
+    return await asyncio.to_thread(parse_proteomics_file, file_path, file_type)
 
 
 @router.post("/{session_id}/upload/ptm-enrichment")
@@ -122,8 +139,12 @@ async def upload_ptm_enrichment_files(
             detail=f"Session {session_id} not found",
         )
 
-    parser = FileParser()
-    uploaded_files = []
+    session_uploads_dir = (
+        Path(settings.sessions_dir) / session_id / "uploads" / "ptm_enrichment"
+    )
+    session_uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    response_files = []
 
     for file in files:
         content = await file.read()
@@ -132,60 +153,44 @@ async def upload_ptm_enrichment_files(
                 message=f"File {file.filename} exceeds maximum size of {settings.max_upload_size_mb}MB"
             )
 
-        try:
-            session_uploads_dir = (
-                Path(settings.sessions_dir) / session_id / "uploads" / "ptm_enrichment"
-            )
-            session_uploads_dir.mkdir(parents=True, exist_ok=True)
-            file_info = await parser.parse_proteomics_file(
-                filename=file.filename, content=content, session_dir=session_uploads_dir
-            )
-            uploaded_files.append(file_info)
-        except Exception as e:
-            for prev in uploaded_files:
-                try:
-                    prev_path = session_uploads_dir / prev.original_filename
-                    if prev_path.exists():
-                        prev_path.unlink()
-                except Exception:
-                    pass
-            import traceback
+        # Sanitize and save file
+        safe_filename = sanitize_filename(file.filename)
+        file_path = session_uploads_dir / safe_filename
 
-            logger.error(f"Upload error for {file.filename}: {traceback.format_exc()}")
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
+
+        # Read columns for metadata
+        try:
+            columns = await asyncio_to_thread(read_file_columns, file_path)
+        except Exception as e:
+            if file_path.exists():
+                file_path.unlink()
+            logger.error(f"Upload error for {file.filename}: {e}")
             raise ValidationError(
                 message=f"Error parsing {file.filename}: {e!s}"
             ) from e
 
-    response_files = []
-    for file_metadata in uploaded_files:
-        parsed = parse_psm_filename(file_metadata.original_filename)
-
         proteomics_file = ProteomicsFileInfo(
-            filename=file_metadata.original_filename,
-            size=file_metadata.size,
-            uploaded_at=file_metadata.uploaded_at,
-            columns=[],
-            experiment=parsed.experiment,
-            conditions=parsed.conditions,
-            replicate=parsed.replicate,
+            filename=file.filename,
+            size=len(content),
+            uploaded_at=datetime.now(UTC),
+            columns=columns,
         )
         session.files.ptm_enrichment.append(proteomics_file)
 
         response_files.append(
             {
-                "filename": file_metadata.original_filename,
-                "size": file_metadata.size,
-                "experiment": parsed.experiment,
-                "conditions": parsed.conditions,
-                "replicate": parsed.replicate,
-                "columns": [],
+                "filename": file.filename,
+                "size": len(content),
+                "columns": columns,
             }
         )
 
     await store.save(session)
 
     return {
-        "message": f"Successfully uploaded {len(uploaded_files)} files",
+        "message": f"Successfully uploaded {len(response_files)} files",
         "files": response_files,
     }
 
@@ -204,8 +209,12 @@ async def upload_global_proteome_files(
             detail=f"Session {session_id} not found",
         )
 
-    parser = FileParser()
-    uploaded_files = []
+    session_uploads_dir = (
+        Path(settings.sessions_dir) / session_id / "uploads" / "global_proteome"
+    )
+    session_uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    response_files = []
 
     for file in files:
         content = await file.read()
@@ -214,60 +223,44 @@ async def upload_global_proteome_files(
                 message=f"File {file.filename} exceeds maximum size of {settings.max_upload_size_mb}MB"
             )
 
-        try:
-            session_uploads_dir = (
-                Path(settings.sessions_dir) / session_id / "uploads" / "global_proteome"
-            )
-            session_uploads_dir.mkdir(parents=True, exist_ok=True)
-            file_info = await parser.parse_proteomics_file(
-                filename=file.filename, content=content, session_dir=session_uploads_dir
-            )
-            uploaded_files.append(file_info)
-        except Exception as e:
-            for prev in uploaded_files:
-                try:
-                    prev_path = session_uploads_dir / prev.original_filename
-                    if prev_path.exists():
-                        prev_path.unlink()
-                except Exception:
-                    pass
-            import traceback
+        # Sanitize and save file
+        safe_filename = sanitize_filename(file.filename)
+        file_path = session_uploads_dir / safe_filename
 
-            logger.error(f"Upload error for {file.filename}: {traceback.format_exc()}")
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
+
+        # Read columns for metadata
+        try:
+            columns = await asyncio_to_thread(read_file_columns, file_path)
+        except Exception as e:
+            if file_path.exists():
+                file_path.unlink()
+            logger.error(f"Upload error for {file.filename}: {e}")
             raise ValidationError(
                 message=f"Error parsing {file.filename}: {e!s}"
             ) from e
 
-    response_files = []
-    for file_metadata in uploaded_files:
-        parsed = parse_psm_filename(file_metadata.original_filename)
-
         proteomics_file = ProteomicsFileInfo(
-            filename=file_metadata.original_filename,
-            size=file_metadata.size,
-            uploaded_at=file_metadata.uploaded_at,
-            columns=[],
-            experiment=parsed.experiment,
-            conditions=parsed.conditions,
-            replicate=parsed.replicate,
+            filename=file.filename,
+            size=len(content),
+            uploaded_at=datetime.now(UTC),
+            columns=columns,
         )
         session.files.global_proteome.append(proteomics_file)
 
         response_files.append(
             {
-                "filename": file_metadata.original_filename,
-                "size": file_metadata.size,
-                "experiment": parsed.experiment,
-                "conditions": parsed.conditions,
-                "replicate": parsed.replicate,
-                "columns": [],
+                "filename": file.filename,
+                "size": len(content),
+                "columns": columns,
             }
         )
 
     await store.save(session)
 
     return {
-        "message": f"Successfully uploaded {len(uploaded_files)} files",
+        "message": f"Successfully uploaded {len(response_files)} files",
         "files": response_files,
     }
 
@@ -375,7 +368,13 @@ async def delete_file(
         session.files.ptm_enrichment = [
             f for f in session.files.ptm_enrichment if f.filename != filename
         ]
-        file_path = Path(settings.sessions_dir) / session_id / "uploads" / "ptm_enrichment" / filename
+        file_path = (
+            Path(settings.sessions_dir)
+            / session_id
+            / "uploads"
+            / "ptm_enrichment"
+            / filename
+        )
         try:
             if file_path.exists():
                 file_path.unlink()
@@ -385,7 +384,13 @@ async def delete_file(
         session.files.global_proteome = [
             f for f in session.files.global_proteome if f.filename != filename
         ]
-        file_path = Path(settings.sessions_dir) / session_id / "uploads" / "global_proteome" / filename
+        file_path = (
+            Path(settings.sessions_dir)
+            / session_id
+            / "uploads"
+            / "global_proteome"
+            / filename
+        )
         try:
             if file_path.exists():
                 file_path.unlink()
@@ -395,7 +400,13 @@ async def delete_file(
         session.files.fasta = [
             f for f in session.files.fasta if f.filename != filename
         ]
-        file_path = Path(settings.sessions_dir) / session_id / "uploads" / "fasta" / filename
+        file_path = (
+            Path(settings.sessions_dir)
+            / session_id
+            / "uploads"
+            / "fasta"
+            / filename
+        )
         try:
             if file_path.exists():
                 file_path.unlink()
@@ -410,3 +421,8 @@ async def delete_file(
     await store.save(session)
 
     return {"message": f"File {filename} deleted"}
+
+
+def asyncio_to_thread(func, *args, **kwargs):
+    """Run a synchronous function in a thread to avoid blocking the event loop."""
+    return asyncio.to_thread(func, *args, **kwargs)

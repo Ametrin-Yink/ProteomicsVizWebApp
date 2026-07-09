@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3, Tag, FlaskConical, AlertCircle, FileText, Plus, Minus, X } from 'lucide-react';
-import type { ParsedFilename } from '@/types';
+import type { UploadedFileInfo, FileDetectionResult, AnalysisType } from '@/types';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
@@ -22,13 +22,19 @@ function UploadContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || '';
 
-  const state = useAnalysisStore();
-  const { config, setConfig } = state;
-  const validation = getValidation(state);
+  const analysisType = useAnalysisStore((s) => s.analysisType);
+  const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
+  const config = useAnalysisStore((s) => s.config);
+  const setConfig = useAnalysisStore((s) => s.setConfig);
+  const setAnalysisType = useAnalysisStore((s) => s.setAnalysisType);
+  const validation = getValidation(useAnalysisStore.getState());
   const { addToast } = useUIStore();
 
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
+
+  // Detection results
+  const [detectionResults, setDetectionResults] = useState<FileDetectionResult[]>([]);
 
   // PTM-specific state
   const [ptmLabelingType, setPtmLabelingType] = useState<'LF' | 'TMT'>('LF');
@@ -36,7 +42,7 @@ function UploadContent() {
   const [ptmFastaUploadMethod, setPtmFastaUploadMethod] = useState<'human' | 'mouse' | 'custom' | null>(null);
   const [ptmFastaFile, setPtmFastaFile] = useState<{ name: string; size: number } | null>(null);
   const [ptmFastaUploading, setPtmFastaUploading] = useState(false);
-  const [ptmEnrichmentFiles, setPtmEnrichmentFiles] = useState<ParsedFilename[]>([]);
+  const [ptmEnrichmentFiles, setPtmEnrichmentFiles] = useState<UploadedFileInfo[]>([]);
   const [ptmGlobalFiles, setPtmGlobalFiles] = useState<{ filename: string; size: number }[]>([]);
   const [ptmEnrichmentUploading, setPtmEnrichmentUploading] = useState(false);
   const [ptmGlobalUploading, setPtmGlobalUploading] = useState(false);
@@ -79,11 +85,12 @@ function UploadContent() {
       const data = await res.json();
       if (data.files?.length > 0) {
         const store = useAnalysisStore.getState();
-        const parsedFiles: ParsedFilename[] = data.files.map((f: Record<string, unknown>) => ({
+        const parsedFiles: UploadedFileInfo[] = data.files.map((f: Record<string, unknown>) => ({
           filename: f.filename as string,
-          experiment: (f.experiment as string) || 'Unknown',
-          conditions: (f.conditions as string[]) || ['Unknown'],
-          replicate: (f.replicate as number) || 1,
+          experiment: (f.experiment as string) || '',
+          replicate: (f.replicate as number) || 0,
+          batch: (f.batch as string) || '',
+          file_type: (f.file_type as 'tmt' | 'dia' | null) || null,
           size: (f.size as number) || 0,
         }));
         for (const pf of parsedFiles) store.addUploadedFile(pf);
@@ -246,11 +253,18 @@ function UploadContent() {
             }
           }
 
-          // Restore pipeline selection from backend session (needed on page refresh)
-          if (raw.pipeline && (raw.pipeline === 'msqrob2' || raw.pipeline === 'msstats')) {
+          // Restore analysis type from backend session (needed on page refresh)
+          const rawConfig = raw.config as Record<string, unknown> | null;
+          const fileTypeFromConfig = rawConfig?.file_type as string | undefined;
+          if (fileTypeFromConfig === 'tmt' || fileTypeFromConfig === 'dia') {
             const store = useAnalysisStore.getState();
-            if (!store.selectedPipeline) {
-              store.setPipeline(raw.pipeline);
+            if (!store.analysisType) {
+              store.setAnalysisType(fileTypeFromConfig as 'tmt' | 'dia');
+            }
+          } else if (raw.pipeline === 'ptm') {
+            const store = useAnalysisStore.getState();
+            if (!store.analysisType) {
+              store.setAnalysisType('ptm');
             }
           }
         }
@@ -277,23 +291,23 @@ function UploadContent() {
     };
   }, [sessionId, config]);
 
-  // Validate session ID and pipeline selection (deferred until session restore completes)
+  // Validate session ID and analysis type (deferred until session restore completes)
   useEffect(() => {
     if (isRestoring) return;
     if (!sessionId) {
       addToast('error', 'No session found. Please start a new analysis.');
       router.push('/');
-    } else if (!state.selectedPipeline) {
-      router.replace(`/new/pipeline?session=${sessionId}`);
+    } else if (!analysisType) {
+      router.replace(`/new/type?session=${sessionId}`);
     }
-  }, [sessionId, state.selectedPipeline, isRestoring, router, addToast]);
+  }, [sessionId, analysisType, isRestoring, router, addToast]);
 
   const hasCriticalErrors = validation.warnings.filter((w) => w.type === 'error').length > 0;
   const ptmHasEnrichmentFiles = ptmEnrichmentFiles.length > 0;
   const ptmHasFasta = ptmFastaFile !== null || ptmFastaUploadMethod !== null;
-  const canContinue = state.selectedTemplate === 'ptm'
+  const canContinue = analysisType === 'ptm'
     ? ptmHasEnrichmentFiles && ptmHasFasta
-    : validation.selectedFiles.length > 0 && !hasCriticalErrors;
+    : uploadedFiles.length > 0 && !hasCriticalErrors;
 
   const handleContinue = async () => {
     if (!canContinue || !sessionId) return;
@@ -301,7 +315,12 @@ function UploadContent() {
     setIsSaving(true);
     try {
       await sessionsApi.updateConfig(sessionId, config);
-      router.replace(`/new/comparisons?session=${sessionId}`);
+      // PTM skips metadata step, TMT/DIA goes to metadata
+      if (analysisType === 'ptm') {
+        router.replace(`/new/comparisons?session=${sessionId}`);
+      } else {
+        router.replace(`/new/metadata?session=${sessionId}`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save configuration';
       addToast('error', `Failed to save: ${message}`);
@@ -328,20 +347,20 @@ function UploadContent() {
       </div>
 
       {/* Pipeline badge */}
-      {state.selectedPipeline && (
+      {analysisType && analysisType !== 'ptm' && (
         <div className="flex items-center gap-2">
-          {state.selectedPipeline === 'msstats' ? (
+          {analysisType === 'tmt' ? (
             <BarChart3 className="w-4 h-4 text-primary" />
           ) : (
             <Dna className="w-4 h-4 text-primary" />
           )}
           <span className="text-sm font-medium text-primary">
-            {state.selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2'} Pipeline
+            {analysisType === 'tmt' ? 'MSstats' : 'msqrob2'} Pipeline
           </span>
         </div>
       )}
 
-      {state.selectedTemplate === 'protein' ? (
+      {analysisType !== 'ptm' ? (
         <>
           <section className="bg-background border border-border rounded-lg">
             <div className="px-5 py-3 border-b border-border flex items-center gap-3">
@@ -358,7 +377,7 @@ function UploadContent() {
             </div>
           </section>
 
-          {state.uploadedFiles.length > 0 && (
+          {uploadedFiles.length > 0 && (
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <Database className="w-5 h-5 text-primary" />
@@ -375,7 +394,7 @@ function UploadContent() {
             </section>
           )}
 
-          {state.uploadedFiles.length > 0 && (
+          {uploadedFiles.length > 0 && (
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-primary" />
@@ -498,13 +517,15 @@ function UploadContent() {
               {ptmEnrichmentFiles.length > 0 && (
                 <div className="mt-4 space-y-1.5">
                   <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Uploaded Files</p>
-                  {ptmEnrichmentFiles.map((f) => (
+                  {ptmEnrichmentFiles.map((f) => {
+                    const meta = config.metadata_columns?.[f.filename] || {};
+                    return (
                     <div key={f.filename} className="flex items-center justify-between p-2 rounded-md border border-border bg-background text-sm">
                       <div className="flex items-center gap-2 min-w-0">
                         <FileText className="w-4 h-4 text-text-muted flex-shrink-0" />
                         <span className="text-text truncate" title={f.filename}>{f.filename}</span>
                         <span className="text-xs text-text-muted flex-shrink-0">
-                          {f.experiment} / {f.conditions.join('_')} / #{f.replicate}
+                          {meta.experiment || f.experiment}
                         </span>
                       </div>
                       <button
@@ -515,7 +536,8 @@ function UploadContent() {
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -766,7 +788,7 @@ function UploadContent() {
           )}
 
           {/* ExperimentTable for PTM enrichment files */}
-          {state.uploadedFiles.length > 0 && (
+          {uploadedFiles.length > 0 && (
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <Database className="w-5 h-5 text-primary" />
@@ -831,12 +853,12 @@ function UploadContent() {
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           data-testid="upload-back-btn"
-          onClick={() => router.push(`/new/pipeline?session=${sessionId}`)}
+          onClick={() => router.push(`/new/type?session=${sessionId}`)}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary
             hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Pipeline
+          Back to Type
         </button>
 
         <button

@@ -1,7 +1,8 @@
 """
 Unit tests for data processing pipeline (Steps 1-5).
 
-Tests the DataProcessor class methods.
+Tests the DataProcessor class methods including the new TMT and DIA input
+processing steps.
 """
 
 import pandas as pd
@@ -281,3 +282,187 @@ class TestDataProcessor:
 
         assert config.remove_razor is True
         assert config.strict_filtering is True
+
+
+class TestDataProcessorTMT:
+    """Test TMT-specific input processing."""
+
+    @pytest.fixture
+    def processor(self):
+        return DataProcessor(ProcessingConfig())
+
+    @pytest.fixture
+    def channel_mapping(self):
+        """A minimal 16-channel TMT mapping for testing."""
+        channels = [
+            "126", "127N", "127C", "128N", "128C", "129N", "129C",
+            "130N", "130C", "131N", "131C", "132N", "132C", "133N", "133C", "134N",
+        ]
+        mapping = {}
+        for i, ch in enumerate(channels):
+            if i < 8:
+                mapping[ch] = {"drug": "DMSO", "time": "24h", "replicate": 1}
+            else:
+                mapping[ch] = {"drug": "DrugA", "time": "24h", "replicate": 1}
+        return mapping
+
+    def test_step1_combine_replicates_tmt(self, tmt_fixture_path, processor, channel_mapping):
+        """Process TMT fixture with channel mapping and verify output."""
+        df = processor.step1_combine_replicates_tmt(
+            file_paths=[tmt_fixture_path],
+            tmt_channel_mapping=channel_mapping,
+        )
+
+        assert df is not None
+        assert len(df) > 0
+
+        # Check key columns
+        assert "Sequence" in df.columns
+        assert "Master_Protein_Accessions" in df.columns
+        assert "Abundance" in df.columns
+        assert "Sample_Origination" in df.columns
+        assert "Condition" in df.columns
+        assert "Replicate" in df.columns
+
+        # Check condition group columns
+        assert "drug" in df.columns
+        assert "time" in df.columns
+
+        # Check types
+        assert pd.api.types.is_numeric_dtype(df["Abundance"]), "Abundance must be numeric"
+        assert pd.api.types.is_integer_dtype(
+            df["Replicate"]
+        ), "Replicate must be integer"
+
+        # Verify no zero abundances
+        assert (df["Abundance"] > 0).all(), "Zero abundances should be removed"
+
+        # Verify Sample_Origination format
+        assert "_" in df["Sample_Origination"].iloc[0]
+
+        # Verify Condition is not empty
+        assert df["Condition"].iloc[0] in ("DMSO_24h", "DrugA_24h")
+
+        # Verify spaces -> underscores in non-abundance columns
+        assert "Master_Protein_Accessions" in df.columns
+        assert "Quan_Info" in df.columns
+
+        # Check that abundance columns are NOT present after melting
+        assert "Abundance 126" not in df.columns
+        assert "Abundance 134N" not in df.columns
+        assert "Channel" not in df.columns  # Channel dropped after mapping
+
+    def test_step1_tmt_multiple_files(self, tmp_path, processor, channel_mapping, tmt_fixture_path):
+        """Combining TMT data from multiple files works."""
+        # Copy the fixture to simulate a second file
+        import shutil
+        second_path = tmp_path / "second_tmt_file.txt"
+        shutil.copy2(tmt_fixture_path, second_path)
+
+        df = processor.step1_combine_replicates_tmt(
+            file_paths=[tmt_fixture_path, second_path],
+            tmt_channel_mapping=channel_mapping,
+        )
+
+        assert len(df) > 0
+        # Should have more rows than single file
+        single_df = processor.step1_combine_replicates_tmt(
+            file_paths=[tmt_fixture_path],
+            tmt_channel_mapping=channel_mapping,
+        )
+        assert len(df) > len(single_df)
+
+
+class TestDataProcessorDIA:
+    """Test DIA-specific input processing."""
+
+    @pytest.fixture
+    def processor(self):
+        return DataProcessor(ProcessingConfig())
+
+    def test_step1_combine_replicates_dia(self, dia_fixture_path, processor):
+        """Process DIA fixture with per-file metadata and verify output."""
+        metadata = {
+            dia_fixture_path.name: {
+                "condition_1": "DMSO",
+                "condition_2": "24h",
+                "experiment": "MyExp",
+                "batch": "A",
+                "replicate": 1,
+            }
+        }
+
+        df = processor.step1_combine_replicates_dia(
+            file_paths=[dia_fixture_path],
+            metadata_columns=metadata,
+        )
+
+        assert df is not None
+        assert len(df) > 0
+
+        # Check key columns
+        assert "Sequence" in df.columns
+        assert "Master_Protein_Accessions" in df.columns
+        assert "Abundance" in df.columns
+        assert "Sample_Origination" in df.columns
+        assert "Condition" in df.columns
+        assert "Replicate" in df.columns
+
+        # Check condition group columns
+        assert "condition_1" in df.columns
+        assert "condition_2" in df.columns
+
+        # Check types
+        assert pd.api.types.is_numeric_dtype(df["Abundance"]), "Abundance must be numeric"
+        assert pd.api.types.is_integer_dtype(
+            df["Replicate"]
+        ), "Replicate must be integer"
+
+        # Verify Quan Value was renamed to Abundance
+        assert "Quan Value" not in df.columns
+
+        # Verify Condition format
+        assert df["Condition"].iloc[0] == "DMSO_24h"
+
+        # Verify Sample_Origination format: {Condition}_{replicate}
+        assert df["Sample_Origination"].iloc[0] == "DMSO_24h_1"
+
+        # Verify spaces -> underscores
+        assert "Master_Protein_Accessions" in df.columns
+
+    def test_step1_dia_quan_value_collision(self, tmp_path, processor):
+        """DIA handles Abundance column collision correctly."""
+        # Create a file that already has both Quan Value and Abundance columns
+        df_input = pd.DataFrame({
+            "Sequence": ["PEP1", "PEP2"],
+            "Modifications": ["", ""],
+            "Charge": [2, 2],
+            "Contaminant": ["FALSE", "FALSE"],
+            "Master Protein Accessions": ["P12345", "P67890"],
+            "Quan Info": ["Valid", "Valid"],
+            "Quan Value": [100.0, 200.0],
+            "Abundance": [300.0, 400.0],
+        })
+        file_path = tmp_path / "collision_test.txt"
+        df_input.to_csv(file_path, sep="\t", index=False)
+
+        metadata = {
+            "collision_test.txt": {
+                "condition_1": "DMSO",
+                "condition_2": "24h",
+                "experiment": "MyExp",
+                "batch": "A",
+                "replicate": 1,
+            }
+        }
+
+        df = processor.step1_combine_replicates_dia(
+            file_paths=[file_path],
+            metadata_columns=metadata,
+        )
+
+        assert df is not None
+        # Should have Abundance from the existing column (not Quan Value)
+        assert "Abundance" in df.columns
+        # Original abundance values should be preserved
+        assert df["Abundance"].iloc[0] == 300.0  # Original abundance preserved

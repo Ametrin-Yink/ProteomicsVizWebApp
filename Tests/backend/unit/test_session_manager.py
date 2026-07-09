@@ -1,5 +1,5 @@
 """Unit tests for SessionManager — session lifecycle and WebSocket management."""
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from app.models.session import SessionCreate, SessionState

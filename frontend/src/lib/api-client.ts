@@ -19,7 +19,7 @@ import type {
   ApiResponse,
   ApiError,
   SessionConfig,
-  UploadedFile,
+  UploadedFileInfo,
   Organism,
 } from '@/types';
 import type { Session, SessionStatus, AnalysisConfig } from '@/types/session';
@@ -93,49 +93,28 @@ function mapBackendStatus(status: string): SessionStatus {
   return statusMap[status] || 'created';
 }
 
-/** Parse PSM filename to extract experiment, conditions, replicate */
-function parsePsmFilename(filename: string): { experiment: string; conditions: string[]; replicate: number } | null {
-  const pattern = /^PSM_(.+)_(\d+)\.csv$/i;
-  const match = filename.match(pattern);
-  if (!match) return null;
-  const parts = match[1].split('_');
-  if (parts.length < 2) return null;
-  return {
-    experiment: parts[0],
-    conditions: parts.slice(1),
-    replicate: parseInt(match[2], 10),
-  };
-}
-
-/** Map backend file metadata to ParsedFilename format for the analysis store */
-export function mapBackendFiles(files: BackendSession['files']): Array<{
-  filename: string;
-  experiment: string;
-  conditions: string[];
-  replicate: number;
-  size: number;
-  columns?: string[];
-}> {
+/** Map backend file metadata to UploadedFileInfo format for the analysis store */
+export function mapBackendFiles(files: BackendSession['files']): UploadedFileInfo[] {
   if (!files?.proteomics) return [];
   return (files.proteomics as Array<{
     filename: string;
     size: number;
     experiment?: string;
-    condition?: string;
-    conditions?: string[];
     replicate?: number;
+    batch?: string;
+    file_type?: 'tmt' | 'dia' | null;
+    tmt_channels?: string[];
     columns?: string[];
-  }>).map(f => {
-    const parsed = parsePsmFilename(f.filename);
-    return {
-      filename: f.filename,
-      experiment: parsed?.experiment || f.experiment || '',
-      conditions: parsed?.conditions || f.conditions || (f.condition ? [f.condition] : []),
-      replicate: parsed?.replicate || f.replicate || 0,
-      size: f.size,
-      columns: f.columns || [],
-    };
-  });
+  }>).map(f => ({
+    filename: f.filename,
+    experiment: f.experiment || '',
+    replicate: f.replicate || 0,
+    batch: f.batch || '',
+    file_type: f.file_type || null,
+    tmt_channels: f.tmt_channels,
+    size: f.size,
+    columns: f.columns || [],
+  }));
 }
 
 /**
@@ -469,10 +448,10 @@ export const uploadApi = {
     sessionId: string,
     files: File[],
     onProgress?: (filename: string, progress: number) => void
-  ): Promise<UploadedFile[]> => {
+  ): Promise<UploadedFileInfo[]> => {
     // Batch size of 5 to avoid Next.js proxy multipart issues
     const BATCH_SIZE = 5;
-    const allResults: UploadedFile[] = [];
+    const allResults: UploadedFileInfo[] = [];
 
     // Process files in batches
     for (let i = 0; i < files.length; i += BATCH_SIZE) {

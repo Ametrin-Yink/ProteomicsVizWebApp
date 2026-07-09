@@ -59,6 +59,7 @@ class SessionManager:
             id=generate_uuid(),
             name=validated_name,
             template=data.template,
+            pipeline=data.pipeline,
             state=SessionState.CREATED,
         )
 

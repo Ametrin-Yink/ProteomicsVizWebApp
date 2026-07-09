@@ -158,7 +158,7 @@ class TestDimensionalityReduction:
         np.random.seed(42)
         matrix = np.random.randn(20, 10)
         from app.services.compare_service import run_cluster
-        coords, variance = run_cluster(matrix, "invalid_method")
+        coords, _variance = run_cluster(matrix, "invalid_method")
         assert coords.shape == (20, 2)
 
 

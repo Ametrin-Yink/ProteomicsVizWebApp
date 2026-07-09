@@ -196,6 +196,15 @@ class AnalysisConfig(BaseModel):
         default=None, description="Metadata column names to use as covariates"
     )
 
+    # Pipeline reform: file type and TMT channel mapping
+    file_type: str | None = Field(
+        default=None, description="Analysis type: 'tmt' or 'dia'"
+    )
+    tmt_channel_mapping: dict[str, dict[str, str | int]] | None = Field(
+        default=None,
+        description="TMT channel -> {group1: val1, ..., replicate: N} mapping",
+    )
+
     # PTM-specific parameters
     ptm_labeling_type: str = Field(
         default="LF",

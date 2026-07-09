@@ -1,34 +1,22 @@
 """
-CSV file parsing utilities with filename extraction.
+File parsing utilities for proteomics PD export files.
 
-Handles parsing of proteomics PSM CSV files and extraction of metadata from filenames.
+Handles delimiter detection, TMT/DIA column validation, and
+file format detection for TMT and DIA proteomics files.
 """
 
-import asyncio
 import re
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
-import aiofiles
 import pandas as pd
 
 from app.core.exceptions import InvalidFileFormatError
-from app.models.data import UploadedFileMetadata
 
+# Pattern for TMT abundance columns: "Abundance 126", "Abundance 127N", etc.
+TMT_ABUNDANCE_PATTERN = r'^"?Abundance\s+(\d+)([NC])?"?$'
 
-@dataclass
-class ParsedFilename:
-    """Parsed PSM filename components."""
-
-    experiment: str
-    conditions: list[str]
-    replicate: int
-    original_filename: str
-
-
-# Required columns for PSM CSV files
-REQUIRED_COLUMNS = [
+# Required columns for TMT files (same as DIA)
+TMT_REQUIRED_COLUMNS = [
     "Sequence",
     "Modifications",
     "Charge",
@@ -37,223 +25,261 @@ REQUIRED_COLUMNS = [
     "Quan Info",
 ]
 
-# Pattern for PSM filenames: PSM_ExperimentName_Cond1_Cond2_..._CondN_ReplicateNumber.csv
-# Everything between PSM_ prefix and the last _<number>.csv is experiment + conditions.
-# Split by _, first segment is experiment, rest are conditions.
-PSM_FILENAME_PATTERN = re.compile(
-    r"^PSM_(?P<middle>.+)_(?P<replicate>\d+)\.csv$",
-    re.IGNORECASE,
-)
+# Required columns for DIA files (Quan Info NOT required — DIA PD exports lack it)
+DIA_REQUIRED_COLUMNS = [
+    "Sequence",
+    "Modifications",
+    "Charge",
+    "Contaminant",
+    "Master Protein Accessions",
+]
 
 
-class FileParser:
-    """Parser for proteomics PSM files."""
-
-    async def parse_proteomics_file(
-        self, filename: str, content: bytes, session_dir: Path
-    ) -> UploadedFileMetadata:
-        """
-        Parse and validate a proteomics PSM file.
-
-        Args:
-            filename: Original filename
-            content: File content as bytes
-            session_dir: Directory to save the file
-
-        Returns:
-            UploadedFileMetadata with file information
-
-        Raises:
-            InvalidFileFormatError: If file is invalid
-        """
-        # Validate filename format
-        parse_psm_filename(filename)
-
-        # Sanitize filename
-        safe_filename = sanitize_filename(filename)
-
-        # Save file
-        file_path = session_dir / safe_filename
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(content)
-
-        # Validate CSV content
-        try:
-            df = await asyncio.to_thread(pd.read_csv, file_path)
-            validate_psm_columns(df, filename)
-        except Exception as e:
-            # Clean up saved file on validation error
-            if file_path.exists():
-                file_path.unlink()
-            raise InvalidFileFormatError(
-                message=f"Invalid CSV content in {filename}",
-                details={"filename": filename, "error": str(e)},
-            ) from e
-
-        return UploadedFileMetadata(
-            filename=safe_filename,
-            original_filename=filename,
-            size=len(content),
-            content_type="text/csv",
-            uploaded_at=datetime.now().isoformat(),
-            path=str(file_path),
-        )
-
-def parse_psm_filename(filename: str) -> ParsedFilename:
-    """
-    Parse PSM filename to extract experiment, conditions, and replicate.
-
-    Expected format: PSM_ExperimentName_Cond1_Cond2_..._CondN_ReplicateNumber.csv
-    Conditions are all segments between experiment and the final replicate number.
+def detect_delimiter(file_path: Path) -> str:
+    """Read first line, detect tab vs comma.
 
     Args:
-        filename: The filename to parse
+        file_path: Path to the file.
 
     Returns:
-        ParsedFilename object with extracted components
+        '\\t' if tab-delimited, ',' if comma-delimited.
 
     Raises:
-        InvalidFileFormatError: If filename doesn't match expected pattern
+        InvalidFileFormatError: If delimiter cannot be determined.
     """
-    match = PSM_FILENAME_PATTERN.match(filename)
-
-    if not match:
+    try:
+        with open(file_path, encoding="utf-8") as f:
+            first_line = f.readline()
+    except Exception as e:
         raise InvalidFileFormatError(
-            message=f"Invalid filename format: {filename}",
-            details={
-                "filename": filename,
-                "expected_pattern": "PSM_ExperimentName_Condition1_Condition2_ReplicateNumber.csv",
-                "example": "PSM_SampleData_DMSO_1.csv",
-            },
-        )
+            message=f"Failed to read file: {file_path.name}",
+            details={"filename": file_path.name, "error": str(e)},
+        ) from e
 
-    middle = match.group("middle")
-    parts = middle.split("_")
+    # Count tabs vs commas in the header line
+    tab_count = first_line.count("\t")
+    comma_count = first_line.count(",")
 
-    if len(parts) < 2:
-        raise InvalidFileFormatError(
-            message=f"Invalid filename format: {filename}",
-            details={
-                "filename": filename,
-                "reason": "Must have at least experiment and one condition",
-            },
-        )
-
-    return ParsedFilename(
-        experiment=parts[0],
-        conditions=parts[1:],
-        replicate=int(match.group("replicate")),
-        original_filename=filename,
-    )
-
-
-def find_abundance_column(columns: list[str]) -> str:
-    """
-    Find the abundance column in the CSV.
-
-    Pattern: "Abundance F{code} Sample"
-
-    Args:
-        columns: List of column names from the CSV
-
-    Returns:
-        Name of the abundance column
-
-    Raises:
-        InvalidFileFormatError: If no abundance column found
-    """
-    abundance_pattern = re.compile(r'^"?Abundance F[\dA-Z]+ Sample"?$', re.IGNORECASE)
-
-    for col in columns:
-        if abundance_pattern.match(col):
-            return col
-
+    if tab_count >= comma_count and tab_count > 0:
+        return "\t"
+    if comma_count > 0:
+        return ","
     raise InvalidFileFormatError(
-        message="No abundance column found in CSV",
-        details={
-            "available_columns": columns,
-            "expected_pattern": "Abundance F{code} Sample",
-        },
+        message=f"Cannot detect delimiter in file: {file_path.name}",
+        details={"filename": file_path.name, "first_line": first_line[:200]},
     )
 
 
-def validate_psm_columns(df: pd.DataFrame, filename: str) -> None:
-    """
-    Validate that the DataFrame has all required columns.
+def detect_tmt_channels(columns: list[str]) -> list[str]:
+    """Extract sorted TMT channel labels from abundance columns.
+
+    Matches columns matching pattern: ^"?Abundance\\s+(\\d+)([NC])?"?$
 
     Args:
-        df: DataFrame to validate
-        filename: Original filename for error messages
+        columns: List of column names from the file.
+
+    Returns:
+        Sorted list of TMT channel labels (e.g. ['126', '127N', ..., '134N']).
+    """
+    pattern = re.compile(TMT_ABUNDANCE_PATTERN)
+    channels = []
+    for col in columns:
+        match = pattern.match(col)
+        if match:
+            label = match.group(1) + (match.group(2) or "")
+            channels.append(label)
+
+    # Sort numerically by the numeric prefix, then by suffix order (N before C)
+    SUFFIX_ORDER = {"": 0, "N": 1, "C": 2}
+
+    def sort_key(ch: str) -> tuple[int, int]:
+        num_str = ""
+        suffix = ""
+        for c in ch:
+            if c.isdigit():
+                num_str += c
+            else:
+                suffix += c
+        return (int(num_str), SUFFIX_ORDER.get(suffix, 3))
+
+    channels.sort(key=sort_key)
+    return channels
+
+
+def read_file_columns(file_path: Path) -> list[str]:
+    """Read column headers only (nrows=0) with auto-detected delimiter.
+
+    Args:
+        file_path: Path to the file.
+
+    Returns:
+        List of column names.
+    """
+    delimiter = detect_delimiter(file_path)
+    try:
+        df = pd.read_csv(file_path, delimiter=delimiter, nrows=0)
+        return list(df.columns)
+    except Exception as e:
+        raise InvalidFileFormatError(
+            message=f"Failed to read columns from: {file_path.name}",
+            details={"filename": file_path.name, "error": str(e)},
+        ) from e
+
+
+def validate_tmt_columns(df: pd.DataFrame, filename: str) -> None:
+    """Validate TMT file: required columns present + >=2 abundance columns matching TMT pattern.
+
+    Abundance columns must be numeric or empty.
+
+    Args:
+        df: DataFrame to validate.
+        filename: Original filename for error messages.
 
     Raises:
-        InvalidFileFormatError: If required columns are missing
+        InvalidFileFormatError: On validation failure.
     """
     columns = set(df.columns)
-    missing = [col for col in REQUIRED_COLUMNS if col not in columns]
 
+    # Check required columns
+    missing = [col for col in TMT_REQUIRED_COLUMNS if col not in columns]
     if missing:
         raise InvalidFileFormatError(
             message=f"Missing required columns in {filename}",
             details={
                 "filename": filename,
                 "missing_columns": missing,
-                "required_columns": REQUIRED_COLUMNS,
+                "required_columns": TMT_REQUIRED_COLUMNS,
                 "available_columns": list(columns),
             },
         )
 
-    # Also check for abundance column
-    try:
-        find_abundance_column(list(columns))
-    except InvalidFileFormatError:
+    # Check for at least 2 abundance columns matching TMT pattern
+    pattern = re.compile(TMT_ABUNDANCE_PATTERN)
+    abundance_cols = [col for col in df.columns if pattern.match(str(col))]
+    if len(abundance_cols) < 2:
         raise InvalidFileFormatError(
-            message=f"Missing abundance column in {filename}",
+            message=f"Missing TMT abundance columns in {filename}",
             details={
                 "filename": filename,
-                "expected_pattern": "Abundance F{{code}} Sample",
+                "abundance_columns_found": abundance_cols,
+                "expected_pattern": str(TMT_ABUNDANCE_PATTERN),
                 "available_columns": list(columns),
             },
-        ) from None
+        )
+
+    # Validate abundance values are numeric (sample first 100 rows)
+    sample = df[abundance_cols].head(100)
+    for col in abundance_cols:
+        numeric = pd.to_numeric(sample[col], errors="coerce")
+        # Only flag rows where the original value is non-null AND non-numeric
+        mask = numeric.isna() & sample[col].notna()
+        if mask.any():
+            non_numeric_rows = sample[col][mask].head(5)
+            raise InvalidFileFormatError(
+                message=f"Non-numeric values found in abundance column '{col}' in {filename}",
+                details={
+                    "filename": filename,
+                    "column": col,
+                    "non_numeric_values": non_numeric_rows.to_list(),
+                },
+            )
 
 
-def extract_columns_from_csv(file_path: Path) -> list[str]:
-    """
-    Extract column names from a CSV file without loading all data.
+def validate_dia_columns(df: pd.DataFrame, filename: str) -> None:
+    """Validate DIA file: required columns present + 'Quan Value' column present.
+
+    'Quan Value' column must be numeric.
 
     Args:
-        file_path: Path to the CSV file
+        df: DataFrame to validate.
+        filename: Original filename for error messages.
 
-    Returns:
-        List of column names
+    Raises:
+        InvalidFileFormatError: On validation failure.
     """
-    try:
-        df = pd.read_csv(file_path, nrows=0)
-        return list(df.columns)
-    except Exception as e:
+    columns = set(df.columns)
+
+    # Check required columns
+    missing = [col for col in DIA_REQUIRED_COLUMNS if col not in columns]
+    if missing:
         raise InvalidFileFormatError(
-            message=f"Failed to read CSV columns: {file_path.name}",
-            details={"filename": file_path.name, "error": str(e)},
-        ) from e
+            message=f"Missing required columns in {filename}",
+            details={
+                "filename": filename,
+                "missing_columns": missing,
+                "required_columns": DIA_REQUIRED_COLUMNS,
+                "available_columns": list(columns),
+            },
+        )
+
+    # Check for Quan Value column
+    if "Quan Value" not in columns:
+        raise InvalidFileFormatError(
+            message=f"Missing 'Quan Value' column in {filename}",
+            details={
+                "filename": filename,
+                "available_columns": list(columns),
+            },
+        )
+
+    # Validate Quan Value values are numeric (sample first 100 rows)
+    sample = df[["Quan Value"]].head(100)
+    numeric = pd.to_numeric(sample["Quan Value"], errors="coerce")
+    # Only flag rows where the original value is non-null AND non-numeric
+    mask = numeric.isna() & sample["Quan Value"].notna()
+    if mask.any():
+        non_numeric_rows = sample["Quan Value"][mask].head(5)
+        raise InvalidFileFormatError(
+            message=f"Non-numeric values found in 'Quan Value' column in {filename}",
+            details={
+                "filename": filename,
+                "column": "Quan Value",
+                "non_numeric_values": non_numeric_rows.to_list(),
+            },
+        )
 
 
-def get_file_size(file_path: Path) -> int:
-    """
-    Get file size in bytes.
+def parse_proteomics_file(file_path: Path, file_type: str) -> dict:
+    """Parse a PD export file. Auto-detect delimiter. Validate columns per file_type.
 
     Args:
-        file_path: Path to the file
+        file_path: Path to the file.
+        file_type: 'tmt' or 'dia'.
 
     Returns:
-        File size in bytes
+        Dict with: columns (list), tmt_channels (list|None), has_quan_value (bool|None).
+
+    Raises:
+        InvalidFileFormatError: On validation failure or unknown file_type.
     """
-    return file_path.stat().st_size
+    delimiter = detect_delimiter(file_path)
+    df = pd.read_csv(file_path, delimiter=delimiter, low_memory=False)
+    columns = list(df.columns)
+
+    if file_type == "tmt":
+        validate_tmt_columns(df, file_path.name)
+        tmt_channels = detect_tmt_channels(columns)
+        return {
+            "columns": columns,
+            "tmt_channels": tmt_channels,
+            "has_quan_value": None,
+        }
+    elif file_type == "dia":
+        validate_dia_columns(df, file_path.name)
+        return {
+            "columns": columns,
+            "tmt_channels": None,
+            "has_quan_value": True,
+        }
+    else:
+        raise InvalidFileFormatError(
+            message=f"Unknown file type: {file_type}",
+            details={"file_type": file_type, "filename": file_path.name},
+        )
 
 
 def sanitize_filename(filename: str) -> str:
-    """
-    Sanitize a filename to remove unsafe characters.
+    """Sanitize a filename to remove unsafe characters.
 
     Args:
         filename: Original filename

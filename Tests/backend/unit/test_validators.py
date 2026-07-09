@@ -13,7 +13,6 @@ from app.core.exceptions import (
 from app.utils.validators import (
     validate_csv_extension,
     validate_file_size,
-    validate_psm_filename_pattern,
     validate_session_name,
 )
 
@@ -53,22 +52,6 @@ class TestValidateCsvExtension:
         """Accept .CSV in uppercase."""
         # Should not raise
         validate_csv_extension("test.CSV")
-
-
-class TestValidatePsmFilenamePattern:
-    """Test PSM filename pattern validation."""
-
-    def test_valid_psm_filename(self):
-        """Accept valid PSM filename."""
-        # Should not raise
-        validate_psm_filename_pattern("PSM_SampleData_DMSO_1.csv")
-
-    def test_invalid_filename(self):
-        """Reject invalid PSM filename."""
-        with pytest.raises(InvalidFileFormatError) as exc_info:
-            validate_psm_filename_pattern("invalid_file.csv")
-
-        assert "Invalid PSM filename" in str(exc_info.value.message)
 
 
 class TestValidateSessionName:

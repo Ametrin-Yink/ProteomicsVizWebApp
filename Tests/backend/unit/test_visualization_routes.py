@@ -1,12 +1,11 @@
 """Unit tests for visualization API routes — results, QC, protein data, tasks."""
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
-from app.models.session import Session, SessionConfig, SessionFiles, SessionState
 from app.main import app
+from app.models.session import Session, SessionConfig, SessionFiles, SessionState
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture

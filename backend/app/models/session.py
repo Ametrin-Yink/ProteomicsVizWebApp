@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class SessionState(str, Enum):
@@ -79,6 +79,13 @@ class SessionConfig(BaseModel):
     # Covariate columns (selected metadata columns to use as model covariates)
     covariate_columns: list[str] | None = Field(default=None)
 
+    # Pipeline reform: file type and TMT channel mapping
+    file_type: str | None = Field(default=None, description="Analysis type: 'tmt' or 'dia'")
+    tmt_channel_mapping: dict[str, dict[str, str | int]] | None = Field(
+        default=None,
+        description="TMT channel → {group1: val1, ..., replicate: N} mapping",
+    )
+
 
 class FileInfo(BaseModel):
     """File metadata model."""
@@ -90,23 +97,12 @@ class FileInfo(BaseModel):
 
 
 class ProteomicsFileInfo(FileInfo):
-    """Proteomics file metadata with parsed filename info."""
+    """Proteomics file metadata — user-provided, not filename-parsed."""
 
-    experiment: str = Field(..., description="Experiment name from filename")
-    conditions: list[str] = Field(
-        ...,
-        description="Conditions from filename (multiple segments between experiment and replicate)",
-    )
-    replicate: int = Field(..., ge=1, description="Replicate number")
-
-    @model_validator(mode="before")
-    @classmethod
-    def migrate_condition_field(cls, data: Any) -> Any:
-        """Accept old 'condition' string field and convert to 'conditions' list."""
-        if isinstance(data, dict) and "condition" in data and "conditions" not in data:
-            data = {**data, "conditions": data["condition"].split("_")}
-            del data["condition"]
-        return data
+    experiment: str = Field(default="", description="Experiment name (user-provided)")
+    replicate: int = Field(default=0, ge=0, description="Replicate number (user-provided)")
+    batch: str | None = Field(default=None, description="Batch label for DIA batch correction")
+    file_type: str | None = Field(default=None, description="Detected file type: 'tmt' or 'dia'")
 
 
 class SessionFiles(BaseModel):
@@ -124,7 +120,7 @@ class Session(BaseModel):
     id: str = Field(..., description="Unique session ID (UUID)")
     name: str = Field(..., min_length=1, description="Session name")
     template: str = Field(default="multi_condition_comparison")
-    pipeline: str = Field(default="msqrob2")
+    pipeline: str = Field(default="")
     state: SessionState = Field(default=SessionState.CREATED)
     config: SessionConfig | None = None
     files: SessionFiles = Field(default_factory=SessionFiles)

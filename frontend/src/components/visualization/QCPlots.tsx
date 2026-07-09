@@ -117,7 +117,7 @@ function normalizeBoxData(
         // Flat box-stats: {condition: stats}
         const name = labelFn(key);
         traces.push({
-          y: boxStatsToValues(val as Record<string, unknown>),
+          y: boxStatsToValues(val as Record<string, unknown>, showOutliers),
           type: 'box', name,
           marker: { color, size: 3, outliercolor: color + '66' },
           boxpoints: bp, hovertemplate,

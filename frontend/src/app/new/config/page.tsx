@@ -17,7 +17,7 @@ import {
   AlertCircle,
   Info,
 } from 'lucide-react';
-import { useAnalysisStore, canStartAnalysis } from '@/stores/analysis-store';
+import { useAnalysisStore, canStartAnalysis, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { organismsApi, sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -28,25 +28,26 @@ import Msqrob2ConfigForm from '@/components/analysis/Msqrob2ConfigForm';
 function ConfigContent({ sessionId }: { sessionId: string }) {
   const router = useRouter();
 
-  const selectedPipeline = useAnalysisStore((s) => s.selectedPipeline);
+  const analysisType = useAnalysisStore((s) => s.analysisType);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const setAvailableOrganisms = useAnalysisStore((s) => s.setAvailableOrganisms);
   const availableOrganisms = useAnalysisStore((s) => s.availableOrganisms);
   const selectedFilesSize = useAnalysisStore((s) => s.selectedFiles.size);
   const canStart = useAnalysisStore(canStartAnalysis);
+  const selectedPipeline = getPipelineFromType(analysisType);
   const { addToast } = useUIStore();
 
   const [isStarting, setIsStarting] = React.useState(false);
 
-  // Redirect guard: no session or no pipeline selected -> back to earlier step
+  // Redirect guard: no session or no analysis type -> back to earlier step
   React.useEffect(() => {
     if (!sessionId) {
       router.replace('/');
-    } else if (!selectedPipeline) {
-      router.replace(`/new/pipeline?session=${sessionId}`);
+    } else if (!analysisType) {
+      router.replace(`/new/type?session=${sessionId}`);
     }
-  }, [sessionId, selectedPipeline, router]);
+  }, [sessionId, analysisType, router]);
 
   // Load organisms on mount
   React.useEffect(() => {

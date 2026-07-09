@@ -1,7 +1,5 @@
 """Unit tests for GSEA service — running ES curve and heatmap computation."""
-import numpy as np
 import pandas as pd
-import pytest
 from app.services.gsea_service import gsea_service
 
 

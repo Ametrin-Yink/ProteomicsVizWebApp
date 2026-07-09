@@ -1,6 +1,6 @@
 """Unit tests for organism scanner."""
 from pathlib import Path
-import pytest
+
 from app.services.organism_scanner import OrganismScanner
 
 
