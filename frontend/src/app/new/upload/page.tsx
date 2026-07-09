@@ -16,8 +16,9 @@ import { useAnalysisStore, getValidation } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, mapBackendFiles } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { useSessionValidation } from '@/hooks/use-session-validation';
 
-function UploadContent() {
+function UploadContentInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || '';
@@ -29,9 +30,18 @@ function UploadContent() {
   const setAnalysisType = useAnalysisStore((s) => s.setAnalysisType);
   const validation = getValidation(useAnalysisStore.getState());
   const { addToast } = useUIStore();
+  const resetAnalysis = useAnalysisStore((s) => s.reset);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
+
+  // Reset analysis store when session changes — prevents stale file/config leakage
+  useEffect(() => {
+    resetAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  useSessionValidation(sessionId || null);
 
   // Detection results
   const [detectionResults, setDetectionResults] = useState<FileDetectionResult[]>([]);
@@ -222,6 +232,11 @@ function UploadContent() {
     const restoreSession = async () => {
       try {
         const sessionResp = await fetch(`/api/sessions/${sessionId}`);
+        if (sessionResp.status === 404) {
+          addToast('error', 'Session not found. Please start a new analysis.');
+          router.push('/');
+          return;
+        }
         if (sessionResp.ok) {
           const raw = await sessionResp.json();
           const files = mapBackendFiles(raw.files);
@@ -269,7 +284,7 @@ function UploadContent() {
           }
         }
       } catch {
-        // Session restoration failed, user can start fresh
+        // Network error — allow continuing offline
       } finally {
         setIsRestoring(false);
       }
@@ -887,6 +902,12 @@ function UploadContent() {
       </div>
     </div>
   );
+}
+
+function UploadContent() {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session') || '';
+  return <UploadContentInner key={sessionId || 'no-session'} />;
 }
 
 export default function UploadPage() {
