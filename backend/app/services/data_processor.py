@@ -10,10 +10,13 @@ This module implements the initial data processing steps:
 
 import logging
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -494,6 +497,315 @@ class DataProcessor:
         )
 
         return df
+
+    # ── Chunked Parquet I/O (Task 4) ──────────────────────────────────────
+
+    @staticmethod
+    def _parquet_chunked_reader(file_path: Path, chunksize: int = 100_000):
+        """Generator: yield DataFrame chunks from a Parquet file.
+
+        Args:
+            file_path: Path to Parquet file
+            chunksize: Number of rows per chunk
+
+        Yields:
+            pandas DataFrame for each row group / batch
+        """
+        import pyarrow.parquet as pq
+
+        pf = pq.ParquetFile(file_path)
+        for batch in pf.iter_batches(batch_size=chunksize):
+            yield batch.to_pandas()
+
+    def step3_remove_razor_chunked(
+        self, input_path: Path, output_path: Path
+    ) -> None:
+        """Chunked two-pass: scan proteins, then apply best-protein selection.
+
+        Pass 1: scan all chunks to build protein -> peptide_count map and
+                collect first-occurrence PSM -> Master_Protein_Accessions.
+        Pass 2: apply best-protein selection per chunk using pre-computed map.
+
+        If config.remove_razor is False, copies input file unchanged.
+
+        Args:
+            input_path: Source Parquet file
+            output_path: Destination Parquet file
+        """
+        if not self.config.remove_razor:
+            import shutil
+
+            shutil.copy2(input_path, output_path)
+            logger.info("Step 3 (chunked): Skipping razor removal (disabled), copied file")
+            return
+
+        logger.info("Step 3 (chunked): Two-pass razor removal")
+
+        # ── Pass 1: build protein->peptide map and PSM->protein map ──
+        protein_peptide_counts: Counter = Counter()
+        psm_to_protein: dict[str, str] = {}
+        seen_psms: set[str] = set()
+
+        for chunk_df in self._parquet_chunked_reader(input_path):
+            # Count peptides per protein across this chunk
+            chunk_counts = (
+                chunk_df["Master_Protein_Accessions"]
+                .str.split(";")
+                .explode()
+                .str.strip()
+                .value_counts()
+            )
+            for prot, count in chunk_counts.items():
+                if prot:
+                    protein_peptide_counts[prot] += count
+
+            # Collect first occurrence of each Unique_PSM's protein string
+            new_mask = ~chunk_df["Unique_PSM"].isin(seen_psms)
+            if new_mask.any():
+                new_psms = (
+                    chunk_df.loc[new_mask, ["Unique_PSM", "Master_Protein_Accessions"]]
+                    .set_index("Unique_PSM")["Master_Protein_Accessions"]
+                    .to_dict()
+                )
+                psm_to_protein.update(new_psms)
+                seen_psms.update(new_psms.keys())
+
+        # Compute best protein for each unique PSM
+        best_protein_map: dict[str, str] = {}
+        for psm, proteins_str in psm_to_protein.items():
+            if pd.isna(proteins_str) or not str(proteins_str).strip():
+                best_protein_map[psm] = ""
+            else:
+                proteins = [
+                    p.strip()
+                    for p in str(proteins_str).split(";")
+                    if p.strip()
+                ]
+                if len(proteins) <= 1:
+                    best_protein_map[psm] = proteins[0] if proteins else ""
+                else:
+                    best_protein_map[psm] = self._select_best_protein(
+                        proteins,
+                        dict(protein_peptide_counts),
+                        self.config.fasta_db,
+                    )
+
+        # ── Pass 2: apply best-protein per chunk and write output ──
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        writer = None
+        try:
+            pf = pq.ParquetFile(input_path)
+            for batch in pf.iter_batches(batch_size=100_000):
+                df = batch.to_pandas()
+                df["Master_Protein_Accessions"] = df["Unique_PSM"].map(
+                    best_protein_map
+                )
+                table = pa.Table.from_pandas(df)
+                if writer is None:
+                    writer = pq.ParquetWriter(
+                        output_path,
+                        table.schema,
+                        compression=settings.parquet_compression,
+                    )
+                writer.write_table(table)
+        finally:
+            if writer is not None:
+                writer.close()
+
+        logger.info("Step 3 (chunked) complete: Razor peptides resolved")
+
+    def step4_remove_low_quality_chunked(
+        self, input_path: Path, output_path: Path
+    ) -> None:
+        """Chunked single-pass: filter each chunk, write to output.
+
+        Applies row-level filters (Contaminant, Quan_Info, Abundance) to each
+        chunk independently and streams results to a new Parquet file.
+
+        Args:
+            input_path: Source Parquet file
+            output_path: Destination Parquet file
+        """
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        logger.info("Step 4 (chunked): Removing low quality PSMs")
+
+        pf = pq.ParquetFile(input_path)
+        has_quan_info = "Quan_Info" in pf.schema_arrow.names
+
+        initial_count = 0
+        remaining_count = 0
+        writer = None
+        try:
+            for batch in pf.iter_batches(batch_size=100_000):
+                df = batch.to_pandas()
+                initial_count += len(df)
+
+                # Remove contaminants
+                df["Contaminant"] = df["Contaminant"].astype(str).str.lower()
+                df = df[df["Contaminant"] != "true"].copy()
+
+                # Remove "No Value" quantification (optional column)
+                if has_quan_info and "Quan_Info" in df.columns:
+                    df = df[df["Quan_Info"] != "No Value"].copy()
+
+                # Remove low abundance
+                df["Abundance"] = pd.to_numeric(df["Abundance"], errors="coerce")
+                df = df[df["Abundance"] >= 1].copy()
+
+                remaining_count += len(df)
+
+                table = pa.Table.from_pandas(df)
+                if writer is None:
+                    writer = pq.ParquetWriter(
+                        output_path,
+                        table.schema,
+                        compression=settings.parquet_compression,
+                    )
+                writer.write_table(table)
+        finally:
+            if writer is not None:
+                writer.close()
+
+        removed = initial_count - remaining_count
+        logger.info(
+            "Step 4 (chunked) complete: Removed %d low quality PSMs, %d remaining",
+            removed,
+            remaining_count,
+        )
+
+    def step5_filter_by_criteria_chunked(
+        self, input_path: Path, output_path: Path
+    ) -> None:
+        """Chunked two/three-pass: compute criteria, then filter and write.
+
+        Pass 1 (all chunks): compute per-condition replicate counts and
+        identify the set of PSMs that pass the missing-value threshold.
+        If strict_filtering is True, also counts PSMs per protein among
+        passing candidates.
+        Final pass: filter chunks to only passing rows and write output.
+
+        Args:
+            input_path: Source Parquet file
+            output_path: Destination Parquet file
+        """
+        logger.info("Step 5 (chunked): Filtering by criteria")
+
+        threshold = 0.2 if self.config.strict_filtering else 0.4
+        logger.info(
+            "  Using %s filtering (threshold=%.1f)",
+            "strict" if self.config.strict_filtering else "lenient",
+            threshold,
+        )
+
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        # ── Pass 1a: total replicates per condition and detected counts ──
+        total_reps_per_cond: dict[str, int] = {}
+        psm_cond_detected: dict[tuple[str, str], set[int]] = {}
+
+        for chunk_df in self._parquet_chunked_reader(input_path):
+            # Track max replicates per condition across chunks
+            for cond, reps in (
+                chunk_df.groupby("Condition")["Replicate"].nunique()
+            ).items():
+                prev = total_reps_per_cond.get(cond, 0)
+                if reps > prev:
+                    total_reps_per_cond[cond] = reps
+
+            # Count detected (non-NaN) abundance per (PSM, Condition)
+            detected = chunk_df.dropna(subset=["Abundance"])
+            for psm, cond, rep in zip(
+                detected["Unique_PSM"],
+                detected["Condition"],
+                detected["Replicate"],
+                strict=False,
+            ):
+                key = (psm, cond)
+                if key not in psm_cond_detected:
+                    psm_cond_detected[key] = set()
+                psm_cond_detected[key].add(int(rep))
+
+        # ── Pass 1b: determine which PSMs pass the threshold ──
+        passing: set[str] = set()
+        failing: set[str] = set()
+        for (psm, cond), detected_reps in psm_cond_detected.items():
+            total = total_reps_per_cond.get(cond, 1)
+            max_missing = int(total * threshold)
+            missing_count = total - len(detected_reps)
+            if missing_count <= max_missing:
+                passing.add(psm)
+            else:
+                failing.add(psm)
+
+        # PSMs that fail ANY condition are excluded
+        psms_to_keep = passing - failing
+
+        conditions = list(total_reps_per_cond.keys())
+        logger.info(
+            "  %d conditions, %d unique PSMs, %d pass criteria",
+            len(conditions),
+            len(passing) + len(failing),
+            len(psms_to_keep),
+        )
+
+        # ── Strict: count rows per protein among passing PSMs ──
+        valid_proteins: set[str] | None = None
+        if self.config.strict_filtering:
+            logger.info("  Counting PSMs per protein for strict filter")
+            row_counts: dict[str, int] = {}
+            for chunk_df in self._parquet_chunked_reader(input_path):
+                kept = chunk_df[chunk_df["Unique_PSM"].isin(psms_to_keep)]
+                for prot, cnt in kept.groupby(
+                    "Master_Protein_Accessions"
+                ).size().items():
+                    pkey = str(prot) if pd.notna(prot) else ""
+                    if pkey:
+                        row_counts[pkey] = row_counts.get(pkey, 0) + cnt
+
+            valid_proteins = {p for p, c in row_counts.items() if c > 1}
+            logger.info(
+                "  Strict: %d proteins with >1 PSM",
+                len(valid_proteins),
+            )
+
+        # ── Final pass: write filtered output ──
+        total_input = 0
+        total_output = 0
+        writer = None
+        try:
+            pf = pq.ParquetFile(input_path)
+            for batch in pf.iter_batches(batch_size=100_000):
+                df = batch.to_pandas()
+                total_input += len(df)
+                mask = df["Unique_PSM"].isin(psms_to_keep)
+                if valid_proteins is not None:
+                    mask &= df["Master_Protein_Accessions"].isin(valid_proteins)
+                df = df[mask].copy()
+                total_output += len(df)
+
+                table = pa.Table.from_pandas(df)
+                if writer is None:
+                    writer = pq.ParquetWriter(
+                        output_path,
+                        table.schema,
+                        compression=settings.parquet_compression,
+                    )
+                writer.write_table(table)
+        finally:
+            if writer is not None:
+                writer.close()
+
+        logger.info(
+            "Step 5 (chunked) complete: %d -> %d rows (%.0f%% kept)",
+            total_input,
+            total_output,
+            100.0 * total_output / total_input if total_input else 0,
+        )
 
     def process(self, file_paths: list[Path], output_path: Path) -> pd.DataFrame:
         """Run complete Steps 1-5 processing pipeline.

@@ -258,7 +258,16 @@ class TestColumnContractDIA:
             assert ctx.df is not None, "Step 1 must populate ctx.df"
 
         await step_unique_psm(ctx)
-        assert ctx.df is not None, "Step 2 must keep ctx.df alive"
+        if use_duckdb:
+            # Task 4: ctx.df stays None — downstream steps use chunked Parquet I/O
+            assert ctx.df is None, (
+                "Step 2 must keep ctx.df=None in DuckDB mode "
+                "(downstream steps 3-5 use chunked Parquet I/O)"
+            )
+            # Load parquet for column contract verification
+            ctx.df = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
+        else:
+            assert ctx.df is not None, "Step 2 must keep ctx.df alive"
 
         # Check core pipeline-produced columns exist
         for col in CORE_CONTRACT_COLUMNS:
