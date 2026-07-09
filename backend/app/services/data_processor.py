@@ -747,3 +747,198 @@ class DataProcessor:
             f"{result['Condition'].nunique()} conditions"
         )
         return result
+
+    def step1_2_duckdb_dia(
+        self,
+        file_paths: list[Path],
+        metadata_columns: dict[str, dict],
+        output_path: Path,
+    ) -> None:
+        """Steps 1-2 (DIA): Streaming CSV -> Parquet via DuckDB.
+
+        Performs Steps 1 (read + metadata join), 2 (Unique_PSM), and
+        low-quality filters (contaminants, Quan_Info, Abundance<1)
+        as a single streaming DuckDB query.
+
+        Args:
+            file_paths: List of DIA file paths
+            metadata_columns: Per-file metadata keyed by filename
+            output_path: Path for output Parquet file
+        """
+        import duckdb
+
+        logger.info(
+            "Steps 1-2 (DuckDB): Streaming %d files -> %s",
+            len(file_paths), output_path,
+        )
+
+        # Detect delimiter and get column names from first file
+        delimiter = _detect_delimiter(file_paths[0])
+        delim_sql = "'\\t'" if delimiter == "\t" else "','"
+        first_cols = pd.read_csv(
+            file_paths[0], nrows=0, sep=delimiter,
+        ).columns.tolist()
+
+        # Validate at least one abundance column exists
+        has_quan_value = "Quan Value" in first_cols
+        has_abundance = "Abundance" in first_cols
+        if not has_quan_value and not has_abundance:
+            raise ValueError(
+                f"No abundance column found in {file_paths[0].name}. "
+                f"Expected 'Quan Value' or 'Abundance'. "
+                f"Available columns: {first_cols}"
+            )
+
+        # Determine group columns from metadata
+        reserved = {"experiment", "batch", "replicate"}
+        group_cols = None
+        for meta in metadata_columns.values():
+            cols = [k for k in meta if k not in reserved]
+            if group_cols is None:
+                group_cols = cols
+            elif cols != group_cols:
+                logger.warning(
+                    "Inconsistent group columns across metadata entries"
+                )
+        if group_cols is None:
+            raise ValueError("No condition group columns found in metadata")
+
+        # Build metadata rows
+        meta_rows = []
+        for fname, meta in metadata_columns.items():
+            condition = "_".join(str(meta[c]) for c in group_cols)
+            replicate = int(meta.get("replicate", 1))
+            sample_orig = f"{condition}_{replicate}"
+            row = [fname, condition, replicate, sample_orig]
+            for c in group_cols:
+                row.append(str(meta[c]))
+            meta_rows.append(tuple(row))
+
+        all_meta_cols = [
+            "filename",
+            "condition",
+            "replicate",
+            "sample_origination",
+        ] + group_cols
+
+        def _sqlesc(s):
+            return s.replace("'", "''")
+
+        # Build VALUES clause for metadata table
+        values_parts = []
+        for row in meta_rows:
+            vals = []
+            for i, v in enumerate(row):
+                col = all_meta_cols[i]
+                if col == "replicate":
+                    vals.append(str(v))
+                else:
+                    vals.append(f"'{_sqlesc(str(v))}'")
+            values_parts.append("(" + ", ".join(vals) + ")")
+
+        values_clause = ",\n".join(values_parts)
+        meta_cols_clause = ", ".join(all_meta_cols)
+
+        # Build file glob
+        ext = file_paths[0].suffix
+        upload_dir = file_paths[0].parent
+        file_glob = str(upload_dir / f"*{ext}").replace("\\", "/")
+
+        # Build the SELECT column list for original CSV columns
+        select_parts = []
+        for col in first_cols:
+            if col in ("Quan Value", "Abundance"):
+                # Handled via abundance expression below, skip raw column
+                continue
+            qcol = f'"{col}"'
+            new_name = col.replace(" ", "_")
+            if new_name != col:
+                select_parts.append(f'{qcol} AS "{new_name}"')
+            else:
+                select_parts.append(qcol)
+
+        orig_cols_sql = ",\n            ".join(select_parts)
+
+        # Build abundance expression with explicit DOUBLE cast
+        if has_quan_value and has_abundance:
+            abund_expr = 'COALESCE("Quan Value", Abundance)'
+        elif has_quan_value:
+            abund_expr = '"Quan Value"'
+        else:
+            abund_expr = 'Abundance'
+        abund_expr_typed = f"TRY_CAST({abund_expr} AS DOUBLE)"
+
+        # Build metadata column JOIN references
+        meta_from_cols = ", ".join(
+            f"m.{c}" for c in all_meta_cols[1:]
+        )
+
+        # Build group columns SELECT suffix
+        group_select_sql = ""
+        if group_cols:
+            group_select_sql = ",\n" + ",\n".join(
+                f"            {c}" for c in group_cols
+            )
+
+        con = duckdb.connect()
+        try:
+            # Create in-memory metadata table
+            con.execute(f"""
+                CREATE TABLE _meta AS
+                SELECT * FROM (VALUES {values_clause})
+                AS t({meta_cols_clause})
+            """)
+
+            # Streaming COPY: read_csv -> join metadata -> rename -> filter -> parquet
+            sql = f"""
+                COPY (
+                    WITH raw AS (
+                        SELECT *,
+                            regexp_replace(filename, '^.*[\\/\\\\]', '')
+                                AS basename
+                        FROM read_csv('{file_glob}',
+                            delim={delim_sql}, auto_detect=true,
+                            all_varchar=true, header=true, filename=true)
+                    ),
+                    joined AS (
+                        SELECT r.* EXCLUDE (filename),
+                               {meta_from_cols}
+                        FROM raw r
+                        JOIN _meta m
+                            ON r.basename = m.filename
+                    )
+                    SELECT
+                        {orig_cols_sql},
+                        {abund_expr_typed} AS "Abundance",
+                        COALESCE(Sequence, '')
+                            || '|' || COALESCE(Modifications, '')
+                            || '|' || COALESCE(Charge, '')
+                            AS "Unique_PSM",
+                        condition AS "Condition",
+                        replicate AS "Replicate",
+                        sample_origination AS "Sample_Origination"{group_select_sql}
+                    FROM joined
+                    WHERE
+                        (Contaminant IS NULL
+                         OR LOWER(Contaminant) != 'true')
+                        AND ("Quan Info" IS NULL
+                             OR "Quan Info" != 'No Value')
+                        AND {abund_expr_typed} >= 1
+                ) TO '{str(output_path).replace(chr(92), '/')}'
+                (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
+            """
+
+            con.execute(sql)
+        finally:
+            con.close()
+
+        if not output_path.exists():
+            raise RuntimeError(
+                f"DuckDB streaming failed: {output_path} not created"
+            )
+
+        result_df = pd.read_parquet(output_path, engine="pyarrow")
+        logger.info(
+            "Steps 1-2 (DuckDB) complete: %d rows, %d conditions",
+            len(result_df), result_df["Condition"].nunique(),
+        )
