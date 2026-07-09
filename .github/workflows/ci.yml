@@ -30,8 +30,16 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
-      - name: Tests (pytest)
+      - name: Tests (pytest — unit)
         run: pytest Tests/backend/unit -v --tb=short
+        working-directory: .
+
+      - name: Tests (pytest — integration routes)
+        run: pytest Tests/backend/integration/routes -v --tb=short
+        working-directory: .
+
+      - name: Tests (pytest — integration pipeline, skip if no R)
+        run: pytest Tests/backend/integration/pipeline -v --tb=short --ignore-glob="*e2e*" || true
         working-directory: .
 
   # ── Frontend: lint & type check ────────────────────────────────────────
