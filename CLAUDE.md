@@ -17,7 +17,6 @@ Proteomics Visualization Web App - A full-stack scientific data analysis platfor
 # Install deps + pre-commit hooks (first time)
 cd backend && .venv/Scripts/python.exe -m pip install -r requirements.txt
 cd ../frontend && npm install
-cd ../Tests && npm install
 cd ../backend && .venv/Scripts/pre-commit.exe install
 
 # Terminal 1 - Backend (start FIRST — frontend proxies to port 8000)
@@ -52,10 +51,8 @@ cd frontend && npm run dev
 backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -v
 backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration -v
 
-# Frontend E2E tests (Playwright)
-cd Tests && npx playwright test
-cd Tests && npx playwright test --list
-cd Tests && npx playwright show-report
+# Specific test group
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit/pipeline -v
 ```
 
 ### Code Quality
@@ -76,9 +73,8 @@ backend/.venv/Scripts/pre-commit.exe run --all-files
 # Quick check
 "C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" -e "library(msqrob2); library(QFeatures); library(limma); library(MSstats); cat('OK\n')"
 
-# Full verification scripts
-"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" backend/scripts/verify_r_packages.R
-"C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe" backend/scripts/verify_msstats.R
+# R integration test
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration/pipeline/test_r_integration.py -v
 ```
 
 ## High-Level Architecture
@@ -193,20 +189,17 @@ Step numbering is positional (list index + 1). PipelineEngine sets `ctx.current_
 | `msstats_data_process.R` | 6 (MSstats) | MSstats protein abundance (DDARawData → OpenMStoMSstatsFormat → dataProcess) |
 | `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison (contrast matrix → groupComparison) |
 | `bionet_network.R` | on-demand | INDRA subnetwork analysis via MSstatsBioNet |
-| `install_r_packages.R` | setup | Installs Bioconductor packages |
-| `verify_r_packages.R` | setup | Verifies msqrob2/QFeatures/limma are installed |
-| `verify_msstats.R` | setup | Verifies MSstats/MSstatsConvert are installed |
+| `install_r_packages.R` | setup | Installs Bioconductor packages (at `scripts/setup/`) |
 
 **WebSocket for Real-Time Updates:**
 - Frontend connects to `ws://localhost:8000/ws/sessions/{session_id}`
 - Pipeline state persisted to `sessions/{session_id}/pipeline_state.json`
 
-**Pipeline E2E Tests:**
-- `Tests/backend/integration/test_tmt_pipeline_e2e.py` — Full TMT pipeline (10k-row PD extract, 16-plex channels, 8 steps, 4 comparisons vs DMSO_24h)
-- `Tests/backend/unit/test_pipeline_chains.py` — Chain tests with mocked R steps; column contract verification
-- `Tests/backend/unit/test_pipeline_registry.py` — Composition, step ordering, positional numbering
-- `Tests/fixtures/` — Real PD data extracts: `tmt_sample_10000rows.txt` (TMT, 78 cols), `dia_sample_01-12_1000rows.txt` (DIA, 61 cols each)
-- Old Playwright E2E tests archived as `.spec.ts.skip` (reference dropped `PSM_*.csv` format)
+**Pipeline Tests:**
+- `Tests/backend/integration/pipeline/test_tmt_pipeline_e2e.py` — Full TMT pipeline (10k-row PD extract, 16-plex channels, 8 steps, 4 comparisons vs DMSO_24h)
+- `Tests/backend/unit/pipeline/test_pipeline_chains.py` — Chain tests with mocked R steps; column contract verification
+- `Tests/backend/unit/pipeline/test_pipeline_registry.py` — Composition, step ordering, positional numbering
+- `Tests/fixtures/` — PD data extracts: `tmt_sample_10000rows.txt` (TMT), `tmt_sample_1000rows.txt` (TMT), `dia_sample_1000rows.txt` (DIA)
 
 **Input File Formats (Proteome Discoverer exports only):**
 - **TMT:** Tab-delimited `.txt`, 78 columns, `Abundance 126` through `Abundance 134N` (16-plex). Channel detection pattern: `^"?Abundance\s+(\d+)([NC])?"?$`. Any plex size accepted (6, 10, 16, 18).
@@ -231,8 +224,7 @@ Step numbering is positional (list index + 1). PipelineEngine sets `ctx.current_
 
 ### Test Location (CRITICAL)
 - **ALL test files MUST be in `Tests/` directory** - No exceptions
-- **Python tests:** `Tests/backend/unit/` and `Tests/backend/integration/`
-- **E2E tests:** `Tests/e2e/`
+- **Python tests:** `Tests/backend/unit/` and `Tests/backend/integration/` (organized by domain in subdirectories)
 
 ### R Integration
 - **NEVER use rpy2** - Always use subprocess
@@ -310,8 +302,8 @@ Sessions persisted to `backend/sessions/{session_id}/`:
 - `backend/app/models/analysis.py` - PipelineTool enum, AnalysisConfig (msqrob2 + MSstats params)
 - `backend/app/models/session.py` - Session, SessionState (includes QUEUED, CANCELLED)
 - `backend/app/models/data.py` - PSMData, ProteinAbundance, DifferentialExpressionResult, QC metrics
-- `backend/scripts/msqrob2_data_process.R` - Step 3 (protein abundance via QFeatures)
-- `backend/scripts/msqrob2_group_comparison_multi.R` - Step 4 (multi-condition DE via msqrob2 v1.16)
+- `backend/scripts/msqrob2_data_process.R` - Step 6 (protein abundance via QFeatures)
+- `backend/scripts/msqrob2_group_comparison_multi.R` - Step 7 (multi-condition DE via msqrob2 v1.16)
 - `backend/scripts/bionet_network.R` - INDRA subnetwork analysis
 - `frontend/next.config.ts` - Frontend config, API proxy to `http://127.0.0.1:8000`
 - `AGENTS/` - 9 developer guides covering overview, red lines, coding standards, API contract, state management, error handling, testing, pipeline, and lessons learned
