@@ -14,6 +14,7 @@ import { processingApi } from '@/lib/api-client';
 import { LogPanel } from '@/components/processing/LogPanel';
 import { SessionManager } from '@/components/session/SessionManager';
 import { formatDuration } from '@/lib/utils';
+import { useSessionValidation } from '@/hooks/use-session-validation';
 import type { LogEntry } from '@/types/processing';
 
 import {
@@ -199,6 +200,8 @@ function ProcessingContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const removeRazor = searchParams.get('remove_razor') !== 'false'; // Default true
+
+  useSessionValidation(sessionId);
 
   const pipeline = (searchParams.get('pipeline') as 'msqrob2' | 'msstats') || 'msqrob2';
   const [startError, setStartError] = useState<string | null>(null);
