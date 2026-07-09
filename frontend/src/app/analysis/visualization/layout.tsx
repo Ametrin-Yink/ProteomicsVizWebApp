@@ -8,6 +8,7 @@ import { SessionManager } from '@/components/session/SessionManager';
 import ExportButton from '@/components/visualization/ExportButton';
 import { ApiProvider } from '@/lib/api-context';
 import { sessionApiPrefix } from '@/lib/api-client';
+import { useSessionValidation } from '@/hooks/use-session-validation';
 
 function buildTabHref(href: string, sessionId: string): string {
   const [path, qs] = href.split('?');
@@ -66,10 +67,14 @@ function LayoutWithProvider({ children }: { children: React.ReactNode }) {
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
   const apiPrefix = sessionId ? sessionApiPrefix(sessionId) : '';
 
+  useSessionValidation(sessionId || null);
+
   return (
     <ApiProvider apiPrefix={apiPrefix}>
       <Navigation />
-      {children}
+      <React.Fragment key={sessionId || 'no-session'}>
+        {children}
+      </React.Fragment>
     </ApiProvider>
   );
 }
