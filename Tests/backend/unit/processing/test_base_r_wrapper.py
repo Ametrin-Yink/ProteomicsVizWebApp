@@ -22,7 +22,6 @@ class FakeRWrapper(BaseRWrapper):
             benchmark_script="benchmark.R",
             data_process_script="data_process.R",
             gc_script="group_comparison.R",
-            verify_script="verify.R",
             dp_timeout=3600,
             gc_timeout=3600,
         )
@@ -105,50 +104,6 @@ class TestDataProcess:
                 output_file=Path("/tmp/out.tsv"),
                 rds_output=Path("/tmp/out.rds"),
             )
-
-
-class TestVerifyRPackages:
-    @pytest.mark.asyncio
-    async def test_missing_script_returns_error(self, wrapper):
-        wrapper._verify_script_name = "nonexistent.R"
-        result = await wrapper.verify_r_packages()
-        assert result["success"] is False
-        assert "not found" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_successful_verification(self, wrapper):
-        with patch.object(Path, "exists", return_value=True):
-            with patch("subprocess.run") as mock_run:
-                mock_result = MagicMock()
-                mock_result.returncode = 0
-                mock_result.stdout = "OK\n"
-                mock_result.stderr = ""
-                mock_run.return_value = mock_result
-
-                result = await wrapper.verify_r_packages()
-                assert result["success"] is True
-
-    @pytest.mark.asyncio
-    async def test_failed_verification(self, wrapper):
-        with patch.object(Path, "exists", return_value=True):
-            with patch("subprocess.run") as mock_run:
-                mock_result = MagicMock()
-                mock_result.returncode = 1
-                mock_result.stdout = ""
-                mock_result.stderr = "msqrob2 not installed"
-                mock_run.return_value = mock_result
-
-                result = await wrapper.verify_r_packages()
-                assert result["success"] is False
-                assert "msqrob2" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_verification_timeout(self, wrapper):
-        with patch.object(Path, "exists", return_value=True):
-            with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 60)):
-                result = await wrapper.verify_r_packages()
-                assert result["success"] is False
-                assert "timed out" in result["error"].lower()
 
 
 class TestNCoreResolution:

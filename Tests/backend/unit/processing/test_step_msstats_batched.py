@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.services.pipeline_engine import StepContext
-from app.services.steps.group_comparison_multi import step_msstats_group_comparison
+from app.services.steps.engines.step_msstats_de import step_msstats_group_comparison
 
 
 class FakeConfig:
@@ -46,7 +46,7 @@ class TestStepMsstatsBatched:
 
     @pytest.fixture
     def mock_msstats(self):
-        with patch("app.services.steps.group_comparison_multi.msstats_wrapper") as mock:
+        with patch("app.services.steps.engines.step_msstats_de.msstats_wrapper") as mock:
             mock.group_comparison_multi = AsyncMock()
             mock.group_comparison_batched = AsyncMock()
             yield mock
@@ -54,7 +54,7 @@ class TestStepMsstatsBatched:
     def test_uses_batched_path_when_above_threshold(self, mock_msstats, tmp_path):
         """When comparisons > msstats_batch_size, use group_comparison_batched."""
         with patch(
-            "app.services.steps.group_comparison_multi.settings"
+            "app.services.steps.engines.step_msstats_de.settings"
         ) as mock_settings:
             mock_settings.msstats_batch_size = 10
             mock_settings.msstats_max_workers = 4
@@ -75,7 +75,7 @@ class TestStepMsstatsBatched:
     def test_uses_single_path_when_below_threshold(self, mock_msstats, tmp_path):
         """When comparisons <= msstats_batch_size, use group_comparison_multi."""
         with patch(
-            "app.services.steps.group_comparison_multi.settings"
+            "app.services.steps.engines.step_msstats_de.settings"
         ) as mock_settings:
             mock_settings.msstats_batch_size = 10
 
@@ -94,7 +94,7 @@ class TestStepMsstatsBatched:
     def test_uses_single_path_at_threshold_boundary(self, mock_msstats, tmp_path):
         """When comparisons == msstats_batch_size, use group_comparison_multi."""
         with patch(
-            "app.services.steps.group_comparison_multi.settings"
+            "app.services.steps.engines.step_msstats_de.settings"
         ) as mock_settings:
             mock_settings.msstats_batch_size = 10
 

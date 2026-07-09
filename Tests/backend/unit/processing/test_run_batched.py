@@ -18,7 +18,6 @@ class FakeWrapper(BaseRWrapper):
             benchmark_script="fake_bench.R",
             data_process_script="fake_dp.R",
             gc_script="fake_gc.R",
-            verify_script="fake_verify.R",
             dp_timeout=60,
             gc_timeout=60,
         )

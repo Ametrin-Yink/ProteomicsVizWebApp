@@ -104,7 +104,6 @@ class BaseRWrapper(ABC):
         benchmark_script: str,
         data_process_script: str,
         gc_script: str,
-        verify_script: str,
         dp_timeout: int,
         gc_timeout: int,
     ):
@@ -118,7 +117,6 @@ class BaseRWrapper(ABC):
         self._benchmark_script_name = benchmark_script
         self._data_process_script_name = data_process_script
         self._gc_script_name = gc_script
-        self._verify_script_name = verify_script
         self._dp_timeout = dp_timeout
         self._gc_timeout = gc_timeout
 
@@ -662,50 +660,6 @@ class BaseRWrapper(ABC):
                 n_cols = len(header.split("\t"))
                 n_rows = sum(1 for _ in f)
             return n_rows, n_cols
-
-    # ------------------------------------------------------------------
-    # Package verification
-    # ------------------------------------------------------------------
-
-    async def verify_r_packages(self) -> dict:
-        """Verify that required R packages are installed."""
-        script_path = self.scripts_dir / self._verify_script_name
-
-        if not script_path.exists():
-            return {
-                "success": False,
-                "error": f"Verification script not found: {script_path}",
-            }
-
-        try:
-
-            def run_verify():
-                return subprocess.run(
-                    [self.r_executable, str(script_path)],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    timeout=60,
-                )
-
-            process = await asyncio.to_thread(run_verify)
-
-            stdout_str = process.stdout if process.stdout else ""
-            stderr_str = process.stderr if process.stderr else ""
-
-            if process.returncode == 0:
-                return {"success": True, "output": stdout_str}
-            else:
-                return {
-                    "success": False,
-                    "error": stderr_str or "Unknown error",
-                    "output": stdout_str,
-                }
-
-        except subprocess.TimeoutExpired:
-            return {"success": False, "error": "Verification timed out"}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
 
     # ------------------------------------------------------------------
     # Pipeline step templates

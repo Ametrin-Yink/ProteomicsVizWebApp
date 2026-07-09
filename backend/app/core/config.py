@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     )
 
     protein_database_dir: Path = Field(
-        default=Path(__file__).resolve().parent.parent.parent / "protein_database",
+        default=Path(__file__).resolve().parent.parent.parent.parent / "protein_database",
         description="Directory containing protein database files",
     )
 

@@ -79,7 +79,6 @@ class MsstatsWrapper(BaseRWrapper):
             benchmark_script="msstats_data_process.R",
             data_process_script="msstats_data_process.R",
             gc_script="msstats_group_comparison_multi.R",
-            verify_script="verify_msstats.R",
             dp_timeout=settings.r_data_process_timeout,
             gc_timeout=settings.r_group_comparison_timeout,
         )

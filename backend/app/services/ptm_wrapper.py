@@ -24,7 +24,6 @@ class PTMWrapper(BaseRWrapper):
             benchmark_script="ptm_summarization.R",
             data_process_script="ptm_summarization.R",
             gc_script="ptm_group_comparison.R",
-            verify_script="verify_msstatsptm.R",
             dp_timeout=settings.r_ptm_summarization_timeout,
             gc_timeout=settings.r_ptm_group_comparison_timeout,
         )

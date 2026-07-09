@@ -55,7 +55,6 @@ class Msqrob2Wrapper(BaseRWrapper):
             benchmark_script="msqrob2_data_process.R",
             data_process_script="msqrob2_data_process.R",
             gc_script="msqrob2_group_comparison_multi.R",
-            verify_script="verify_r_packages.R",
             dp_timeout=settings.r_msqrob2_data_process_timeout,
             gc_timeout=settings.r_msqrob2_group_comparison_timeout,
         )
