@@ -10,7 +10,7 @@ This module implements the initial data processing steps:
 
 import logging
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -705,17 +705,13 @@ class DataProcessor:
         import pyarrow.parquet as pq
 
         # ── Pass 1a: total replicates per condition and detected counts ──
-        total_reps_per_cond: dict[str, int] = {}
+        rep_sets: dict[str, set[int]] = defaultdict(set)
         psm_cond_detected: dict[tuple[str, str], set[int]] = {}
 
         for chunk_df in self._parquet_chunked_reader(input_path):
-            # Track max replicates per condition across chunks
-            for cond, reps in (
-                chunk_df.groupby("Condition")["Replicate"].nunique()
-            ).items():
-                prev = total_reps_per_cond.get(cond, 0)
-                if reps > prev:
-                    total_reps_per_cond[cond] = reps
+            # Accumulate unique replicate IDs per condition across all chunks
+            for cond, group in chunk_df.groupby("Condition"):
+                rep_sets[cond].update(group["Replicate"].unique().tolist())
 
             # Count detected (non-NaN) abundance per (PSM, Condition)
             detected = chunk_df.dropna(subset=["Abundance"])
@@ -729,6 +725,9 @@ class DataProcessor:
                 if key not in psm_cond_detected:
                     psm_cond_detected[key] = set()
                 psm_cond_detected[key].add(int(rep))
+
+        # Convert accumulated sets to counts after pass completes
+        total_reps_per_cond = {cond: len(reps) for cond, reps in rep_sets.items()}
 
         # ── Pass 1b: determine which PSMs pass the threshold ──
         passing: set[str] = set()
