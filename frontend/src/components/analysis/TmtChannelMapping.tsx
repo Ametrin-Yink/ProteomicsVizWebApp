@@ -8,7 +8,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { Plus, Download, Upload, X, AlertCircle } from 'lucide-react';
-import { parseCSVLine } from '@/lib/csv';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import type { UploadedFileInfo } from '@/types';
@@ -24,14 +23,13 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const tmtChannelMapping = useAnalysisStore((s) => s.tmtChannelMapping);
   const updateChannelMapping = useAnalysisStore((s) => s.updateChannelMapping);
   const importChannelMapping = useAnalysisStore((s) => s.importChannelMapping);
-  const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
   const { addToast } = useUIStore();
 
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const channels = file.tmt_channels || [];
+  const channels = useMemo(() => file.tmt_channels || [], [file.tmt_channels]);
 
   // Derive group column names from existing mapping (exclude 'replicate')
   const groupColumns = useMemo(() => {

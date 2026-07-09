@@ -21,7 +21,6 @@ function ComparisonsContent() {
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const analysisType = useAnalysisStore((s) => s.analysisType);
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
-  const tmtChannelMapping = useAnalysisStore((s) => s.tmtChannelMapping);
   const selectedPipeline = getPipelineFromType(analysisType);
   const { addToast } = useUIStore();
 

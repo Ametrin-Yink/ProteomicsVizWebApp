@@ -18,7 +18,6 @@ function TypeContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || '';
 
-  const analysisType = useAnalysisStore((s) => s.analysisType);
   const setAnalysisType = useAnalysisStore((s) => s.setAnalysisType);
   const config = useAnalysisStore((s) => s.config);
   const { addToast } = useUIStore();

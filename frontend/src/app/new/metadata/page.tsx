@@ -12,7 +12,7 @@ import React, { useEffect, useState, useRef, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Loader2, BarChart3, Dna, CheckCircle,
-  AlertCircle, ChevronDown, ChevronRight, FlaskConical,
+  AlertCircle, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import TmtChannelMapping from '@/components/analysis/TmtChannelMapping';
 import DiaMetadataTable from '@/components/analysis/DiaMetadataTable';
-import type { UploadedFileInfo } from '@/types';
 
 function MetadataContentInner() {
   const router = useRouter();
@@ -120,6 +119,7 @@ function MetadataContentInner() {
     };
 
     restore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, setConfig]);
 
   // Auto-save with 800ms debounce (FR3.4)

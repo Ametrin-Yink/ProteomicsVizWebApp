@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3, Tag, FlaskConical, AlertCircle, FileText, Plus, Minus, X } from 'lucide-react';
-import type { UploadedFileInfo, FileDetectionResult, AnalysisType } from '@/types';
+import type { UploadedFileInfo } from '@/types';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
@@ -27,7 +27,6 @@ function UploadContentInner() {
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
-  const setAnalysisType = useAnalysisStore((s) => s.setAnalysisType);
   const validation = getValidation(useAnalysisStore.getState());
   const { addToast } = useUIStore();
   const resetAnalysis = useAnalysisStore((s) => s.reset);
@@ -42,9 +41,6 @@ function UploadContentInner() {
   }, [sessionId]);
 
   useSessionValidation(sessionId || null);
-
-  // Detection results
-  const [detectionResults, setDetectionResults] = useState<FileDetectionResult[]>([]);
 
   // PTM-specific state
   const [ptmLabelingType, setPtmLabelingType] = useState<'LF' | 'TMT'>('LF');
@@ -291,6 +287,7 @@ function UploadContentInner() {
     };
 
     restoreSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, setConfig]);
 
   // Auto-save config to backend on changes (debounced) so edits survive refresh
