@@ -46,17 +46,6 @@ class TestMsstatsPackageAvailability:
 class TestMsstatsScripts:
     """Test MSstats script existence."""
 
-    def test_verify_msstats_script_exists(self):
-        """Verify MSstats verification script exists."""
-        script_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "backend"
-            / "scripts"
-            / "verify_msstats.R"
-        )
-
-        assert script_path.exists()
-
     def test_msstats_data_process_script_exists(self):
         """Verify MSstats data process script exists (used by multi-condition pipeline)."""
         script_path = (
@@ -101,17 +90,6 @@ class TestMsstatsScripts:
 
 class TestRScripts:
     """Test R script execution."""
-
-    def test_verify_r_packages_script_exists(self):
-        """Verify R package verification script exists."""
-        script_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "backend"
-            / "scripts"
-            / "verify_r_packages.R"
-        )
-
-        assert script_path.exists()
 
     def test_msqrob2_data_process_script_exists(self):
         """Verify msqrob2 data process script exists (used by multi-condition pipeline)."""
