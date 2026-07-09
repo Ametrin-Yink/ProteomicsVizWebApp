@@ -14,18 +14,18 @@ API = "http://localhost:8000/api/sessions"
 FIXTURE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "fixtures"
 
 DIA_FILES = [
-    ("dia_sample_01_1000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_02_1000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_03_1000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "3", "batch": "P01C02"}),
-    ("dia_sample_04_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_05_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_06_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "3", "batch": "P01C02"}),
-    ("dia_sample_07_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_08_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_09_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "3", "batch": "P01C02"}),
-    ("dia_sample_10_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_11_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_12_1000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "3", "batch": "P01C02"}),
+    ("dia_sample_01_10000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "1", "batch": "P01C02"}),
+    ("dia_sample_02_10000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "2", "batch": "P01C02"}),
+    ("dia_sample_03_10000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "3", "batch": "P01C02"}),
+    ("dia_sample_04_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "1", "batch": "P01C02"}),
+    ("dia_sample_05_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "2", "batch": "P01C02"}),
+    ("dia_sample_06_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "3", "batch": "P01C02"}),
+    ("dia_sample_07_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "1", "batch": "P01C02"}),
+    ("dia_sample_08_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "2", "batch": "P01C02"}),
+    ("dia_sample_09_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "3", "batch": "P01C02"}),
+    ("dia_sample_10_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "1", "batch": "P01C02"}),
+    ("dia_sample_11_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "2", "batch": "P01C02"}),
+    ("dia_sample_12_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "3", "batch": "P01C02"}),
 ]
 
 COMPARISONS = [
@@ -139,13 +139,8 @@ class TestDIAPipelineE2E:
         sid = dia_session["id"]
         r = requests.get(f"{API}/{sid}/results")
         data = r.json()
-        total_proteins = data.get("data", {}).get("total_proteins", 0)
-        # Test data (1000 rows/file) may produce NA p-values for all proteins
-        # due to insufficient statistical power. Check that the API returns
-        # valid structure rather than requiring >0 significant results.
-        assert isinstance(total_proteins, int), (
-            f"Expected integer total_proteins, got {type(total_proteins)}"
-        )
+        results = data.get("data", {}).get("results", [])
+        assert len(results) > 0, "No DE results returned"
 
     def test_qc_metrics_available(self, dia_session):
         sid = dia_session["id"]
