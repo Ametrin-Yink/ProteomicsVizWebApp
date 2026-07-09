@@ -84,7 +84,7 @@ def dia_session():
         "organism": "human",
         "pipeline": "msqrob2",
         "remove_razor": True,
-        "strict_filtering": True,
+        "strict_filtering": False,  # 10K-row real-data fixtures: PSMs sampled independently per file, no overlap across replicates
         "comparisons": COMPARISONS,
         "metadata_columns": {fname: meta for fname, meta in DIA_FILES},
         "msqrob2_normalization": "center.median",
@@ -113,7 +113,7 @@ def dia_session():
     yield r.json()
 
     # Cleanup: delete session after all tests complete
-    requests.delete(f"{API}/{sid}")
+        requests.delete(f"{API}/{sid}")
 
 
 class TestDIAPipelineE2E:
