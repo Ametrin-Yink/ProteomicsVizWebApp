@@ -215,5 +215,5 @@ class TestTMTPipelineE2E:
         # The session should have been processed with msstats pipeline
         r = requests.get(f"{API}/{tmt_session['id']}/logs")
         logs = r.json()
-        log_messages = " ".join(l["message"] for l in logs.get("logs", []))
+        log_messages = " ".join(log["message"] for log in logs.get("logs", []))
         assert "MSstats" in log_messages, "Pipeline should mention MSstats"

@@ -11,11 +11,13 @@ from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 import pytest
-
-from app.models.analysis import AnalysisConfig, AnalysisResult, AnalysisTemplate, PipelineTool
+from app.models.analysis import (
+    AnalysisConfig,
+    AnalysisResult,
+    AnalysisTemplate,
+    PipelineTool,
+)
 from app.services.pipeline_engine import StepContext
-from app.services.data_processor import DataProcessor, ProcessingConfig
-
 
 # ── Required column contract (Section 8.1) ──────────────────────────────
 
@@ -285,10 +287,14 @@ class TestSharedChainSteps:
     @pytest.mark.asyncio
     async def test_full_chain_2_to_5(self, tmp_path):
         """Shared steps 2-5: ctx.df stays alive until step 5 frees it."""
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
+        from app.services.steps.shared.step_filter_criteria import (
+            step_filter_criteria_default,
+        )
+        from app.services.steps.shared.step_remove_low_quality import (
+            step_remove_low_quality_default,
+        )
         from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_remove_low_quality import step_remove_low_quality_default
-        from app.services.steps.shared.step_filter_criteria import step_filter_criteria_default
+        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         ctx = _make_preseeded_ctx(tmp_path)
         assert ctx.df is not None
@@ -304,8 +310,8 @@ class TestSharedChainSteps:
 
     @pytest.mark.asyncio
     async def test_step_razor_removes_multi_protein(self, tmp_path):
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
         from app.services.steps.shared.step_remove_razor import step_remove_razor
+        from app.services.steps.shared.step_unique_psm import step_unique_psm
         ctx = _make_preseeded_ctx(tmp_path)
         await step_unique_psm(ctx)
         await step_remove_razor(ctx)
@@ -321,13 +327,21 @@ class TestMSstatsFullPipeline:
 
     @pytest.mark.asyncio
     async def test_all_8_steps(self, pipeline_test_files, tmp_path):
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
-        from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_remove_low_quality import step_remove_low_quality_default
-        from app.services.steps.shared.step_filter_criteria import step_filter_criteria_default
+        from app.services.steps.engines.step_msstats_abundance import (
+            step_msstats_protein_abundance,
+        )
+        from app.services.steps.engines.step_msstats_de import (
+            step_msstats_group_comparison,
+        )
+        from app.services.steps.shared.step_filter_criteria import (
+            step_filter_criteria_default,
+        )
         from app.services.steps.shared.step_qc_metrics import step_qc_metrics
-        from app.services.steps.engines.step_msstats_abundance import step_msstats_protein_abundance
-        from app.services.steps.engines.step_msstats_de import step_msstats_group_comparison
+        from app.services.steps.shared.step_remove_low_quality import (
+            step_remove_low_quality_default,
+        )
+        from app.services.steps.shared.step_remove_razor import step_remove_razor
+        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         # Use pre-seeded DataFrame (bypasses input step 1)
         ctx = _make_preseeded_ctx(tmp_path)
@@ -387,13 +401,19 @@ class TestMsqrob2FullPipeline:
 
     @pytest.mark.asyncio
     async def test_all_8_steps(self, pipeline_test_files, tmp_path):
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
-        from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_remove_low_quality import step_remove_low_quality_default
-        from app.services.steps.shared.step_filter_criteria import step_filter_criteria_default
-        from app.services.steps.shared.step_qc_metrics import step_qc_metrics
-        from app.services.steps.engines.step_msqrob2_abundance import step_protein_abundance_msqrob2
+        from app.services.steps.engines.step_msqrob2_abundance import (
+            step_protein_abundance_msqrob2,
+        )
         from app.services.steps.engines.step_msqrob2_de import step_multi_condition_de
+        from app.services.steps.shared.step_filter_criteria import (
+            step_filter_criteria_default,
+        )
+        from app.services.steps.shared.step_qc_metrics import step_qc_metrics
+        from app.services.steps.shared.step_remove_low_quality import (
+            step_remove_low_quality_default,
+        )
+        from app.services.steps.shared.step_remove_razor import step_remove_razor
+        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         # Use pre-seeded DataFrame (bypasses input step 1)
         ctx = _make_preseeded_ctx(tmp_path)

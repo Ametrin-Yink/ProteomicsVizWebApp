@@ -1,7 +1,7 @@
 """Unit tests for BaseRWrapper — subprocess execution, encoding, timeout, errors."""
 import subprocess
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from app.core.exceptions import RScriptError

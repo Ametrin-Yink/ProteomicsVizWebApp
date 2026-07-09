@@ -1,5 +1,6 @@
 """Unit tests for MsstatsWrapper — MSstats pipeline command construction."""
 import json
+
 import pytest
 from app.models.analysis import AnalysisConfig, PipelineTool
 from app.services.msstats_wrapper import MsstatsWrapper

@@ -1,13 +1,13 @@
 """Unit tests for processing API routes — /process, /cancel, /retry, /logs."""
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
+from app.api.routes.processing import _derive_pipeline
+from app.main import app
 from app.models.analysis import PipelineTool
 from app.models.session import Session, SessionConfig, SessionFiles, SessionState
-from app.main import app
-from app.api.routes.processing import _derive_pipeline
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture

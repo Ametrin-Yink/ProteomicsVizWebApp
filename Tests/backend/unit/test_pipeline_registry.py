@@ -6,7 +6,7 @@ pipelines. Validates step ordering, positional numbering, and PTM preservation.
 
 import pytest
 from app.models.analysis import PipelineTool
-from app.services.pipeline_registry import PIPELINES, PipelineDefinition, PipelineStep
+from app.services.pipeline_registry import PIPELINES
 
 
 class TestPipelineComposition:

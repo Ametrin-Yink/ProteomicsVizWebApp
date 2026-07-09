@@ -3,7 +3,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from app.services.qc_calculator import QCCalculator
 
 

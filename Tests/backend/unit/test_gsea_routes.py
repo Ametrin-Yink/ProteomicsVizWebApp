@@ -1,9 +1,9 @@
 """Unit tests for GSEA API routes — run, status, data, plot, heatmap."""
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-from fastapi.testclient import TestClient
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture

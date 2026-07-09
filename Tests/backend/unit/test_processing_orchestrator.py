@@ -1,5 +1,4 @@
 """Unit tests for ProcessingOrchestrator — validation and state transitions."""
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -79,8 +78,9 @@ class TestOrchestratorInit:
         assert orch.progress_callbacks == []
 
     def test_set_cancel_event(self):
-        from app.services.processing_orchestrator import ProcessingOrchestrator
         import asyncio
+
+        from app.services.processing_orchestrator import ProcessingOrchestrator
         orch = ProcessingOrchestrator(session_id="test-id")
         event = asyncio.Event()
         orch.set_cancel_event(event)
