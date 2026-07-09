@@ -8,7 +8,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Loader2,
@@ -42,6 +42,8 @@ export interface SessionManagerProps {
  */
 export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pageSessionId = searchParams.get('session_id') || searchParams.get('session') || '';
   const sessions = useSessions();
   const sessionsList = React.useMemo(() => sessions || [], [sessions]);
   const currentSession = useCurrentSession();
@@ -134,6 +136,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       // Show success toast
       const { addToast } = useUIStore.getState();
       addToast('success', 'Session deleted successfully');
+
+      // Redirect if user is viewing the deleted session
+      if (pageSessionId === sessionId) {
+        router.push('/');
+      }
     } catch (error) {
       console.error('Failed to delete session:', error);
       // Show error toast
@@ -211,6 +218,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       setIsSelectMode(false);
       const { addToast } = useUIStore.getState();
       addToast('success', `${count} session${count > 1 ? 's' : ''} deleted`);
+
+      // Redirect if user is viewing one of the deleted sessions
+      if (idsToDelete.includes(pageSessionId)) {
+        router.push('/');
+      }
     } catch (error) {
       const { addToast } = useUIStore.getState();
       addToast('error', error instanceof Error ? error.message : 'Failed to delete sessions');
