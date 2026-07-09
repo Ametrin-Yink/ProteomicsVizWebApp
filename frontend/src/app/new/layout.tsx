@@ -14,6 +14,7 @@ import { useSidebar } from '@/components/layout/SidebarContext';
 import { SessionManager } from '@/components/session/SessionManager';
 import { WizardProgress } from '@/components/analysis/WizardProgress';
 import { useAnalysisStore } from '@/stores/analysis-store';
+import { useSessionValidation } from '@/hooks/use-session-validation';
 
 function getStepIndex(pathname: string, analysisType: string | null): number {
   // PTM: 5 steps (skips metadata)
@@ -51,6 +52,8 @@ export default function NewAnalysisLayout({
   const analysisType = useAnalysisStore((s) => s.analysisType);
   const currentStep = getStepIndex(pathname, analysisType);
   const { isExpanded } = useSidebar();
+
+  useSessionValidation(sessionId || null);
 
   return (
     <div className="flex w-full h-full relative">
