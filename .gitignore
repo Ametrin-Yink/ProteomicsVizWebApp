@@ -85,6 +85,7 @@ nosetests.xml
 sessions/
 backend/sessions/
 backend/reports/
+backend/Tests/
 uploads/
 backend/uploads/
 
@@ -133,11 +134,10 @@ settings.local.json
 .claude/
 .remember/
 .worktrees/
+.superpowers/
 
 # --- Design docs (local only) ---
 DESIGN.json
 DESIGN.md
 PRODUCT.md
-docs/msqrob2-pipeline.md
-docs/msstatsptm-package/
 docs/superpowers/
