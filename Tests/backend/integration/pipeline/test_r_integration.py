@@ -49,7 +49,7 @@ class TestMsstatsScripts:
     def test_msstats_data_process_script_exists(self):
         """Verify MSstats data process script exists (used by multi-condition pipeline)."""
         script_path = (
-            Path(__file__).parent.parent.parent.parent
+            Path(__file__).resolve().parent.parent.parent.parent.parent
             / "backend"
             / "scripts"
             / "msstats_data_process.R"
@@ -60,7 +60,7 @@ class TestMsstatsScripts:
     def test_msstats_group_comparison_multi_script_exists(self):
         """Verify MSstats multi-condition group comparison script exists."""
         script_path = (
-            Path(__file__).parent.parent.parent.parent
+            Path(__file__).resolve().parent.parent.parent.parent.parent
             / "backend"
             / "scripts"
             / "msstats_group_comparison_multi.R"
@@ -94,7 +94,7 @@ class TestRScripts:
     def test_msqrob2_data_process_script_exists(self):
         """Verify msqrob2 data process script exists (used by multi-condition pipeline)."""
         script_path = (
-            Path(__file__).parent.parent.parent.parent
+            Path(__file__).resolve().parent.parent.parent.parent.parent
             / "backend"
             / "scripts"
             / "msqrob2_data_process.R"
@@ -105,7 +105,7 @@ class TestRScripts:
     def test_msqrob2_group_comparison_multi_script_exists(self):
         """Verify msqrob2 multi-condition group comparison script exists."""
         script_path = (
-            Path(__file__).parent.parent.parent.parent
+            Path(__file__).resolve().parent.parent.parent.parent.parent
             / "backend"
             / "scripts"
             / "msqrob2_group_comparison_multi.R"
