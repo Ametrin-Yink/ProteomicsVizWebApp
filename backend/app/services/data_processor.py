@@ -839,10 +839,10 @@ class DataProcessor:
         values_clause = ",\n".join(values_parts)
         meta_cols_clause = ", ".join(all_meta_cols)
 
-        # Build file glob
-        ext = file_paths[0].suffix
-        upload_dir = file_paths[0].parent
-        file_glob = str(upload_dir / f"*{ext}").replace("\\", "/")
+        # Build explicit file list (avoid glob picking up unrelated files)
+        file_list_sql = ", ".join(
+            f"'{str(p).replace(chr(92), '/')}'" for p in file_paths
+        )
 
         # Build the SELECT column list for original CSV columns
         select_parts = []
@@ -880,6 +880,18 @@ class DataProcessor:
                 f"            {c}" for c in group_cols
             )
 
+        # Build WHERE clause — "Quan Info" column is optional
+        has_quan_info = "Quan Info" in first_cols
+        filter_parts = [
+            "(Contaminant IS NULL OR LOWER(Contaminant) != 'true')",
+            f"{abund_expr_typed} >= 1",
+        ]
+        if has_quan_info:
+            filter_parts.append(
+                '("Quan Info" IS NULL OR "Quan Info" != \'No Value\')'
+            )
+        where_clause = " AND ".join(filter_parts)
+
         con = duckdb.connect()
         try:
             # Create in-memory metadata table
@@ -896,7 +908,7 @@ class DataProcessor:
                         SELECT *,
                             regexp_replace(filename, '^.*[\\/\\\\]', '')
                                 AS basename
-                        FROM read_csv('{file_glob}',
+                        FROM read_csv([{file_list_sql}],
                             delim={delim_sql}, auto_detect=true,
                             all_varchar=true, header=true, filename=true)
                     ),
@@ -919,11 +931,7 @@ class DataProcessor:
                         sample_origination AS "Sample_Origination"{group_select_sql}
                     FROM joined
                     WHERE
-                        (Contaminant IS NULL
-                         OR LOWER(Contaminant) != 'true')
-                        AND ("Quan Info" IS NULL
-                             OR "Quan Info" != 'No Value')
-                        AND {abund_expr_typed} >= 1
+                        {where_clause}
                 ) TO '{str(output_path).replace(chr(92), '/')}'
                 (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
             """

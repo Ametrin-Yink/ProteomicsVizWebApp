@@ -17,6 +17,7 @@ from app.models.analysis import (
     AnalysisTemplate,
     PipelineTool,
 )
+from app.core.config import settings
 from app.services.pipeline_engine import StepContext
 
 # ── Required column contract (Section 8.1) ──────────────────────────────
@@ -242,7 +243,19 @@ class TestColumnContractDIA:
         ctx.result = AnalysisResult(session_id="contract-test-dia")
 
         await step_input_dia(ctx)
-        assert ctx.df is not None, "Step 1 must populate ctx.df"
+        # DuckDB path: ctx.df may be None but parquet must exist
+        use_duckdb = settings.use_duckdb_streaming
+        if use_duckdb:
+            try:
+                import duckdb  # noqa: F401
+            except ImportError:
+                use_duckdb = False
+        if use_duckdb:
+            assert ctx.psm_file_path and ctx.psm_file_path.exists(), (
+                "Step 1 must save parquet when DuckDB streaming"
+            )
+        else:
+            assert ctx.df is not None, "Step 1 must populate ctx.df"
 
         await step_unique_psm(ctx)
         assert ctx.df is not None, "Step 2 must keep ctx.df alive"
