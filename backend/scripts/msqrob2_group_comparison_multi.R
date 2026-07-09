@@ -53,12 +53,27 @@ if (is.na(n_cores) || n_cores < 1L) n_cores <- 1L
 
 cat("Config: ridge=", ridge, " maxitRob=", maxitRob, " adjust=", adjust_method,
     " n_cores=", n_cores, " batch=", ifelse(is.null(batch_column), "none", batch_column), "\n")
+cat(sprintf("[TIMING] de_start %s", Sys.time()), "\n", file=stderr())
 flush.console()
+
+# Detect pre-fitted RDS / save-fitted modes
+skip_fit <- isTRUE(config$skip_fit)
+save_fitted_rds <- isTRUE(config$save_fitted_rds)
+
+if (save_fitted_rds) {
+    cat("Save-fitted mode — will save fitted model to MSqRob2_Fitted.rds and exit\n")
+    flush.console()
+}
+if (skip_fit) {
+    cat("Pre-fitted RDS — skipping msqrob() model fitting\n")
+    flush.console()
+}
 
 # Load QFeatures RDS from step 3
 if (!file.exists(rds_file)) stop(paste("RDS file not found:", rds_file))
 pe <- readRDS(rds_file)
 cat("Loaded QFeatures:", nrow(pe[["protein"]]), "proteins,", ncol(pe[["protein"]]), "samples\n")
+cat(sprintf("[TIMING] rds_load_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
 # Extract sample names from protein assay (QFeatures colnames returns CharacterList)
@@ -87,10 +102,13 @@ for (i in seq_along(comparisons)) {
     g2_values <- as.character(unlist(comp$group2))
     g1_label <- paste(g1_values, collapse = "+")
     g2_label <- paste(g2_values, collapse = "+")
-    comparison_labels[i] <- paste0(g1_label, "_vs_", g2_label)
+    # Use custom label if provided (enables benchmarking with duplicate comparisons)
+    label <- if (!is.null(comp$label) && nzchar(comp$label)) comp$label else paste0(g1_label, "_vs_", g2_label)
+    comparison_labels[i] <- label
     all_condition_values <- c(all_condition_values, g1_values, g2_values)
     cat("  Comparison", i, ":", comparison_labels[i], "\n")
 }
+cat(sprintf("[TIMING] comparisons_parsed %s n=%d", Sys.time(), length(comparisons)), "\n", file=stderr())
 flush.console()
 
 # ==========================================================================
@@ -254,17 +272,35 @@ if (n_cores > 1L) {
 } else {
     BPPARAM <- SerialParam()
 }
-register(BPPARAM)
+if (!skip_fit) {
+    register(BPPARAM)
 
-# Fit model via msqrob v1.16 API
-cat("\nFitting msqrob model...\n")
-flush.console()
+    # Fit model via msqrob v1.16 API
+    cat("\nFitting msqrob model...\n")
+    cat(sprintf("[TIMING] model_fit_start %s", Sys.time()), "\n", file=stderr())
+    flush.console()
 
-pe <- msqrob(object = pe, i = "protein", formula = model_formula,
-             robust = TRUE, ridge = ridge, maxitRob = maxitRob)
+    pe <- msqrob(object = pe, i = "protein", formula = model_formula,
+                 robust = TRUE, ridge = ridge, maxitRob = maxitRob)
 
-cat("Model fitted. rowData columns:", paste(colnames(rowData(pe[["protein"]])), collapse = ", "), "\n")
-flush.console()
+    cat("Model fitted. rowData columns:", paste(colnames(rowData(pe[["protein"]])), collapse = ", "), "\n")
+    cat(sprintf("[TIMING] model_fit_done %s", Sys.time()), "\n", file=stderr())
+    flush.console()
+
+    # Save fitted QFeatures for batched reuse (Phase A)
+    if (save_fitted_rds) {
+        fitted_rds_path <- file.path(output_dir, "MSqRob2_Fitted.rds")
+        saveRDS(pe, file = fitted_rds_path)
+        cat("Fitted RDS saved to:", fitted_rds_path, "\n")
+        cat("Save-fitted mode complete — exiting (comparisons skipped)\n")
+        cat(sprintf("[TIMING] de_complete %s", Sys.time()), "\n", file=stderr())
+        flush.console()
+        quit(save = "no", status = 0)
+    }
+} else {
+    cat("Using pre-fitted model from RDS — skipping msqrob()\n")
+    flush.console()
+}
 
 # ==========================================================================
 # Pre-identify zero-variance proteins
@@ -349,7 +385,12 @@ for (i in seq_along(comparisons)) {
 
     sig_count <- sum(results_out$adjPval < 0.05, na.rm = TRUE)
     cat("    ", label, ":", nrow(results_out), "proteins,", sig_count, "significant\n")
+
+    if (i %% 100 == 0 || i == length(comparisons)) {
+        cat(sprintf("[TIMING] comparisons_done %d/%d %s", i, length(comparisons), Sys.time()), "\n", file=stderr())
+    }
 }
 
+cat(sprintf("[TIMING] de_complete %s", Sys.time()), "\n", file=stderr())
 cat("\nStep 4 complete: msqrob2 differential expression finished successfully\n")
 flush.console()

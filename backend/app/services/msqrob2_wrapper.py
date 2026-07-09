@@ -7,12 +7,15 @@ Handles protein abundance (QFeatures aggregation) and differential expression
 Implements steps 6-7 of the MULTI_CONDITION pipeline.
 """
 
+import logging
 import json as _json
 from pathlib import Path
 
 from app.core.config import settings
 from app.models.analysis import AnalysisConfig
 from app.services.base_r_wrapper import BaseRWrapper
+
+logger = logging.getLogger("proteomics")
 
 
 def _build_msqrob2_batch_cmd(
@@ -134,6 +137,8 @@ class Msqrob2Wrapper(BaseRWrapper):
             "numberOfCores": n_cores,
             "batch_column": config.msqrob2_batch_column,
             "metadata": _translate_metadata(config.metadata),
+            "skip_fit": extra.get("skip_fit", False),
+            "save_fitted_rds": extra.get("save_fitted_rds", False),
         }
 
     async def group_comparison_batched(
@@ -151,6 +156,10 @@ class Msqrob2Wrapper(BaseRWrapper):
         Splits comparisons into batches of settings.msqrob2_batch_size
         and runs each in its own R subprocess via ProcessPoolExecutor.
         When comparisons <= batch_size, falls back to group_comparison_multi.
+
+        Two-phase execution for batching:
+          Phase A — Fit the msqrob() model once, save fitted RDS.
+          Phase B — Batched comparisons using pre-fitted RDS (skip msqrob()).
         """
         import functools
 
@@ -164,17 +173,35 @@ class Msqrob2Wrapper(BaseRWrapper):
                 config=config, log_callback=log_callback, timeout=timeout,
             )
 
+        # Phase A: Fit the model once (if not already cached)
+        fitted_rds_path = output_dir / "MSqRob2_Fitted.rds"
+        if not fitted_rds_path.exists():
+            logger.info("Phase A: Fitting msqrob model (save_fitted_rds mode)")
+            await self.group_comparison_multi(
+                rds_file=rds_file,
+                output_dir=output_dir,
+                comparisons=comparisons[:1],
+                gene_mapping_file=gene_mapping_file,
+                config=config,
+                log_callback=log_callback,
+                timeout=timeout,
+                save_fitted_rds=True,
+            )
+            logger.info("Phase A complete: fitted RDS saved to %s", fitted_rds_path)
+
+        # Phase B: Batched comparisons using pre-fitted RDS
         script_path = self.scripts_dir / self._gc_script_name
         cfg = config if config else AnalysisConfig()
         n_cores = await self._resolve_n_cores(cfg, self._n_cores_config_attr, rds_file, log_callback)
         if n_cores > 1:
             n_cores = await self._check_memory_headroom(rds_file, n_cores, log_callback)
-        gc_config = self._build_gc_config(cfg, n_cores)
+        gc_config = self._build_gc_config(cfg, n_cores, skip_fit=True)
         config_json = _json.dumps(gc_config)
 
         build_batch_cmd = functools.partial(
             _build_msqrob2_batch_cmd,
-            str(rds_file), str(output_dir),
+            str(fitted_rds_path),  # Use fitted RDS — skips msqrob() in R script
+            str(output_dir),
             str(gene_mapping_file) if gene_mapping_file else "",
             config_json,
             self.r_executable, str(script_path),
