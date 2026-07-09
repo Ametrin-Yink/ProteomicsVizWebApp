@@ -784,7 +784,7 @@ class DataProcessor:
                 mask = df["Unique_PSM"].isin(psms_to_keep)
                 if valid_proteins is not None:
                     mask &= df["Master_Protein_Accessions"].isin(valid_proteins)
-                df = df[mask].copy()
+                df = df[mask].copy().reset_index(drop=True)
                 total_output += len(df)
 
                 table = pa.Table.from_pandas(df)

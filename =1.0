@@ -1,0 +1,5 @@
+Collecting duckdb
+  Using cached duckdb-1.5.4-cp312-cp312-win_amd64.whl.metadata (4.2 kB)
+Using cached duckdb-1.5.4-cp312-cp312-win_amd64.whl (13.1 MB)
+Installing collected packages: duckdb
+Successfully installed duckdb-1.5.4
