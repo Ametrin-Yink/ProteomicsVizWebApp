@@ -21,14 +21,14 @@ class TestMsstatsPipelineSplit:
         pipeline = PIPELINES[PipelineTool.MSSTATS]
         step_6 = pipeline.steps[5]  # 0-indexed
         assert step_6.number == 6
-        assert step_6.name == "protein_abundance"
+        assert step_6.name == "protein_abundance_msstats"
         assert "Protein Abundance" in step_6.display_name
 
     def test_step_7_is_differential_expression(self):
         pipeline = PIPELINES[PipelineTool.MSSTATS]
         step_7 = pipeline.steps[6]  # 0-indexed
         assert step_7.number == 7
-        assert step_7.name == "differential_expression"
+        assert step_7.name == "de_msstats"
         assert "Differential Expression" in step_7.display_name
 
 
