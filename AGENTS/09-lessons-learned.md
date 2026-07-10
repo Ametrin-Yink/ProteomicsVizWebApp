@@ -101,3 +101,41 @@ Automated test assertions are necessary but not sufficient. For every UI feature
 5. Document findings
 
 **Non-negotiable:** If visual confirmation fails, the test fails. If UI is misaligned, the test fails. If data is not displayed, the test fails. Screenshots don't lie — they show the actual rendered state.
+
+## Performance Optimization (Phase 1 & 2)
+
+### Ridge Regression Breaks with ≤3 Replicates
+
+**Problem:** After changing `msqrob2_ridge` default to `True`, all DE results showed 0 proteins (all-NA logFC/pval). Session `daf0051c` showed "0 proteins" in the web app.
+
+**Root cause:** The 2025 msqrob2TMT paper recommends ridge for many-condition designs, but the formula `~ 0 + condition` with 3 replicates per condition creates 4 parameters from 12 observations. Ridge penalization causes `lme4` to hit "boundary (singular) fit" on every protein, producing all-NA results.
+
+**Why the API didn't override it:** `SessionConfig` model was missing `msqrob2_ridge` field, so `config_forward_fields` couldn't forward the user's `msqrob2_ridge: false` from the API to `AnalysisConfig`. The default (`True`) was always used.
+
+**Fix:** Reverted default to `False`, added missing msqrob2 fields to `SessionConfig`, and added them to `config_forward_fields` in `processing.py`.
+
+**Lesson:** Every config field that exists in `AnalysisConfig` MUST also exist in `SessionConfig` AND in `config_forward_fields`. A missing field silently uses the default — the API returns 200 with no warning that the user's setting was ignored.
+
+### DuckDB CSV vs Pandas CSV Parsing
+
+**Problem:** DuckDB `read_csv` and `pandas.read_csv` handle quoted headers, null values, and type inference differently. A query that works on test data may silently drop rows on real data.
+
+**Mitigation:** Use `all_varchar=true` (read everything as strings) and explicit `TRY_CAST(... AS DOUBLE)` for numeric columns. The output comparison test (`test_duckdb_streaming.py`) verifies identical output to pandas for the same input.
+
+### Chunked Step 5 Replicate Counting
+
+**Problem:** Using `max(nunique())` across Parquet row groups undercounts replicates when a condition's replicates span multiple chunks. Caused over-filtering.
+
+**Fix:** Use `defaultdict(set)` to accumulate actual replicate values across all chunks, then convert to lengths.
+
+### Phase 2.2 removeAssay Warnings
+
+**Problem:** "removing N sampleMap rows not in names(experiments)" appears after `removeAssay()` calls. Benign — QFeatures is cleaning up sampleMap entries for deleted assays.
+
+**Lesson:** These warnings are expected and harmless. The reduced RDS works correctly in Step 7 (only accesses `protein` assay).
+
+### Hydration Mismatch in Wizard Layout
+
+**Problem:** `getSessionIdFromURL()` used `typeof window === 'undefined'` check — server rendered empty `session=""`, client rendered actual session ID. React hydration mismatch.
+
+**Fix:** Use `useState('')` + `useEffect(() => setSessionId(...), [])` so the initial render (empty) matches SSR.
