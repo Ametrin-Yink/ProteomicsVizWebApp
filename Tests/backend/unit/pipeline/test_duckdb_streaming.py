@@ -100,10 +100,8 @@ class TestDuckDBStreaming:
                     underscore_version = col.replace(" ", "_")
                     if underscore_version in df_dd.columns:
                         missing_orig.discard(col)
-                if missing_orig:
-                    # "Quan Value" may be replaced by "Abundance"
-                    if "Quan Value" in missing_orig and "Abundance" in df_dd.columns:
-                        missing_orig.discard("Quan Value")
+                if missing_orig and "Quan Value" in missing_orig and "Abundance" in df_dd.columns:
+                    missing_orig.discard("Quan Value")
             assert not missing_orig, (
                 f"DuckDB output missing original columns from {fpath.name}: {missing_orig}"
             )

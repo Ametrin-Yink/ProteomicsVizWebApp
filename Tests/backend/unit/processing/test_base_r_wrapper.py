@@ -83,16 +83,18 @@ class TestRunRScript:
 class TestDataProcess:
     @pytest.mark.asyncio
     async def test_returns_output_path(self, wrapper):
-        with patch.object(wrapper, "_run_r_script") as mock_run:
-            with patch.object(Path, "exists", return_value=True):
-                mock_run.return_value = None
-                result = await wrapper.data_process(
-                    input_file=Path("/tmp/input.parquet"),
-                    output_file=Path("/tmp/output.tsv"),
-                    rds_output=Path("/tmp/output.rds"),
-                )
-                assert result == Path("/tmp/output.tsv")
-                mock_run.assert_awaited_once()
+        with (
+            patch.object(wrapper, "_run_r_script") as mock_run,
+            patch.object(Path, "exists", return_value=True),
+        ):
+            mock_run.return_value = None
+            result = await wrapper.data_process(
+                input_file=Path("/tmp/input.parquet"),
+                output_file=Path("/tmp/output.tsv"),
+                rds_output=Path("/tmp/output.rds"),
+            )
+            assert result == Path("/tmp/output.tsv")
+            mock_run.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_missing_script_raises_error(self, wrapper):

@@ -342,7 +342,7 @@ class QCCalculator:
         abundances — multiple MS fractions contribute to the same PSM in
         the same sample. Then log2-transforms, computes SD of log2 values
         across replicates per PSM, and converts to CV% via the exact
-        log-normal formula: CV = sqrt(exp(σ_ln²) - 1)×100.
+        log-normal formula: CV = sqrt(exp(sd_ln^2) - 1) * 100.
 
         Returns precomputed box-plot statistics per condition.
         """
@@ -377,9 +377,9 @@ class QCCalculator:
         """
         Calculate variation per condition for protein abundances.
 
-        Computes SD of log2 abundance × 100 across replicates.  Protein
+        Computes SD of log2 abundance x 100 across replicates.  Protein
         abundances are already log2-transformed, so no conversion is needed.
-        SD_log2 × 100 gives an approximate CV% that is stable across the
+        SD_log2 x 100 gives an approximate CV% that is stable across the
         abundance range.
         """
         if protein_df is None:
@@ -407,7 +407,7 @@ class QCCalculator:
             condition = self._extract_condition(col)
             condition_cols.setdefault(condition, []).append(col)
 
-        # SD of log2 values × 100 per protein per condition (vectorized)
+        # SD of log2 values x 100 per protein per condition (vectorized)
         cv_by_condition = {}
         for condition, cols in condition_cols.items():
             mat = protein_df[cols].values.astype(float)

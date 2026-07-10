@@ -1092,11 +1092,11 @@ async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
 
     # ── Compare (protein-correlation, comparison-correlation) ──
     compare_dir = session_dir / "results" / "compare"
-    _COMPARE_KINDS = [
+    _compare_kinds = [
         ("protein-correlation", "Protein Correlation"),
         ("comparison-correlation", "Comparison Correlation"),
     ]
-    for compute_type, label_prefix in _COMPARE_KINDS:
+    for compute_type, label_prefix in _compare_kinds:
         status_file = compare_dir / f"{compute_type}_status.json"
         if not status_file.exists():
             continue

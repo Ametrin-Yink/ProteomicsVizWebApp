@@ -90,7 +90,7 @@ def detect_tmt_channels(columns: list[str]) -> list[str]:
             channels.append(label)
 
     # Sort numerically by the numeric prefix, then by suffix order (N before C)
-    SUFFIX_ORDER = {"": 0, "N": 1, "C": 2}
+    suffix_order = {"": 0, "N": 1, "C": 2}
 
     def sort_key(ch: str) -> tuple[int, int]:
         num_str = ""
@@ -100,7 +100,7 @@ def detect_tmt_channels(columns: list[str]) -> list[str]:
                 num_str += c
             else:
                 suffix += c
-        return (int(num_str), SUFFIX_ORDER.get(suffix, 3))
+        return (int(num_str), suffix_order.get(suffix, 3))
 
     channels.sort(key=sort_key)
     return channels

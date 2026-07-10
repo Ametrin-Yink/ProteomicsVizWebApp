@@ -297,10 +297,10 @@ async def upload_fasta_file(
     # Validate FASTA format — first line must start with ">"
     try:
         text_content = content.decode("utf-8")
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as err:
         raise ValidationError(
             message=f"File {file.filename} is not a valid text file"
-        )
+        ) from err
 
     first_line = text_content.strip().split("\n")[0] if text_content else ""
     if not first_line.startswith(">"):

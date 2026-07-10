@@ -1125,12 +1125,7 @@ class DataProcessor:
                 row.append(str(meta[c]))
             meta_rows.append(tuple(row))
 
-        all_meta_cols = [
-            "filename",
-            "condition",
-            "replicate",
-            "sample_origination",
-        ] + group_cols
+        all_meta_cols = ["filename", "condition", "replicate", "sample_origination", *group_cols]
 
         def _sqlesc(s):
             return s.replace("'", "''")
