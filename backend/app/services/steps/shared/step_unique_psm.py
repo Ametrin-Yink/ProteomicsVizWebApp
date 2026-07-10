@@ -1,59 +1,27 @@
-"""Step 2: Generate unique PSM identifiers (shared, both pipelines).
+"""Step 2: Unique PSM identifier (no-op — DuckDB already handled it).
 
-Unified handler that merges unique_psm_msqrob2 and unique_psm_msstats.
-Adds Unique_PSM column, re-saves parquet. Does NOT free ctx.df
-(memory management is handled by the pipeline engine).
-
-When DuckDB streaming has already performed Steps 1-2, this handler
-keeps ctx.df = None so downstream steps (3-5) use chunked Parquet I/O.
+DuckDB streaming in Steps 1-2 generates Unique_PSM inline as part
+of the COPY query. This handler records step completion without
+any processing.
 """
 
-import asyncio
 import logging
 
-from app.core.config import settings
-from app.services.data_processor import DataProcessor, ProcessingConfig
 from app.services.pipeline_engine import StepContext
 
 logger = logging.getLogger("proteomics")
 
 
 async def step_unique_psm(ctx: StepContext) -> None:
-    """Generate Unique_PSM and re-save parquet.
+    """Step 2: DuckDB already handled Unique_PSM generation.
 
-    Calls DataProcessor.step2_generate_unique_psm() to add Unique_PSM column.
-    Re-saves at ctx.psm_file_path. Does NOT free ctx.df.
-    Uses ctx.current_step_number for step_outputs.
-
-    If ctx.df is None and ctx.psm_file_path exists, DuckDB streaming
-    already handled Steps 1-2. Keeps ctx.df = None so downstream
-    steps 3-5 use chunked Parquet I/O.
+    Marks step output and continues. The parquet file at
+    ctx.psm_file_path already contains the Unique_PSM column
+    from the DuckDB streaming query.
     """
     current_step = ctx.current_step_number or 2
-    if ctx.df is None and ctx.psm_file_path and ctx.psm_file_path.exists():
-        logger.info(
-            "Step %d: DuckDB already handled Steps 1-2, "
-            "keeping parquet on disk for chunked I/O (Steps 3-5)",
-            current_step,
-        )
-        ctx.step_outputs[current_step] = ctx.psm_file_path
-        return
-
-    processor = DataProcessor(
-        ProcessingConfig(
-            remove_razor=ctx.config.remove_razor,
-            strict_filtering=ctx.config.strict_filtering,
-        )
+    ctx.step_outputs[current_step] = ctx.psm_file_path
+    logger.info(
+        "Step %d: Unique_PSM already in parquet (DuckDB Steps 1-2)",
+        current_step,
     )
-    ctx.df = await asyncio.to_thread(processor.step2_generate_unique_psm, ctx.df)
-
-    # Re-save with Unique_PSM column
-    psm_path = ctx.psm_file_path
-    await asyncio.to_thread(
-        ctx.df.to_parquet,
-        psm_path,
-        engine="pyarrow",
-        compression=settings.parquet_compression,
-        index=False,
-    )
-    ctx.step_outputs[current_step] = psm_path
