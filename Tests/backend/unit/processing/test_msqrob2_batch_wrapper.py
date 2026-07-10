@@ -169,10 +169,11 @@ class TestMsqrob2WrapperHasBatched:
 
     @pytest.mark.asyncio
     @patch.object(Msqrob2Wrapper, "run_batched")
+    @patch.object(Msqrob2Wrapper, "group_comparison_multi")  # Phase A fit call
     @patch.object(Msqrob2Wrapper, "_resolve_n_cores", return_value=2)
     @patch.object(Msqrob2Wrapper, "_check_memory_headroom", return_value=2)
     async def test_batched_execution_when_many_comparisons(
-        self, mock_mem, mock_cores, mock_run_batched, wrapper
+        self, mock_mem, mock_cores, mock_gc_multi, mock_run_batched, wrapper
     ):
         """When comparisons > batch_size, should use run_batched."""
         from app.core.config import settings
@@ -192,10 +193,11 @@ class TestMsqrob2WrapperHasBatched:
 
     @pytest.mark.asyncio
     @patch.object(Msqrob2Wrapper, "run_batched")
+    @patch.object(Msqrob2Wrapper, "group_comparison_multi")  # Phase A fit call
     @patch.object(Msqrob2Wrapper, "_resolve_n_cores", return_value=2)
     @patch.object(Msqrob2Wrapper, "_check_memory_headroom", return_value=2)
     async def test_passess_config_json_to_batch_builder(
-        self, mock_mem, mock_cores, mock_run_batched, wrapper
+        self, mock_mem, mock_cores, mock_gc_multi, mock_run_batched, wrapper
     ):
         """Verify config is serialized and passed through build_batch_cmd."""
         from app.core.config import settings

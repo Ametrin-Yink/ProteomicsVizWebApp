@@ -48,10 +48,15 @@ export default function NewAnalysisLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const sessionId = getSessionIdFromURL();
+  const [sessionId, setSessionId] = React.useState('');
   const analysisType = useAnalysisStore((s) => s.analysisType);
   const currentStep = getStepIndex(pathname, analysisType);
   const { isExpanded } = useSidebar();
+
+  // Hydration: populate sessionId from URL only after mount to match SSR empty state
+  React.useEffect(() => {
+    setSessionId(getSessionIdFromURL());
+  }, []);
 
   useSessionValidation(sessionId || null);
 
