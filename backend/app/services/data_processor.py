@@ -673,6 +673,77 @@ class DataProcessor:
             remaining_count,
         )
 
+    def step4_remove_low_quality_duckdb(
+        self, input_path: Path, output_path: Path
+    ) -> None:
+        """DuckDB SQL: filter contaminants, No Value, Abundance < 1 in one pass.
+
+        Reads input parquet, applies row-level filters via DuckDB WHERE clause,
+        and streams output directly to a new Parquet file using COPY TO.
+
+        Handles the optional Quan_Info column (absent in DIA files) by checking
+        the parquet schema before building the SQL.
+
+        Args:
+            input_path: Source Parquet file
+            output_path: Destination Parquet file
+        """
+        import duckdb
+        import pyarrow.parquet as pq
+
+        logger.info("Step 4 (DuckDB): Removing low quality PSMs")
+
+        pf = pq.ParquetFile(input_path)
+        has_quan_info = "Quan_Info" in pf.schema_arrow.names
+
+        filter_parts = [
+            "(Contaminant IS NULL OR LOWER(Contaminant) != 'true')",
+            'TRY_CAST("Abundance" AS DOUBLE) >= 1',
+        ]
+        if has_quan_info:
+            filter_parts.append(
+                '("Quan_Info" IS NULL OR "Quan_Info" != \'No Value\')'
+            )
+        where_clause = "\n              AND ".join(filter_parts)
+
+        input_path_fwd = str(input_path).replace(chr(92), '/')
+        output_path_fwd = str(output_path).replace(chr(92), '/')
+
+        sql = f"""
+            COPY (
+                SELECT *
+                FROM read_parquet('{input_path_fwd}')
+                WHERE {where_clause}
+            ) TO '{output_path_fwd}'
+            (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
+        """
+
+        con = duckdb.connect()
+        try:
+            initial_count = con.sql(
+                f"SELECT count(*) FROM read_parquet('{input_path_fwd}')"
+            ).fetchone()[0]
+
+            con.execute(sql)
+
+            remaining_count = con.sql(
+                f"SELECT count(*) FROM read_parquet('{output_path_fwd}')"
+            ).fetchone()[0]
+        finally:
+            con.close()
+
+        if not output_path.exists():
+            raise RuntimeError(
+                f"DuckDB Step 4 failed: {output_path} not created"
+            )
+
+        removed = initial_count - remaining_count
+        logger.info(
+            "Step 4 (DuckDB) complete: Removed %d low quality PSMs, %d remaining",
+            removed,
+            remaining_count,
+        )
+
     def step5_filter_by_criteria_chunked(
         self, input_path: Path, output_path: Path
     ) -> None:
