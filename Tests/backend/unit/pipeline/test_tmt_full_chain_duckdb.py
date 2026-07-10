@@ -61,7 +61,6 @@ class TestTMTFullChainDuckDB:
     @pytest.mark.asyncio
     async def test_full_chain_duckdb(self, tmp_path):
         """All 8 steps complete with DuckDB streaming for Steps 1-2."""
-        import duckdb  # Verify DuckDB is available
 
         from app.services.steps.engines.step_msstats_abundance import (
             step_msstats_protein_abundance,

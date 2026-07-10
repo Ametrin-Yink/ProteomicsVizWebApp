@@ -6,7 +6,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-
 # ── Helpers ──
 
 def _write_tmt_csv(path: Path, extra_cols: dict | None = None) -> None:
@@ -65,7 +64,6 @@ class TestTMTDuckDBStreaming:
 
     def test_output_parquet_created(self):
         """DuckDB streaming writes a parquet file to output_path."""
-        import duckdb  # verify available
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -84,7 +82,6 @@ class TestTMTDuckDBStreaming:
 
     def test_core_columns_present(self):
         """Output has all core contract columns."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -107,7 +104,6 @@ class TestTMTDuckDBStreaming:
 
     def test_contaminant_filtered(self):
         """Rows with Contaminant=True are excluded."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -129,7 +125,6 @@ class TestTMTDuckDBStreaming:
 
     def test_no_value_filtered(self):
         """Rows with Quan_Info='No Value' are excluded."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,7 +146,6 @@ class TestTMTDuckDBStreaming:
 
     def test_low_abundance_filtered(self):
         """Rows with Abundance < 1 are excluded."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -174,7 +168,6 @@ class TestTMTDuckDBStreaming:
 
     def test_unique_psm_format(self):
         """Unique_PSM is Sequence|Modifications|Charge."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -200,7 +193,6 @@ class TestTMTDuckDBStreaming:
 
     def test_channel_unpivot(self):
         """Each input row with N channels produces N output rows."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -231,7 +223,6 @@ class TestTMTDuckDBStreaming:
 
     def test_condition_assignment(self):
         """Conditions are correctly assigned from channel mapping."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -255,7 +246,6 @@ class TestTMTDuckDBStreaming:
         Uses clean data that won't trigger the DuckDB filters, so both
         paths produce the same rows for a proper equivalence comparison.
         """
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         # Clean data: no contaminants, no "No Value", all abundance >= 1
@@ -307,7 +297,6 @@ class TestTMTDuckDBStreaming:
 
     def test_missing_channel_mapping_raises(self):
         """Empty channel mapping raises ValueError."""
-        import duckdb
         from app.services.data_processor import DataProcessor, ProcessingConfig
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -326,8 +315,12 @@ class TestTMTHandlerDuckDBBranching:
     @pytest.mark.asyncio
     async def test_duckdb_path_sets_df_none(self, tmp_path):
         """DuckDB mode sets ctx.df = None (signals chunked I/O for Steps 3-5)."""
-        import duckdb
-        from app.models.analysis import AnalysisConfig, AnalysisResult, AnalysisTemplate, PipelineTool
+        from app.models.analysis import (
+            AnalysisConfig,
+            AnalysisResult,
+            AnalysisTemplate,
+            PipelineTool,
+        )
         from app.services.pipeline_engine import StepContext
         from app.services.steps.inputs.step_input_tmt import step_input_tmt
 
@@ -375,7 +368,12 @@ class TestTMTHandlerDuckDBBranching:
     @pytest.mark.asyncio
     async def test_step2_skips_when_df_is_none(self, tmp_path):
         """Step 2 (unique_psm) returns early when ctx.df is None."""
-        from app.models.analysis import AnalysisConfig, AnalysisResult, AnalysisTemplate, PipelineTool
+        from app.models.analysis import (
+            AnalysisConfig,
+            AnalysisResult,
+            AnalysisTemplate,
+            PipelineTool,
+        )
         from app.services.pipeline_engine import StepContext
         from app.services.steps.shared.step_unique_psm import step_unique_psm
 

@@ -1,8 +1,8 @@
 """Test that explicit n_cores=1 triggers a warning log."""
 
 import logging
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 
 class TestNCoresWarning:
@@ -11,17 +11,16 @@ class TestNCoresWarning:
     @pytest.mark.asyncio
     async def test_explicit_ncores_1_logs_warning(self, caplog):
         """Setting n_cores=1 explicitly should log a performance warning."""
-        from app.services.base_r_wrapper import BaseRWrapper, _safe_log
 
         caplog.set_level(logging.WARNING)
 
         # We need a concrete subclass — use MsstatsWrapper
-        from app.services.msstats_wrapper import msstats_wrapper
+        from pathlib import Path
 
         # Monkey-patch _resolve_n_cores to bypass calibration (we just want
         # to test the warning path when explicit==1)
         from app.models.analysis import AnalysisConfig
-        from pathlib import Path
+        from app.services.msstats_wrapper import msstats_wrapper
 
         config = AnalysisConfig(msstats_n_cores=1)
         dummy_file = Path("/nonexistent/input.parquet")
