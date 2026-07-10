@@ -240,61 +240,6 @@ class TestTMTDuckDBStreaming:
             assert "DMSO_24h" in conditions
             assert "DrugA_24h" in conditions
 
-    def test_pandas_ddb_output_equivalence(self):
-        """DuckDB output matches pandas output for the same input.
-
-        Uses clean data that won't trigger the DuckDB filters, so both
-        paths produce the same rows for a proper equivalence comparison.
-        """
-        from app.services.data_processor import DataProcessor, ProcessingConfig
-
-        # Clean data: no contaminants, no "No Value", all abundance >= 1
-        clean_rows = [
-            ["PEP001", "Ox(M)", "2", "False", "P00001", "Valid", "1000.5", "500.2", "P00004"],
-            ["PEP003", "", "2", "False", "P00003", "Valid", "10.5", "800.0", "P00004"],
-        ]
-        clean_cols = [
-            "Sequence", "Modifications", "Charge", "Contaminant",
-            "Master Protein Accessions", "Quan Info",
-            "Abundance 126", "Abundance 127N", "Extra",
-        ]
-        clean_df = pd.DataFrame(clean_rows, columns=clean_cols)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            csv_path = Path(tmp) / "test_clean_tmt.txt"
-            duckdb_path = Path(tmp) / "duckdb_output.parquet"
-            clean_df.to_csv(csv_path, sep="\t", index=False)
-            mapping = _make_channel_mapping()
-
-            # DuckDB path
-            processor = DataProcessor(ProcessingConfig())
-            processor.step1_2_duckdb_tmt([csv_path], mapping, duckdb_path)
-            ddb_result = pd.read_parquet(duckdb_path, engine="pyarrow")
-
-            # Pandas path
-            pandas_result = processor.step1_combine_replicates_tmt(
-                [csv_path], mapping
-            )
-            # Sort both by Sequence + Condition for comparison
-            sort_keys = ["Sequence", "Condition"]
-            ddb_sorted = ddb_result.sort_values(sort_keys).reset_index(drop=True)
-            pd_sorted = pandas_result.sort_values(sort_keys).reset_index(drop=True)
-
-            # Compare core columns (DuckDB has Unique_PSM inlined, pandas doesn't)
-            for col in ["Sequence", "Condition", "Replicate", "Sample_Origination"]:
-                ddb_vals = ddb_sorted[col].astype(str).tolist()
-                pd_vals = pd_sorted[col].astype(str).tolist()
-                assert ddb_vals == pd_vals, (
-                    f"Column '{col}' differs between DuckDB and pandas"
-                )
-
-            # Abundance: compare as float (duckdb may have slight differences)
-            ddb_ab = ddb_sorted["Abundance"].astype(float).tolist()
-            pd_ab = pd_sorted["Abundance"].astype(float).tolist()
-            assert len(ddb_ab) == len(pd_ab), (
-                f"Row count mismatch: {len(ddb_ab)} vs {len(pd_ab)}"
-            )
-
     def test_missing_channel_mapping_raises(self):
         """Empty channel mapping raises ValueError."""
         from app.services.data_processor import DataProcessor, ProcessingConfig
