@@ -322,10 +322,10 @@ class ProteomicsFileInfo(FileInfo):
     replicate: int = 0            # User input (was: parsed from filename)
     batch: str | None = None      # NEW: for DIA batch correction
     file_type: str | None = None  # NEW: "tmt" | "dia"
-    
+
     # REMOVED: conditions: list[str]
     # REMOVED: filename-parsing logic in model_validator
-    # NOTE: condition groups (drug, time, gender, etc.) are stored in 
+    # NOTE: condition groups (drug, time, gender, etc.) are stored in
     #       SessionConfig.metadata_columns, NOT in ProteomicsFileInfo
 ```
 
@@ -334,18 +334,18 @@ class ProteomicsFileInfo(FileInfo):
 ```python
 class SessionConfig(BaseModel):
     # ... existing fields ...
-    
+
     # NEW fields:
     file_type: str | None = None              # "tmt" | "dia"
-    tmt_channel_mapping: dict[str, dict[str, str|int]] | None = None  
+    tmt_channel_mapping: dict[str, dict[str, str|int]] | None = None
     # Channel → {group1: val1, group2: val2, ..., replicate: N}
     # Example: {"126": {"drug": "DMSO", "time": "24h", "replicate": 1}}
-    
+
     # EXISTING field (unchanged structure, user-populated instead of filename-parsed):
     metadata_columns: dict[str, dict[str, str]] | None = None
     # {filename: {group1: val1, group2: val2, experiment: "...", replicate: "N", batch: "..."}}
     # Condition groups are now user-defined columns, not auto-created condition_1, condition_2
-    
+
     # NOTE: pipeline field still exists but is now derived, not user-set
 ```
 
@@ -354,7 +354,7 @@ class SessionConfig(BaseModel):
 ```python
 class AnalysisConfig(BaseModel):
     # ... existing fields ...
-    
+
     # NEW fields:
     file_type: str | None = None
     tmt_channel_mapping: dict[str, dict[str, str | int]] | None = None

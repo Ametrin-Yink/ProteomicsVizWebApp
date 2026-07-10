@@ -21,6 +21,23 @@ repos:
       - id: eslint
         name: eslint
         language: system
-        entry: cmd /c "cd /d frontend && npx eslint src/"
+        entry: bash -c 'cd frontend && npx eslint src/'
         pass_filenames: false
         files: ^frontend/src/.*\.[jt]sx?$
+        require_serial: true
+
+      - id: tsc
+        name: typescript type-check
+        language: system
+        entry: bash -c 'cd frontend && npx tsc --noEmit'
+        pass_filenames: false
+        files: ^frontend/src/.*\.[jt]sx?$
+        require_serial: true
+
+      - id: pytest
+        name: backend unit tests
+        language: system
+        entry: bash -c 'backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -q --tb=short'
+        pass_filenames: false
+        files: ^backend/.*\.py$
+        require_serial: true

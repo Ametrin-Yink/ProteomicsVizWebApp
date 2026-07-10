@@ -285,12 +285,17 @@ def compute_protein_correlations(
         {
             "accession": accessions[i],
             "gene_name": gene_names[i],
-            "correlation": float(query_corrs[i]) if not np.isnan(query_corrs[i]) else None,
+            "correlation": float(query_corrs[i])
+            if not np.isnan(query_corrs[i])
+            else None,
         }
         for i in range(n)
     ]
     # Sort by correlation descending (higher = more correlated)
-    result.sort(key=lambda x: x["correlation"] if x["correlation"] is not None else -2.0, reverse=True)
+    result.sort(
+        key=lambda x: x["correlation"] if x["correlation"] is not None else -2.0,
+        reverse=True,
+    )
     return result
 
 

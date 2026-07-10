@@ -4,6 +4,7 @@ E2E integration test: Full TMT protein analysis pipeline.
 Uses 10k-row extract from real PD TMT file with 16-plex TMTpro channel design.
 Verifies all 8 pipeline steps complete and produce expected outputs.
 """
+
 import csv
 import time
 from collections import defaultdict
@@ -18,6 +19,7 @@ TMT_FILE = FIXTURE_DIR / "tmt_sample_10000rows.txt"
 CHANNEL_DESIGN = FIXTURE_DIR / "tmt_channel_design.csv"
 
 # ── Helpers ──
+
 
 def parse_channel_design(csv_path: Path) -> dict:
     """Parse TMT channel design CSV into channel mapping dict.
@@ -64,6 +66,7 @@ def wait_for_completion(session_id: str, timeout: int = 600, interval: int = 10)
 
 # ── Fixtures ──
 
+
 @pytest.fixture(scope="module")
 def channel_mapping():
     """Parse channel design CSV once per test module."""
@@ -79,10 +82,13 @@ def tmt_session(channel_mapping):
     assert TMT_FILE.exists(), f"TMT fixture not found: {TMT_FILE}"
 
     # 1. Create session
-    r = requests.post(API, json={
-        "name": "E2E TMT Pipeline Test",
-        "template": "multi_condition_comparison",
-    })
+    r = requests.post(
+        API,
+        json={
+            "name": "E2E TMT Pipeline Test",
+            "template": "multi_condition_comparison",
+        },
+    )
     assert r.status_code in (200, 201), f"Session creation failed: {r.text}"
     sid = r.json()["id"]
 
@@ -104,10 +110,16 @@ def tmt_session(channel_mapping):
 
     # 4. Full configuration
     comparisons = [
-        {"group1": {"Condition": "INCB224525_4h"},  "group2": {"Condition": "DMSO_24h"}},
-        {"group1": {"Condition": "INCB231845_4h"},  "group2": {"Condition": "DMSO_24h"}},
-        {"group1": {"Condition": "INCB224525_24h"}, "group2": {"Condition": "DMSO_24h"}},
-        {"group1": {"Condition": "INCB231845_24h"}, "group2": {"Condition": "DMSO_24h"}},
+        {"group1": {"Condition": "INCB224525_4h"}, "group2": {"Condition": "DMSO_24h"}},
+        {"group1": {"Condition": "INCB231845_4h"}, "group2": {"Condition": "DMSO_24h"}},
+        {
+            "group1": {"Condition": "INCB224525_24h"},
+            "group2": {"Condition": "DMSO_24h"},
+        },
+        {
+            "group1": {"Condition": "INCB231845_24h"},
+            "group2": {"Condition": "DMSO_24h"},
+        },
     ]
 
     config = {
@@ -136,7 +148,9 @@ def tmt_session(channel_mapping):
 
     # 6. Wait for completion
     state = wait_for_completion(sid)
-    assert state == "completed", f"Pipeline ended with state '{state}', expected 'completed'"
+    assert (
+        state == "completed"
+    ), f"Pipeline ended with state '{state}', expected 'completed'"
 
     # 7. Yield session data for assertions
     r = requests.get(f"{API}/{sid}")
@@ -147,6 +161,7 @@ def tmt_session(channel_mapping):
 
 
 # ── Tests ──
+
 
 class TestTMTPipelineE2E:
     """Full TMT protein analysis pipeline E2E tests."""
@@ -161,8 +176,16 @@ class TestTMTPipelineE2E:
         r = requests.get(f"{API}/{sid}/logs")
         logs = r.json()
         completed = logs.get("completed_steps", [])
-        assert completed == [1, 2, 3, 4, 5, 6, 7, 8], \
-            f"Expected all 8 steps completed, got {completed}"
+        assert completed == [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+        ], f"Expected all 8 steps completed, got {completed}"
 
     def test_four_comparison_files_exist(self, tmt_session):
         """All 4 DE comparison files are generated."""
@@ -222,8 +245,11 @@ class TestTMTPipelineE2E:
             cond = f"{info['treatment']}_{info['time']}"
             conditions.add(cond)
         assert conditions == {
-            "DMSO_24h", "INCB224525_4h", "INCB231845_4h",
-            "INCB224525_24h", "INCB231845_24h",
+            "DMSO_24h",
+            "INCB224525_4h",
+            "INCB231845_4h",
+            "INCB224525_24h",
+            "INCB231845_24h",
         }
 
     def test_pipeline_uses_msstats(self, tmt_session):

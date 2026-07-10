@@ -140,9 +140,7 @@ async def update_session_config(
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                e.errors() if hasattr(e, "errors") else str(e)
-            ),
+            detail=(e.errors() if hasattr(e, "errors") else str(e)),
         ) from e
 
     session.config = config

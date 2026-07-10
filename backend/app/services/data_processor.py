@@ -517,9 +517,7 @@ class DataProcessor:
         for batch in pf.iter_batches(batch_size=chunksize):
             yield batch.to_pandas()
 
-    def step3_remove_razor_chunked(
-        self, input_path: Path, output_path: Path
-    ) -> None:
+    def step3_remove_razor_chunked(self, input_path: Path, output_path: Path) -> None:
         """Chunked two-pass: scan proteins, then apply best-protein selection.
 
         Pass 1: scan all chunks to build protein -> peptide_count map and
@@ -536,7 +534,9 @@ class DataProcessor:
             import shutil
 
             shutil.copy2(input_path, output_path)
-            logger.info("Step 3 (chunked): Skipping razor removal (disabled), copied file")
+            logger.info(
+                "Step 3 (chunked): Skipping razor removal (disabled), copied file"
+            )
             return
 
         logger.info("Step 3 (chunked): Two-pass razor removal")
@@ -577,9 +577,7 @@ class DataProcessor:
                 best_protein_map[psm] = ""
             else:
                 proteins = [
-                    p.strip()
-                    for p in str(proteins_str).split(";")
-                    if p.strip()
+                    p.strip() for p in str(proteins_str).split(";") if p.strip()
                 ]
                 if len(proteins) <= 1:
                     best_protein_map[psm] = proteins[0] if proteins else ""
@@ -599,9 +597,7 @@ class DataProcessor:
             pf = pq.ParquetFile(input_path)
             for batch in pf.iter_batches(batch_size=100_000):
                 df = batch.to_pandas()
-                df["Master_Protein_Accessions"] = df["Unique_PSM"].map(
-                    best_protein_map
-                )
+                df["Master_Protein_Accessions"] = df["Unique_PSM"].map(best_protein_map)
                 table = pa.Table.from_pandas(df)
                 if writer is None:
                     writer = pq.ParquetWriter(
@@ -759,9 +755,9 @@ class DataProcessor:
             row_counts: dict[str, int] = {}
             for chunk_df in self._parquet_chunked_reader(input_path):
                 kept = chunk_df[chunk_df["Unique_PSM"].isin(psms_to_keep)]
-                for prot, cnt in kept.groupby(
-                    "Master_Protein_Accessions"
-                ).size().items():
+                for prot, cnt in (
+                    kept.groupby("Master_Protein_Accessions").size().items()
+                ):
                     pkey = str(prot) if pd.notna(prot) else ""
                     if pkey:
                         row_counts[pkey] = row_counts.get(pkey, 0) + cnt
@@ -860,7 +856,10 @@ class DataProcessor:
         for file_path in file_paths:
             delimiter = _detect_delimiter(file_path)
             df = pd.read_csv(
-                file_path, sep=delimiter, encoding="utf-8", low_memory=False,
+                file_path,
+                sep=delimiter,
+                encoding="utf-8",
+                low_memory=False,
             )
 
             abundance_cols = _detect_tmt_abundance_columns(list(df.columns))
@@ -923,9 +922,7 @@ class DataProcessor:
                 melted["Replicate"], errors="coerce"
             ).astype(int)
             melted["Sample_Origination"] = (
-                melted["Condition"].astype(str)
-                + "_"
-                + melted["Replicate"].astype(str)
+                melted["Condition"].astype(str) + "_" + melted["Replicate"].astype(str)
             )
 
             # Rename spaces to underscores in non-abundance columns
@@ -965,7 +962,10 @@ class DataProcessor:
         for file_path in file_paths:
             delimiter = _detect_delimiter(file_path)
             df = pd.read_csv(
-                file_path, sep=delimiter, encoding="utf-8", low_memory=False,
+                file_path,
+                sep=delimiter,
+                encoding="utf-8",
+                low_memory=False,
             )
 
             # Look up metadata for this file
@@ -980,10 +980,10 @@ class DataProcessor:
                 key_stem_sanitized = _sanitize_filename(
                     key.rsplit(".", 1)[0] if "." in key else key
                 )
-                if (
-                    key_sanitized in (file_sanitized, file_stem_sanitized)
-                    or key_stem_sanitized in (file_stem_sanitized, file_sanitized)
-                ):
+                if key_sanitized in (
+                    file_sanitized,
+                    file_stem_sanitized,
+                ) or key_stem_sanitized in (file_stem_sanitized, file_sanitized):
                     file_meta = meta
                     break
 
@@ -1015,7 +1015,8 @@ class DataProcessor:
             abund_col = (
                 "Abundance"
                 if "Abundance" in df.columns
-                else "Abundance_DIA" if "Abundance_DIA" in df.columns
+                else "Abundance_DIA"
+                if "Abundance_DIA" in df.columns
                 else None
             )
             if abund_col is None:
@@ -1080,14 +1081,17 @@ class DataProcessor:
 
         logger.info(
             "Steps 1-2 (DuckDB): Streaming %d files -> %s",
-            len(file_paths), output_path,
+            len(file_paths),
+            output_path,
         )
 
         # Detect delimiter and get column names from first file
         delimiter = _detect_delimiter(file_paths[0])
         delim_sql = "'\\t'" if delimiter == "\t" else "','"
         first_cols = pd.read_csv(
-            file_paths[0], nrows=0, sep=delimiter,
+            file_paths[0],
+            nrows=0,
+            sep=delimiter,
         ).columns.tolist()
 
         # Validate at least one abundance column exists
@@ -1108,9 +1112,7 @@ class DataProcessor:
             if group_cols is None:
                 group_cols = cols
             elif cols != group_cols:
-                logger.warning(
-                    "Inconsistent group columns across metadata entries"
-                )
+                logger.warning("Inconsistent group columns across metadata entries")
         if group_cols is None:
             raise ValueError("No condition group columns found in metadata")
 
@@ -1125,7 +1127,13 @@ class DataProcessor:
                 row.append(str(meta[c]))
             meta_rows.append(tuple(row))
 
-        all_meta_cols = ["filename", "condition", "replicate", "sample_origination", *group_cols]
+        all_meta_cols = [
+            "filename",
+            "condition",
+            "replicate",
+            "sample_origination",
+            *group_cols,
+        ]
 
         def _sqlesc(s):
             return s.replace("'", "''")
@@ -1171,13 +1179,11 @@ class DataProcessor:
         elif has_quan_value:
             abund_expr = '"Quan Value"'
         else:
-            abund_expr = 'Abundance'
+            abund_expr = "Abundance"
         abund_expr_typed = f"TRY_CAST({abund_expr} AS DOUBLE)"
 
         # Build metadata column JOIN references
-        meta_from_cols = ", ".join(
-            f"m.{c}" for c in all_meta_cols[1:]
-        )
+        meta_from_cols = ", ".join(f"m.{c}" for c in all_meta_cols[1:])
 
         # Build group columns SELECT suffix
         group_select_sql = ""
@@ -1193,9 +1199,7 @@ class DataProcessor:
             f"{abund_expr_typed} >= 1",
         ]
         if has_quan_info:
-            filter_parts.append(
-                '("Quan Info" IS NULL OR "Quan Info" != \'No Value\')'
-            )
+            filter_parts.append('("Quan Info" IS NULL OR "Quan Info" != \'No Value\')')
         where_clause = " AND ".join(filter_parts)
 
         con = duckdb.connect()
@@ -1247,12 +1251,11 @@ class DataProcessor:
             con.close()
 
         if not output_path.exists():
-            raise RuntimeError(
-                f"DuckDB streaming failed: {output_path} not created"
-            )
+            raise RuntimeError(f"DuckDB streaming failed: {output_path} not created")
 
         result_df = pd.read_parquet(output_path, engine="pyarrow")
         logger.info(
             "Steps 1-2 (DuckDB) complete: %d rows, %d conditions",
-            len(result_df), result_df["Condition"].nunique(),
+            len(result_df),
+            result_df["Condition"].nunique(),
         )

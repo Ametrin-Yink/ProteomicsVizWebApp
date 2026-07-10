@@ -295,8 +295,22 @@ class TestDataProcessorTMT:
     def channel_mapping(self):
         """A minimal 16-channel TMT mapping for testing."""
         channels = [
-            "126", "127N", "127C", "128N", "128C", "129N", "129C",
-            "130N", "130C", "131N", "131C", "132N", "132C", "133N", "133C", "134N",
+            "126",
+            "127N",
+            "127C",
+            "128N",
+            "128C",
+            "129N",
+            "129C",
+            "130N",
+            "130C",
+            "131N",
+            "131C",
+            "132N",
+            "132C",
+            "133N",
+            "133C",
+            "134N",
         ]
         mapping = {}
         for i, ch in enumerate(channels):
@@ -306,7 +320,9 @@ class TestDataProcessorTMT:
                 mapping[ch] = {"drug": "DrugA", "time": "24h", "replicate": 1}
         return mapping
 
-    def test_step1_combine_replicates_tmt(self, tmt_fixture_path, processor, channel_mapping):
+    def test_step1_combine_replicates_tmt(
+        self, tmt_fixture_path, processor, channel_mapping
+    ):
         """Process TMT fixture with channel mapping and verify output."""
         df = processor.step1_combine_replicates_tmt(
             file_paths=[tmt_fixture_path],
@@ -329,7 +345,9 @@ class TestDataProcessorTMT:
         assert "time" in df.columns
 
         # Check types
-        assert pd.api.types.is_numeric_dtype(df["Abundance"]), "Abundance must be numeric"
+        assert pd.api.types.is_numeric_dtype(
+            df["Abundance"]
+        ), "Abundance must be numeric"
         assert pd.api.types.is_integer_dtype(
             df["Replicate"]
         ), "Replicate must be integer"
@@ -352,10 +370,13 @@ class TestDataProcessorTMT:
         assert "Abundance 134N" not in df.columns
         assert "Channel" not in df.columns  # Channel dropped after mapping
 
-    def test_step1_tmt_multiple_files(self, tmp_path, processor, channel_mapping, tmt_fixture_path):
+    def test_step1_tmt_multiple_files(
+        self, tmp_path, processor, channel_mapping, tmt_fixture_path
+    ):
         """Combining TMT data from multiple files works."""
         # Copy the fixture to simulate a second file
         import shutil
+
         second_path = tmp_path / "second_tmt_file.txt"
         shutil.copy2(tmt_fixture_path, second_path)
 
@@ -413,7 +434,9 @@ class TestDataProcessorDIA:
         assert "condition_2" in df.columns
 
         # Check types
-        assert pd.api.types.is_numeric_dtype(df["Abundance"]), "Abundance must be numeric"
+        assert pd.api.types.is_numeric_dtype(
+            df["Abundance"]
+        ), "Abundance must be numeric"
         assert pd.api.types.is_integer_dtype(
             df["Replicate"]
         ), "Replicate must be integer"
@@ -433,16 +456,18 @@ class TestDataProcessorDIA:
     def test_step1_dia_quan_value_collision(self, tmp_path, processor):
         """DIA handles Abundance column collision correctly."""
         # Create a file that already has both Quan Value and Abundance columns
-        df_input = pd.DataFrame({
-            "Sequence": ["PEP1", "PEP2"],
-            "Modifications": ["", ""],
-            "Charge": [2, 2],
-            "Contaminant": ["FALSE", "FALSE"],
-            "Master Protein Accessions": ["P12345", "P67890"],
-            "Quan Info": ["Valid", "Valid"],
-            "Quan Value": [100.0, 200.0],
-            "Abundance": [300.0, 400.0],
-        })
+        df_input = pd.DataFrame(
+            {
+                "Sequence": ["PEP1", "PEP2"],
+                "Modifications": ["", ""],
+                "Charge": [2, 2],
+                "Contaminant": ["FALSE", "FALSE"],
+                "Master Protein Accessions": ["P12345", "P67890"],
+                "Quan Info": ["Valid", "Valid"],
+                "Quan Value": [100.0, 200.0],
+                "Abundance": [300.0, 400.0],
+            }
+        )
         file_path = tmp_path / "collision_test.txt"
         df_input.to_csv(file_path, sep="\t", index=False)
 

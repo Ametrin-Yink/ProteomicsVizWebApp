@@ -347,7 +347,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                             "progress": 100,
                                             "message": f"{step_display_name} completed",
                                             "overall_progress": int(
-                                                (len(completed_steps) / total_steps) * 100
+                                                (len(completed_steps) / total_steps)
+                                                * 100
                                             ),
                                         },
                                     }

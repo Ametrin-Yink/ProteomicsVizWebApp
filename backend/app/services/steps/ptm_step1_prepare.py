@@ -91,11 +91,13 @@ async def step_ptm_prepare_data(ctx: StepContext) -> None:
         writer = csv.writer(f)
         writer.writerow(["Run", "Condition", "BioReplicate"])
         for run_name, cols in metadata.items():
-            writer.writerow([
-                run_name,
-                cols.get("Condition", ""),
-                cols.get("BioReplicate", ""),
-            ])
+            writer.writerow(
+                [
+                    run_name,
+                    cols.get("Condition", ""),
+                    cols.get("BioReplicate", ""),
+                ]
+            )
 
     # --- Store outputs for downstream steps ---
     ctx.step_outputs["annotation_csv"] = annotation_path

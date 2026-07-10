@@ -13,8 +13,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Pipeline constants
 # MIN_PROTEOMICS_FILES enforces a minimum for TMT (single file covers all samples)
 # DIA requires at least 2 files for any meaningful comparison.
-MIN_PROTEOMICS_FILES = 1   # TMT: single file covers all samples
-MIN_DIA_FILES = 2          # DIA: at least 2 files needed
+MIN_PROTEOMICS_FILES = 1  # TMT: single file covers all samples
+MIN_DIA_FILES = 2  # DIA: at least 2 files needed
 
 
 class Settings(BaseSettings):
@@ -66,7 +66,8 @@ class Settings(BaseSettings):
     )
 
     protein_database_dir: Path = Field(
-        default=Path(__file__).resolve().parent.parent.parent.parent / "protein_database",
+        default=Path(__file__).resolve().parent.parent.parent.parent
+        / "protein_database",
         description="Directory containing protein database files",
     )
 

@@ -219,7 +219,9 @@ class QCCalculator:
         # PCA — guard against edge cases where data is too small after NaN removal
         _, n_features = scaled.shape
         if n_features < 2:
-            logger.warning("Insufficient features (%d) for PCA after NaN removal", n_features)
+            logger.warning(
+                "Insufficient features (%d) for PCA after NaN removal", n_features
+            )
             return PCAResult(
                 samples=abundance_cols,
                 pc1=[0.0] * len(abundance_cols),
@@ -368,7 +370,7 @@ class QCCalculator:
                 continue
             sd_log2 = valid["std"].values
             sd_ln = sd_log2 * np.log(2)
-            cvs = np.sqrt(np.exp(sd_ln ** 2) - 1) * 100
+            cvs = np.sqrt(np.exp(sd_ln**2) - 1) * 100
             cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
 
         return cv_by_condition
@@ -495,7 +497,14 @@ class QCCalculator:
         """
         valid = values[np.isfinite(values)]
         if len(valid) == 0:
-            return {"q1": 0, "median": 0, "q3": 0, "lowerfence": 0, "upperfence": 0, "outliers": []}
+            return {
+                "q1": 0,
+                "median": 0,
+                "q3": 0,
+                "lowerfence": 0,
+                "upperfence": 0,
+                "outliers": [],
+            }
         q1 = float(np.percentile(valid, 25))
         q3 = float(np.percentile(valid, 75))
         med = float(np.percentile(valid, 50))
@@ -507,10 +516,18 @@ class QCCalculator:
         # Keep only the most extreme outliers (furthest from fences)
         if len(outlier_vals) > max_outliers:
             dist = np.maximum(lf - outlier_vals, outlier_vals - uf)
-            top_idx = np.argpartition(-dist, min(max_outliers, len(dist) - 1))[:max_outliers]
+            top_idx = np.argpartition(-dist, min(max_outliers, len(dist) - 1))[
+                :max_outliers
+            ]
             outlier_vals = outlier_vals[top_idx]
-        return {"q1": q1, "median": med, "q3": q3,
-                "lowerfence": lf, "upperfence": uf, "outliers": outlier_vals.tolist()}
+        return {
+            "q1": q1,
+            "median": med,
+            "q3": q3,
+            "lowerfence": lf,
+            "upperfence": uf,
+            "outliers": outlier_vals.tolist(),
+        }
 
     def _calculate_intensity_distributions(
         self, protein_df: pd.DataFrame, psm_df: pd.DataFrame | None
@@ -556,8 +573,12 @@ class QCCalculator:
 
         # Protein intensities — precomputed box stats per sample
         id_cols = {
-            "Master Protein Accessions", "Gene_Name", "Protein",
-            "Master_Protein_Accessions", "PSM_Count", "psm_count",
+            "Master Protein Accessions",
+            "Gene_Name",
+            "Protein",
+            "Master_Protein_Accessions",
+            "PSM_Count",
+            "psm_count",
         }
         abundance_cols = [
             col

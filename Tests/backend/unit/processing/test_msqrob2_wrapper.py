@@ -1,4 +1,5 @@
 """Unit tests for Msqrob2Wrapper — QFeatures pipeline command construction."""
+
 import pytest
 from app.models.analysis import AnalysisConfig
 from app.services.msqrob2_wrapper import Msqrob2Wrapper
@@ -28,6 +29,7 @@ class TestInit:
 
     def test_r_executable_set(self, wrapper):
         from app.core.config import settings
+
         assert wrapper.r_executable == settings.r_executable
 
 
@@ -39,18 +41,24 @@ class TestDataProcessConfig:
         assert config["numberOfCores"] == 4
 
     def test_includes_remove_razor_flag(self, wrapper):
-        config = AnalysisConfig(organism="human", treatment="A", control="B", remove_razor=True)
+        config = AnalysisConfig(
+            organism="human", treatment="A", control="B", remove_razor=True
+        )
         result = wrapper._build_data_process_config(config, n_cores=2)
         assert result["remove_razor"] is True
 
     def test_includes_strict_filtering_flag(self, wrapper):
-        config = AnalysisConfig(organism="human", treatment="A", control="B", strict_filtering=True)
+        config = AnalysisConfig(
+            organism="human", treatment="A", control="B", strict_filtering=True
+        )
         result = wrapper._build_data_process_config(config, n_cores=2)
         assert result["strict_filtering"] is True
 
     def test_batch_column_included_when_set(self, wrapper):
         config = AnalysisConfig(
-            organism="human", treatment="A", control="B",
+            organism="human",
+            treatment="A",
+            control="B",
             msqrob2_batch_column="Plate",
         )
         result = wrapper._build_data_process_config(config, n_cores=4)

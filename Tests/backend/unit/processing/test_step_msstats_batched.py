@@ -46,7 +46,9 @@ class TestStepMsstatsBatched:
 
     @pytest.fixture
     def mock_msstats(self):
-        with patch("app.services.steps.engines.step_msstats_de.msstats_wrapper") as mock:
+        with patch(
+            "app.services.steps.engines.step_msstats_de.msstats_wrapper"
+        ) as mock:
             mock.group_comparison_multi = AsyncMock()
             mock.group_comparison_batched = AsyncMock()
             yield mock

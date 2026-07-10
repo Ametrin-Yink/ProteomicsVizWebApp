@@ -1,4 +1,5 @@
 """Unit tests for organism scanner."""
+
 from pathlib import Path
 
 from app.services.organism_scanner import OrganismScanner

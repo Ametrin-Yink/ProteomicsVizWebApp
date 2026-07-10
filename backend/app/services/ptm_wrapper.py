@@ -45,11 +45,15 @@ class PTMWrapper(BaseRWrapper):
             "numberOfCores": n_cores,
         }
 
-    def _build_gc_config(self, config: AnalysisConfig, n_cores: int, **extra: object) -> dict:
+    def _build_gc_config(
+        self, config: AnalysisConfig, n_cores: int, **extra: object
+    ) -> dict:
         """Build config JSON for step 3 (PTM group comparison via MSstatsPTM)."""
         return {
             "ptm_label_type": extra.get("ptm_label_type", config.ptm_labeling_type),
-            "protein_label_type": extra.get("protein_label_type", config.ptm_labeling_type),
+            "protein_label_type": extra.get(
+                "protein_label_type", config.ptm_labeling_type
+            ),
             "adj_method": "BH",
             "moderated": True,
             "numberOfCores": n_cores,

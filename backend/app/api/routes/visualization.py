@@ -1057,17 +1057,23 @@ async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
             )
         except Exception:
             data = None
-        if data and isinstance(data, dict) and data.get("status") in ("running", "queued"):
-            tasks.append({
-                "kind": "gsea",
-                "label": f"GSEA: {data.get('comparison', 'unknown')}",
-                "status": data["status"],
-                "started_at": data.get("started_at"),
-                "completed_at": data.get("completed_at"),
-                "error": data.get("error"),
-                "progress": data.get("progress"),
-                "queue_position": data.get("queue_position"),
-            })
+        if (
+            data
+            and isinstance(data, dict)
+            and data.get("status") in ("running", "queued")
+        ):
+            tasks.append(
+                {
+                    "kind": "gsea",
+                    "label": f"GSEA: {data.get('comparison', 'unknown')}",
+                    "status": data["status"],
+                    "started_at": data.get("started_at"),
+                    "completed_at": data.get("completed_at"),
+                    "error": data.get("error"),
+                    "progress": data.get("progress"),
+                    "queue_position": data.get("queue_position"),
+                }
+            )
 
     # ── BIONET ──
     bionet_file = session_dir / "bionet_run_status.json"
@@ -1078,17 +1084,23 @@ async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
             )
         except Exception:
             data = None
-        if data and isinstance(data, dict) and data.get("status") in ("running", "queued"):
-            tasks.append({
-                "kind": "bionet",
-                "label": f"BioNet: {data.get('comparison', 'unknown')}",
-                "status": data["status"],
-                "started_at": data.get("started_at"),
-                "completed_at": data.get("completed_at"),
-                "error": data.get("error"),
-                "progress": data.get("progress"),
-                "queue_position": data.get("queue_position"),
-            })
+        if (
+            data
+            and isinstance(data, dict)
+            and data.get("status") in ("running", "queued")
+        ):
+            tasks.append(
+                {
+                    "kind": "bionet",
+                    "label": f"BioNet: {data.get('comparison', 'unknown')}",
+                    "status": data["status"],
+                    "started_at": data.get("started_at"),
+                    "completed_at": data.get("completed_at"),
+                    "error": data.get("error"),
+                    "progress": data.get("progress"),
+                    "queue_position": data.get("queue_position"),
+                }
+            )
 
     # ── Compare (protein-correlation, comparison-correlation) ──
     compare_dir = session_dir / "results" / "compare"
@@ -1106,17 +1118,23 @@ async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
             )
         except Exception:
             continue
-        if data and isinstance(data, dict) and data.get("status") in ("running", "queued"):
-            tasks.append({
-                "kind": "compute",
-                "label": label_prefix,
-                "status": data["status"],
-                "started_at": data.get("started_at"),
-                "completed_at": data.get("completed_at"),
-                "error": data.get("error"),
-                "progress": data.get("progress"),
-                "queue_position": data.get("queue_position"),
-            })
+        if (
+            data
+            and isinstance(data, dict)
+            and data.get("status") in ("running", "queued")
+        ):
+            tasks.append(
+                {
+                    "kind": "compute",
+                    "label": label_prefix,
+                    "status": data["status"],
+                    "started_at": data.get("started_at"),
+                    "completed_at": data.get("completed_at"),
+                    "error": data.get("error"),
+                    "progress": data.get("progress"),
+                    "queue_position": data.get("queue_position"),
+                }
+            )
 
     return tasks
 
@@ -2038,7 +2056,7 @@ async def load_ptm_results(
 
     comparisons = []
     for ptm_file in ptm_files:
-        label = ptm_file.stem[len("PTM_Model_"):]  # Extract label after "PTM_Model_"
+        label = ptm_file.stem[len("PTM_Model_") :]  # Extract label after "PTM_Model_"
 
         comparison: dict[str, Any] = {"label": label}
 
@@ -2123,12 +2141,14 @@ async def get_ptm_site_abundance(
         )
 
     # Placeholder: data will be populated from pipeline results
-    return create_response({
-        "site": site_id,
-        "conditions": [],
-        "abundances": [],
-        "samples": [],
-    })
+    return create_response(
+        {
+            "site": site_id,
+            "conditions": [],
+            "abundances": [],
+            "samples": [],
+        }
+    )
 
 
 @router.get("/{session_id}/ptm/qc/plots")

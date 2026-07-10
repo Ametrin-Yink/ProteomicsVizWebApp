@@ -97,5 +97,8 @@ async def step_input_dia(ctx: StepContext) -> None:
     ctx.result.total_psms = len(result)
     ctx.step_outputs[ctx.current_step_number or 1] = psm_path
 
-    logger.info("DIA input complete (pandas): %d rows, %d conditions",
-                len(result), result["Condition"].nunique())
+    logger.info(
+        "DIA input complete (pandas): %d rows, %d conditions",
+        len(result),
+        result["Condition"].nunique(),
+    )

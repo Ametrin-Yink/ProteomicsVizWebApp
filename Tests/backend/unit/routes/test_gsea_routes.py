@@ -1,4 +1,5 @@
 """Unit tests for GSEA API routes — run, status, data, plot, heatmap."""
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,22 +12,28 @@ def client(tmp_path, monkeypatch):
     from datetime import UTC, datetime
 
     from app.core import config
+
     monkeypatch.setattr(config.settings, "sessions_dir", tmp_path)
 
     from app.models.session import Session, SessionConfig, SessionFiles, SessionState
+
     session = Session(
         id="550e8400-e29b-41d4-a716-446655440000",
-        name="Test", template="multi_condition_comparison",
-        pipeline="msqrob2", state=SessionState.COMPLETED,
+        name="Test",
+        template="multi_condition_comparison",
+        pipeline="msqrob2",
+        state=SessionState.COMPLETED,
         config=SessionConfig(treatment="A", control="B", organism="human"),
         files=SessionFiles(),
-        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     mock_store = AsyncMock()
     mock_store.get = AsyncMock(return_value=session)
 
     from app.api.deps import get_session_store
+
     app.dependency_overrides[get_session_store] = lambda: mock_store
     with TestClient(app) as c:
         yield c

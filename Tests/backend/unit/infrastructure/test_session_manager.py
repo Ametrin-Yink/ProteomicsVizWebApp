@@ -1,4 +1,5 @@
 """Unit tests for SessionManager — session lifecycle and WebSocket management."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -21,13 +22,16 @@ def mock_store():
 @pytest.fixture
 def manager(mock_store):
     from app.services.session_manager import SessionManager
+
     return SessionManager(store=mock_store)
 
 
 class TestCreateSession:
     @pytest.mark.asyncio
     async def test_creates_session_with_valid_name(self, manager, mock_store):
-        data = SessionCreate(name="My Experiment", template="multi_condition_comparison")
+        data = SessionCreate(
+            name="My Experiment", template="multi_condition_comparison"
+        )
         result = await manager.create_session(data)
         assert result is not None
         mock_store.create.assert_awaited_once()
@@ -50,7 +54,9 @@ class TestCreateSession:
     async def test_validates_name_characters(self, manager, mock_store):
         with pytest.raises(Exception):
             await manager.create_session(
-                SessionCreate(name="test<script>", template="multi_condition_comparison")
+                SessionCreate(
+                    name="test<script>", template="multi_condition_comparison"
+                )
             )
 
 
@@ -141,7 +147,9 @@ class TestWebSocketManagement:
         await manager.register_websocket("session-1", ws)
 
         outputs = {"diff_expression": "Diff_Expression.tsv"}
-        await manager.send_complete_message("session-1", outputs=outputs, duration=120.5)
+        await manager.send_complete_message(
+            "session-1", outputs=outputs, duration=120.5
+        )
 
         ws.send_json.assert_awaited_once()
         sent = ws.send_json.call_args[0][0]

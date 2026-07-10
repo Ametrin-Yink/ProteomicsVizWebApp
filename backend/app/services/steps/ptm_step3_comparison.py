@@ -80,9 +80,7 @@ async def step_ptm_group_comparison(ctx: StepContext) -> None:
             de_paths.append(de_file)
             de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
             pval_col = "adj.pvalue" if "adj.pvalue" in de_df.columns else "adjPval"
-            sig_count = len(
-                de_df[de_df[pval_col] < ctx.config.pvalue_threshold]
-            )
+            sig_count = len(de_df[de_df[pval_col] < ctx.config.pvalue_threshold])
             total_sig += sig_count
 
     ctx.step_outputs["comparison_dir"] = output_dir

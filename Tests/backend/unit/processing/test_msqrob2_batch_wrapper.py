@@ -1,4 +1,5 @@
 """Unit tests for msqrob2 batched DE — _build_msqrob2_batch_cmd and group_comparison_batched."""
+
 from __future__ import annotations
 
 import json
@@ -77,7 +78,7 @@ class TestBuildMsqrob2BatchCmd:
             rds_file_str="file.rds",
             output_dir_str="output",
             gene_mapping_str="gene_map.txt",
-            config_json_str='{}',
+            config_json_str="{}",
             r_executable="Rscript",
             script_path_str="script.R",
             gc_timeout=3600,
@@ -117,9 +118,16 @@ class TestBuildMsqrob2BatchCmd:
 
     def test_uses_provided_timeout(self):
         result = _build_msqrob2_batch_cmd(
-            rds_file_str="f.rds", output_dir_str="o", gene_mapping_str="g.txt",
-            config_json_str='{}', r_executable="R", script_path_str="s.R",
-            gc_timeout=7200, batch_items=[{}], batch_idx=0, n_cores_per=1,
+            rds_file_str="f.rds",
+            output_dir_str="o",
+            gene_mapping_str="g.txt",
+            config_json_str="{}",
+            r_executable="R",
+            script_path_str="s.R",
+            gc_timeout=7200,
+            batch_items=[{}],
+            batch_idx=0,
+            n_cores_per=1,
         )
         _, timeout = result
         assert timeout == 7200
@@ -177,8 +185,7 @@ class TestMsqrob2WrapperHasBatched:
 
         with patch.object(settings, "msqrob2_batch_size", 2):
             comparisons = [
-                {"g1": {"x": str(i)}, "g2": {"x": str(i + 1)}}
-                for i in range(5)
+                {"g1": {"x": str(i)}, "g2": {"x": str(i + 1)}} for i in range(5)
             ]
             result = await wrapper.group_comparison_batched(
                 rds_file=Path("f.rds"),
@@ -201,11 +208,12 @@ class TestMsqrob2WrapperHasBatched:
 
         with patch.object(settings, "msqrob2_batch_size", 2):
             comparisons = [
-                {"g1": {"x": str(i)}, "g2": {"x": str(i + 1)}}
-                for i in range(5)
+                {"g1": {"x": str(i)}, "g2": {"x": str(i + 1)}} for i in range(5)
             ]
             config = AnalysisConfig(
-                organism="human", treatment="A", control="B",
+                organism="human",
+                treatment="A",
+                control="B",
                 msqrob2_ridge=True,
                 msqrob2_adjust_method="fdr",
             )

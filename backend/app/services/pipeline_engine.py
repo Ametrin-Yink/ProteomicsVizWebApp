@@ -258,7 +258,8 @@ class PipelineEngine:
             _t0 = time.monotonic()
             _mem0 = (
                 round(ctx.df.memory_usage(deep=False).sum() / 1e6, 1)
-                if ctx.df is not None else None
+                if ctx.df is not None
+                else None
             )
 
             try:
@@ -301,7 +302,8 @@ class PipelineEngine:
             if _mem0 is not None and ctx.df is not None:
                 mem1 = round(ctx.df.memory_usage(deep=False).sum() / 1e6, 1)
                 ctx.state.data.setdefault("step_memory", {})[step.name] = {
-                    "start_mb": _mem0, "end_mb": mem1,
+                    "start_mb": _mem0,
+                    "end_mb": mem1,
                 }
 
             if step.number in ctx.step_outputs:
@@ -391,7 +393,9 @@ class PipelineEngine:
         overall_progress = max(0, min(100, overall_progress))
 
         pipeline_tool = ctx.config.pipeline
-        step_display_names = STEP_DISPLAY_NAMES.get(pipeline_tool, STEP_DISPLAY_NAMES.get(PipelineTool.MSQROB2, {}))
+        step_display_names = STEP_DISPLAY_NAMES.get(
+            pipeline_tool, STEP_DISPLAY_NAMES.get(PipelineTool.MSQROB2, {})
+        )
         step_name = step_display_names.get(step, message)
 
         progress = ProcessingProgress(

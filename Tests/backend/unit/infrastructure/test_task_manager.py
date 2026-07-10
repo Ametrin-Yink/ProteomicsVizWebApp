@@ -45,7 +45,13 @@ async def test_submit_heavy_task_completes():
         time.sleep(0.05)
         return x + 1
 
-    result = await tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, slow_fn, 5, label="add")
+    result = await tm.submit(
+        "550e8400-e29b-41d4-a716-446655440001",
+        TaskKind.COMPUTE,
+        slow_fn,
+        5,
+        label="add",
+    )
     assert result == 6
 
 
@@ -61,7 +67,9 @@ async def test_per_session_serialization():
             order.append(f"{label}-end")
             return label
 
-        return await tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, fn, label=label)
+        return await tm.submit(
+            "550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, fn, label=label
+        )
 
     task_a = asyncio.create_task(run("a", 0.05))
     await asyncio.sleep(0.01)
@@ -109,7 +117,12 @@ async def test_cancel_queued_task():
         return "done"
 
     task_blocking = asyncio.create_task(
-        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, blocking_fn, label="blocker")
+        tm.submit(
+            "550e8400-e29b-41d4-a716-446655440001",
+            TaskKind.COMPUTE,
+            blocking_fn,
+            label="blocker",
+        )
     )
     await asyncio.sleep(0)  # Let event loop start the coroutine
     assert blocking_started.wait(timeout=2), "blocker should start within 2s"
@@ -170,7 +183,12 @@ async def test_get_status_shows_running_task():
         return "ok"
 
     task = asyncio.create_task(
-        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, slow_fn, label="test-task")
+        tm.submit(
+            "550e8400-e29b-41d4-a716-446655440001",
+            TaskKind.COMPUTE,
+            slow_fn,
+            label="test-task",
+        )
     )
 
     # Yield to event loop until the task transitions to "running".
@@ -205,7 +223,12 @@ async def test_queue_position_for_blocked_session():
         return "ok"
 
     task_a = asyncio.create_task(
-        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, slow_fn, label="blocker")
+        tm.submit(
+            "550e8400-e29b-41d4-a716-446655440001",
+            TaskKind.COMPUTE,
+            slow_fn,
+            label="blocker",
+        )
     )
 
     # Yield enough cycles for task_a to reach the semaphore/executor and
@@ -216,13 +239,20 @@ async def test_queue_position_for_blocked_session():
 
     # Submit to same session — per-session lock keeps this queued
     task_b = asyncio.create_task(
-        tm.submit("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE, lambda: "dummy", label="waiter")
+        tm.submit(
+            "550e8400-e29b-41d4-a716-446655440001",
+            TaskKind.COMPUTE,
+            lambda: "dummy",
+            label="waiter",
+        )
     )
     # Yield to let task_b enter the queue
     for _ in range(20):
         await asyncio.sleep(0)
 
-    pos = tm.get_queue_position("550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE)
+    pos = tm.get_queue_position(
+        "550e8400-e29b-41d4-a716-446655440001", TaskKind.COMPUTE
+    )
     assert pos is not None, "Expected task_b to be queued, got pos=None"
     assert pos >= 1
 

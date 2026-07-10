@@ -1,4 +1,5 @@
 """Unit tests for ProcessingOrchestrator — validation and state transitions."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,9 +21,7 @@ def mock_session():
     session.config.organism = "human"
     session.config.remove_razor = False
     session.config.strict_filtering = False
-    session.config.comparisons = [
-        {"group1": {"C": "DrugA"}, "group2": {"C": "DMSO"}}
-    ]
+    session.config.comparisons = [{"group1": {"C": "DrugA"}, "group2": {"C": "DMSO"}}]
     session.files = MagicMock()
     session.files.proteomics = [
         MagicMock(filename=f"PSM_Exp_DrugA_{i}.csv") for i in range(1, 4)
@@ -34,6 +33,7 @@ def mock_session():
 class TestPipelineDerivation:
     def test_explicit_msqrob2(self):
         from app.api.routes.processing import _derive_pipeline
+
         session = MagicMock()
         session.pipeline = "msqrob2"
         session.template = "multi_condition_comparison"
@@ -41,6 +41,7 @@ class TestPipelineDerivation:
 
     def test_explicit_msstats(self):
         from app.api.routes.processing import _derive_pipeline
+
         session = MagicMock()
         session.pipeline = "msstats"
         session.template = "multi_condition_comparison"
@@ -48,6 +49,7 @@ class TestPipelineDerivation:
 
     def test_backward_compat_no_pipeline_field(self):
         from app.api.routes.processing import _derive_pipeline
+
         session = MagicMock()
         session.pipeline = None
         session.template = "multi_condition_comparison"
@@ -57,11 +59,13 @@ class TestPipelineDerivation:
 class TestTemplateDerivation:
     def test_msstats_template(self):
         from app.api.routes.processing import _derive_template
+
         result = _derive_template("msstats")
         assert result is not None
 
     def test_default_fallback(self):
         from app.api.routes.processing import _derive_template
+
         result = _derive_template("unknown_template")
         assert result is not None  # Falls back to multi_condition
 
@@ -69,11 +73,13 @@ class TestTemplateDerivation:
 class TestOrchestratorInit:
     def test_stores_session_id(self):
         from app.services.processing_orchestrator import ProcessingOrchestrator
+
         orch = ProcessingOrchestrator(session_id="test-id")
         assert orch._session_id == "test-id"
 
     def test_progress_callbacks_initially_empty(self):
         from app.services.processing_orchestrator import ProcessingOrchestrator
+
         orch = ProcessingOrchestrator(session_id="test-id")
         assert orch.progress_callbacks == []
 
@@ -81,6 +87,7 @@ class TestOrchestratorInit:
         import asyncio
 
         from app.services.processing_orchestrator import ProcessingOrchestrator
+
         orch = ProcessingOrchestrator(session_id="test-id")
         event = asyncio.Event()
         orch.set_cancel_event(event)
@@ -88,6 +95,7 @@ class TestOrchestratorInit:
 
     def test_register_progress_callback(self):
         from app.services.processing_orchestrator import ProcessingOrchestrator
+
         orch = ProcessingOrchestrator(session_id="test-id")
 
         async def dummy_callback(progress):
@@ -132,18 +140,20 @@ class TestOrchestratorProcessSession:
 
         orch = ProcessingOrchestrator(session_id="test-orch-id")
 
-        with patch(
-            "app.services.processing_orchestrator.PipelineEngine.run",
-            new=AsyncMock(return_value=mock_engine_result),
-        ), patch(
-            "app.services.processing_orchestrator.session_manager"
-        ) as mock_sm:
+        with (
+            patch(
+                "app.services.processing_orchestrator.PipelineEngine.run",
+                new=AsyncMock(return_value=mock_engine_result),
+            ),
+            patch("app.services.processing_orchestrator.session_manager") as mock_sm,
+        ):
             mock_sm.get_uploads_dir = AsyncMock(return_value=uploads_dir)
             mock_sm.get_results_dir = AsyncMock(return_value=results_dir)
             mock_sm.get_session = AsyncMock(return_value=mock_session)
             mock_sm.update_session_state = AsyncMock()
 
             import asyncio
+
             result = asyncio.run(orch.process_session(orch_config))
 
             assert result is mock_engine_result
@@ -154,9 +164,7 @@ class TestOrchestratorProcessSession:
                 "test-orch-id", SessionState.COMPLETED
             )
 
-    def test_failure_transitions_to_error(
-        self, mock_session, orch_config, tmp_path
-    ):
+    def test_failure_transitions_to_error(self, mock_session, orch_config, tmp_path):
         """On engine failure: PROCESSING → ERROR with error message."""
         from app.services.processing_orchestrator import ProcessingOrchestrator
 
@@ -167,18 +175,20 @@ class TestOrchestratorProcessSession:
 
         orch = ProcessingOrchestrator(session_id="test-orch-id")
 
-        with patch(
-            "app.services.processing_orchestrator.PipelineEngine.run",
-            new=AsyncMock(side_effect=ValueError("step 3 failed")),
-        ), patch(
-            "app.services.processing_orchestrator.session_manager"
-        ) as mock_sm:
+        with (
+            patch(
+                "app.services.processing_orchestrator.PipelineEngine.run",
+                new=AsyncMock(side_effect=ValueError("step 3 failed")),
+            ),
+            patch("app.services.processing_orchestrator.session_manager") as mock_sm,
+        ):
             mock_sm.get_uploads_dir = AsyncMock(return_value=uploads_dir)
             mock_sm.get_results_dir = AsyncMock(return_value=results_dir)
             mock_sm.get_session = AsyncMock(return_value=mock_session)
             mock_sm.update_session_state = AsyncMock()
 
             import asyncio
+
             with pytest.raises(ValueError, match="step 3 failed"):
                 asyncio.run(orch.process_session(orch_config))
 

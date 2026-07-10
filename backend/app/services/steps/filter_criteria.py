@@ -41,9 +41,7 @@ async def step_filter_criteria_default(ctx: StepContext) -> None:
         logger.info("Step 5 (chunked): Wrote %s", psm_path.name)
     else:
         # Existing in-memory pandas path
-        ctx.df = await asyncio.to_thread(
-            processor.step5_filter_by_criteria, ctx.df
-        )
+        ctx.df = await asyncio.to_thread(processor.step5_filter_by_criteria, ctx.df)
 
         # Save to Parquet
         await asyncio.to_thread(

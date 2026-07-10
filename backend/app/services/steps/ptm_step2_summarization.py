@@ -66,13 +66,17 @@ async def step_ptm_summarization(ctx: StepContext) -> None:
         ptm_input_csv = ptm_inputs[0]
     else:
         combined_ptm_tsv = ctx.results_dir / "ptm_combined.tsv"
-        logger.info("Combining %d PTM input files into %s", len(ptm_inputs), combined_ptm_tsv)
+        logger.info(
+            "Combining %d PTM input files into %s", len(ptm_inputs), combined_ptm_tsv
+        )
         dfs = []
         for f in ptm_inputs:
             df = await asyncio.to_thread(pd.read_csv, f, sep="\t")
             dfs.append(df)
         combined = pd.concat(dfs, ignore_index=True)
-        await asyncio.to_thread(combined.to_csv, str(combined_ptm_tsv), sep="\t", index=False)
+        await asyncio.to_thread(
+            combined.to_csv, str(combined_ptm_tsv), sep="\t", index=False
+        )
         ptm_input_csv = combined_ptm_tsv
 
     # --- Build config dict ---
@@ -116,14 +120,17 @@ async def step_ptm_summarization(ctx: StepContext) -> None:
             protein_combined = ctx.results_dir / "protein_combined.tsv"
             logger.info(
                 "Combining %d global proteome files into %s",
-                len(protein_inputs), protein_combined,
+                len(protein_inputs),
+                protein_combined,
             )
             dfs = []
             for f in protein_inputs:
                 df = await asyncio.to_thread(pd.read_csv, f, sep="\t")
                 dfs.append(df)
             combined = pd.concat(dfs, ignore_index=True)
-            await asyncio.to_thread(combined.to_csv, str(protein_combined), sep="\t", index=False)
+            await asyncio.to_thread(
+                combined.to_csv, str(protein_combined), sep="\t", index=False
+            )
             protein_input_csv = protein_combined
 
         cmd.append(str(protein_input_csv))
@@ -146,7 +153,7 @@ async def step_ptm_summarization(ctx: StepContext) -> None:
     except subprocess.TimeoutExpired:
         raise RScriptError(
             message=f"PTM summarization timed out after "
-                    f"{settings.r_ptm_summarization_timeout * ctx.timeout_multiplier}s",
+            f"{settings.r_ptm_summarization_timeout * ctx.timeout_multiplier}s",
             details={
                 "timeout": settings.r_ptm_summarization_timeout,
                 "multiplier": ctx.timeout_multiplier,

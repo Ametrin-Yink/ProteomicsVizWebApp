@@ -4,6 +4,7 @@ E2E integration test: Full DIA protein analysis pipeline.
 Uses 12 DIA sample files (1000 rows each) with 4 conditions across 3 drugs.
 Verifies all 8 msqrob2 pipeline steps complete and produce expected outputs.
 """
+
 import time
 from pathlib import Path
 
@@ -14,18 +15,54 @@ API = "http://localhost:8000/api/sessions"
 FIXTURE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "fixtures"
 
 DIA_FILES = [
-    ("dia_sample_01_10000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_02_10000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_03_10000rows.txt", {"experiment": "MGL2510", "drug": "DMSO",  "replicate": "3", "batch": "P01C02"}),
-    ("dia_sample_04_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_05_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_06_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug1", "replicate": "3", "batch": "P01C02"}),
-    ("dia_sample_07_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_08_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_09_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug2", "replicate": "3", "batch": "P01C02"}),
-    ("dia_sample_10_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "1", "batch": "P01C02"}),
-    ("dia_sample_11_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "2", "batch": "P01C02"}),
-    ("dia_sample_12_10000rows.txt", {"experiment": "MGL2510", "drug": "Drug3", "replicate": "3", "batch": "P01C02"}),
+    (
+        "dia_sample_01_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "DMSO", "replicate": "1", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_02_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "DMSO", "replicate": "2", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_03_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "DMSO", "replicate": "3", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_04_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug1", "replicate": "1", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_05_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug1", "replicate": "2", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_06_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug1", "replicate": "3", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_07_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug2", "replicate": "1", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_08_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug2", "replicate": "2", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_09_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug2", "replicate": "3", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_10_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug3", "replicate": "1", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_11_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug3", "replicate": "2", "batch": "P01C02"},
+    ),
+    (
+        "dia_sample_12_10000rows.txt",
+        {"experiment": "MGL2510", "drug": "Drug3", "replicate": "3", "batch": "P01C02"},
+    ),
 ]
 
 COMPARISONS = [
@@ -55,10 +92,13 @@ def dia_session():
         assert fpath.exists(), f"DIA fixture not found: {fpath}"
 
     # 1. Create session
-    r = requests.post(API, json={
-        "name": "DIA E2E",
-        "template": "multi_condition_comparison",
-    })
+    r = requests.post(
+        API,
+        json={
+            "name": "DIA E2E",
+            "template": "multi_condition_comparison",
+        },
+    )
     assert r.status_code in (200, 201), f"Session creation failed: {r.text}"
     sid = r.json()["id"]
 
@@ -107,7 +147,9 @@ def dia_session():
 
     # 6. Wait for completion
     state = wait_for_completion(sid)
-    assert state == "completed", f"Pipeline ended with state '{state}', expected 'completed'"
+    assert (
+        state == "completed"
+    ), f"Pipeline ended with state '{state}', expected 'completed'"
 
     r = requests.get(f"{API}/{sid}")
     yield r.json()
@@ -127,8 +169,16 @@ class TestDIAPipelineE2E:
         r = requests.get(f"{API}/{sid}/logs")
         logs = r.json()
         completed = logs.get("completed_steps", [])
-        assert completed == [1, 2, 3, 4, 5, 6, 7, 8], \
-            f"Expected all 8 steps completed, got {completed}"
+        assert completed == [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+        ], f"Expected all 8 steps completed, got {completed}"
 
     def test_three_comparison_files_exist(self, dia_session):
         sid = dia_session["id"]
@@ -144,9 +194,9 @@ class TestDIAPipelineE2E:
         # Verify the API returns the expected structure with a protein count.
         total = data.get("data", {}).get("total", 0)
         total_proteins = data.get("data", {}).get("total_proteins", 0)
-        assert isinstance(total, int) and isinstance(total_proteins, int), (
-            f"Expected integer counts, got total={total}, total_proteins={total_proteins}"
-        )
+        assert (
+            isinstance(total, int) and isinstance(total_proteins, int)
+        ), f"Expected integer counts, got total={total}, total_proteins={total_proteins}"
 
     def test_qc_metrics_available(self, dia_session):
         sid = dia_session["id"]
@@ -164,7 +214,9 @@ class TestDIAPipelineE2E:
 
     def test_strict_filtering_applied(self, dia_session):
         config = dia_session.get("config", {})
-        assert config.get("strict_filtering") is False  # 10K real-data fixtures: no PSM overlap across replicates
+        assert (
+            config.get("strict_filtering") is False
+        )  # 10K real-data fixtures: no PSM overlap across replicates
         assert config.get("remove_razor") is True
 
     def test_pipeline_uses_msqrob2(self, dia_session):

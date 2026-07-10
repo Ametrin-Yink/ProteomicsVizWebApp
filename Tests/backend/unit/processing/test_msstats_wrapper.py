@@ -1,4 +1,5 @@
 """Unit tests for MsstatsWrapper — MSstats pipeline command construction."""
+
 import json
 
 import pytest

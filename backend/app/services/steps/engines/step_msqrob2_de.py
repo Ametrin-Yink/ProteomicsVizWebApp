@@ -49,7 +49,8 @@ async def step_multi_condition_de(ctx: StepContext) -> None:
     if len(comparisons) > settings.msqrob2_batch_size:
         logger.info(
             "Step %d: Using batched DE for %d comparisons",
-            current_step, len(comparisons),
+            current_step,
+            len(comparisons),
         )
         await msqrob2_wrapper.group_comparison_batched(
             rds_file=rds_input,

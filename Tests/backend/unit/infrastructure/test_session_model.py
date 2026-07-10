@@ -1,6 +1,7 @@
 """
 Unit tests for Session model extensions (visualization state + pipeline reform).
 """
+
 from datetime import UTC, datetime
 
 

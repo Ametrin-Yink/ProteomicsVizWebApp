@@ -86,7 +86,9 @@ class SessionConfig(BaseModel):
     covariate_columns: list[str] | None = Field(default=None)
 
     # Pipeline reform: file type and TMT channel mapping
-    file_type: str | None = Field(default=None, description="Analysis type: 'tmt' or 'dia'")
+    file_type: str | None = Field(
+        default=None, description="Analysis type: 'tmt' or 'dia'"
+    )
     tmt_channel_mapping: dict[str, dict[str, str | int]] | None = Field(
         default=None,
         description="TMT channel → {group1: val1, ..., replicate: N} mapping",
@@ -106,9 +108,15 @@ class ProteomicsFileInfo(FileInfo):
     """Proteomics file metadata — user-provided, not filename-parsed."""
 
     experiment: str = Field(default="", description="Experiment name (user-provided)")
-    replicate: int = Field(default=0, ge=0, description="Replicate number (user-provided)")
-    batch: str | None = Field(default=None, description="Batch label for DIA batch correction")
-    file_type: str | None = Field(default=None, description="Detected file type: 'tmt' or 'dia'")
+    replicate: int = Field(
+        default=0, ge=0, description="Replicate number (user-provided)"
+    )
+    batch: str | None = Field(
+        default=None, description="Batch label for DIA batch correction"
+    )
+    file_type: str | None = Field(
+        default=None, description="Detected file type: 'tmt' or 'dia'"
+    )
 
 
 class SessionFiles(BaseModel):

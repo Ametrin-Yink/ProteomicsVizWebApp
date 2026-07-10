@@ -62,6 +62,7 @@ def _build_msqrob2_batch_cmd(
     ]
     return cmd, gc_timeout
 
+
 # Reserved metadata keys — NOT condition groups (not translated to condition_N)
 _RESERVED_KEYS = {"experiment", "replicate", "batch", "file_type"}
 
@@ -126,7 +127,9 @@ class Msqrob2Wrapper(BaseRWrapper):
             "numberOfCores": n_cores,
             "batch_column": config.msqrob2_batch_column,
             "metadata": _translate_metadata(config.metadata),
-            "keep_intermediate_assays": getattr(config, "msqrob2_keep_intermediate_assays", False),
+            "keep_intermediate_assays": getattr(
+                config, "msqrob2_keep_intermediate_assays", False
+            ),
         }
 
     def _build_gc_config(self, config: AnalysisConfig, n_cores: int, **extra) -> dict:
@@ -169,9 +172,13 @@ class Msqrob2Wrapper(BaseRWrapper):
 
         if n_total <= batch_size:
             return await self.group_comparison_multi(
-                rds_file=rds_file, output_dir=output_dir,
-                comparisons=comparisons, gene_mapping_file=gene_mapping_file,
-                config=config, log_callback=log_callback, timeout=timeout,
+                rds_file=rds_file,
+                output_dir=output_dir,
+                comparisons=comparisons,
+                gene_mapping_file=gene_mapping_file,
+                config=config,
+                log_callback=log_callback,
+                timeout=timeout,
             )
 
         # Phase A: Fit the model once (if not already cached)
@@ -193,7 +200,9 @@ class Msqrob2Wrapper(BaseRWrapper):
         # Phase B: Batched comparisons using pre-fitted RDS
         script_path = self.scripts_dir / self._gc_script_name
         cfg = config if config else AnalysisConfig()
-        n_cores = await self._resolve_n_cores(cfg, self._n_cores_config_attr, rds_file, log_callback)
+        n_cores = await self._resolve_n_cores(
+            cfg, self._n_cores_config_attr, rds_file, log_callback
+        )
         if n_cores > 1:
             n_cores = await self._check_memory_headroom(rds_file, n_cores, log_callback)
         gc_config = self._build_gc_config(cfg, n_cores, skip_fit=True)
@@ -205,7 +214,8 @@ class Msqrob2Wrapper(BaseRWrapper):
             str(output_dir),
             str(gene_mapping_file) if gene_mapping_file else "",
             config_json,
-            self.r_executable, str(script_path),
+            self.r_executable,
+            str(script_path),
             timeout if timeout is not None else self._gc_timeout,
         )
 

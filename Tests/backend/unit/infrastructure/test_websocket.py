@@ -1,4 +1,5 @@
 """Unit tests for WebSocket endpoint — connection lifecycle and message handling."""
+
 import json
 from unittest.mock import AsyncMock, MagicMock
 
@@ -23,7 +24,9 @@ def mock_store():
 
 
 class TestWebSocketConnection:
-    def test_websocket_accepts_connection(self, mock_session_manager, mock_store, monkeypatch):
+    def test_websocket_accepts_connection(
+        self, mock_session_manager, mock_store, monkeypatch
+    ):
         app.state.session_manager = mock_session_manager
         app.state.session_store = mock_store
 
@@ -46,17 +49,21 @@ class TestWebSocketConnection:
             response = ws.receive_text()
             assert "pong" in response
 
-    def test_subscribe_replays_logs(self, mock_session_manager, mock_store, monkeypatch):
+    def test_subscribe_replays_logs(
+        self, mock_session_manager, mock_store, monkeypatch
+    ):
         app.state.session_manager = mock_session_manager
-        mock_store.load_pipeline_state = AsyncMock(return_value={
-            "logs": [
-                {"level": "info", "message": "Step 1 complete"},
-                {"level": "info", "message": "Step 2 complete"},
-            ],
-            "completed_steps": [1, 2],
-            "completed_at": None,
-            "outputs": {},
-        })
+        mock_store.load_pipeline_state = AsyncMock(
+            return_value={
+                "logs": [
+                    {"level": "info", "message": "Step 1 complete"},
+                    {"level": "info", "message": "Step 2 complete"},
+                ],
+                "completed_steps": [1, 2],
+                "completed_at": None,
+                "outputs": {},
+            }
+        )
         app.state.session_store = mock_store
 
         client = TestClient(app)
@@ -73,12 +80,14 @@ class TestWebSocketConnection:
         self, mock_session_manager, mock_store, monkeypatch
     ):
         app.state.session_manager = mock_session_manager
-        mock_store.load_pipeline_state = AsyncMock(return_value={
-            "logs": [],
-            "completed_steps": [1],
-            "completed_at": None,
-            "outputs": {},
-        })
+        mock_store.load_pipeline_state = AsyncMock(
+            return_value={
+                "logs": [],
+                "completed_steps": [1],
+                "completed_at": None,
+                "outputs": {},
+            }
+        )
         app.state.session_store = mock_store
 
         client = TestClient(app)

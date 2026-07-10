@@ -83,7 +83,9 @@ async def upload_proteomics_files(
             # Clean up saved file on error
             if file_path.exists():
                 file_path.unlink()
-            logger.error(f"Upload validation error for {file.filename}: {traceback.format_exc()}")
+            logger.error(
+                f"Upload validation error for {file.filename}: {traceback.format_exc()}"
+            )
             raise ValidationError(
                 message=f"Error parsing {file.filename}: {e!s}"
             ) from e
@@ -281,7 +283,9 @@ async def upload_fasta_file(
 
     # Validate file extension
     ext = Path(file.filename).suffix.lower()
-    if ext not in {".fasta", ".fa", ".faa"} and not file.filename.lower().endswith(".fasta"):
+    if ext not in {".fasta", ".fa", ".faa"} and not file.filename.lower().endswith(
+        ".fasta"
+    ):
         raise ValidationError(
             message=f"Invalid file extension: {file.filename}. Expected .fasta, .fa, or .faa"
         )
@@ -397,15 +401,9 @@ async def delete_file(
         except Exception as e:
             logger.warning(f"Failed to delete uploaded file {filename}: {e}")
     elif file_type == "fasta":
-        session.files.fasta = [
-            f for f in session.files.fasta if f.filename != filename
-        ]
+        session.files.fasta = [f for f in session.files.fasta if f.filename != filename]
         file_path = (
-            Path(settings.sessions_dir)
-            / session_id
-            / "uploads"
-            / "fasta"
-            / filename
+            Path(settings.sessions_dir) / session_id / "uploads" / "fasta" / filename
         )
         try:
             if file_path.exists():

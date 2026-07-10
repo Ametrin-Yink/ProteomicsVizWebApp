@@ -136,8 +136,10 @@ class TestUpdateSession:
         response = client_with_mock_store.put(
             "/api/sessions/test-session-id/config",
             json={
-                "treatment": "DrugA", "control": "DMSO",
-                "organism": "human", "pipeline": "msstats",
+                "treatment": "DrugA",
+                "control": "DMSO",
+                "organism": "human",
+                "pipeline": "msstats",
             },
         )
         assert response.status_code == 200
@@ -145,7 +147,9 @@ class TestUpdateSession:
         updated = mock_store.update.call_args[0][0]
         assert updated.pipeline == "msstats"
 
-    def test_config_preserves_state_on_second_config(self, client_with_mock_store, mock_store):
+    def test_config_preserves_state_on_second_config(
+        self, client_with_mock_store, mock_store
+    ):
         response = client_with_mock_store.put(
             "/api/sessions/test-session-id/config",
             json={"treatment": "DrugB", "control": "Vehicle", "organism": "mouse"},

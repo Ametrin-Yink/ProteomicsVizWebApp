@@ -26,7 +26,5 @@ def test_bionet_subnetwork_404_when_not_computed(client):
     Even with a valid session UUID format, no session data exists
     so we get 404 (session not found).
     """
-    response = client.get(
-        f"/api/sessions/{NONEXISTENT_SESSION}/bionet/subnetwork"
-    )
+    response = client.get(f"/api/sessions/{NONEXISTENT_SESSION}/bionet/subnetwork")
     assert response.status_code == 404

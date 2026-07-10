@@ -1,4 +1,5 @@
 """Unit tests for BaseRWrapper — subprocess execution, encoding, timeout, errors."""
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -9,6 +10,7 @@ from app.services.base_r_wrapper import BaseRWrapper
 
 class FakeRWrapper(BaseRWrapper):
     """Concrete subclass for testing BaseRWrapper."""
+
     def _build_data_process_config(self, config, n_cores):
         return {"treatment": getattr(config, "treatment", ""), "n_cores": n_cores}
 
@@ -111,6 +113,7 @@ class TestNCoreResolution:
     @pytest.mark.asyncio
     async def test_no_explicit_ncores_runs_calibration(self, wrapper):
         from app.models.analysis import AnalysisConfig
+
         config = AnalysisConfig(organism="human", treatment="A", control="B")
         with patch.object(wrapper, "_calibrate_ncores") as mock_cal:
             mock_cal.return_value = 4
@@ -124,6 +127,7 @@ class TestNCoreResolution:
     async def test_cached_ncores_skips_calibration(self, wrapper):
         wrapper._optimal_ncores = 8
         from app.models.analysis import AnalysisConfig
+
         config = AnalysisConfig(organism="human", treatment="A", control="B")
         with patch.object(wrapper, "_calibrate_ncores") as mock_cal:
             n = await wrapper._resolve_n_cores(

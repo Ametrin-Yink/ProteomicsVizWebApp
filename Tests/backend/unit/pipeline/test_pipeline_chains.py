@@ -24,42 +24,63 @@ from app.services.pipeline_engine import StepContext
 
 # Core columns the pipeline ALWAYS produces (regardless of input file format)
 CORE_CONTRACT_COLUMNS = [
-    "Abundance", "Sample_Origination", "Condition", "Replicate", "Unique_PSM",
+    "Abundance",
+    "Sample_Origination",
+    "Condition",
+    "Replicate",
+    "Unique_PSM",
 ]
 
 # Columns that are standard input columns (present in most PD exports)
 # but may vary between TMT and DIA formats
 STANDARD_INPUT_COLUMNS = [
-    "Sequence", "Modifications", "Charge", "Contaminant", "Master_Protein_Accessions",
+    "Sequence",
+    "Modifications",
+    "Charge",
+    "Contaminant",
+    "Master_Protein_Accessions",
 ]
 
 
 # ── Test data for R step mocks ──────────────────────────────────────────
 
+
 def _write_protein_abundance_tsv(results_dir: Path) -> pd.DataFrame:
     """Write a realistic Protein_Abundances.tsv for R step mocks."""
-    df = pd.DataFrame({
-        "Protein": ["P00001", "P00002", "P00003", "P00004", "P00005"],
-        "DMSO_1": [1000.0, 2000.0, 1500.0, 1200.0, 1800.0],
-        "DMSO_2": [1100.0, 2100.0, 1600.0, 1300.0, 1900.0],
-        "DMSO_3": [1050.0, 2050.0, 1550.0, 1250.0, 1850.0],
-        "DrugA_1": [2000.0, 2000.0, 1500.0, 1200.0, 1800.0],
-        "DrugA_2": [2100.0, 2100.0, 1600.0, 1300.0, 1900.0],
-        "DrugA_3": [2050.0, 2050.0, 1550.0, 1250.0, 1850.0],
-    })
+    df = pd.DataFrame(
+        {
+            "Protein": ["P00001", "P00002", "P00003", "P00004", "P00005"],
+            "DMSO_1": [1000.0, 2000.0, 1500.0, 1200.0, 1800.0],
+            "DMSO_2": [1100.0, 2100.0, 1600.0, 1300.0, 1900.0],
+            "DMSO_3": [1050.0, 2050.0, 1550.0, 1250.0, 1850.0],
+            "DrugA_1": [2000.0, 2000.0, 1500.0, 1200.0, 1800.0],
+            "DrugA_2": [2100.0, 2100.0, 1600.0, 1300.0, 1900.0],
+            "DrugA_3": [2050.0, 2050.0, 1550.0, 1250.0, 1850.0],
+        }
+    )
     df.to_csv(results_dir / "Protein_Abundances.tsv", sep="\t", index=False)
     return df
 
 
-def _write_diff_expression_tsv(results_dir: Path, comparison_label: str) -> pd.DataFrame:
+def _write_diff_expression_tsv(
+    results_dir: Path, comparison_label: str
+) -> pd.DataFrame:
     """Write a realistic Diff_Expression_*.tsv for R step mocks."""
-    df = pd.DataFrame({
-        "Master_Protein_Accessions": ["P00001", "P00002", "P00003", "P00004", "P00005"],
-        "Gene_Name": ["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"],
-        "logFC": [2.0, -1.5, 0.5, 0.0, -2.0],
-        "pval": [0.001, 0.01, 0.5, 0.8, 0.0001],
-        "adjPval": [0.005, 0.05, 0.6, 0.9, 0.001],
-    })
+    df = pd.DataFrame(
+        {
+            "Master_Protein_Accessions": [
+                "P00001",
+                "P00002",
+                "P00003",
+                "P00004",
+                "P00005",
+            ],
+            "Gene_Name": ["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"],
+            "logFC": [2.0, -1.5, 0.5, 0.0, -2.0],
+            "pval": [0.001, 0.01, 0.5, 0.8, 0.0001],
+            "adjPval": [0.005, 0.05, 0.6, 0.9, 0.001],
+        }
+    )
     out = results_dir / f"Diff_Expression_{comparison_label}.tsv"
     df.to_csv(out, sep="\t", index=False)
     return df
@@ -67,9 +88,7 @@ def _write_diff_expression_tsv(results_dir: Path, comparison_label: str) -> pd.D
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
-_COMPARISONS = [
-    {"group1": {"condition_1": "DrugA"}, "group2": {"condition_1": "DMSO"}}
-]
+_COMPARISONS = [{"group1": {"condition_1": "DrugA"}, "group2": {"condition_1": "DMSO"}}]
 _COMPARISON_LABEL = "DrugA_vs_DMSO"
 
 
@@ -110,6 +129,7 @@ def _make_preseeded_ctx(tmp_path: Path) -> StepContext:
     ctx = _make_ctx(PipelineTool.MSSTATS, [], tmp_path)
     # Build a realistic DataFrame matching Step 1+2 output contract
     import numpy as np
+
     rng = np.random.default_rng(42)
     n = 50
     conditions_list = ["DMSO", "DrugA"]
@@ -117,24 +137,27 @@ def _make_preseeded_ctx(tmp_path: Path) -> StepContext:
     for i in range(n):
         cond = conditions_list[i % 2]
         rep = (i // 2) % 3 + 1
-        rows.append({
-            "Sequence": f"PEP_{i:04d}",
-            "Modifications": "",
-            "Charge": 2,
-            "Contaminant": "FALSE",
-            "Master_Protein_Accessions": f"P{i:05d}",
-            "Quan_Info": "Valid",
-            "Abundance": round(float(rng.lognormal(mean=7.0, sigma=0.5)), 1),
-            "Sample_Origination": f"{cond}_{rep}",
-            "Condition": cond,
-            "Replicate": rep,
-            "Unique_PSM": f"PEP_{i:04d}||2",
-        })
+        rows.append(
+            {
+                "Sequence": f"PEP_{i:04d}",
+                "Modifications": "",
+                "Charge": 2,
+                "Contaminant": "FALSE",
+                "Master_Protein_Accessions": f"P{i:05d}",
+                "Quan_Info": "Valid",
+                "Abundance": round(float(rng.lognormal(mean=7.0, sigma=0.5)), 1),
+                "Sample_Origination": f"{cond}_{rep}",
+                "Condition": cond,
+                "Replicate": rep,
+                "Unique_PSM": f"PEP_{i:04d}||2",
+            }
+        )
     ctx.df = pd.DataFrame(rows)
     return ctx
 
 
 # ── Column Contract Tests ───────────────────────────────────────────────
+
 
 class TestColumnContractTMT:
     """TMT pipeline Step 1+2 output has all required columns (Section 8.1)."""
@@ -189,23 +212,27 @@ class TestColumnContractTMT:
         assert "time" in ctx.df.columns, "Missing condition group column: time"
 
         # Verify Sample_Origination format
-        assert ctx.df["Sample_Origination"].str.match(r".+_\d+").all(), (
-            "Sample_Origination should end with _<replicate>"
-        )
+        assert (
+            ctx.df["Sample_Origination"].str.match(r".+_\d+").all()
+        ), "Sample_Origination should end with _<replicate>"
 
         # Verify Abundance is numeric
-        assert pd.api.types.is_numeric_dtype(ctx.df["Abundance"]), "Abundance must be numeric"
+        assert pd.api.types.is_numeric_dtype(
+            ctx.df["Abundance"]
+        ), "Abundance must be numeric"
 
         # Verify Replicate is integer
-        assert pd.api.types.is_integer_dtype(ctx.df["Replicate"]), "Replicate must be integer"
+        assert pd.api.types.is_integer_dtype(
+            ctx.df["Replicate"]
+        ), "Replicate must be integer"
 
         # Verify no zero abundances
         assert (ctx.df["Abundance"] > 0).all(), "No zero abundances allowed"
 
         # Verify Unique_PSM format
-        assert ctx.df["Unique_PSM"].str.contains("|", regex=False).all(), (
-            "Unique_PSM must contain pipe separators"
-        )
+        assert (
+            ctx.df["Unique_PSM"].str.contains("|", regex=False).all()
+        ), "Unique_PSM must contain pipe separators"
 
 
 class TestColumnContractDIA:
@@ -251,9 +278,9 @@ class TestColumnContractDIA:
             except ImportError:
                 use_duckdb = False
         if use_duckdb:
-            assert ctx.psm_file_path and ctx.psm_file_path.exists(), (
-                "Step 1 must save parquet when DuckDB streaming"
-            )
+            assert (
+                ctx.psm_file_path and ctx.psm_file_path.exists()
+            ), "Step 1 must save parquet when DuckDB streaming"
         else:
             assert ctx.df is not None, "Step 1 must populate ctx.df"
 
@@ -282,16 +309,21 @@ class TestColumnContractDIA:
         assert "condition_2" in ctx.df.columns, "Missing group column: condition_2"
 
         # Verify Abundance and Replicate types
-        assert pd.api.types.is_numeric_dtype(ctx.df["Abundance"]), "Abundance must be numeric"
-        assert pd.api.types.is_integer_dtype(ctx.df["Replicate"]), "Replicate must be integer"
+        assert pd.api.types.is_numeric_dtype(
+            ctx.df["Abundance"]
+        ), "Abundance must be numeric"
+        assert pd.api.types.is_integer_dtype(
+            ctx.df["Replicate"]
+        ), "Replicate must be integer"
 
         # Verify Unique_PSM format
-        assert ctx.df["Unique_PSM"].str.contains("|", regex=False).all(), (
-            "Unique_PSM must contain pipe separators"
-        )
+        assert (
+            ctx.df["Unique_PSM"].str.contains("|", regex=False).all()
+        ), "Unique_PSM must contain pipe separators"
 
 
 # ── Python-only chain tests (shared steps 2-5) ─────────────────────────
+
 
 class TestSharedChainSteps:
     """Shared pipeline steps 2-5 (unique_psm, razor, quality, filter)."""
@@ -299,6 +331,7 @@ class TestSharedChainSteps:
     @pytest.mark.asyncio
     async def test_step2_keeps_dataframe(self, tmp_path):
         from app.services.steps.shared.step_unique_psm import step_unique_psm
+
         ctx = _make_preseeded_ctx(tmp_path)
         assert ctx.df is not None
 
@@ -334,6 +367,7 @@ class TestSharedChainSteps:
     async def test_step_razor_removes_multi_protein(self, tmp_path):
         from app.services.steps.shared.step_remove_razor import step_remove_razor
         from app.services.steps.shared.step_unique_psm import step_unique_psm
+
         ctx = _make_preseeded_ctx(tmp_path)
         await step_unique_psm(ctx)
         await step_remove_razor(ctx)
@@ -343,6 +377,7 @@ class TestSharedChainSteps:
 
 
 # ── FULL pipeline E2E tests (with R steps mocked) ───────────────────────
+
 
 class TestMSstatsFullPipeline:
     """MSstats (TMT): ALL 8 steps with mocked R steps 6-7."""
@@ -402,7 +437,9 @@ class TestMSstatsFullPipeline:
         with patch(
             "app.services.steps.engines.step_msstats_de.msstats_wrapper.group_comparison_multi",
             new=AsyncMock(
-                side_effect=lambda **kw: _write_diff_expression_tsv(results, _COMPARISON_LABEL)
+                side_effect=lambda **kw: _write_diff_expression_tsv(
+                    results, _COMPARISON_LABEL
+                )
             ),
         ):
             await step_msstats_group_comparison(ctx)
@@ -474,7 +511,9 @@ class TestMsqrob2FullPipeline:
         with patch(
             "app.services.steps.engines.step_msqrob2_de.msqrob2_wrapper.group_comparison_multi",
             new=AsyncMock(
-                side_effect=lambda **kw: _write_diff_expression_tsv(results, _COMPARISON_LABEL)
+                side_effect=lambda **kw: _write_diff_expression_tsv(
+                    results, _COMPARISON_LABEL
+                )
             ),
         ):
             await step_multi_condition_de(ctx)
@@ -492,12 +531,27 @@ class TestMsqrob2FullPipeline:
 
 # ── Fixture helpers ─────────────────────────────────────────────────────
 
+
 def _make_tmt_channel_mapping() -> dict:
     """Create a TMT channel mapping for testing with 16 channels."""
     # 16 channels from the TMT fixture
     channels = [
-        "126", "127N", "127C", "128N", "128C", "129N", "129C",
-        "130N", "130C", "131N", "131C", "132N", "132C", "133N", "133C", "134N",
+        "126",
+        "127N",
+        "127C",
+        "128N",
+        "128C",
+        "129N",
+        "129C",
+        "130N",
+        "130C",
+        "131N",
+        "131C",
+        "132N",
+        "132C",
+        "133N",
+        "133C",
+        "134N",
     ]
     mapping = {}
     for i, ch in enumerate(channels):

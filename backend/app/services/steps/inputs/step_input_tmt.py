@@ -53,6 +53,8 @@ async def step_input_tmt(ctx: StepContext) -> None:
     ctx.result.total_psms = len(result)
     ctx.step_outputs[ctx.current_step_number or 1] = psm_path
 
-    logger.info(f"TMT input complete: {len(result)} rows, "
-                f"{result['Condition'].nunique()} conditions, "
-                f"{result['Replicate'].nunique()} replicates")
+    logger.info(
+        f"TMT input complete: {len(result)} rows, "
+        f"{result['Condition'].nunique()} conditions, "
+        f"{result['Replicate'].nunique()} replicates"
+    )

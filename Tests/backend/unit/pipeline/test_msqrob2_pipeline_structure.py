@@ -41,7 +41,10 @@ class TestMsqrob2PipelineStructure:
         pipeline = PIPELINES[PipelineTool.MSQROB2]
         step6 = pipeline.steps[5]
         assert step6.number == 6
-        assert "msqrob2" in step6.display_name.lower() or "protein" in step6.display_name.lower()
+        assert (
+            "msqrob2" in step6.display_name.lower()
+            or "protein" in step6.display_name.lower()
+        )
         assert step6.handler == step_protein_abundance_msqrob2
 
     def test_step_7_is_multi_condition_de(self):
@@ -65,7 +68,9 @@ class TestMsqrob2Config:
         assert config.msqrob2_aggregation == "robustSummary"
         assert config.msqrob2_model == "msqrobLm"
         assert config.msqrob2_robust is True
-        assert config.msqrob2_ridge is False  # default False: ridge breaks with ≤3 replicates
+        assert (
+            config.msqrob2_ridge is False
+        )  # default False: ridge breaks with ≤3 replicates
         assert config.msqrob2_adjust_method == "BH"
 
     def test_config_serialization(self):

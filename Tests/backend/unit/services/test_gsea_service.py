@@ -1,4 +1,5 @@
 """Unit tests for GSEA service — running ES curve and heatmap computation."""
+
 import pandas as pd
 from app.services.gsea_service import gsea_service
 
@@ -81,13 +82,15 @@ class TestRunningESCurve:
 
 class TestGenerateHeatmapData:
     def test_returns_genes_samples_zscores(self):
-        protein_df = pd.DataFrame({
-            "Master_Protein_Accessions": ["P1", "P2", "P3", "P4"],
-            "Gene_Name": ["GENE1", "GENE2", "GENE3", "GENE4"],
-            "S1": [15.0, 14.0, 13.0, 12.0],
-            "S2": [16.0, 14.5, 12.5, 11.5],
-            "S3": [14.5, 13.5, 13.5, 12.5],
-        })
+        protein_df = pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["P1", "P2", "P3", "P4"],
+                "Gene_Name": ["GENE1", "GENE2", "GENE3", "GENE4"],
+                "S1": [15.0, 14.0, 13.0, 12.0],
+                "S2": [16.0, 14.5, 12.5, 11.5],
+                "S3": [14.5, 13.5, 13.5, 12.5],
+            }
+        )
 
         result = gsea_service.generate_heatmap_data(
             protein_df, lead_genes=["GENE1", "GENE2", "GENE3"]
@@ -101,11 +104,13 @@ class TestGenerateHeatmapData:
         assert len(result["samples"]) == 3
 
     def test_missing_lead_genes_returns_none(self):
-        protein_df = pd.DataFrame({
-            "Master_Protein_Accessions": ["P1"],
-            "Gene_Name": ["GENE1"],
-            "S1": [15.0],
-        })
+        protein_df = pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["P1"],
+                "Gene_Name": ["GENE1"],
+                "S1": [15.0],
+            }
+        )
 
         result = gsea_service.generate_heatmap_data(
             protein_df, lead_genes=["NONEXISTENT"]
@@ -114,30 +119,30 @@ class TestGenerateHeatmapData:
         assert result is None
 
     def test_excludes_psm_count_column(self):
-        protein_df = pd.DataFrame({
-            "Master_Protein_Accessions": ["P1"],
-            "Gene_Name": ["GENE1"],
-            "PSM_Count": [5],
-            "S1": [15.0],
-        })
-
-        result = gsea_service.generate_heatmap_data(
-            protein_df, lead_genes=["GENE1"]
+        protein_df = pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["P1"],
+                "Gene_Name": ["GENE1"],
+                "PSM_Count": [5],
+                "S1": [15.0],
+            }
         )
+
+        result = gsea_service.generate_heatmap_data(protein_df, lead_genes=["GENE1"])
 
         assert result is not None
         assert "PSM_Count" not in result["samples"]
 
     def test_single_gene_single_sample(self):
-        protein_df = pd.DataFrame({
-            "Master_Protein_Accessions": ["P1"],
-            "Gene_Name": ["GENE1"],
-            "S1": [10.0],
-        })
-
-        result = gsea_service.generate_heatmap_data(
-            protein_df, lead_genes=["GENE1"]
+        protein_df = pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["P1"],
+                "Gene_Name": ["GENE1"],
+                "S1": [10.0],
+            }
         )
+
+        result = gsea_service.generate_heatmap_data(protein_df, lead_genes=["GENE1"])
 
         assert result is not None
         assert len(result["genes"]) == 1
@@ -145,15 +150,15 @@ class TestGenerateHeatmapData:
         assert len(result["z_scores"]) == 1
 
     def test_empty_protein_df_handled(self):
-        protein_df = pd.DataFrame({
-            "Master_Protein_Accessions": [],
-            "Gene_Name": [],
-            "S1": [],
-        }).astype({"S1": "float64"})
+        protein_df = pd.DataFrame(
+            {
+                "Master_Protein_Accessions": [],
+                "Gene_Name": [],
+                "S1": [],
+            }
+        ).astype({"S1": "float64"})
 
-        result = gsea_service.generate_heatmap_data(
-            protein_df, lead_genes=["GENE1"]
-        )
+        result = gsea_service.generate_heatmap_data(protein_df, lead_genes=["GENE1"])
 
         # Should handle gracefully — either None or valid structure
         if result is not None:

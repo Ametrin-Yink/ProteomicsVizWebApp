@@ -1,4 +1,5 @@
 """Unit tests for visualization API routes — results, QC, protein data, tasks."""
+
 from unittest.mock import AsyncMock
 
 import pandas as pd
@@ -13,33 +14,41 @@ def client(tmp_path, monkeypatch):
     from datetime import UTC, datetime
 
     from app.core import config
+
     monkeypatch.setattr(config.settings, "sessions_dir", tmp_path)
 
     results_dir = tmp_path / "550e8400-e29b-41d4-a716-446655440000" / "results"
     results_dir.mkdir(parents=True)
 
-    de_df = pd.DataFrame({
-        "Master_Protein_Accessions": ["P001", "P002", "P003"],
-        "Gene_Name": ["GENE1", "GENE2", "GENE3"],
-        "logFC": [2.5, -1.8, 0.3],
-        "pval": [0.001, 0.01, 0.5],
-        "adjPval": [0.005, 0.05, 0.6],
-        "PSM_Count": [10, 5, 2],
-        "se": [0.1, 0.2, 0.3],
-        "t": [25.0, -9.0, 1.0],
-    })
+    de_df = pd.DataFrame(
+        {
+            "Master_Protein_Accessions": ["P001", "P002", "P003"],
+            "Gene_Name": ["GENE1", "GENE2", "GENE3"],
+            "logFC": [2.5, -1.8, 0.3],
+            "pval": [0.001, 0.01, 0.5],
+            "adjPval": [0.005, 0.05, 0.6],
+            "PSM_Count": [10, 5, 2],
+            "se": [0.1, 0.2, 0.3],
+            "t": [25.0, -9.0, 1.0],
+        }
+    )
     de_df.to_csv(results_dir / "Diff_Expression.tsv", sep="\t", index=False)
 
     session = Session(
         id="550e8400-e29b-41d4-a716-446655440000",
-        name="Test", template="multi_condition_comparison",
-        pipeline="msqrob2", state=SessionState.COMPLETED,
+        name="Test",
+        template="multi_condition_comparison",
+        pipeline="msqrob2",
+        state=SessionState.COMPLETED,
         config=SessionConfig(
-            treatment="DrugA", control="DMSO", organism="human",
+            treatment="DrugA",
+            control="DMSO",
+            organism="human",
             comparisons=[{"group1": {"C": "DrugA"}, "group2": {"C": "DMSO"}}],
         ),
         files=SessionFiles(),
-        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
     mock_store = AsyncMock()
@@ -47,6 +56,7 @@ def client(tmp_path, monkeypatch):
     mock_store.load_pipeline_state = AsyncMock(return_value=None)
 
     from app.api.deps import get_session_store
+
     app.dependency_overrides[get_session_store] = lambda: mock_store
     with TestClient(app) as c:
         yield c
@@ -116,6 +126,7 @@ class TestGetResults:
     def test_session_not_found(self, client):
         # Override the mock store to return None for this test
         from app.api.deps import get_session_store
+
         none_store = AsyncMock()
         none_store.get = AsyncMock(return_value=None)
         app.dependency_overrides[get_session_store] = lambda: none_store
@@ -127,6 +138,7 @@ class TestGetResults:
         finally:
             # Restore original mock
             from app.api.deps import get_session_store
+
             mock_store2 = AsyncMock()
             mock_store2.get = AsyncMock(return_value=None)
             app.dependency_overrides.clear()

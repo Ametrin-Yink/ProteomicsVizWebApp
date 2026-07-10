@@ -46,7 +46,8 @@ async def step_msstats_protein_abundance(ctx: StepContext) -> None:
                 },
             )
             ctx.state.add_log(
-                "info", "Checkpoint found — skipping protein abundance",
+                "info",
+                "Checkpoint found — skipping protein abundance",
                 step=current_step,
             )
             if protein_output.exists():
@@ -58,7 +59,9 @@ async def step_msstats_protein_abundance(ctx: StepContext) -> None:
             ctx.step_outputs[current_step] = protein_output
             return
 
-    logger.info(f"Step {current_step} (MSstats dataProcess): Calculating protein abundance")
+    logger.info(
+        f"Step {current_step} (MSstats dataProcess): Calculating protein abundance"
+    )
 
     await msstats_wrapper.data_process(
         input_file=psm_input,

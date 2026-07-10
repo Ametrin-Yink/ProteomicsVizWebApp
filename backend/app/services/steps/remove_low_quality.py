@@ -38,6 +38,4 @@ async def step_remove_low_quality_default(ctx: StepContext) -> None:
         logger.info("Step 4 (chunked): Replaced %s", ctx.psm_file_path.name)
     else:
         # Existing in-memory pandas path
-        ctx.df = await asyncio.to_thread(
-            processor.step4_remove_low_quality, ctx.df
-        )
+        ctx.df = await asyncio.to_thread(processor.step4_remove_low_quality, ctx.df)
