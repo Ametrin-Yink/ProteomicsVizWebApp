@@ -872,6 +872,114 @@ class DataProcessor:
 
         logger.info("Step 3 (DuckDB) complete: Razor peptides resolved")
 
+    def step5_filter_by_criteria_duckdb(
+        self, input_path: Path, output_path: Path
+    ) -> None:
+        """DuckDB SQL: filter PSMs by missing-value criteria using CTEs.
+
+        Per Spec Section 5.3:
+        CTE chain: cond_reps -> psm_detected -> psm_pass -> COPY filtered output.
+        Lenient (40% threshold, self.config.strict_filtering=False):
+            removes PSMs with missing replicates exceeding
+            CAST(total_reps * 0.4 AS INTEGER) in ANY condition.
+        Strict (20% threshold, self.config.strict_filtering=True):
+            additionally removes proteins with only 1 PSM among passing
+            candidates via passing_protein_counts CTE.
+
+        PSM must pass threshold in ALL conditions (HAVING COUNT(*) = n_conditions).
+
+        Args:
+            input_path: Source Parquet file
+            output_path: Destination Parquet file
+        """
+        import duckdb
+
+        threshold = 0.2 if self.config.strict_filtering else 0.4
+        logger.info(
+            "Step 5 (DuckDB): Filtering by criteria (%s, threshold=%.1f)",
+            "strict" if self.config.strict_filtering else "lenient",
+            threshold,
+        )
+
+        # Build strict-mode CTE + WHERE extension (Spec Section 5.3 strict variant)
+        strict_cte = ""
+        strict_where = ""
+        if self.config.strict_filtering:
+            strict_cte = """,
+        passing_protein_counts AS (
+            SELECT "Master_Protein_Accessions", COUNT(*) AS psm_count
+            FROM read_parquet('__INPUT__')
+            WHERE "Unique_PSM" IN (SELECT "Unique_PSM" FROM psm_pass)
+            GROUP BY "Master_Protein_Accessions"
+            HAVING COUNT(*) > 1
+        )"""
+            strict_where = """
+          AND p."Master_Protein_Accessions" IN (
+              SELECT "Master_Protein_Accessions" FROM passing_protein_counts
+          )"""
+
+        input_path_fwd = str(input_path).replace(chr(92), '/')
+        output_path_fwd = str(output_path).replace(chr(92), '/')
+
+        # Replace placeholder with actual path for strict CTE subquery
+        strict_cte = strict_cte.replace("__INPUT__", input_path_fwd)
+
+        sql = f"""
+            COPY (
+                WITH cond_reps AS (
+                    SELECT "Condition", COUNT(DISTINCT "Replicate") AS total_reps
+                    FROM read_parquet('{input_path_fwd}')
+                    GROUP BY "Condition"
+                ),
+                psm_detected AS (
+                    SELECT "Unique_PSM", "Condition",
+                           COUNT(DISTINCT "Replicate") AS detected_reps
+                    FROM read_parquet('{input_path_fwd}')
+                    WHERE "Abundance" IS NOT NULL
+                    GROUP BY "Unique_PSM", "Condition"
+                ),
+                psm_pass AS (
+                    SELECT d."Unique_PSM"
+                    FROM psm_detected d
+                    JOIN cond_reps c ON d."Condition" = c."Condition"
+                    WHERE (c.total_reps - d.detected_reps)
+                          <= CAST(FLOOR(c.total_reps * {threshold}) AS INTEGER)
+                    GROUP BY d."Unique_PSM"
+                    HAVING COUNT(*) = (SELECT COUNT(*) FROM cond_reps)
+                ){strict_cte}
+                SELECT p.*
+                FROM read_parquet('{input_path_fwd}') p
+                WHERE p."Unique_PSM" IN (SELECT "Unique_PSM" FROM psm_pass){strict_where}
+            ) TO '{output_path_fwd}'
+            (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
+        """
+
+        con = duckdb.connect()
+        try:
+            input_count = con.sql(
+                f"SELECT count(*) FROM read_parquet('{input_path_fwd}')"
+            ).fetchone()[0]
+
+            con.execute(sql)
+
+            output_count = con.sql(
+                f"SELECT count(*) FROM read_parquet('{output_path_fwd}')"
+            ).fetchone()[0]
+        finally:
+            con.close()
+
+        if not output_path.exists():
+            raise RuntimeError(
+                f"DuckDB Step 5 failed: {output_path} not created"
+            )
+
+        logger.info(
+            "Step 5 (DuckDB) complete: %d -> %d rows (%.0f%% kept)",
+            input_count,
+            output_count,
+            100.0 * output_count / input_count if input_count else 0,
+        )
+
     def step5_filter_by_criteria_chunked(
         self, input_path: Path, output_path: Path
     ) -> None:
