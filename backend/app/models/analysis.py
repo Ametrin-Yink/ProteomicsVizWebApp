@@ -167,8 +167,8 @@ class AnalysisConfig(BaseModel):
         description="[DEPRECATED in v1.16] msqrob() always uses robust regression. Value ignored.",
     )
     msqrob2_ridge: bool = Field(
-        default=True,  # changed from False — ridge improves stability for many-condition designs
-        description="Apply ridge penalty for high-dimensional/collinear designs",
+        default=False,  # ridge requires 5+ replicates; 3 reps causes boundary singular fits
+        description="Apply ridge penalty for high-dimensional/collinear designs (requires 5+ replicates)",
     )
     msqrob2_adjust_method: str = Field(
         default="BH",
