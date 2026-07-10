@@ -8,7 +8,7 @@ Proteomics Visualization Web App - A full-stack scientific data analysis platfor
 
 **Tech Stack:**
 - Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js, Cytoscape.js, Radix UI
-- Backend: FastAPI, Python 3.12+, Pydantic, asyncio, scipy, scikit-learn, DuckDB (optional — streaming DIA ingestion)
+- Backend: FastAPI, Python 3.12+, Pydantic, asyncio, scipy, scikit-learn, DuckDB (DIA streaming)
 - Analysis: R 4.5+, msqrob2, QFeatures, limma, MSstats, MSstatsBioNet, gseapy
 
 ## Quick Start (Dev)
@@ -173,10 +173,9 @@ backend/app/services/steps/
 | 7 | MSSTATS_DE (R) | MSQROB2_DE (R) |
 | 8 | QC_METRICS (shared) | QC_METRICS (shared) |
 
-**DIA optimized path (Steps 1-5):** When `use_duckdb_streaming=true` (default) and `duckdb` is installed:
-- Steps 1-2 are merged into a **single streaming DuckDB query** (CSV → Parquet with metadata join, Unique_PSM, contaminant/Quan_Info/Abundance<1 filters). Peak memory <500MB regardless of input size (vs 2× raw data with pandas).
-- Steps 3-5 use **chunked Parquet I/O** (100K-row batches) reading from disk instead of `ctx.df`. Set `ctx.df = None` after DuckDB to signal chunked path.
-- Falls back to pandas path when DuckDB is unavailable or `use_duckdb_streaming=false`.
+**DIA optimized path (Steps 1-5, DuckDB-only):** Pure DuckDB SQL reading/writing Parquet on disk:
+- Steps 1-2: Single streaming DuckDB COPY query (CSV → Parquet with metadata join, Unique_PSM, contaminant/Quan_Info/Abundance<1 filters). Peak memory <500MB.
+- Steps 3-5: DuckDB SQL (COPY queries with WHERE/CTE/JOIN). Step 3 uses two-phase DuckDB + Python for razor peptide protein selection. Zero pandas in preprocessing.
 
 **msqrob2 DE batching (Step 7):** When comparisons exceed `msqrob2_batch_size` (default 10), splits across parallel R subprocesses via `ProcessPoolExecutor`. Each batch loads a pre-fitted QFeatures RDS and runs `makeContrast()` + `hypothesisTest()` independently. Config: `msqrob2_batch_size` (1-50), `msqrob2_max_workers` (1-64), `msqrob2_n_cores_cap` (1-64).
 
@@ -249,10 +248,9 @@ backend/app/services/steps/
 - **Supported extensions:** `.txt` (tab-delimited) and `.csv` (comma-delimited), auto-detected
 
 ### Performance & Scale
-- **DIA scale:** Supports 10K+ input files via DuckDB streaming (Steps 1-2) and chunked Parquet I/O (Steps 3-5). Peak Python memory <500MB regardless of input count. Upload is the bottleneck — 10K files through the web API requires a bulk upload endpoint.
+- **DIA scale:** Supports 10K+ input files via DuckDB-only SQL preprocessing (Steps 1-5). Peak Python memory <500MB regardless of input count. Upload is the bottleneck — 10K files through the web API requires a bulk upload endpoint.
 - **DE scale:** 10K comparisons with 16-way batching completes in ~5 minutes (vs ~10 hours serial). Config via `msqrob2_batch_size`, `msqrob2_max_workers`, `msqrob2_n_cores_cap`.
 - **TMT scale:** <100 samples — current architecture handles this without optimization.
-- **DuckDB is optional:** Falls back to pandas path if `duckdb` package is not installed. Listed in `requirements.txt` with comment.
 - **SessionConfig ↔ AnalysisConfig:** New msqrob2 fields must be added to BOTH models. `config_forward_fields` in `processing.py` only forwards fields that exist in `SessionConfig`. If a field exists in `AnalysisConfig` but not `SessionConfig`, the API silently drops it.
 
 ### TypeScript / State Management

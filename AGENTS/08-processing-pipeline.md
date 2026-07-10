@@ -7,13 +7,14 @@ The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step han
 
 GSEA, BioNet, and Compare are on-demand — triggered from visualization/compare routes, not pipeline steps.
 
-## DIA Optimized Path (msqrob2)
+## DIA Optimized Path (msqrob2, DuckDB-only)
 
-When `use_duckdb_streaming=true` (default) and `duckdb` is installed:
+Steps 1-5 use pure DuckDB SQL reading/writing Parquet on disk. `ctx.df = None` after DuckDB signals disk-based path. No pandas in preprocessing.
 
-- **Steps 1-2** are merged into a single streaming DuckDB query: `read_csv(all files) → JOIN metadata → Unique_PSM → filter contaminants/Quan_Info/Abundance<1 → COPY TO parquet`. Peak memory <500MB. Sets `ctx.df = None` to signal chunked path.
-- **Steps 3-5** use chunked Parquet I/O (100K-row batches via `pyarrow.parquet.ParquetFile.iter_batches()`). Step 3 (razor) is two-pass: scan for protein-peptide counts, then apply selection. Step 4 is single-pass row-level filters. Step 5 is two-pass: compute missing-value thresholds, then filter.
-- Falls back to pandas path when DuckDB unavailable or disabled.
+- **Steps 1-2:** Single streaming DuckDB COPY query: `read_csv(all files) → JOIN metadata → Unique_PSM → filter contaminants/Quan_Info/Abundance<1 → COPY TO parquet`. Peak memory <500MB.
+- **Step 3:** Two-phase DuckDB + Python: (1) DuckDB SQL aggregates protein-peptide counts, (2) Python applies best-protein selection per peptide.
+- **Step 4:** Single DuckDB COPY ... SELECT with WHERE clause for row-level filters.
+- **Step 5:** DuckDB SQL with CTE chain: computes per-condition missing-value thresholds, then applies filter in a single query.
 
 ### Key details (msqrob2)
 
@@ -36,19 +37,19 @@ Step 8:    Python (QC metrics) → QC_Results.json
 
 **Pipeline Engine** (`pipeline_engine.py`):
 - `PipelineDefinition` — ordered list of `PipelineStep` objects keyed by `PipelineTool`
-- `StepContext` — mutable context passed through all steps. After DuckDB streaming, `ctx.df = None` signals chunked I/O path for Steps 3-5.
+- `StepContext` — mutable context passed through all steps. After DuckDB streaming, `ctx.df = None` signals disk-based (DuckDB SQL) path for Steps 3-5.
 - `PipelineEngine.run()` — iterates steps, handles cancellation, saves state after each step. Records `step_timings` and `step_memory` in `pipeline_state.json` for profiling.
 
 **Step Handlers** (`services/steps/`):
-- Steps 1-2 for DIA: DuckDB streaming path calls `DataProcessor.step1_2_duckdb_dia()` then sets `ctx.df = None`. Pandas fallback uses `step1_combine_replicates_dia()` + `step2_generate_unique_psm()` with in-memory DataFrame.
-- Steps 3-5: Each handler checks `ctx.df is None` → uses chunked Parquet I/O from `ctx.psm_file_path`. When `ctx.df` is populated → uses existing pandas in-memory path (backward compat).
+- Steps 1-2 for DIA: DuckDB path calls `DataProcessor.step1_2_duckdb_dia()` then sets `ctx.df = None`.
+- Steps 3-5: Each handler checks `ctx.df is None` → uses DuckDB SQL from `ctx.psm_file_path`. When `ctx.df` is populated → uses existing pandas in-memory path (backward compat for TMT).
 - Steps 6-7: R scripts via `Msqrob2Wrapper`. Step 7 supports batched mode via `group_comparison_batched()`.
 
 **DuckDB DataProcessor** (`data_processor.py`):
 - `step1_2_duckdb_dia()` — streaming CSV→Parquet via DuckDB SQL. Builds in-memory metadata table, JOINs on filename basename, applies filters, writes Parquet with zstd.
-- `step3_remove_razor_chunked()` — two-pass: (1) scan protein-peptide counts, (2) apply best-protein selection per chunk
-- `step4_remove_low_quality_chunked()` — single-pass row-level filter
-- `step5_filter_by_criteria_chunked()` — two-pass: (1) compute per-condition replicate sets + passing PSM IDs, (2) filter chunks. Uses `defaultdict(set)` for replicate accumulation (not `max(nunique())` — would undercount across row groups).
+- `step3_remove_razor_duckdb()` — two-phase DuckDB + Python: (1) DuckDB SQL aggregates protein-peptide counts, (2) Python applies best-protein selection per peptide
+- `step4_remove_low_quality_duckdb()` — single DuckDB COPY ... SELECT with WHERE clause for row-level filters
+- `step5_filter_by_criteria_duckdb()` — DuckDB SQL with CTE chain: computes per-condition missing-value thresholds, then applies filter in a single query
 
 **Task Manager** (`task_manager.py`):
 - Isolates long-running computations into dedicated thread pools per `TaskKind` (PIPELINE, GSEA, BIONET, COMPUTE, LIGHT)
