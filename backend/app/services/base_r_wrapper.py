@@ -172,11 +172,16 @@ class BaseRWrapper(ABC):
         explicit = getattr(config, config_attr, None)
         if explicit is not None:
             if explicit == 1:
-                logger.info("n_cores=1 explicitly set, skipping calibration")
+                logger.warning(
+                    "n_cores=1 explicitly set — all R processing will run "
+                    "single-core. For better performance, use 'Auto-detect' "
+                    "or set a higher core count (e.g., 8)."
+                )
                 await _safe_log(
                     log_callback,
-                    "info",
-                    "Single-core mode: skipping parallel calibration",
+                    "warning",
+                    "Single-core mode — R processing will be slow. "
+                    "Enable 'Auto-detect' for optimal performance.",
                 )
             return explicit
 
