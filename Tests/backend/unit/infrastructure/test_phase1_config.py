@@ -85,12 +85,12 @@ class TestDuckDbMsqrob2BatchSettings:
 
 
 class TestMsqrob2RidgeDefault:
-    """Verify msqrob2_ridge default changed to True."""
+    """Verify msqrob2_ridge default."""
 
-    def test_ridge_default_is_true(self):
-        """msqrob2_ridge now defaults to True for stability."""
+    def test_ridge_default_is_false(self):
+        """msqrob2_ridge defaults to False — ridge breaks with ≤3 replicates."""
         config = AnalysisConfig()
-        assert config.msqrob2_ridge is True
+        assert config.msqrob2_ridge is False
 
     def test_ridge_can_be_disabled(self):
         """Setting msqrob2_ridge to False is still allowed."""
