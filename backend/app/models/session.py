@@ -73,7 +73,13 @@ class SessionConfig(BaseModel):
     msstats_save_fitted_models: bool | None = Field(default=None)
     msstats_n_cores: int | None = Field(default=None)
 
-    # Batch correction (msqrob2)
+    # msqrob2 advanced parameters
+    msqrob2_ridge: bool | None = Field(default=None)
+    msqrob2_normalization: str | None = Field(default=None)
+    msqrob2_imputation: str | None = Field(default=None)
+    msqrob2_aggregation: str | None = Field(default=None)
+    msqrob2_adjust_method: str | None = Field(default=None)
+    msqrob2_n_cores: int | None = Field(default=None)
     msqrob2_batch_column: str | None = Field(default=None)
 
     # Covariate columns (selected metadata columns to use as model covariates)
