@@ -380,7 +380,7 @@ class TestPipelineEngineRun:
         handler1.assert_awaited_once_with(ctx)
         handler2.assert_awaited_once_with(ctx)
         assert result.steps_completed == [1, 2]
-        assert result.processing_time_seconds > 0
+        assert result.processing_time_seconds >= 0  # may be 0.0 with mocked instant handlers
 
     def test_run_stops_on_error(self, tmp_path):
         """Engine stops at failing step, marks state, and re-raises."""
