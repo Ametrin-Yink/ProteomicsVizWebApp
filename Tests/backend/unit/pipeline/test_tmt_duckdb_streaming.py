@@ -318,3 +318,94 @@ class TestTMTDuckDBStreaming:
             processor = DataProcessor(ProcessingConfig())
             with pytest.raises(ValueError, match="channel_mapping"):
                 processor.step1_2_duckdb_tmt([csv_path], {}, parquet_path)
+
+
+class TestTMTHandlerDuckDBBranching:
+    """TMT step handler correctly branches between DuckDB and pandas."""
+
+    @pytest.mark.asyncio
+    async def test_duckdb_path_sets_df_none(self, tmp_path):
+        """DuckDB mode sets ctx.df = None (signals chunked I/O for Steps 3-5)."""
+        import duckdb
+        from app.models.analysis import AnalysisConfig, AnalysisResult, AnalysisTemplate, PipelineTool
+        from app.services.pipeline_engine import StepContext
+        from app.services.steps.inputs.step_input_tmt import step_input_tmt
+
+        # Create test CSV
+        csv_path = tmp_path / "test_tmt.txt"
+        _write_tmt_csv(csv_path)
+
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        psm_path = results_dir / "PSM_Combined.parquet"
+
+        mapping = _make_channel_mapping()
+        config = AnalysisConfig(
+            template=AnalysisTemplate.MULTI_CONDITION,
+            pipeline=PipelineTool.MSSTATS,
+            organism="human",
+            remove_razor=True,
+            strict_filtering=False,
+            file_type="tmt",
+            tmt_channel_mapping=mapping,
+        )
+
+        ctx = StepContext(
+            config=config,
+            session_id="test-duckdb-branching",
+            file_paths=[csv_path],
+            results_dir=results_dir,
+            uploads_dir=tmp_path / "uploads",
+        )
+        ctx.psm_file_path = psm_path
+        ctx.result = AnalysisResult(session_id="test-duckdb-branching")
+
+        await step_input_tmt(ctx)
+
+        # DuckDB mode: df must be None, parquet must exist
+        assert ctx.df is None, (
+            "DuckDB mode must set ctx.df = None for chunked Steps 3-5"
+        )
+        assert psm_path.exists(), "PSM_Combined.parquet must exist"
+        # Step 2 must be marked done
+        assert 2 in ctx.step_outputs, (
+            "Step 2 must be marked done when DuckDB handles Steps 1-2"
+        )
+
+    @pytest.mark.asyncio
+    async def test_step2_skips_when_df_is_none(self, tmp_path):
+        """Step 2 (unique_psm) returns early when ctx.df is None."""
+        from app.models.analysis import AnalysisConfig, AnalysisResult, AnalysisTemplate, PipelineTool
+        from app.services.pipeline_engine import StepContext
+        from app.services.steps.shared.step_unique_psm import step_unique_psm
+
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        psm_path = results_dir / "PSM_Combined.parquet"
+        # Create a minimal parquet so Step 2's early-return check passes
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        table = pa.table({"col": [1]})
+        pq.write_table(table, psm_path)
+
+        config = AnalysisConfig(
+            template=AnalysisTemplate.MULTI_CONDITION,
+            pipeline=PipelineTool.MSSTATS,
+            organism="human",
+        )
+        ctx = StepContext(
+            config=config,
+            session_id="test-step2-skip",
+            file_paths=[],
+            results_dir=results_dir,
+            uploads_dir=tmp_path / "uploads",
+        )
+        ctx.psm_file_path = psm_path
+        ctx.result = AnalysisResult(session_id="test-step2-skip")
+        ctx.df = None  # Simulate DuckDB mode
+
+        await step_unique_psm(ctx)
+
+        # Step 2 should keep df as None
+        assert ctx.df is None, "Step 2 must keep ctx.df=None in DuckDB mode"
+        assert 2 in ctx.step_outputs, "Step 2 must record its output"

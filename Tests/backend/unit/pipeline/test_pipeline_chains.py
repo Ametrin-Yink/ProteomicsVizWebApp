@@ -194,10 +194,19 @@ class TestColumnContractTMT:
         ctx.result = AnalysisResult(session_id="contract-test-tmt")
 
         await step_input_tmt(ctx)
-        assert ctx.df is not None, "Step 1 must populate ctx.df"
+        # In DuckDB mode, ctx.df is None (Steps 1-2 merged into streaming)
+        # Load from parquet for column verification
+        if ctx.df is None:
+            assert ctx.psm_file_path and ctx.psm_file_path.exists(), (
+                "Step 1 must save parquet when DuckDB streaming"
+            )
 
         await step_unique_psm(ctx)
-        assert ctx.df is not None, "Step 2 must keep ctx.df alive after unified handler"
+        if ctx.df is None:
+            # DuckDB mode: load parquet for verification
+            ctx.df = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
+        else:
+            assert ctx.df is not None, "Step 2 must keep ctx.df alive"
 
         # Check core pipeline-produced columns exist
         for col in CORE_CONTRACT_COLUMNS:
