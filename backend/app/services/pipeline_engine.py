@@ -254,6 +254,13 @@ class PipelineEngine:
             # Set current step number before calling handler
             ctx.current_step_number = step.number
 
+            # Profile timing
+            _t0 = time.monotonic()
+            _mem0 = (
+                round(ctx.df.memory_usage(deep=False).sum() / 1e6, 1)
+                if ctx.df is not None else None
+            )
+
             try:
                 await step.handler(ctx)
             except Exception as e:
@@ -288,6 +295,15 @@ class PipelineEngine:
                     )
                     raise
 
+            # Record step timing
+            elapsed = round(time.monotonic() - _t0, 3)
+            ctx.state.data.setdefault("step_timings", {})[step.name] = elapsed
+            if _mem0 is not None and ctx.df is not None:
+                mem1 = round(ctx.df.memory_usage(deep=False).sum() / 1e6, 1)
+                ctx.state.data.setdefault("step_memory", {})[step.name] = {
+                    "start_mb": _mem0, "end_mb": mem1,
+                }
+
             if step.number in ctx.step_outputs:
                 ctx.state.mark_step_completed(
                     step.number,
@@ -318,6 +334,25 @@ class PipelineEngine:
 
         # Persist result summary into pipeline state for API consumers
         ctx.state.data["result"] = ctx.result.model_dump(mode="json")
+
+        # Profile: log timing summary from step timings collected during the loop
+        timings = ctx.state.data.get("step_timings", {})
+        if timings:
+            lines = ["[TIMING SUMMARY]"]
+            total = 0.0
+            memory = ctx.state.data.get("step_memory", {})
+            for step in pipeline.steps:
+                elapsed = timings.get(step.name, 0)
+                total += elapsed
+                mem_info = ""
+                if step.name in memory:
+                    m = memory[step.name]
+                    mem_info = f"  (mem: {m['start_mb']:.0f} -> {m['end_mb']:.0f} MB)"
+                lines.append(f"  {step.name:<28s} {elapsed:>8.1f}s{mem_info}")
+            lines.append(f"  {'-' * 28}   {'-' * 8}")
+            lines.append(f"  {'TOTAL':<28s} {total:>8.1f}s ({total / 60:.1f} min)")
+            logger.info("\n".join(lines))
+            ctx.state.add_log("info", "\n".join(lines))
 
         ctx.state.mark_completed()
 
