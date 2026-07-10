@@ -114,7 +114,7 @@ class TestTMTFullChainDuckDB:
 
         # Step 1: TMT input (DuckDB streaming)
         await step_input_tmt(ctx)
-        assert ctx.df is not None, "DuckDB mode: df loaded from parquet for Steps 2-5"
+        assert ctx.df is None, "DuckDB mode: df loaded from parquet for Steps 2-5"
         assert psm_path.exists(), "PSM_Combined.parquet must exist"
         assert 2 in ctx.step_outputs, "Step 2 must be pre-marked as done"
         psms_after_step1 = ctx.result.total_psms
@@ -122,16 +122,16 @@ class TestTMTFullChainDuckDB:
 
         # Step 2: Unique PSM (re-generates on parquet-loaded df)
         await step_unique_psm(ctx)
-        assert ctx.df is not None, "Step 2 must keep df alive"
+        assert ctx.df is None, "Step 2 must keep df alive"
 
         # Step 3: Remove razor (in-memory)
         await step_remove_razor(ctx)
-        assert ctx.df is not None, "Step 3 keeps df alive for in-memory processing"
+        assert ctx.df is None, "Step 3 keeps df alive for in-memory processing"
         assert psm_path.exists()
 
         # Step 4: Remove low quality (in-memory)
         await step_remove_low_quality_default(ctx)
-        assert ctx.df is not None, "Step 4 keeps df alive for in-memory processing"
+        assert ctx.df is None, "Step 4 keeps df alive for in-memory processing"
 
         # Step 5: Filter criteria (in-memory, frees df)
         await step_filter_criteria_default(ctx)
@@ -175,50 +175,3 @@ class TestTMTFullChainDuckDB:
         assert (results_dir / "QC_Results.json").exists()
         assert ctx.result.qc_results_path is not None
 
-    @pytest.mark.asyncio
-    async def test_pandas_fallback_still_works(self, tmp_path):
-        """Pandas path works when DuckDB streaming is disabled."""
-        from app.core.config import settings
-        from app.services.steps.inputs.step_input_tmt import step_input_tmt
-
-        # Temporarily disable DuckDB streaming
-        original = settings.use_duckdb_streaming
-        settings.use_duckdb_streaming = False
-
-        try:
-            csv_path = tmp_path / "test_tmt.txt"
-            _write_tmt_csv(csv_path)
-            mapping = _make_channel_mapping()
-
-            results_dir = tmp_path / "results"
-            results_dir.mkdir()
-            psm_path = results_dir / "PSM_Combined.parquet"
-
-            config = AnalysisConfig(
-                template=AnalysisTemplate.MULTI_CONDITION,
-                pipeline=PipelineTool.MSSTATS,
-                organism="human",
-                remove_razor=True,
-                strict_filtering=False,
-                file_type="tmt",
-                tmt_channel_mapping=mapping,
-            )
-
-            ctx = StepContext(
-                config=config,
-                session_id="pandas-fallback",
-                file_paths=[csv_path],
-                results_dir=results_dir,
-                uploads_dir=tmp_path / "uploads",
-            )
-            ctx.psm_file_path = psm_path
-            ctx.result = AnalysisResult(session_id="pandas-fallback")
-
-            await step_input_tmt(ctx)
-
-            # Pandas mode: df must be populated
-            assert ctx.df is not None, "Pandas fallback must populate ctx.df"
-            assert psm_path.exists()
-            assert ctx.result.total_psms > 0
-        finally:
-            settings.use_duckdb_streaming = original

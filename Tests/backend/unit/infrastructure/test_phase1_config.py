@@ -9,13 +9,8 @@ from app.core.config import Settings
 from app.models.analysis import AnalysisConfig
 
 
-class TestDuckDbMsqrob2BatchSettings:
-    """Verify new Phase 1+2 settings have correct defaults and validation."""
-
-    def test_use_duckdb_streaming_default(self):
-        """DuckDB streaming is enabled by default."""
-        settings = Settings()
-        assert settings.use_duckdb_streaming is True
+class TestMsqrob2BatchSettings:
+    """Verify msqrob2 batch settings have correct defaults and validation."""
 
     def test_msqrob2_batch_size_default(self):
         """msqrob2_batch_size defaults to 10."""
@@ -48,12 +43,6 @@ class TestDuckDbMsqrob2BatchSettings:
         """msqrob2_n_cores_cap must be between 1 and 64."""
         settings = Settings()
         assert 1 <= settings.msqrob2_n_cores_cap <= 64
-
-    def test_environ_overrides_duckdb(self, monkeypatch):
-        """use_duckdb_streaming should be overridable via env var."""
-        monkeypatch.setenv("USE_DUCKDB_STREAMING", "false")
-        settings = Settings()
-        assert settings.use_duckdb_streaming is False
 
     @pytest.mark.parametrize(
         "env_val,expected",

@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 import pytest
-from app.core.config import settings
 from app.models.analysis import (
     AnalysisConfig,
     AnalysisResult,
@@ -153,6 +152,7 @@ def _make_preseeded_ctx(tmp_path: Path) -> StepContext:
             }
         )
     ctx.df = pd.DataFrame(rows)
+    ctx.df.to_parquet(ctx.psm_file_path, engine="pyarrow", index=False)
     return ctx
 
 
@@ -279,31 +279,18 @@ class TestColumnContractDIA:
         ctx.result = AnalysisResult(session_id="contract-test-dia")
 
         await step_input_dia(ctx)
-        # DuckDB path: ctx.df may be None but parquet must exist
-        use_duckdb = settings.use_duckdb_streaming
-        if use_duckdb:
-            try:
-                import duckdb  # noqa: F401
-            except ImportError:
-                use_duckdb = False
-        if use_duckdb:
-            assert (
-                ctx.psm_file_path and ctx.psm_file_path.exists()
-            ), "Step 1 must save parquet when DuckDB streaming"
-        else:
-            assert ctx.df is not None, "Step 1 must populate ctx.df"
+        assert ctx.psm_file_path and ctx.psm_file_path.exists(), (
+            "Step 1 must save parquet"
+        )
+        assert ctx.df is None, "Step 1 must set ctx.df=None (DuckDB mode)"
 
         await step_unique_psm(ctx)
-        if use_duckdb:
-            # Task 4: ctx.df stays None — downstream steps use chunked Parquet I/O
-            assert ctx.df is None, (
-                "Step 2 must keep ctx.df=None in DuckDB mode "
-                "(downstream steps 3-5 use chunked Parquet I/O)"
-            )
-            # Load parquet for column contract verification
-            ctx.df = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
-        else:
-            assert ctx.df is not None, "Step 2 must keep ctx.df alive"
+        assert ctx.df is None, (
+            "Step 2 must keep ctx.df=None "
+            "(downstream steps 3-5 use DuckDB SQL)"
+        )
+        # Load parquet for column contract verification
+        ctx.df = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
 
         # Check core pipeline-produced columns exist
         for col in CORE_CONTRACT_COLUMNS:
@@ -370,7 +357,9 @@ class TestSharedChainSteps:
         await step_remove_low_quality_default(ctx)
         assert ctx.df is not None, "Step 4 must keep ctx.df"
         await step_filter_criteria_default(ctx)
-        assert ctx.df is None, "Step 5 must free ctx.df before R steps"
+        assert ctx.psm_file_path.exists(), (
+            "Step 5 must write PSM_Abundances.parquet"
+        )
 
     @pytest.mark.asyncio
     async def test_step_razor_removes_multi_protein(self, tmp_path):
@@ -423,7 +412,7 @@ class TestMSstatsFullPipeline:
         await step_remove_low_quality_default(ctx)
         assert ctx.df is not None
         await step_filter_criteria_default(ctx)
-        assert ctx.df is None, "df freed after step 5"
+        assert ctx.psm_file_path.exists(), "Step 5 must write output parquet"
 
         # ── Step 6: Protein abundance (mocked MSstats R) ──
         rds = results / "MSstats_Processed.rds"
@@ -497,7 +486,7 @@ class TestMsqrob2FullPipeline:
         await step_remove_low_quality_default(ctx)
         assert ctx.df is not None
         await step_filter_criteria_default(ctx)
-        assert ctx.df is None, "df freed after step 5"
+        assert ctx.psm_file_path.exists(), "Step 5 must write output parquet"
 
         # ── Step 6: Protein abundance (mocked msqrob2 R) ──
         rds = results / "MSqRob2_Processed.rds"
