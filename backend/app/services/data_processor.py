@@ -419,8 +419,6 @@ class DataProcessor:
             metadata_columns: Per-file metadata keyed by filename
             output_path: Path for output Parquet file
         """
-        import pandas as pd
-
         logger.info(
             "Steps 1-2 (DuckDB): Streaming %d files -> %s",
             len(file_paths),
@@ -430,11 +428,9 @@ class DataProcessor:
         # Detect delimiter and get column names from first file
         delimiter = _detect_delimiter(file_paths[0])
         delim_sql = "'\\t'" if delimiter == "\t" else "','"
-        first_cols = pd.read_csv(
-            file_paths[0],
-            nrows=0,
-            sep=delimiter,
-        ).columns.tolist()
+        with open(file_paths[0], encoding="utf-8", errors="replace") as f:
+            reader = csv.reader(f, delimiter=delimiter)
+            first_cols = next(reader)
 
         # Validate at least one abundance column exists
         has_quan_value = "Quan Value" in first_cols
@@ -595,11 +591,19 @@ class DataProcessor:
         if not output_path.exists():
             raise RuntimeError(f"DuckDB streaming failed: {output_path} not created")
 
-        result_df = pd.read_parquet(output_path, engine="pyarrow")
+        num_rows = pq.ParquetFile(output_path).metadata.num_rows
+        con = duckdb.connect()
+        try:
+            num_conditions = con.execute(
+                f"""SELECT COUNT(DISTINCT "Condition")
+                   FROM read_parquet('{str(output_path).replace(chr(92), '/')}')"""
+            ).fetchone()[0]
+        finally:
+            con.close()
         logger.info(
             "Steps 1-2 (DuckDB) complete: %d rows, %d conditions",
-            len(result_df),
-            result_df["Condition"].nunique(),
+            num_rows,
+            num_conditions,
         )
 
     def step1_2_duckdb_tmt(
@@ -623,8 +627,6 @@ class DataProcessor:
             tmt_channel_mapping: Channel -> {group: value, ..., replicate: N}
             output_path: Path for output Parquet file
         """
-        import pandas as pd
-
         logger.info(
             "Steps 1-2 (DuckDB TMT): Streaming %d file(s) -> %s",
             len(file_paths),
@@ -638,11 +640,9 @@ class DataProcessor:
         # Detect delimiter and column names from first file
         delimiter = _detect_delimiter(file_paths[0])
         delim_sql = "'\\t'" if delimiter == "\t" else "','"
-        first_cols = pd.read_csv(
-            file_paths[0],
-            nrows=0,
-            sep=delimiter,
-        ).columns.tolist()
+        with open(file_paths[0], encoding="utf-8", errors="replace") as f:
+            reader = csv.reader(f, delimiter=delimiter)
+            first_cols = next(reader)
 
         # Validate TMT abundance columns exist
         abundance_cols = _detect_tmt_abundance_columns(first_cols)
@@ -789,9 +789,17 @@ class DataProcessor:
                 f"DuckDB TMT streaming failed: {output_path} not created"
             )
 
-        result_df = pd.read_parquet(output_path, engine="pyarrow")
+        num_rows = pq.ParquetFile(output_path).metadata.num_rows
+        con = duckdb.connect()
+        try:
+            num_conditions = con.execute(
+                f"""SELECT COUNT(DISTINCT "Condition")
+                   FROM read_parquet('{str(output_path).replace(chr(92), '/')}')"""
+            ).fetchone()[0]
+        finally:
+            con.close()
         logger.info(
             "Steps 1-2 (DuckDB TMT) complete: %d rows, %d conditions",
-            len(result_df),
-            result_df["Condition"].nunique(),
+            num_rows,
+            num_conditions,
         )
