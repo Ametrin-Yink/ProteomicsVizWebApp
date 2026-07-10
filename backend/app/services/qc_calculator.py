@@ -217,7 +217,7 @@ class QCCalculator:
         scaled = scaler.fit_transform(data_t)
 
         # PCA — guard against edge cases where data is too small after NaN removal
-        n_samples, n_features = scaled.shape
+        _, n_features = scaled.shape
         if n_features < 2:
             logger.warning("Insufficient features (%d) for PCA after NaN removal", n_features)
             return PCAResult(

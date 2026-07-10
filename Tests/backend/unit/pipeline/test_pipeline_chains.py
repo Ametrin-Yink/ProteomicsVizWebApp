@@ -11,13 +11,13 @@ from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 import pytest
+from app.core.config import settings
 from app.models.analysis import (
     AnalysisConfig,
     AnalysisResult,
     AnalysisTemplate,
     PipelineTool,
 )
-from app.core.config import settings
 from app.services.pipeline_engine import StepContext
 
 # ── Required column contract (Section 8.1) ──────────────────────────────

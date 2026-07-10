@@ -1,5 +1,4 @@
 """Unit tests for BaseRWrapper — subprocess execution, encoding, timeout, errors."""
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

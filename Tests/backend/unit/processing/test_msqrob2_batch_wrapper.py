@@ -6,11 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-import pytest
-
 from app.models.analysis import AnalysisConfig
-from app.services.msqrob2_wrapper import _build_msqrob2_batch_cmd, Msqrob2Wrapper
+from app.services.msqrob2_wrapper import Msqrob2Wrapper, _build_msqrob2_batch_cmd
 
 
 @pytest.fixture

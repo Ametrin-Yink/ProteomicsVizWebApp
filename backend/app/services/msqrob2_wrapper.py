@@ -7,8 +7,8 @@ Handles protein abundance (QFeatures aggregation) and differential expression
 Implements steps 6-7 of the MULTI_CONDITION pipeline.
 """
 
-import logging
 import json as _json
+import logging
 from pathlib import Path
 
 from app.core.config import settings

@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from app.services.data_processor import DataProcessor, ProcessingConfig
 
 logging.basicConfig(level=logging.INFO)
