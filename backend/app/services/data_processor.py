@@ -1259,3 +1259,197 @@ class DataProcessor:
             len(result_df),
             result_df["Condition"].nunique(),
         )
+
+    def step1_2_duckdb_tmt(
+        self,
+        file_paths: list[Path],
+        tmt_channel_mapping: dict[str, dict],
+        output_path: Path,
+    ) -> None:
+        """Steps 1-2 (TMT): Streaming CSV -> Parquet via DuckDB UNPIVOT.
+
+        Performs Steps 1 (read + melt channels + map conditions),
+        2 (Unique_PSM), and low-quality filters (contaminants,
+        Quan_Info, Abundance<1) as a single streaming DuckDB query.
+
+        TMT files are wide-format with 16+ Abundance <N> columns.
+        DuckDB UNPIVOT melts them into long format, then joins with
+        channel mapping for condition/replicate assignment.
+
+        Args:
+            file_paths: List of TMT file paths (tab-delimited .txt)
+            tmt_channel_mapping: Channel -> {group: value, ..., replicate: N}
+            output_path: Path for output Parquet file
+        """
+        import duckdb
+
+        logger.info(
+            "Steps 1-2 (DuckDB TMT): Streaming %d file(s) -> %s",
+            len(file_paths),
+            output_path,
+        )
+
+        # Validate channel mapping is non-empty BEFORE reading files
+        if not tmt_channel_mapping:
+            raise ValueError("tmt_channel_mapping is required for TMT input")
+
+        # Detect delimiter and column names from first file
+        delimiter = _detect_delimiter(file_paths[0])
+        delim_sql = "'\\t'" if delimiter == "\t" else "','"
+        first_cols = pd.read_csv(
+            file_paths[0],
+            nrows=0,
+            sep=delimiter,
+        ).columns.tolist()
+
+        # Validate TMT abundance columns exist
+        abundance_cols = _detect_tmt_abundance_columns(first_cols)
+        if not abundance_cols:
+            raise ValueError(
+                f"No TMT abundance columns found in {file_paths[0].name}. "
+                f"Pattern: 'Abundance <number>[NC]?'"
+            )
+
+        # Determine group columns from channel mapping (all keys except 'replicate')
+        sample_mapping = next(iter(tmt_channel_mapping.values()))
+        group_cols = sorted([k for k in sample_mapping if k != "replicate"])
+        if not group_cols:
+            raise ValueError(
+                "No condition group columns found in tmt_channel_mapping"
+            )
+
+        # Build channel mapping VALUES clause
+        def _sqlesc(s):
+            return str(s).replace("'", "''")
+
+        values_parts = []
+        for channel, info in tmt_channel_mapping.items():
+            condition = "_".join(str(info[c]) for c in group_cols)
+            replicate = int(info.get("replicate", 1))
+            vals = [
+                f"'{_sqlesc(channel)}'",
+                f"'{_sqlesc(condition)}'",
+                str(replicate),
+            ]
+            for c in group_cols:
+                vals.append(f"'{_sqlesc(str(info[c]))}'")
+            values_parts.append("(" + ", ".join(vals) + ")")
+
+        values_clause = ",\n".join(values_parts)
+        meta_cols = ["channel", "condition", "replicate", *group_cols]
+        meta_cols_clause = ", ".join(meta_cols)
+
+        # Build non-abundance column SELECT list (rename spaces -> underscores)
+        non_abundance_cols = [
+            col for col in first_cols if col not in abundance_cols
+        ]
+        select_parts = []
+        for col in non_abundance_cols:
+            qcol = f'"{col}"'
+            new_name = col.replace(" ", "_")
+            if new_name != col:
+                select_parts.append(f'{qcol} AS "{new_name}"')
+            else:
+                select_parts.append(qcol)
+
+        orig_cols_sql = ",\n            ".join(select_parts)
+
+        # Build WHERE clause
+        has_quan_info = "Quan Info" in first_cols
+        filter_parts = [
+            "(Contaminant IS NULL OR LOWER(Contaminant) != 'true')",
+            "TRY_CAST(Abundance AS DOUBLE) >= 1",
+        ]
+        if has_quan_info:
+            filter_parts.append(
+                '("Quan Info" IS NULL OR "Quan Info" != \'No Value\')'
+            )
+        where_clause = " AND ".join(filter_parts)
+
+        # Build condition expression (group cols joined with _)
+        condition_expr = " || '_' || ".join(
+            f"m.{c}" for c in group_cols
+        )
+        # Build group column SELECT suffix
+        group_select_sql = ",\n            ".join(
+            f"m.{c} AS \"{c}\"" for c in group_cols
+        )
+
+        # Build file list for read_csv
+        file_list_sql = ", ".join(
+            f"'{str(p).replace(chr(92), '/')}'" for p in file_paths
+        )
+
+        # Build the SQL
+        # Use raw-string variables for regex patterns to avoid Python
+        # f-string backslash escaping issues. DuckDB's regex engine (RE2)
+        # needs single backslashes: \s \d \w etc.
+        abundance_regex = r'Abundance\s+\d+[NC]?'
+        channel_strip_regex = r'^Abundance\s+'
+        sql = f"""
+            COPY (
+                WITH raw AS (
+                    SELECT *
+                    FROM read_csv([{file_list_sql}],
+                        delim={delim_sql}, auto_detect=true,
+                        all_varchar=true, header=true)
+                ),
+                unpivoted AS (
+                    UNPIVOT raw
+                    ON COLUMNS('{abundance_regex}')
+                    INTO NAME Channel VALUE Abundance
+                ),
+                mapped AS (
+                    SELECT
+                        u.* EXCLUDE (Channel),
+                        regexp_replace(
+                            Channel, '{channel_strip_regex}', ''
+                        ) AS _channel_label
+                    FROM unpivoted u
+                )
+                SELECT
+                    {orig_cols_sql},
+                    TRY_CAST(Abundance AS DOUBLE) AS "Abundance",
+                    COALESCE(Sequence, '')
+                        || '|' || COALESCE(Modifications, '')
+                        || '|' || COALESCE(Charge, '')
+                        AS "Unique_PSM",
+                    {condition_expr} AS "Condition",
+                    m.replicate AS "Replicate",
+                    {condition_expr}
+                        || '_' || CAST(m.replicate AS VARCHAR)
+                        AS "Sample_Origination",
+                    {group_select_sql}
+                FROM mapped r
+                JOIN _channel_map m
+                    ON r._channel_label = m.channel
+                WHERE
+                    {where_clause}
+            ) TO '{str(output_path).replace(chr(92), '/')}'
+            (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
+        """
+
+        con = duckdb.connect()
+        try:
+            # Create in-memory channel mapping table
+            con.execute(f"""
+                CREATE TABLE _channel_map AS
+                SELECT * FROM (VALUES {values_clause})
+                AS t({meta_cols_clause})
+            """)
+
+            con.execute(sql)
+        finally:
+            con.close()
+
+        if not output_path.exists():
+            raise RuntimeError(
+                f"DuckDB TMT streaming failed: {output_path} not created"
+            )
+
+        result_df = pd.read_parquet(output_path, engine="pyarrow")
+        logger.info(
+            "Steps 1-2 (DuckDB TMT) complete: %d rows, %d conditions",
+            len(result_df),
+            result_df["Condition"].nunique(),
+        )
