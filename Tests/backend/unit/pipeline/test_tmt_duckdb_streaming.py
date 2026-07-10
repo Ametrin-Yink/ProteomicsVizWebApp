@@ -355,9 +355,10 @@ class TestTMTHandlerDuckDBBranching:
 
         await step_input_tmt(ctx)
 
-        # DuckDB mode: df must be None, parquet must exist
-        assert ctx.df is None, (
-            "DuckDB mode must set ctx.df = None for chunked Steps 3-5"
+        # DuckDB mode: df is loaded from parquet for in-memory Steps 3-5,
+        # parquet must exist
+        assert ctx.df is not None, (
+            "DuckDB mode must load ctx.df from parquet for in-memory Steps 3-5"
         )
         assert psm_path.exists(), "PSM_Combined.parquet must exist"
         # Step 2 must be marked done

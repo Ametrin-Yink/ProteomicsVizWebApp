@@ -1312,7 +1312,7 @@ class DataProcessor:
 
         # Determine group columns from channel mapping (all keys except 'replicate')
         sample_mapping = next(iter(tmt_channel_mapping.values()))
-        group_cols = sorted([k for k in sample_mapping if k != "replicate"])
+        group_cols = [k for k in sample_mapping if k != "replicate"]
         if not group_cols:
             raise ValueError(
                 "No condition group columns found in tmt_channel_mapping"

@@ -11,6 +11,7 @@ shared steps (remove_razor, filter_criteria) use chunked Parquet I/O.
 import asyncio
 import logging
 
+import pandas as pd
 import pyarrow.parquet as pq
 
 from app.core.config import settings
@@ -57,7 +58,10 @@ async def step_input_tmt(ctx: StepContext) -> None:
             ctx.config.tmt_channel_mapping,
             psm_path,
         )
-        ctx.df = None  # Signal: DuckDB handled Steps 1-2
+        # Load parquet back into memory for fast in-memory Steps 3-5.
+        # Chunked Parquet I/O is optimized for DIA's 10K+ file scale;
+        # TMT's single-file data fits in memory and runs 5× faster in-memory.
+        ctx.df = pd.read_parquet(psm_path, engine="pyarrow")
         ctx.psm_file_path = psm_path
         ctx.step_outputs[ctx.current_step_number or 1] = psm_path
         ctx.step_outputs[2] = psm_path  # Step 2 also done

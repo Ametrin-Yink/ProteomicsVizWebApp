@@ -114,28 +114,28 @@ class TestTMTFullChainDuckDB:
 
         # Step 1: TMT input (DuckDB streaming)
         await step_input_tmt(ctx)
-        assert ctx.df is None, "DuckDB mode: df must be None"
+        assert ctx.df is not None, "DuckDB mode: df loaded from parquet for Steps 2-5"
         assert psm_path.exists(), "PSM_Combined.parquet must exist"
         assert 2 in ctx.step_outputs, "Step 2 must be pre-marked as done"
         psms_after_step1 = ctx.result.total_psms
         assert psms_after_step1 > 0, "Must have PSMs after Step 1"
 
-        # Step 2: Unique PSM (skips in DuckDB mode)
+        # Step 2: Unique PSM (re-generates on parquet-loaded df)
         await step_unique_psm(ctx)
-        assert ctx.df is None, "Step 2 must keep df=None in DuckDB mode"
+        assert ctx.df is not None, "Step 2 must keep df alive"
 
-        # Step 3: Remove razor (chunked I/O)
+        # Step 3: Remove razor (in-memory)
         await step_remove_razor(ctx)
-        assert ctx.df is None, "Step 3 keeps df=None in chunked mode"
+        assert ctx.df is not None, "Step 3 keeps df alive for in-memory processing"
         assert psm_path.exists()
 
-        # Step 4: Remove low quality (chunked I/O)
+        # Step 4: Remove low quality (in-memory)
         await step_remove_low_quality_default(ctx)
-        assert ctx.df is None, "Step 4 keeps df=None in chunked mode"
+        assert ctx.df is not None, "Step 4 keeps df alive for in-memory processing"
 
-        # Step 5: Filter criteria (chunked I/O)
+        # Step 5: Filter criteria (in-memory, frees df)
         await step_filter_criteria_default(ctx)
-        assert ctx.df is None, "Step 5 keeps df=None (already freed)"
+        assert ctx.df is None, "Step 5 frees ctx.df before R steps"
 
         # Step 6: Protein abundance (mocked MSstats R)
         rds = results_dir / "MSstats_Processed.rds"
