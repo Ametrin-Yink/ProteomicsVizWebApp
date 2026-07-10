@@ -232,15 +232,16 @@ async def load_diff_expression_results(
             adj_pval = row.get("adjPval", 1)
             psm_count = row.get("PSM_Count", row.get("psm_count", 0))
 
-            # Convert NaN/Inf to None and skip rows with invalid values
+            # Convert NaN/Inf to None for JSON — include rows even with NA values
+            # so the UI shows the full protein count (frontend displays "N/A" for None)
             if pd.isna(log_fc) or (isinstance(log_fc, float) and math.isinf(log_fc)):
-                continue  # Skip proteins with invalid logFC (inf/-inf/NaN)
+                log_fc = None
             if pd.isna(pval) or (isinstance(pval, float) and math.isinf(pval)):
-                continue  # Skip proteins with invalid p-value
+                pval = None
             if pd.isna(adj_pval) or (
                 isinstance(adj_pval, float) and math.isinf(adj_pval)
             ):
-                adj_pval = 1  # Conservative default for missing adjusted p-value
+                adj_pval = None
             if pd.isna(psm_count):
                 psm_count = 0
             elif int(psm_count) > 0:
