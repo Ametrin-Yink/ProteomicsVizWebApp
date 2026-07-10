@@ -744,6 +744,134 @@ class DataProcessor:
             remaining_count,
         )
 
+    def step3_remove_razor_duckdb(
+        self, input_path: Path, output_path: Path
+    ) -> None:
+        """DuckDB SQL + Python: remove razor peptides via protein-peptide counts.
+
+        Two-phase approach per Spec Section 5.2:
+        Phase 1 (DuckDB): Build protein->peptide_count map and
+            first-occurrence PSM->protein-list map from input parquet.
+        Python: Compute best_protein for each PSM using _select_best_protein()
+            (handles FASTA tie-breaking per Spec Section 8.4).
+        Phase 2 (DuckDB): Apply best_protein mapping via JOIN and COPY TO.
+
+        If config.remove_razor is False, copies the file unchanged
+        (shutil.copy2 -- same behavior as removed chunked method).
+
+        Args:
+            input_path: Source Parquet file
+            output_path: Destination Parquet file
+        """
+        import shutil
+
+        if not self.config.remove_razor:
+            shutil.copy2(input_path, output_path)
+            logger.info(
+                "Step 3 (DuckDB): Skipping razor removal (disabled), copied file"
+            )
+            return
+
+        import duckdb
+
+        logger.info("Step 3 (DuckDB): Two-phase razor removal")
+
+        input_path_fwd = str(input_path).replace(chr(92), '/')
+        output_path_fwd = str(output_path).replace(chr(92), '/')
+
+        con = duckdb.connect()
+        try:
+            # Phase 1: Build protein->peptide count and PSM->protein maps
+            con.execute(f"""
+                CREATE TABLE _peptide_counts AS
+                SELECT TRIM(protein) AS protein, COUNT(*) AS cnt
+                FROM (
+                    SELECT UNNEST(
+                        STRING_SPLIT("Master_Protein_Accessions", ';')
+                    ) AS protein
+                    FROM read_parquet('{input_path_fwd}')
+                ) sub
+                WHERE TRIM(protein) != ''
+                GROUP BY protein
+            """)
+
+            con.execute(f"""
+                CREATE TABLE _psm_proteins AS
+                SELECT "Unique_PSM",
+                       FIRST("Master_Protein_Accessions") AS proteins
+                FROM read_parquet('{input_path_fwd}')
+                GROUP BY "Unique_PSM"
+            """)
+
+            # Python: Compute best protein for each PSM
+            # Uses _select_best_protein() for FASTA tie-breaking (Spec Section 8.4)
+            peptide_counts = {
+                row[0]: row[1]
+                for row in con.sql(
+                    "SELECT protein, cnt FROM _peptide_counts"
+                ).fetchall()
+            }
+
+            best_protein_map: dict[str, str] = {}
+            for psm, proteins_str in con.sql(
+                'SELECT "Unique_PSM", proteins FROM _psm_proteins'
+            ).fetchall():
+                if not proteins_str or not str(proteins_str).strip():
+                    best_protein_map[psm] = ""
+                    continue
+                proteins = [
+                    p.strip()
+                    for p in str(proteins_str).split(";")
+                    if p.strip()
+                ]
+                if len(proteins) <= 1:
+                    best_protein_map[psm] = proteins[0] if proteins else ""
+                else:
+                    best_protein_map[psm] = self._select_best_protein(
+                        proteins,
+                        peptide_counts,
+                        self.config.fasta_db,
+                    )
+
+            # Build mapping table
+            def _sqlesc(s):
+                return str(s).replace("'", "''")
+
+            values_parts = [
+                f"('{_sqlesc(psm)}', '{_sqlesc(best)}')"
+                for psm, best in best_protein_map.items()
+            ]
+            values_clause = ",\n".join(values_parts)
+
+            con.execute(f"""
+                CREATE TABLE _best_protein_map AS
+                SELECT * FROM (VALUES {values_clause})
+                AS t("Unique_PSM", best_protein)
+            """)
+
+            # Phase 2: Apply mapping via JOIN + COPY
+            con.execute(f"""
+                COPY (
+                    SELECT r.* EXCLUDE ("Master_Protein_Accessions"),
+                           COALESCE(
+                               m.best_protein, r."Master_Protein_Accessions"
+                           ) AS "Master_Protein_Accessions"
+                    FROM read_parquet('{input_path_fwd}') r
+                    LEFT JOIN _best_protein_map m
+                        ON r."Unique_PSM" = m."Unique_PSM"
+                ) TO '{output_path_fwd}'
+                (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
+            """)
+        finally:
+            con.close()
+
+        if not output_path.exists():
+            raise RuntimeError(
+                f"DuckDB Step 3 failed: {output_path} not created"
+            )
+
+        logger.info("Step 3 (DuckDB) complete: Razor peptides resolved")
+
     def step5_filter_by_criteria_chunked(
         self, input_path: Path, output_path: Path
     ) -> None:
