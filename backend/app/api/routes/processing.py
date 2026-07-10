@@ -329,6 +329,15 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             "comparisons",
             # Batch correction (msqrob2)
             "msqrob2_batch_column",
+            # msqrob2 advanced
+            "msqrob2_ridge",
+            "msqrob2_normalization",
+            "msqrob2_imputation",
+            "msqrob2_aggregation",
+            "msqrob2_adjust_method",
+            "msqrob2_n_cores",
+            # MSstats n_cores
+            "msstats_n_cores",
             # Pipeline reform: file type and TMT channel mapping
             "file_type",
             "tmt_channel_mapping",
