@@ -104,6 +104,7 @@ function buildProteinTraces(props: ProteinModeProps) {
         : { color: '#9ca3af', size: 6, opacity: 0.5 },
       text: others.map((p) => p.gene_name || p.accession),
       hoverinfo: 'text' as const,
+      hoverlabel: { namelength: -1, font: { size: 12 } },
       name: 'Proteins',
     });
   }
@@ -129,6 +130,7 @@ function buildProteinTraces(props: ProteinModeProps) {
           },
       text: selected.map((p) => `${p.gene_name || p.accession} (selected)`),
       hoverinfo: 'text' as const,
+      hoverlabel: { namelength: -1, font: { size: 12 } },
       name: 'Selected',
     });
   }
@@ -169,6 +171,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
       },
       text: others.map((p) => formatComparisonKey(p.comparison)),
       hoverinfo: 'text' as const,
+      hoverlabel: { namelength: -1, font: { size: 12 } },
       name: 'Comparisons',
     });
   }
@@ -186,6 +189,7 @@ function buildComparisonTraces(props: ComparisonModeProps) {
       },
       text: selected.map((p) => `${formatComparisonKey(p.comparison)} (selected)`),
       hoverinfo: 'text' as const,
+      hoverlabel: { namelength: -1, font: { size: 12 } },
       name: 'Selected',
     });
   }

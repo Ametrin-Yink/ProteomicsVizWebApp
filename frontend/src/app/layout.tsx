@@ -52,6 +52,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Fix Plotly tooltip issues:
+            1. overflow:visible — prevent SVG from clipping tooltips near edges
+            2. transition:none — prevent Tailwind transitions from animating tooltip from (0,0) */}
+        <style>{`.js-plotly-plot .main-svg{overflow:visible!important}.js-plotly-plot .main-svg,.js-plotly-plot .main-svg *{transition:none!important}`}</style>
       </head>
       <body className="antialiased font-sans bg-background overflow-auto">
         <a

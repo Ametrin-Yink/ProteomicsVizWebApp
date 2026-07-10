@@ -343,6 +343,11 @@ export default function VolcanoPlot({
             config={config}
             onClick={handlePointClick}
             onDoubleClick={handlePointClick}
+            onInitialized={(_figure, graphDiv) => {
+              // Fix tooltip clipping: allow hover content to extend beyond SVG bounds
+              const svg = graphDiv.querySelector('.main-svg');
+              if (svg) (svg as SVGElement).style.overflow = 'visible';
+            }}
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />

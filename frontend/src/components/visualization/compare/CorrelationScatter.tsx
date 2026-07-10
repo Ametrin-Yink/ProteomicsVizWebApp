@@ -70,6 +70,7 @@ export default function CorrelationScatter({
       marker: { color: pointColors, size: 8 },
       text: comparisons,
       hoverinfo: 'text' as const,
+      hoverlabel: { namelength: -1, font: { size: 12 } },
       name: 'Comparisons',
     };
 
