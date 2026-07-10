@@ -131,13 +131,6 @@ class Settings(BaseSettings):
         description="Max BiocParallel cores per R subprocess",
     )
 
-    # --- DuckDB streaming (Phase 1) ---
-    use_duckdb_streaming: bool = Field(
-        default=True,
-        description="Use DuckDB for streaming DIA file ingestion (Steps 1-2). "
-        "Falls back to pandas if DuckDB is not installed.",
-    )
-
     # --- msqrob2 Step 7 batching ---
     msqrob2_batch_size: int = Field(
         default=10,
