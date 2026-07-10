@@ -216,8 +216,19 @@ class QCCalculator:
         scaler = StandardScaler()
         scaled = scaler.fit_transform(data_t)
 
-        # PCA
-        n_components = min(2, len(abundance_cols) - 1)
+        # PCA — guard against edge cases where data is too small after NaN removal
+        n_samples, n_features = scaled.shape
+        if n_features < 2:
+            logger.warning("Insufficient features (%d) for PCA after NaN removal", n_features)
+            return PCAResult(
+                samples=abundance_cols,
+                pc1=[0.0] * len(abundance_cols),
+                pc2=[0.0] * len(abundance_cols),
+                conditions=[self._extract_condition(col) for col in abundance_cols],
+                pc1_variance=0.0,
+                pc2_variance=0.0,
+            )
+        n_components = min(2, n_features)
         pca = PCA(n_components=n_components)
         components = pca.fit_transform(scaled)
 
