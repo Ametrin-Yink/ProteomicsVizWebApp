@@ -148,9 +148,9 @@ def tmt_session(channel_mapping):
 
     # 6. Wait for completion
     state = wait_for_completion(sid)
-    assert (
-        state == "completed"
-    ), f"Pipeline ended with state '{state}', expected 'completed'"
+    assert state == "completed", (
+        f"Pipeline ended with state '{state}', expected 'completed'"
+    )
 
     # 7. Yield session data for assertions
     r = requests.get(f"{API}/{sid}")

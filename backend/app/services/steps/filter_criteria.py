@@ -1,10 +1,8 @@
 """Step 5: Filter by criteria, save to file, free memory."""
 
 import asyncio
-
 import logging
 
-from app.core.config import settings
 from app.services.data_processor import DataProcessor, ProcessingConfig
 from app.services.pipeline_engine import StepContext
 

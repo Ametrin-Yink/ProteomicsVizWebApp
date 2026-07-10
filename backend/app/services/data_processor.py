@@ -20,8 +20,6 @@ from pathlib import Path
 import duckdb
 import pyarrow.parquet as pq
 
-from app.core.config import settings
-
 logger = logging.getLogger(__name__)
 
 
@@ -129,13 +127,11 @@ class DataProcessor:
             'TRY_CAST("Abundance" AS DOUBLE) >= 1',
         ]
         if has_quan_info:
-            filter_parts.append(
-                '("Quan_Info" IS NULL OR "Quan_Info" != \'No Value\')'
-            )
+            filter_parts.append('("Quan_Info" IS NULL OR "Quan_Info" != \'No Value\')')
         where_clause = "\n              AND ".join(filter_parts)
 
-        input_path_fwd = str(input_path).replace(chr(92), '/')
-        output_path_fwd = str(output_path).replace(chr(92), '/')
+        input_path_fwd = str(input_path).replace(chr(92), "/")
+        output_path_fwd = str(output_path).replace(chr(92), "/")
 
         sql = f"""
             COPY (
@@ -161,9 +157,7 @@ class DataProcessor:
             con.close()
 
         if not output_path.exists():
-            raise RuntimeError(
-                f"DuckDB Step 4 failed: {output_path} not created"
-            )
+            raise RuntimeError(f"DuckDB Step 4 failed: {output_path} not created")
 
         removed = initial_count - remaining_count
         logger.info(
@@ -172,9 +166,7 @@ class DataProcessor:
             remaining_count,
         )
 
-    def step3_remove_razor_duckdb(
-        self, input_path: Path, output_path: Path
-    ) -> None:
+    def step3_remove_razor_duckdb(self, input_path: Path, output_path: Path) -> None:
         """DuckDB SQL + Python: remove razor peptides via protein-peptide counts.
 
         Two-phase approach per Spec Section 5.2:
@@ -200,8 +192,8 @@ class DataProcessor:
 
         logger.info("Step 3 (DuckDB): Two-phase razor removal")
 
-        input_path_fwd = str(input_path).replace(chr(92), '/')
-        output_path_fwd = str(output_path).replace(chr(92), '/')
+        input_path_fwd = str(input_path).replace(chr(92), "/")
+        output_path_fwd = str(output_path).replace(chr(92), "/")
 
         con = duckdb.connect()
         try:
@@ -244,9 +236,7 @@ class DataProcessor:
                     best_protein_map[psm] = ""
                     continue
                 proteins = [
-                    p.strip()
-                    for p in str(proteins_str).split(";")
-                    if p.strip()
+                    p.strip() for p in str(proteins_str).split(";") if p.strip()
                 ]
                 if len(proteins) <= 1:
                     best_protein_map[psm] = proteins[0] if proteins else ""
@@ -290,9 +280,7 @@ class DataProcessor:
             con.close()
 
         if not output_path.exists():
-            raise RuntimeError(
-                f"DuckDB Step 3 failed: {output_path} not created"
-            )
+            raise RuntimeError(f"DuckDB Step 3 failed: {output_path} not created")
 
         logger.info("Step 3 (DuckDB) complete: Razor peptides resolved")
 
@@ -340,8 +328,8 @@ class DataProcessor:
               SELECT "Master_Protein_Accessions" FROM passing_protein_counts
           )"""
 
-        input_path_fwd = str(input_path).replace(chr(92), '/')
-        output_path_fwd = str(output_path).replace(chr(92), '/')
+        input_path_fwd = str(input_path).replace(chr(92), "/")
+        output_path_fwd = str(output_path).replace(chr(92), "/")
 
         # Replace placeholder with actual path for strict CTE subquery
         strict_cte = strict_cte.replace("__INPUT__", input_path_fwd)
@@ -391,9 +379,7 @@ class DataProcessor:
             con.close()
 
         if not output_path.exists():
-            raise RuntimeError(
-                f"DuckDB Step 5 failed: {output_path} not created"
-            )
+            raise RuntimeError(f"DuckDB Step 5 failed: {output_path} not created")
 
         logger.info(
             "Step 5 (DuckDB) complete: %d -> %d rows (%.0f%% kept)",
@@ -580,7 +566,7 @@ class DataProcessor:
                     FROM joined
                     WHERE
                         {where_clause}
-                ) TO '{str(output_path).replace(chr(92), '/')}'
+                ) TO '{str(output_path).replace(chr(92), "/")}'
                 (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
             """
 
@@ -596,7 +582,7 @@ class DataProcessor:
         try:
             num_conditions = con.execute(
                 f"""SELECT COUNT(DISTINCT "Condition")
-                   FROM read_parquet('{str(output_path).replace(chr(92), '/')}')"""
+                   FROM read_parquet('{str(output_path).replace(chr(92), "/")}')"""
             ).fetchone()[0]
         finally:
             con.close()
@@ -656,9 +642,7 @@ class DataProcessor:
         sample_mapping = next(iter(tmt_channel_mapping.values()))
         group_cols = [k for k in sample_mapping if k != "replicate"]
         if not group_cols:
-            raise ValueError(
-                "No condition group columns found in tmt_channel_mapping"
-            )
+            raise ValueError("No condition group columns found in tmt_channel_mapping")
 
         # Build channel mapping VALUES clause
         def _sqlesc(s):
@@ -682,9 +666,7 @@ class DataProcessor:
         meta_cols_clause = ", ".join(meta_cols)
 
         # Build non-abundance column SELECT list (rename spaces -> underscores)
-        non_abundance_cols = [
-            col for col in first_cols if col not in abundance_cols
-        ]
+        non_abundance_cols = [col for col in first_cols if col not in abundance_cols]
         select_parts = []
         for col in non_abundance_cols:
             qcol = f'"{col}"'
@@ -703,19 +685,13 @@ class DataProcessor:
             "TRY_CAST(Abundance AS DOUBLE) >= 1",
         ]
         if has_quan_info:
-            filter_parts.append(
-                '("Quan Info" IS NULL OR "Quan Info" != \'No Value\')'
-            )
+            filter_parts.append('("Quan Info" IS NULL OR "Quan Info" != \'No Value\')')
         where_clause = " AND ".join(filter_parts)
 
         # Build condition expression (group cols joined with _)
-        condition_expr = " || '_' || ".join(
-            f"m.{c}" for c in group_cols
-        )
+        condition_expr = " || '_' || ".join(f"m.{c}" for c in group_cols)
         # Build group column SELECT suffix
-        group_select_sql = ",\n            ".join(
-            f"m.{c} AS \"{c}\"" for c in group_cols
-        )
+        group_select_sql = ",\n            ".join(f'm.{c} AS "{c}"' for c in group_cols)
 
         # Build file list for read_csv
         file_list_sql = ", ".join(
@@ -726,8 +702,8 @@ class DataProcessor:
         # Use raw-string variables for regex patterns to avoid Python
         # f-string backslash escaping issues. DuckDB's regex engine (RE2)
         # needs single backslashes: \s \d \w etc.
-        abundance_regex = r'Abundance\s+\d+[NC]?'
-        channel_strip_regex = r'^Abundance\s+'
+        abundance_regex = r"Abundance\s+\d+[NC]?"
+        channel_strip_regex = r"^Abundance\s+"
         sql = f"""
             COPY (
                 WITH raw AS (
@@ -767,7 +743,7 @@ class DataProcessor:
                     ON r._channel_label = m.channel
                 WHERE
                     {where_clause}
-            ) TO '{str(output_path).replace(chr(92), '/')}'
+            ) TO '{str(output_path).replace(chr(92), "/")}'
             (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
         """
 
@@ -794,7 +770,7 @@ class DataProcessor:
         try:
             num_conditions = con.execute(
                 f"""SELECT COUNT(DISTINCT "Condition")
-                   FROM read_parquet('{str(output_path).replace(chr(92), '/')}')"""
+                   FROM read_parquet('{str(output_path).replace(chr(92), "/")}')"""
             ).fetchone()[0]
         finally:
             con.close()

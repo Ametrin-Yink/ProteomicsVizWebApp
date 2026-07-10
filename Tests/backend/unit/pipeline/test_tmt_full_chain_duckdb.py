@@ -51,7 +51,9 @@ def _write_diff_expression_tsv(results_dir: Path, label: str) -> pd.DataFrame:
     return df
 
 
-_COMPARISONS = [{"group1": {"Condition": "DrugA_24h"}, "group2": {"Condition": "DMSO_24h"}}]
+_COMPARISONS = [
+    {"group1": {"Condition": "DrugA_24h"}, "group2": {"Condition": "DMSO_24h"}}
+]
 _COMPARISON_LABEL = "DrugA_24h_vs_DMSO_24h"
 
 
@@ -174,4 +176,3 @@ class TestTMTFullChainDuckDB:
         await step_qc_metrics(ctx)
         assert (results_dir / "QC_Results.json").exists()
         assert ctx.result.qc_results_path is not None
-

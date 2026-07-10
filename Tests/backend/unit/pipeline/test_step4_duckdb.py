@@ -4,6 +4,7 @@ Spec ref: Section 5.1 — single COPY query with WHERE filters.
 Edge cases: Quan_Info column optional (DIA files lack it),
 column names use underscores (spaces already replaced by DuckDB streaming).
 """
+
 import tempfile
 from pathlib import Path
 
@@ -29,14 +30,33 @@ class TestStep4DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "true", "Master_Protein_Accessions": "P1",
-                 "Quan_Info": "Valid", "Abundance": 1000.0, "Condition": "A", "Replicate": 1},
-                {"Sequence": "PEP2", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P2",
-                 "Quan_Info": "Valid", "Abundance": 2000.0, "Condition": "A", "Replicate": 1},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "true",
+                        "Master_Protein_Accessions": "P1",
+                        "Quan_Info": "Valid",
+                        "Abundance": 1000.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                    {
+                        "Sequence": "PEP2",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P2",
+                        "Quan_Info": "Valid",
+                        "Abundance": 2000.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig())
             processor.step4_remove_low_quality_duckdb(input_path, output_path)
@@ -50,14 +70,33 @@ class TestStep4DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1",
-                 "Quan_Info": "No Value", "Abundance": 1000.0, "Condition": "A", "Replicate": 1},
-                {"Sequence": "PEP2", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P2",
-                 "Quan_Info": "Valid", "Abundance": 2000.0, "Condition": "A", "Replicate": 1},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1",
+                        "Quan_Info": "No Value",
+                        "Abundance": 1000.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                    {
+                        "Sequence": "PEP2",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P2",
+                        "Quan_Info": "Valid",
+                        "Abundance": 2000.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig())
             processor.step4_remove_low_quality_duckdb(input_path, output_path)
@@ -71,14 +110,33 @@ class TestStep4DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1",
-                 "Quan_Info": "Valid", "Abundance": 0.5, "Condition": "A", "Replicate": 1},
-                {"Sequence": "PEP2", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P2",
-                 "Quan_Info": "Valid", "Abundance": 2000.0, "Condition": "A", "Replicate": 1},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1",
+                        "Quan_Info": "Valid",
+                        "Abundance": 0.5,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                    {
+                        "Sequence": "PEP2",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P2",
+                        "Quan_Info": "Valid",
+                        "Abundance": 2000.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig())
             processor.step4_remove_low_quality_duckdb(input_path, output_path)
@@ -96,16 +154,18 @@ class TestStep4DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            df = pd.DataFrame({
-                "Sequence": ["PEP1", "PEP2"],
-                "Modifications": ["", ""],
-                "Charge": [2, 2],
-                "Contaminant": ["false", "true"],
-                "Master_Protein_Accessions": ["P1", "P2"],
-                "Abundance": [1000.0, 2000.0],
-                "Condition": ["A", "A"],
-                "Replicate": [1, 1],
-            })
+            df = pd.DataFrame(
+                {
+                    "Sequence": ["PEP1", "PEP2"],
+                    "Modifications": ["", ""],
+                    "Charge": [2, 2],
+                    "Contaminant": ["false", "true"],
+                    "Master_Protein_Accessions": ["P1", "P2"],
+                    "Abundance": [1000.0, 2000.0],
+                    "Condition": ["A", "A"],
+                    "Replicate": [1, 1],
+                }
+            )
             df.to_parquet(input_path, engine="pyarrow", compression="zstd", index=False)
 
             processor = DataProcessor(ProcessingConfig())
@@ -120,14 +180,33 @@ class TestStep4DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1",
-                 "Quan_Info": "Valid", "Abundance": 100.0, "Condition": "A", "Replicate": 1},
-                {"Sequence": "PEP2", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P2",
-                 "Quan_Info": "Valid", "Abundance": 200.0, "Condition": "A", "Replicate": 1},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1",
+                        "Quan_Info": "Valid",
+                        "Abundance": 100.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                    {
+                        "Sequence": "PEP2",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P2",
+                        "Quan_Info": "Valid",
+                        "Abundance": 200.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig())
             processor.step4_remove_low_quality_duckdb(input_path, output_path)
@@ -141,11 +220,22 @@ class TestStep4DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1",
-                 "Quan_Info": "Valid", "Abundance": 100.0, "Condition": "A", "Replicate": 1},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1",
+                        "Quan_Info": "Valid",
+                        "Abundance": 100.0,
+                        "Condition": "A",
+                        "Replicate": 1,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig())
             processor.step4_remove_low_quality_duckdb(input_path, output_path)

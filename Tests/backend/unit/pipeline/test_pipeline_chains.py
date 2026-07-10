@@ -221,27 +221,27 @@ class TestColumnContractTMT:
         assert "time" in ctx.df.columns, "Missing condition group column: time"
 
         # Verify Sample_Origination format
-        assert (
-            ctx.df["Sample_Origination"].str.match(r".+_\d+").all()
-        ), "Sample_Origination should end with _<replicate>"
+        assert ctx.df["Sample_Origination"].str.match(r".+_\d+").all(), (
+            "Sample_Origination should end with _<replicate>"
+        )
 
         # Verify Abundance is numeric
-        assert pd.api.types.is_numeric_dtype(
-            ctx.df["Abundance"]
-        ), "Abundance must be numeric"
+        assert pd.api.types.is_numeric_dtype(ctx.df["Abundance"]), (
+            "Abundance must be numeric"
+        )
 
         # Verify Replicate is integer
-        assert pd.api.types.is_integer_dtype(
-            ctx.df["Replicate"]
-        ), "Replicate must be integer"
+        assert pd.api.types.is_integer_dtype(ctx.df["Replicate"]), (
+            "Replicate must be integer"
+        )
 
         # Verify no zero abundances
         assert (ctx.df["Abundance"] > 0).all(), "No zero abundances allowed"
 
         # Verify Unique_PSM format
-        assert (
-            ctx.df["Unique_PSM"].str.contains("|", regex=False).all()
-        ), "Unique_PSM must contain pipe separators"
+        assert ctx.df["Unique_PSM"].str.contains("|", regex=False).all(), (
+            "Unique_PSM must contain pipe separators"
+        )
 
 
 class TestColumnContractDIA:
@@ -286,8 +286,7 @@ class TestColumnContractDIA:
 
         await step_unique_psm(ctx)
         assert ctx.df is None, (
-            "Step 2 must keep ctx.df=None "
-            "(downstream steps 3-5 use DuckDB SQL)"
+            "Step 2 must keep ctx.df=None (downstream steps 3-5 use DuckDB SQL)"
         )
         # Load parquet for column contract verification
         ctx.df = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
@@ -305,17 +304,17 @@ class TestColumnContractDIA:
         assert "condition_2" in ctx.df.columns, "Missing group column: condition_2"
 
         # Verify Abundance and Replicate types
-        assert pd.api.types.is_numeric_dtype(
-            ctx.df["Abundance"]
-        ), "Abundance must be numeric"
-        assert pd.api.types.is_integer_dtype(
-            ctx.df["Replicate"]
-        ), "Replicate must be integer"
+        assert pd.api.types.is_numeric_dtype(ctx.df["Abundance"]), (
+            "Abundance must be numeric"
+        )
+        assert pd.api.types.is_integer_dtype(ctx.df["Replicate"]), (
+            "Replicate must be integer"
+        )
 
         # Verify Unique_PSM format
-        assert (
-            ctx.df["Unique_PSM"].str.contains("|", regex=False).all()
-        ), "Unique_PSM must contain pipe separators"
+        assert ctx.df["Unique_PSM"].str.contains("|", regex=False).all(), (
+            "Unique_PSM must contain pipe separators"
+        )
 
 
 # ── Python-only chain tests (shared steps 2-5) ─────────────────────────
@@ -357,9 +356,7 @@ class TestSharedChainSteps:
         await step_remove_low_quality_default(ctx)
         assert ctx.df is not None, "Step 4 must keep ctx.df"
         await step_filter_criteria_default(ctx)
-        assert ctx.psm_file_path.exists(), (
-            "Step 5 must write PSM_Abundances.parquet"
-        )
+        assert ctx.psm_file_path.exists(), "Step 5 must write PSM_Abundances.parquet"
 
     @pytest.mark.asyncio
     async def test_step_razor_removes_multi_protein(self, tmp_path):

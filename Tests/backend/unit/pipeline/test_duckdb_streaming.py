@@ -94,9 +94,9 @@ class TestDuckDBStreaming:
         )
 
         result = pd.read_parquet(output_path)
-        assert (
-            len(result) == 5
-        ), f"Expected 5 rows after contam filter, got {len(result)}"
+        assert len(result) == 5, (
+            f"Expected 5 rows after contam filter, got {len(result)}"
+        )
 
     def test_low_abundance_filter(self, tmp_path):
         """DuckDB correctly filters Abundance < 1 rows."""
@@ -126,9 +126,9 @@ class TestDuckDBStreaming:
         )
 
         result = pd.read_parquet(output_path)
-        assert (
-            len(result) == 7
-        ), f"Expected 7 rows after abundance filter, got {len(result)}"
+        assert len(result) == 7, (
+            f"Expected 7 rows after abundance filter, got {len(result)}"
+        )
         assert result["Abundance"].min() >= 1, "Found Abundance < 1"
 
     def test_dual_column_edge_case(self, tmp_path):
@@ -161,6 +161,6 @@ class TestDuckDBStreaming:
 
         result = pd.read_parquet(output_path)
         # COALESCE("Quan Value", Abundance) should prefer "Quan Value"
-        assert (
-            result["Abundance"].iloc[0] == 500.0
-        ), f"Expected COALESCE to prefer Quan Value (500), got {result['Abundance'].iloc[0]}"
+        assert result["Abundance"].iloc[0] == 500.0, (
+            f"Expected COALESCE to prefer Quan Value (500), got {result['Abundance'].iloc[0]}"
+        )

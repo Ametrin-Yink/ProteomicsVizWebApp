@@ -8,6 +8,7 @@ Phase 2 (DuckDB): apply mapping via JOIN + COPY TO.
 Edge cases: razor disabled (file copy), single-protein PSMs (unchanged),
 protein selection by peptide count, FASTA length tie-breaking.
 """
+
 import tempfile
 from pathlib import Path
 
@@ -34,12 +35,22 @@ class TestStep3DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1; P2",
-                 "Unique_PSM": "PEP1||2", "Condition": "A", "Replicate": 1,
-                 "Abundance": 100.0},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1; P2",
+                        "Unique_PSM": "PEP1||2",
+                        "Condition": "A",
+                        "Replicate": 1,
+                        "Abundance": 100.0,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig(remove_razor=False))
             processor.step3_remove_razor_duckdb(input_path, output_path)
@@ -56,24 +67,55 @@ class TestStep3DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1; P2",
-                 "Unique_PSM": "PEP1||2", "Condition": "A", "Replicate": 1,
-                 "Abundance": 100.0},
-                {"Sequence": "PEP2", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1",
-                 "Unique_PSM": "PEP2||2", "Condition": "A", "Replicate": 1,
-                 "Abundance": 200.0},
-                {"Sequence": "PEP3", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1",
-                 "Unique_PSM": "PEP3||2", "Condition": "A", "Replicate": 1,
-                 "Abundance": 300.0},
-                {"Sequence": "PEP4", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P2",
-                 "Unique_PSM": "PEP4||2", "Condition": "A", "Replicate": 1,
-                 "Abundance": 400.0},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1; P2",
+                        "Unique_PSM": "PEP1||2",
+                        "Condition": "A",
+                        "Replicate": 1,
+                        "Abundance": 100.0,
+                    },
+                    {
+                        "Sequence": "PEP2",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1",
+                        "Unique_PSM": "PEP2||2",
+                        "Condition": "A",
+                        "Replicate": 1,
+                        "Abundance": 200.0,
+                    },
+                    {
+                        "Sequence": "PEP3",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1",
+                        "Unique_PSM": "PEP3||2",
+                        "Condition": "A",
+                        "Replicate": 1,
+                        "Abundance": 300.0,
+                    },
+                    {
+                        "Sequence": "PEP4",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P2",
+                        "Unique_PSM": "PEP4||2",
+                        "Condition": "A",
+                        "Replicate": 1,
+                        "Abundance": 400.0,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig(remove_razor=True))
             processor.step3_remove_razor_duckdb(input_path, output_path)
@@ -89,12 +131,22 @@ class TestStep3DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P12345",
-                 "Unique_PSM": "PEP1||2", "Condition": "A", "Replicate": 1,
-                 "Abundance": 100.0},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P12345",
+                        "Unique_PSM": "PEP1||2",
+                        "Condition": "A",
+                        "Replicate": 1,
+                        "Abundance": 100.0,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig(remove_razor=True))
             processor.step3_remove_razor_duckdb(input_path, output_path)
@@ -110,21 +162,39 @@ class TestStep3DuckDB:
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.parquet"
             output_path = Path(tmp) / "output.parquet"
-            _write_test_parquet(input_path, [
-                {"Sequence": "PEP1", "Modifications": "", "Charge": 2,
-                 "Contaminant": "false", "Master_Protein_Accessions": "P1; P2",
-                 "Unique_PSM": "PEP1||2", "Quan_Info": "Valid",
-                 "Condition": "A", "Replicate": 1, "Abundance": 100.0},
-            ])
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Sequence": "PEP1",
+                        "Modifications": "",
+                        "Charge": 2,
+                        "Contaminant": "false",
+                        "Master_Protein_Accessions": "P1; P2",
+                        "Unique_PSM": "PEP1||2",
+                        "Quan_Info": "Valid",
+                        "Condition": "A",
+                        "Replicate": 1,
+                        "Abundance": 100.0,
+                    },
+                ],
+            )
 
             processor = DataProcessor(ProcessingConfig(remove_razor=True))
             processor.step3_remove_razor_duckdb(input_path, output_path)
 
             result = pd.read_parquet(output_path, engine="pyarrow")
             expected_cols = {
-                "Sequence", "Modifications", "Charge", "Contaminant",
-                "Master_Protein_Accessions", "Unique_PSM", "Quan_Info",
-                "Condition", "Replicate", "Abundance",
+                "Sequence",
+                "Modifications",
+                "Charge",
+                "Contaminant",
+                "Master_Protein_Accessions",
+                "Unique_PSM",
+                "Quan_Info",
+                "Condition",
+                "Replicate",
+                "Abundance",
             }
             assert expected_cols.issubset(set(result.columns)), (
                 f"Missing columns: {expected_cols - set(result.columns)}"

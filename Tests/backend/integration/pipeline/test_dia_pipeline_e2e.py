@@ -147,9 +147,9 @@ def dia_session():
 
     # 6. Wait for completion
     state = wait_for_completion(sid)
-    assert (
-        state == "completed"
-    ), f"Pipeline ended with state '{state}', expected 'completed'"
+    assert state == "completed", (
+        f"Pipeline ended with state '{state}', expected 'completed'"
+    )
 
     r = requests.get(f"{API}/{sid}")
     yield r.json()
@@ -194,9 +194,9 @@ class TestDIAPipelineE2E:
         # Verify the API returns the expected structure with a protein count.
         total = data.get("data", {}).get("total", 0)
         total_proteins = data.get("data", {}).get("total_proteins", 0)
-        assert (
-            isinstance(total, int) and isinstance(total_proteins, int)
-        ), f"Expected integer counts, got total={total}, total_proteins={total_proteins}"
+        assert isinstance(total, int) and isinstance(total_proteins, int), (
+            f"Expected integer counts, got total={total}, total_proteins={total_proteins}"
+        )
 
     def test_qc_metrics_available(self, dia_session):
         sid = dia_session["id"]

@@ -28,9 +28,9 @@ class TestPipelineComposition:
             "qc_metrics",
         ]
         actual_names = [s.name for s in pipeline.steps]
-        assert (
-            actual_names == expected_names
-        ), f"Expected {expected_names}, got {actual_names}"
+        assert actual_names == expected_names, (
+            f"Expected {expected_names}, got {actual_names}"
+        )
 
     def test_pipeline_composition_dia(self):
         """DIA_PROTEIN (msqrob2) has 8 steps in correct order."""
@@ -48,18 +48,18 @@ class TestPipelineComposition:
             "qc_metrics",
         ]
         actual_names = [s.name for s in pipeline.steps]
-        assert (
-            actual_names == expected_names
-        ), f"Expected {expected_names}, got {actual_names}"
+        assert actual_names == expected_names, (
+            f"Expected {expected_names}, got {actual_names}"
+        )
 
     def test_pipeline_step_numbering(self):
         """step.number matches list position (index + 1)."""
         for tool in [PipelineTool.MSQROB2, PipelineTool.MSSTATS]:
             pipeline = PIPELINES[tool]
             for i, step in enumerate(pipeline.steps, start=1):
-                assert (
-                    step.number == i
-                ), f"Pipeline '{tool}' step '{step.name}' should be #{i}, got #{step.number}"
+                assert step.number == i, (
+                    f"Pipeline '{tool}' step '{step.name}' should be #{i}, got #{step.number}"
+                )
 
     def test_pipeline_ptm_preserved(self):
         """PTM_PIPELINE has 4 steps preserved unchanged."""
@@ -136,20 +136,20 @@ class TestPipelineStepDetails:
     def test_all_steps_have_handlers(self):
         for tool, pipeline in PIPELINES.items():
             for step in pipeline.steps:
-                assert (
-                    step.handler is not None
-                ), f"Pipeline '{tool}' step '{step.name}' missing handler"
+                assert step.handler is not None, (
+                    f"Pipeline '{tool}' step '{step.name}' missing handler"
+                )
 
     def test_all_steps_have_display_names(self):
         for tool, pipeline in PIPELINES.items():
             for step in pipeline.steps:
-                assert (
-                    step.display_name
-                ), f"Pipeline '{tool}' step '{step.name}' missing display_name"
+                assert step.display_name, (
+                    f"Pipeline '{tool}' step '{step.name}' missing display_name"
+                )
 
     def test_step_names_are_unique_per_pipeline(self):
         for tool, pipeline in PIPELINES.items():
             names = [s.name for s in pipeline.steps]
-            assert len(names) == len(
-                set(names)
-            ), f"Pipeline '{tool}' has duplicate step names: {names}"
+            assert len(names) == len(set(names)), (
+                f"Pipeline '{tool}' has duplicate step names: {names}"
+            )

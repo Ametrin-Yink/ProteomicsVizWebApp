@@ -51,6 +51,4 @@ async def step_input_tmt(ctx: StepContext) -> None:
     ctx.step_outputs[ctx.current_step_number or 1] = psm_path
     ctx.step_outputs[2] = psm_path  # Step 2 also done (Unique_PSM inlined)
     ctx.result.total_psms = pq.ParquetFile(psm_path).metadata.num_rows
-    logger.info(
-        "TMT input complete (DuckDB): %d rows", ctx.result.total_psms
-    )
+    logger.info("TMT input complete (DuckDB): %d rows", ctx.result.total_psms)

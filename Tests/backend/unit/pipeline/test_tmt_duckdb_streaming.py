@@ -8,6 +8,7 @@ import pytest
 
 # ── Helpers ──
 
+
 def _write_tmt_csv(path: Path, extra_cols: dict | None = None) -> None:
     """Write a minimal TMT-style CSV with 2 abundance channels."""
     rows = [
@@ -18,9 +19,14 @@ def _write_tmt_csv(path: Path, extra_cols: dict | None = None) -> None:
         ["PEP003", "", "2", "False", "P00003", "Valid", "0.5", "800.0"],
     ]
     cols = [
-        "Sequence", "Modifications", "Charge", "Contaminant",
-        "Master Protein Accessions", "Quan Info",
-        "Abundance 126", "Abundance 127N",
+        "Sequence",
+        "Modifications",
+        "Charge",
+        "Contaminant",
+        "Master Protein Accessions",
+        "Quan Info",
+        "Abundance 126",
+        "Abundance 127N",
     ]
     if extra_cols:
         for col_name, values in extra_cols.items():
@@ -40,6 +46,7 @@ def _make_channel_mapping() -> dict:
 
 # ── Tests ──
 
+
 class TestTMTDuckDBStreaming:
     """DuckDB TMT streaming produces correct output."""
 
@@ -48,8 +55,11 @@ class TestTMTDuckDBStreaming:
         from app.services.data_processor import _detect_tmt_abundance_columns
 
         cols = [
-            "Sequence", "Modifications", "Abundance 126",
-            "Abundance 127N", "Master Protein Accessions",
+            "Sequence",
+            "Modifications",
+            "Abundance 126",
+            "Abundance 127N",
+            "Master Protein Accessions",
         ]
         detected = _detect_tmt_abundance_columns(cols)
         assert detected == ["Abundance 126", "Abundance 127N"]
@@ -96,8 +106,11 @@ class TestTMTDuckDBStreaming:
 
             result = pd.read_parquet(parquet_path, engine="pyarrow")
             required = [
-                "Abundance", "Sample_Origination", "Condition",
-                "Replicate", "Unique_PSM",
+                "Abundance",
+                "Sample_Origination",
+                "Condition",
+                "Replicate",
+                "Unique_PSM",
             ]
             for col in required:
                 assert col in result.columns, f"Missing required column: {col}"
@@ -118,9 +131,7 @@ class TestTMTDuckDBStreaming:
 
             result = pd.read_parquet(parquet_path, engine="pyarrow")
             # PEP002 has Contaminant=True — should be filtered out
-            contaminants = result[
-                result["Sequence"].astype(str).str.contains("PEP002")
-            ]
+            contaminants = result[result["Sequence"].astype(str).str.contains("PEP002")]
             assert len(contaminants) == 0, "Contaminant rows must be excluded"
 
     def test_no_value_filtered(self):
@@ -139,9 +150,7 @@ class TestTMTDuckDBStreaming:
 
             result = pd.read_parquet(parquet_path, engine="pyarrow")
             # PEP002 also has Quan_Info='No Value'
-            no_val_rows = result[
-                result["Sequence"].astype(str).str.contains("PEP002")
-            ]
+            no_val_rows = result[result["Sequence"].astype(str).str.contains("PEP002")]
             assert len(no_val_rows) == 0, "No Value rows must be excluded"
 
     def test_low_abundance_filtered(self):
@@ -181,9 +190,7 @@ class TestTMTDuckDBStreaming:
             )
 
             result = pd.read_parquet(parquet_path, engine="pyarrow")
-            pep001_rows = result[
-                result["Sequence"].astype(str).str.contains("PEP001")
-            ]
+            pep001_rows = result[result["Sequence"].astype(str).str.contains("PEP001")]
             assert len(pep001_rows) > 0
             for _, row in pep001_rows.iterrows():
                 assert "|" in row["Unique_PSM"], "Unique_PSM must contain pipes"
@@ -207,16 +214,12 @@ class TestTMTDuckDBStreaming:
 
             result = pd.read_parquet(parquet_path, engine="pyarrow")
             # PEP001: 2 channels, both valid → 2 rows
-            pep001 = result[
-                result["Sequence"].astype(str).str.contains("PEP001")
-            ]
+            pep001 = result[result["Sequence"].astype(str).str.contains("PEP001")]
             assert len(pep001) == 2, (
                 f"PEP001 should have 2 rows (2 channels), got {len(pep001)}"
             )
             # PEP003: channel 126 filtered (Abundance<1), channel 127N valid → 1 row
-            pep003 = result[
-                result["Sequence"].astype(str).str.contains("PEP003")
-            ]
+            pep003 = result[result["Sequence"].astype(str).str.contains("PEP003")]
             assert len(pep003) == 1, (
                 f"PEP003 should have 1 row (1 channel kept), got {len(pep003)}"
             )

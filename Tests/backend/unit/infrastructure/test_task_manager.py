@@ -202,9 +202,9 @@ async def test_get_status_shows_running_task():
             break
 
     tasks = tm.get_status("550e8400-e29b-41d4-a716-446655440001")["tasks"]
-    assert any(
-        t["kind"] == "compute" and t["status"] == "running" for t in tasks
-    ), f"Expected running task, got: {tasks}"
+    assert any(t["kind"] == "compute" and t["status"] == "running" for t in tasks), (
+        f"Expected running task, got: {tasks}"
+    )
 
     done.set()
     await task

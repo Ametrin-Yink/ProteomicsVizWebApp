@@ -4,6 +4,7 @@ Spec Section 6.1: ProcessingConfig stays unchanged — these tests
 are extracted from test_data_processor.py and test_data_processor_steps.py
 before those files are deleted.
 """
+
 from app.services.data_processor import ProcessingConfig
 
 
