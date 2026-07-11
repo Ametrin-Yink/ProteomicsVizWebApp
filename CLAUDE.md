@@ -89,10 +89,10 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 ```
 
 **Key Modules:**
-- `app/api/routes/` - 7 route modules (sessions, upload, analysis, processing, visualization, reports, compare)
+- `app/api/routes/` - 6 route modules (sessions, upload, processing, visualization, reports, compare)
 - `app/services/pipeline_engine.py` - Plugin-based step execution engine with PipelineState tracking
-- `app/services/pipeline_registry.py` - Pipeline definitions for both msqrob2 and MSstats tools
-- `app/services/steps/` - Individual step handlers (13 handler functions, each pipeline has its own step 1-2)
+- `app/services/pipeline_registry.py` - Pipeline definitions for msqrob2, MSstats, and PTM tools
+- `app/services/steps/` - Individual step handlers (15 handler files across inputs, shared, engines, and PTM)
 - `app/services/base_r_wrapper.py` - Template Method base class for R subprocess wrappers (shared by msqrob2/msstats)
 - `app/services/task_manager.py` - Thread-pool-isolated background computation with queuing (TaskKind: PIPELINE, GSEA, BIONET, COMPUTE, LIGHT)
 - `app/services/session_manager.py` - Centralized session lifecycle and scanning
@@ -153,12 +153,16 @@ backend/app/services/steps/
     ├── step_msqrob2_de.py         # msqrob2 contrasts
     ├── step_msstats_abundance.py   # dataProcess
     └── step_msstats_de.py          # groupComparison
+    # PTM handlers (at steps/ root):
+    #   ptm_step1_prepare.py, ptm_step2_summarization.py
+    #   ptm_step3_comparison.py, ptm_step4_qc.py
 ```
 
 **Pipeline → File Type Mapping (auto-derived):**
 - **TMT** → MSstats (8 steps): TMT multiplexed data with reporter ion channels
 - **DIA** → msqrob2 (8 steps): Label-free DIA data with single Quan_Value per PSM
-- User selects analysis type (TMT/DIA) up front; pipeline is auto-derived via `_derive_pipeline()` from `session.config.file_type`
+- **PTM** → MSstatsPTM (4 steps): PTM-specific pipeline with summarization and group comparison
+- User selects analysis type (TMT/DIA/PTM) up front; pipeline is auto-derived via `_derive_pipeline()` from `session.config.file_type`
 
 **Both pipelines are 8-step symmetric:**
 
@@ -172,6 +176,15 @@ backend/app/services/steps/
 | 6 | MSSTATS_ABUNDANCE (R) | MSQROB2_ABUNDANCE (R) |
 | 7 | MSSTATS_DE (R) | MSQROB2_DE (R) |
 | 8 | QC_METRICS (shared) | QC_METRICS (shared) |
+
+**PTM pipeline (4 steps):**
+
+| Step | PTM (MSstatsPTM) |
+|------|------------------|
+| 1 | PREPARE_PTM_DATA — PTM data preparation |
+| 2 | PTM_SUMMARIZATION — MSstatsPTM summarization (R) |
+| 3 | PTM_GROUP_COMPARISON — PTM group comparison (R) |
+| 4 | PTM_QC_METRICS — PTM QC metrics |
 
 **DIA optimized path (Steps 1-5, DuckDB-only):** Pure DuckDB SQL reading/writing Parquet on disk:
 - Steps 1-2: Single streaming DuckDB COPY query (CSV → Parquet with metadata join, Unique_PSM, contaminant/Quan_Info/Abundance<1 filters). Peak memory <500MB.
@@ -197,6 +210,8 @@ backend/app/services/steps/
 | `msstats_data_process.R` | 6 (MSstats) | MSstats protein abundance (DDARawData → OpenMStoMSstatsFormat → dataProcess) |
 | `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison (contrast matrix → groupComparison) |
 | `bionet_network.R` | on-demand | INDRA subnetwork analysis via MSstatsBioNet |
+| `ptm_summarization.R` | PTM 2 | MSstatsPTM summarization |
+| `ptm_group_comparison.R` | PTM 3 | PTM group comparison via MSstatsPTM |
 | `install_r_packages.R` | setup | Installs all R packages (at `backend/scripts/`) |
 
 **WebSocket for Real-Time Updates:**
@@ -207,7 +222,7 @@ backend/app/services/steps/
 - `Tests/backend/integration/pipeline/test_tmt_pipeline_e2e.py` — Full TMT pipeline (10k-row PD extract, 16-plex channels, 8 steps, 4 comparisons vs DMSO_24h)
 - `Tests/backend/unit/pipeline/test_pipeline_chains.py` — Chain tests with mocked R steps; column contract verification
 - `Tests/backend/unit/pipeline/test_pipeline_registry.py` — Composition, step ordering, positional numbering
-- `Tests/fixtures/` — PD data extracts: `tmt_sample_10000rows.txt` (TMT), `tmt_sample_1000rows.txt` (TMT), `dia_sample_1000rows.txt` (DIA)
+- `Tests/fixtures/` — PD data extracts: `tmt_sample_10000rows.txt` (TMT), `dia_sample_01_10000rows.txt` through `dia_sample_12_10000rows.txt` (DIA, 12 files)
 
 **Input File Formats (Proteome Discoverer exports only):**
 - **TMT:** Tab-delimited `.txt`, 78 columns, `Abundance 126` through `Abundance 134N` (16-plex). Channel detection pattern: `^"?Abundance\s+(\d+)([NC])?"?$`. Any plex size accepted (6, 10, 16, 18).
