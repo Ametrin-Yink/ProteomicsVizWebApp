@@ -24,7 +24,7 @@ class TestDetectDelimiter:
 
     def test_detect_delimiter_tab(self, test_data_dir: Path):
         """Detect tab delimiter from TMT fixture (tab-separated)."""
-        path = test_data_dir / "tmt_sample_1000rows.txt"
+        path = test_data_dir / "tmt_sample_10000rows.txt"
         result = detect_delimiter(path)
         assert result == "\t"
 
@@ -206,7 +206,7 @@ class TestReadFileColumns:
 
     def test_read_file_columns(self, test_data_dir: Path):
         """Read column names from TMT fixture."""
-        path = test_data_dir / "tmt_sample_1000rows.txt"
+        path = test_data_dir / "tmt_sample_10000rows.txt"
         columns = read_file_columns(path)
         assert len(columns) == 78
         assert "Sequence" in columns

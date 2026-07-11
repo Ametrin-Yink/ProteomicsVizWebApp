@@ -8,7 +8,7 @@ This module re-exports all step handler functions from their organized locations
 """
 
 # ── Shared utilities ────────────────────────────────────────────────────
-from ._helpers import create_log_callback, get_gene_mapping, get_psm_input, safe_log
+from ._helpers import create_log_callback, get_gene_mapping, get_psm_input
 
 # ── Engine-specific step handlers ───────────────────────────────────────
 from .engines.step_msqrob2_abundance import step_protein_abundance_msqrob2
@@ -37,7 +37,6 @@ __all__ = [
     "create_log_callback",
     "get_gene_mapping",
     "get_psm_input",
-    "safe_log",
     "step_filter_criteria_default",
     "step_input_dia",
     "step_input_tmt",

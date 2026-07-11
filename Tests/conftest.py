@@ -52,13 +52,13 @@ def test_data_dir() -> Path:
 @pytest.fixture
 def tmt_fixture_path() -> Path:
     """Return path to the TMT sample fixture file."""
-    return Path(__file__).parent / "fixtures" / "tmt_sample_1000rows.txt"
+    return Path(__file__).parent / "fixtures" / "tmt_sample_10000rows.txt"
 
 
 @pytest.fixture
 def dia_fixture_path() -> Path:
     """Return path to the DIA sample fixture file."""
-    return Path(__file__).parent / "fixtures" / "dia_sample_1000rows.txt"
+    return Path(__file__).parent / "fixtures" / "dia_sample_01_10000rows.txt"
 
 
 # Pytest hooks for custom reporting

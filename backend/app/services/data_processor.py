@@ -38,6 +38,11 @@ def _detect_tmt_abundance_columns(columns: list[str]) -> list[str]:
     return [col for col in columns if pattern.match(col)]
 
 
+def _sqlesc(s: str) -> str:
+    """Escape single quotes for SQL string literals."""
+    return str(s).replace("'", "''")
+
+
 @dataclass
 class ProcessingConfig:
     """Configuration for data processing."""
@@ -248,9 +253,6 @@ class DataProcessor:
                     )
 
             # Build mapping table
-            def _sqlesc(s):
-                return str(s).replace("'", "''")
-
             values_parts = [
                 f"('{_sqlesc(psm)}', '{_sqlesc(best)}')"
                 for psm, best in best_protein_map.items()
@@ -459,9 +461,6 @@ class DataProcessor:
             *group_cols,
         ]
 
-        def _sqlesc(s):
-            return s.replace("'", "''")
-
         # Build VALUES clause for metadata table
         values_parts = []
         for row in meta_rows:
@@ -645,9 +644,6 @@ class DataProcessor:
             raise ValueError("No condition group columns found in tmt_channel_mapping")
 
         # Build channel mapping VALUES clause
-        def _sqlesc(s):
-            return str(s).replace("'", "''")
-
         values_parts = []
         for channel, info in tmt_channel_mapping.items():
             condition = "_".join(str(info[c]) for c in group_cols)

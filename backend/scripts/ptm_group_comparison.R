@@ -39,7 +39,12 @@ if (length(args) < 4) {
 rds_file         <- args[1]
 output_dir       <- args[2]
 comparisons_json <- args[3]
-config_json      <- if (nzchar(args[4])) args[4] else "{}"
+# group_comparison_multi() inserts a gene_mapping_file placeholder
+# before config_json, so config may be at args[4] (direct call)
+# or args[5] (called via BaseRWrapper.group_comparison_multi).
+config_json      <- if (length(args) >= 5 && nzchar(args[5])) args[5]
+                    else if (nzchar(args[4])) args[4]
+                    else "{}"
 
 cat("[PTM Group Comparison] Arguments:\n")
 cat("  RDS file:", rds_file, "\n")

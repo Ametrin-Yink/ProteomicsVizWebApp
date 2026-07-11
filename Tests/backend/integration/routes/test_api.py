@@ -242,18 +242,18 @@ class TestFileUploadAPI:
         )
 
         # Upload file
-        file_path = test_data_dir / "tmt_sample_1000rows.txt"
+        file_path = test_data_dir / "tmt_sample_10000rows.txt"
         with open(file_path, "rb") as f:
             response = client.post(
                 f"/api/sessions/{session_id}/upload/proteomics",
-                files={"files": ("tmt_sample_1000rows.txt", f, "text/plain")},
+                files={"files": ("tmt_sample_10000rows.txt", f, "text/plain")},
             )
 
         assert response.status_code == 200
         data = response.json()
         assert "files" in data
         assert len(data["files"]) == 1
-        assert data["files"][0]["filename"] == "tmt_sample_1000rows.txt"
+        assert data["files"][0]["filename"] == "tmt_sample_10000rows.txt"
         assert "size" in data["files"][0]
         assert "columns" in data["files"][0]
         assert data["files"][0]["file_type"] == "tmt"
@@ -277,14 +277,14 @@ class TestFileUploadAPI:
         )
 
         # Upload multiple files
-        file1_path = test_data_dir / "tmt_sample_1000rows.txt"
+        file1_path = test_data_dir / "tmt_sample_10000rows.txt"
         file2_path = test_data_dir / "tmt_sample_10000rows.txt"
 
         with open(file1_path, "rb") as f1, open(file2_path, "rb") as f2:
             response = client.post(
                 f"/api/sessions/{session_id}/upload/proteomics",
                 files=[
-                    ("files", ("tmt_sample_1000rows.txt", f1, "text/plain")),
+                    ("files", ("tmt_sample_10000rows.txt", f1, "text/plain")),
                     ("files", ("tmt_sample_10000rows.txt", f2, "text/plain")),
                 ],
             )
@@ -319,12 +319,12 @@ class TestFileUploadAPI:
 
     def test_upload_file_session_not_found(self, client, test_data_dir):
         """Return 404 when uploading to non-existent session."""
-        file_path = test_data_dir / "tmt_sample_1000rows.txt"
+        file_path = test_data_dir / "tmt_sample_10000rows.txt"
 
         with open(file_path, "rb") as f:
             response = client.post(
                 "/api/sessions/non-existent-id/upload/proteomics",
-                files={"files": ("tmt_sample_1000rows.txt", f, "text/plain")},
+                files={"files": ("tmt_sample_10000rows.txt", f, "text/plain")},
             )
 
         assert response.status_code == 404

@@ -156,11 +156,3 @@ def get_pipeline(template: str) -> PipelineDefinition:
 def list_pipelines() -> dict[str, PipelineDefinition]:
     """Return all registered pipeline definitions."""
     return dict(PIPELINES)
-
-
-def reset_registry() -> None:
-    """Reset PIPELINES dict (no-op — PIPELINES is immutable).
-
-    Kept for backward compatibility with test fixtures.
-    """
-    pass

@@ -443,16 +443,22 @@ class BaseRWrapper(ABC):
         except subprocess.TimeoutExpired:
             process.kill()
             await asyncio.to_thread(process.wait)
-            stdout_thread.join(timeout=5)
-            stderr_thread.join(timeout=5)
             raise
         finally:
             self._current_process = None
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=1)
-
-        stdout_thread.join(timeout=30)
-        stderr_thread.join(timeout=30)
+            # Join reader threads on ALL exit paths.
+            # Non-TimeoutExpired exceptions (e.g. CancelledError)
+            # skip the except block and must not orphan threads.
+            if process.returncode is None:
+                try:
+                    process.kill()
+                    await asyncio.to_thread(process.wait)
+                except Exception:
+                    pass
+            stdout_thread.join(timeout=5)
+            stderr_thread.join(timeout=5)
 
         stdout_str = "\n".join(stdout_lines)
         stderr_str = "\n".join(stderr_lines)

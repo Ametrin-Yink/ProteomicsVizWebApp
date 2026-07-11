@@ -11,7 +11,7 @@ import pandas as pd
 
 from app.services.pipeline_engine import StepContext
 from app.services.ptm_wrapper import ptm_wrapper
-from app.services.steps._helpers import create_log_callback
+from app.services.steps._helpers import build_comparison_label, create_log_callback
 
 logger = logging.getLogger("proteomics")
 
@@ -68,13 +68,10 @@ async def step_ptm_group_comparison(ctx: StepContext) -> None:
     )
 
     # Parse output TSVs and store paths in step_outputs
-    def build_label(group: dict) -> str:
-        return "+".join(str(v) for v in group.values())
-
     de_paths: list = []
     total_sig = 0
     for comp in comparisons:
-        label = f"{build_label(comp['group1'])}_vs_{build_label(comp['group2'])}"
+        label = f"{build_comparison_label(comp['group1'])}_vs_{build_comparison_label(comp['group2'])}"
         de_file = output_dir / f"Diff_Expression_{label}.tsv"
         if de_file.exists():
             de_paths.append(de_file)

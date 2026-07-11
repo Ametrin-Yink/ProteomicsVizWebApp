@@ -12,23 +12,6 @@ from app.models.analysis import Organism
 logger = logging.getLogger("proteomics")
 
 
-async def safe_log(
-    callback: Callable | None,
-    level: str,
-    message: str,
-) -> None:
-    """Call a log callback safely, supporting both sync and async callbacks."""
-    if callback is None:
-        return
-    try:
-        if asyncio.iscoroutinefunction(callback):
-            await callback(level, message)
-        else:
-            callback(level, message)
-    except Exception:
-        pass
-
-
 def get_gene_mapping(organism: Organism | None) -> Path | None:
     """Get gene mapping file for organism."""
     if not organism or not settings.protein_database_dir:
@@ -45,6 +28,14 @@ def get_psm_input(ctx, step: int = 5) -> Path:
     if not ctx.psm_file_path:
         raise ProcessingError("PSM file not saved", step=step)
     return ctx.psm_file_path
+
+
+def build_comparison_label(group: dict) -> str:
+    """Build a comparison label from a group dict like {'Condition': 'Treated'}.
+
+    Used by DE step handlers to construct Diff_Expression_{label}.tsv filenames.
+    """
+    return "+".join(str(v) for v in group.values())
 
 
 def create_log_callback(ctx, step: int) -> Callable:

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.services.msstats_wrapper import msstats_wrapper
 from app.services.pipeline_engine import StepContext
 from app.services.steps._helpers import (
+    build_comparison_label,
     create_log_callback,
     get_gene_mapping,
 )
@@ -87,13 +88,10 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
             config=ctx.config,
         )
 
-    def build_label(group: dict) -> str:
-        return "+".join(str(v) for v in group.values())
-
     # Record the first comparison result as the primary diff_expression_path
     if comparisons:
         first = comparisons[0]
-        label = f"{build_label(first['group1'])}_vs_{build_label(first['group2'])}"
+        label = f"{build_comparison_label(first['group1'])}_vs_{build_comparison_label(first['group2'])}"
         ctx.result.diff_expression_path = str(
             ctx.results_dir / f"Diff_Expression_{label}.tsv"
         )
@@ -101,7 +99,7 @@ async def step_msstats_group_comparison(ctx: StepContext) -> None:
     # Count total significant proteins across all comparisons
     total_sig = 0
     for comp in comparisons:
-        label = f"{build_label(comp['group1'])}_vs_{build_label(comp['group2'])}"
+        label = f"{build_comparison_label(comp['group1'])}_vs_{build_comparison_label(comp['group2'])}"
         de_file = ctx.results_dir / f"Diff_Expression_{label}.tsv"
         if de_file.exists():
             de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
