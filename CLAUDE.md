@@ -197,7 +197,7 @@ backend/app/services/steps/
 | `msstats_data_process.R` | 6 (MSstats) | MSstats protein abundance (DDARawData → OpenMStoMSstatsFormat → dataProcess) |
 | `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison (contrast matrix → groupComparison) |
 | `bionet_network.R` | on-demand | INDRA subnetwork analysis via MSstatsBioNet |
-| `install_r_packages.R` | setup | Installs Bioconductor packages (at `scripts/setup/`) |
+| `install_r_packages.R` | setup | Installs all R packages (at `backend/scripts/`) |
 
 **WebSocket for Real-Time Updates:**
 - Frontend connects to `ws://localhost:8000/ws/sessions/{session_id}`

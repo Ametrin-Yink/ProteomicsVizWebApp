@@ -21,7 +21,7 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 ### 1. Install R Packages
 
 ```bash
-Rscript scripts/setup/install_r_packages.R
+Rscript backend/scripts/install_r_packages.R
 ```
 
 ### 2. Install Dependencies
@@ -102,7 +102,6 @@ ProteomicsVizWebApp/
 ├── backend/            # FastAPI server + R pipeline scripts
 ├── frontend/           # Next.js web application
 ├── Tests/              # All test files (unit + integration, organized by domain)
-├── scripts/setup/      # Setup scripts (R package installation)
 ├── AGENTS/             # Developer documentation
 └── docs/               # API specification + design specs
 ```
