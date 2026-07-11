@@ -84,7 +84,7 @@ function ComparisonsContent() {
   // --- Redirect guard ---
   React.useEffect(() => {
     if (!sessionId) { router.replace('/'); }
-    else if (!analysisType) { router.replace(`/new/type?session=${sessionId}`); }
+    else if (!analysisType) { router.replace('/'); }
     else if (uploadedFiles.length === 0) { router.replace(`/new/upload?session=${sessionId}`); }
   }, [sessionId, analysisType, uploadedFiles.length, router]);
 

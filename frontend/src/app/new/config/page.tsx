@@ -45,7 +45,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
     if (!sessionId) {
       router.replace('/');
     } else if (!analysisType) {
-      router.replace(`/new/type?session=${sessionId}`);
+      router.replace('/');
     }
   }, [sessionId, analysisType, router]);
 

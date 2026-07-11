@@ -64,7 +64,7 @@ function MetadataContentInner() {
       return;
     }
     if (!analysisType) {
-      router.replace(`/new/type?session=${sessionId}`);
+      router.replace('/');
       return;
     }
     // FR1.9: PTM redirects to Comparisons

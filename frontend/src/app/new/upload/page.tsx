@@ -310,7 +310,7 @@ function UploadContentInner() {
       addToast('error', 'No session found. Please start a new analysis.');
       router.push('/');
     } else if (!analysisType) {
-      router.replace(`/new/type?session=${sessionId}`);
+      router.replace('/');
     }
   }, [sessionId, analysisType, isRestoring, router, addToast]);
 
@@ -865,12 +865,12 @@ function UploadContentInner() {
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           data-testid="upload-back-btn"
-          onClick={() => router.push(`/new/type?session=${sessionId}`)}
+          onClick={() => router.push('/')}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-secondary
             hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Type
+          Back to Home
         </button>
 
         <button

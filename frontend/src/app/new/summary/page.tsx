@@ -67,7 +67,7 @@ function SummaryContent() {
 
   React.useEffect(() => {
     if (!sessionId) { router.replace('/'); }
-    else if (!analysisType) { router.replace(`/new/type?session=${sessionId}`); }
+    else if (!analysisType) { router.replace('/'); }
   }, [sessionId, analysisType, router]);
 
   // Derive data column names from metadata_columns
