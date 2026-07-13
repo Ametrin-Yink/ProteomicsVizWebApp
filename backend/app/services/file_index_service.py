@@ -97,11 +97,14 @@ class FileIndexService:
                 ext = fp.suffix.lstrip(".").lower()
                 if ext not in ("txt", "csv"):
                     continue
+                parent = str(Path(rel).parent)
+                if parent == ".":
+                    parent = ""
                 fs_paths[rel] = {
                     "name": fname,
                     "size": st.st_size,
                     "file_type": ext,
-                    "parent_path": str(Path(rel).parent),
+                    "parent_path": parent,
                     "modified_at": datetime.fromtimestamp(st.st_mtime),
                 }
 

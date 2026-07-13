@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import (
     compare,
+    files as files_routes,
     processing,
     reports,
     sessions,
@@ -227,6 +228,7 @@ app.include_router(visualization.router, prefix="/api/sessions", tags=["visualiz
 app.include_router(reports.router, prefix="/api/sessions", tags=["reports"])
 app.include_router(reports.global_router, prefix="/api", tags=["reports"])
 app.include_router(compare.router, prefix="/api/sessions", tags=["compare"])
+app.include_router(files_routes.router, prefix="/api/files", tags=["files"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 
 
