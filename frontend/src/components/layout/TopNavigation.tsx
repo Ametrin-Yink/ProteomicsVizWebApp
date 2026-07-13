@@ -15,6 +15,7 @@ import { useSidebar } from '@/components/layout/SidebarContext';
 
 const navLinks = [
   { href: '/', label: 'Home', id: 'home' },
+  { href: '/files', label: 'Files', id: 'files' },
   { href: '/reports', label: 'Reports', id: 'reports' },
   { href: '/about', label: 'About', id: 'about' },
 ];
