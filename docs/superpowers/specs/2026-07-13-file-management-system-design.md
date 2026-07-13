@@ -93,11 +93,17 @@ New file: `backend/app/services/file_index_service.py`
 
 ```python
 class FileIndexService:
-    """Manages the DuckDB index of the file library."""
+    """Manages the DuckDB index of the file library.
+
+    All write operations (scan, insert, update, delete) are guarded by
+    a threading.Lock. DuckDB allows concurrent readers but only one writer;
+    the lock prevents races between e.g. a page-load scan and an in-flight upload.
+    """
 
     def __init__(self, library_dir: Path):
         self.library_dir = library_dir
         self.db_path = library_dir / ".library_index.duckdb"
+        self._write_lock = threading.Lock()
         self._ensure_schema()  # CREATE TABLE IF NOT EXISTS on first use
 
     def scan_and_sync(self) -> ScanResult:
@@ -144,6 +150,7 @@ New router: `backend/app/api/routes/files.py`, mounted at `/api/files` in `main.
 | `DELETE` | `/delete` | `{path}` | `{deleted: path}` | Delete file/folder |
 | `POST` | `/scan` | — | `{total, added, removed, updated}` | Force re-scan |
 | `GET` | `/search?q=term` | — | `{results: [{name, path, type, size}]}` | Search by name |
+| `GET` | `/content?path=/DIA_Experiments/sample_01.txt` | — | Raw file bytes (text/plain) | Download file contents (for client-side parsing) |
 | `POST` | `/select` | `{session_id, paths: [...]}` | `{files: [{filename, size, columns, file_type, tmt_channels?}]}` | Copy files to session, parse, return metadata |
 
 ### 3.6 File Operations Detail
@@ -182,6 +189,14 @@ New router: `backend/app/api/routes/files.py`, mounted at `/api/files` in `main.
 5. Save session
 6. Return file metadata list
 
+**Get File Content (`/content`):**
+1. Validate path resolves inside library root (path traversal check)
+2. Reject if path is a folder (400) or doesn't exist (404)
+3. Reject if file > 10MB (400) — metadata CSVs are < 1KB; this endpoint is not for PSM data download
+4. Read file via `aiofiles` and return as `text/plain` response
+5. Used by metadata page to fetch CSV templates for client-side parsing
+6. Not needed for pipeline file selection — that uses `/select` which copies + parses server-side
+
 ### 3.7 Scan & Sync Strategy
 
 **When scans happen:**
@@ -191,7 +206,7 @@ New router: `backend/app/api/routes/files.py`, mounted at `/api/files` in `main.
 | Files page first loads | Frontend calls `POST /scan` (full sync), then `GET /tree` (read from index) |
 | User clicks Refresh | Frontend calls `POST /scan` (full sync), then `GET /tree` |
 | After any mutation (upload/rename/move/delete) | Index updated directly in the same request — no scan needed |
-| Navigating subfolders (`GET /tree`) | Read from index directly — no scan. Very fast. |
+| Navigating subfolders (`GET /tree`) | Read from index directly — no scan. Called per-folder on expand (lazy), not for entire tree. Sub-millisecond. |
 
 **Full scan logic (`POST /scan`):**
 
@@ -263,9 +278,10 @@ const navLinks = [
 - Drag files from desktop → uploads to current folder (`.txt`/`.csv` only)
 - Drag within tree → moves file/folder
 - Right-click → context menu
-- Search → filters file list by name substring as-you-type (calls `GET /search?q=`)
+- Search → filters file list by name substring, debounced 300ms (calls `GET /search?q=`)
 - Refresh → calls `POST /scan`, updates status bar
 - Multi-select → shift-click range, ctrl-click toggle; enabled bulk Delete
+- Folder tree → lazy-loaded: only top-level folders fetched on mount; children loaded per-folder on expand (`GET /tree?path=...`)
 
 **Loading State:** Skeleton table rows during initial scan. Status bar shows "Indexing..."
 
@@ -298,13 +314,16 @@ Modal version of the file explorer for selecting files within the wizard.
 **Behavior:**
 - Same folder tree + file list as Files page, with checkboxes
 - Dropdown filter: "All files", "CSV only", "TXT only"
-- Search narrows tree to matching folders
+- Search narrows tree to matching folders, debounced 300ms (same as Files page)
 - **Select All** — checks every visible file in filtered results
 - **Clear Selection** — unchecks every visible file
 - Selections persist across folder navigation (global selection set)
 - "Select" button disabled until ≥ 1 file chosen
-- On confirm → calls `POST /api/files/select` → copies files to session → calls `onSelect`
-- Copy progress shown with a spinner and "Copying N of M..."
+- On confirm → calls `onSelect(selectedPaths)` with the array of selected file paths. The picker itself does NOT call any endpoint — the parent decides:
+  - **Pipeline wizard parent:** calls `POST /api/files/select` (copies to session + parses server-side)
+  - **Metadata page parent:** calls `GET /api/files/content?path=...` for each CSV (fetches raw content, parses client-side)
+
+**Empty State:** If the library has no files (or no files matching the filter): "Your file library is empty. Upload .txt or .csv files from the Files page first." The Select button is disabled. If opened from the metadata page (CSV-only filter) and no CSVs exist: "No CSV files found in the library."
 
 ### 4.4 Modified Wizard — Upload Step
 
@@ -345,6 +364,7 @@ export const fileLibraryApi = {
   delete: (path: string) => api.delete(`/files/delete`, { data: { path } }),
   scan: () => api.post(`/files/scan`),
   search: (query: string) => api.get(`/files/search`, { params: { q: query } }),
+  getContent: (path: string) => api.get(`/files/content`, { params: { path }, responseType: 'text' }),
   selectForSession: (sessionId: string, paths: string[]) => api.post(`/files/select`, { session_id: sessionId, paths }),
 };
 ```
@@ -371,6 +391,8 @@ export const fileLibraryApi = {
 | Upload > 500MB | `413` | Toast: "File exceeds 500MB maximum." |
 | Upload 0-byte file | `400` | Toast: "File is empty." |
 | Unparseable file at select time | `422` | Toast: "X could not be parsed as a valid PSM file." File not added to session. |
+| Request file content for a folder | `400` | Toast: "Cannot download a folder as a file." |
+| Request file content > 10MB | `400` | Toast: "File too large to preview. Select it for a pipeline analysis instead." |
 
 ### 5.3 Folder Operations
 
@@ -463,7 +485,6 @@ export const fileLibraryApi = {
 | `frontend/src/components/files/FileLibraryToolbar.tsx` | Action toolbar |
 | `frontend/src/components/files/FileLibraryPicker.tsx` | Selection modal for wizard |
 | `frontend/src/components/files/ContextMenu.tsx` | Right-click context menu |
-| `frontend/src/lib/file-library-client.ts` | API client functions |
 
 ### Modified Files
 
@@ -501,6 +522,7 @@ export const fileLibraryApi = {
 - Cloud/object storage backends
 - Drag-and-drop upload in the wizard (replaced entirely)
 - Old `FileUploadZone` for TMT/DIA (removed)
+- PTM enrichment and global proteome files in the library (future enhancement — these are also CSV PSM data and could reuse the library, but are kept in-wizard for v1 to limit scope; FASTA stays wizard-only permanently per decision #5)
 
 ---
 
