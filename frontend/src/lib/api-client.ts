@@ -45,12 +45,93 @@ import type {
   PTMUploadResponse,
 } from '@/types/api';
 
+// ---- File Library Types ----
+
+export interface FileLibraryEntry {
+  name: string;
+  path: string;
+  type: 'txt' | 'csv' | 'folder';
+  size: number;
+  modified_at: string | null;
+}
+
+export interface SelectedFileInfo {
+  filename: string;
+  size: number;
+  columns: string[];
+  file_type: 'tmt' | 'dia';
+  tmt_channels?: string[];
+  has_quan_value?: boolean;
+}
+
 // Use empty base URL to go through Next.js proxy (avoids CORS)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const API_PREFIX = '/api';  // Backend routes are at /api
 
 // Helper to build API URLs
 const apiUrl = (path: string) => `${API_BASE_URL}${API_PREFIX}${path}`;
+
+/**
+ * Thin axios-like wrapper using fetch (no axios dependency).
+ * Methods return { data: T } to match the axios .data accessor pattern.
+ */
+const api = {
+  get: async <T>(url: string, config?: { responseType?: string; signal?: AbortSignal }): Promise<{ data: T }> => {
+    const response = await fetch(`${API_BASE_URL}${API_PREFIX}${url}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      signal: config?.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text);
+    }
+    if (config?.responseType === 'text') {
+      return { data: (await response.text()) as unknown as T };
+    }
+    return { data: (await response.json()) as T };
+  },
+
+  post: async <T>(url: string, data?: unknown, config?: { signal?: AbortSignal }): Promise<{ data: T }> => {
+    const response = await fetch(`${API_BASE_URL}${API_PREFIX}${url}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+      signal: config?.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text);
+    }
+    return { data: (await response.json()) as T };
+  },
+
+  put: async <T>(url: string, data?: unknown): Promise<{ data: T }> => {
+    const response = await fetch(`${API_BASE_URL}${API_PREFIX}${url}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text);
+    }
+    return { data: (await response.json()) as T };
+  },
+
+  delete: async <T>(url: string, config?: { data?: unknown }): Promise<{ data: T }> => {
+    const response = await fetch(`${API_BASE_URL}${API_PREFIX}${url}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: config?.data !== undefined ? JSON.stringify(config.data) : undefined,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text);
+    }
+    return { data: (await response.json()) as T };
+  },
+};
 
 // Backend session format (different from frontend Session type)
 interface BackendSession {
@@ -1046,4 +1127,61 @@ export const exportApi = {
     const response = await fetch(apiUrl(`/reports/${reportId}`), { method: 'DELETE' });
     return handleResponse<{ message: string }>(response);
   },
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  File Library API
+// ═══════════════════════════════════════════════════════════════════════
+
+export const fileLibraryApi = {
+  listDirectory: (path: string): Promise<{ path: string; entries: FileLibraryEntry[] }> =>
+    api.get(`/files/tree?path=${encodeURIComponent(path)}`).then(r => r.data),
+
+  createFolder: (parentPath: string, name: string): Promise<{ path: string; name: string }> =>
+    api.post(`/files/folders`, { parent_path: parentPath, name }).then(r => r.data),
+
+  upload: async (
+    files: File[],
+    targetPath: string,
+    _onProgress?: (pct: number) => void,
+  ): Promise<{ files: { name: string; size: number; type: string }[] }> => {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    const response = await fetch(
+      `${API_PREFIX}/files/upload?target_path=${encodeURIComponent(targetPath)}`,
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text);
+    }
+    return response.json();
+  },
+
+  rename: (path: string, newName: string): Promise<{ path: string; name: string }> =>
+    api.put(`/files/rename`, { path, new_name: newName }).then(r => r.data),
+
+  move: (sourcePath: string, targetParent: string): Promise<{ path: string; new_parent: string }> =>
+    api.put(`/files/move`, { source_path: sourcePath, target_parent: targetParent }).then(r => r.data),
+
+  delete: (path: string): Promise<{ deleted: string }> =>
+    api.delete(`/files/delete`, { data: { path } }).then(r => r.data),
+
+  scan: (): Promise<{ total: number; added: number; removed: number; updated: number }> =>
+    api.post(`/files/scan`).then(r => r.data),
+
+  search: (query: string): Promise<{ results: FileLibraryEntry[] }> =>
+    api.get(`/files/search?q=${encodeURIComponent(query)}`).then(r => r.data),
+
+  getContent: (path: string): Promise<string> =>
+    api.get(`/files/content?path=${encodeURIComponent(path)}`, { responseType: 'text' }).then(r => r.data),
+
+  selectForSession: (
+    sessionId: string,
+    paths: string[],
+  ): Promise<{ files: SelectedFileInfo[] }> =>
+    api.post(`/files/select`, { session_id: sessionId, paths }).then(r => r.data),
 };
