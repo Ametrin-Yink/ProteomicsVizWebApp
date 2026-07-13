@@ -2294,6 +2294,10 @@ interface FileListProps {
   onClearSelection: () => void;
   onNavigate: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, path: string, name: string) => void;
+  sortBy: 'name' | 'size' | 'modified' | null;
+  sortOrder: 'asc' | 'desc';
+  onSort: (column: 'name' | 'size' | 'modified') => void;
+  filterType: 'all' | 'txt' | 'csv';
 }
 
 function formatSize(bytes: number): string {
@@ -2336,9 +2340,25 @@ export const FileList: React.FC<FileListProps> = ({
   onClearSelection,
   onNavigate,
   onContextMenu,
+  sortBy,
+  sortOrder,
+  onSort,
+  filterType,
 }) => {
-  const allSelected = entries.length > 0 && entries.every(e => selectedPaths.has(e.path));
-  const someSelected = entries.some(e => selectedPaths.has(e.path));
+  // Filter by type, then check allSelected against filtered entries
+  const displayed = entries
+    .filter(e => {
+      if (filterType === 'all' || e.type === 'folder') return true;
+      return e.type === filterType;
+    });
+
+  const allSelected = displayed.length > 0 && displayed.every(e => selectedPaths.has(e.path));
+  const someSelected = displayed.some(e => selectedPaths.has(e.path));
+
+  const sortIndicator = (col: string): string => {
+    if (sortBy !== col) return '';
+    return sortOrder === 'asc' ? ' ▲' : ' ▼';
+  };
 
   // Breadcrumb segments
   const segments = currentPath ? currentPath.split('/') : [];
@@ -2402,13 +2422,19 @@ export const FileList: React.FC<FileListProps> = ({
                   className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
                 />
               </th>
-              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase">Name</th>
-              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-24">Size</th>
-              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-44">Modified</th>
+              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase cursor-pointer select-none hover:text-text" onClick={() => onSort('name')}>
+                Name{sortIndicator('name')}
+              </th>
+              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-24 cursor-pointer select-none hover:text-text" onClick={() => onSort('size')}>
+                Size{sortIndicator('size')}
+              </th>
+              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-44 cursor-pointer select-none hover:text-text" onClick={() => onSort('modified')}>
+                Modified{sortIndicator('modified')}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {entries.map(entry => {
+            {displayed.map(entry => {
               const isSelected = selectedPaths.has(entry.path);
               return (
                 <tr
@@ -2455,7 +2481,7 @@ export const FileList: React.FC<FileListProps> = ({
                 </tr>
               );
             })}
-            {entries.length === 0 && (
+            {displayed.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-12 text-center text-sm text-text-muted">
                   This folder is empty.
@@ -2472,12 +2498,224 @@ export const FileList: React.FC<FileListProps> = ({
 export default FileList;
 ```
 
-- [ ] **Step 5: Wire components into FileLibraryPage**
+- [ ] **Step 5: Wire components and handler functions into FileLibraryPage**
 
-Replace the placeholder sections in `FileLibraryPage.tsx` with real components. The key changes:
+Replace the entire FileLibraryPage.tsx with the full wired version. Add these new state variables at the top of the component:
 
 ```typescript
-// Replace the toolbar placeholder with:
+// Additional state in FileLibraryPage
+const [uploading, setUploading] = useState(false);
+const [searchResults, setSearchResults] = useState<FileLibraryEntry[] | null>(null);
+const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+const [contextMenu, setContextMenu] = useState<{
+  x: number; y: number; items: ContextMenuItem[];
+} | null>(null);
+const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
+const [moveTarget, setMoveTarget] = useState<string | null>(null);
+const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | null>(null);
+const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+const [filterType, setFilterType] = useState<'all' | 'txt' | 'csv'>('all');
+```
+
+Add all handler functions before the render return:
+
+```typescript
+// ---- Handlers ----
+
+const handleCreateFolder = useCallback(async () => {
+  const name = window.prompt('Folder name:');
+  if (!name || !name.trim()) return;
+  try {
+    await fileLibraryApi.createFolder(currentPath, name.trim());
+    addToast('success', `Folder '${name.trim()}' created`);
+    loadLibrary();
+  } catch (err) {
+    addToast('error', `Failed to create folder: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+}, [currentPath, addToast, loadLibrary]);
+
+const handleUpload = useCallback(async (fileList: FileList) => {
+  const files = Array.from(fileList);
+  if (files.length === 0) return;
+  setUploading(true);
+  try {
+    const result = await fileLibraryApi.upload(files, currentPath);
+    addToast('success', `Uploaded ${result.files.length} file(s)`);
+    loadLibrary();
+  } catch (err) {
+    addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    setUploading(false);
+  }
+}, [currentPath, addToast, loadLibrary]);
+
+const handleDelete = useCallback(async () => {
+  if (selectedPaths.size === 0) return;
+  const count = selectedPaths.size;
+  const isFolder = Array.from(selectedPaths).some(p => {
+    const e = entries.find(en => en.path === p);
+    return e?.type === 'folder';
+  });
+  const msg = isFolder
+    ? `Delete ${count} item(s) including folders and all contents?`
+    : `Delete ${count} file(s)?`;
+  if (!window.confirm(msg)) return;
+  try {
+    for (const path of selectedPaths) {
+      await fileLibraryApi.delete(path);
+    }
+    addToast('success', `Deleted ${count} item(s)`);
+    setSelectedPaths(new Set());
+    loadLibrary();
+  } catch (err) {
+    addToast('error', `Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+}, [selectedPaths, entries, addToast, loadLibrary]);
+
+const handleRename = useCallback(() => {
+  if (selectedPaths.size !== 1) return;
+  const path = Array.from(selectedPaths)[0];
+  const entry = entries.find(e => e.path === path);
+  if (!entry) return;
+  const newName = window.prompt('New name:', entry.name);
+  if (!newName || !newName.trim() || newName.trim() === entry.name) return;
+  try {
+    await fileLibraryApi.rename(path, newName.trim());
+    addToast('success', `Renamed to '${newName.trim()}'`);
+    setSelectedPaths(new Set());
+    loadLibrary();
+  } catch (err) {
+    addToast('error', `Rename failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+}, [selectedPaths, entries, addToast, loadLibrary]);
+
+const handleMove = useCallback(() => {
+  if (selectedPaths.size === 0) return;
+  // Simple prompt for target folder path
+  const target = window.prompt('Move to folder (blank = root, or type folder path):', '');
+  if (target === null) return; // cancelled
+  const targetParent = (target || '').trim();
+  const doMove = async () => {
+    try {
+      let moved = 0;
+      for (const path of selectedPaths) {
+        await fileLibraryApi.move(path, targetParent);
+        moved++;
+      }
+      addToast('success', `Moved ${moved} item(s)`);
+      setSelectedPaths(new Set());
+      loadLibrary();
+    } catch (err) {
+      addToast('error', `Move failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+  doMove();
+}, [selectedPaths, addToast, loadLibrary]);
+
+// Debounced search — 300ms per spec
+const handleSearchChange = useCallback((query: string) => {
+  setSearchQuery(query);
+  if (searchTimer) clearTimeout(searchTimer);
+  if (!query.trim()) {
+    setSearchResults(null);
+    return;
+  }
+  const timer = setTimeout(async () => {
+    try {
+      const data = await fileLibraryApi.search(query);
+      setSearchResults(data.results);
+    } catch {
+      // search failed silently
+    }
+  }, 300);
+  setSearchTimer(timer);
+}, [searchTimer]);
+
+const handleToggleSelect = useCallback((path: string) => {
+  setSelectedPaths(prev => {
+    const next = new Set(prev);
+    if (next.has(path)) next.delete(path); else next.add(path);
+    return next;
+  });
+}, []);
+
+const handleSelectAll = useCallback(() => {
+  setSelectedPaths(prev => {
+    const next = new Set(prev);
+    for (const e of (searchResults ?? entries)) {
+      if (e.type !== 'folder') next.add(e.path);
+    }
+    return next;
+  });
+}, [searchResults, entries]);
+
+// ---- Context menu handlers ----
+
+const handleFileContextMenu = useCallback((e: React.MouseEvent, path: string, name: string) => {
+  e.preventDefault();
+  setContextMenu({
+    x: e.clientX, y: e.clientY,
+    items: [
+      { label: 'Rename', action: () => { setSelectedPaths(new Set([path])); setRenameTarget({ path, name }); } },
+      { label: 'Move...', action: () => { setSelectedPaths(new Set([path])); setMoveTarget(path); } },
+      { label: 'Delete', action: async () => {
+        if (!window.confirm(`Delete '${name}'?`)) return;
+        await fileLibraryApi.delete(path);
+        addToast('success', `Deleted '${name}'`);
+        loadLibrary();
+      }, danger: true },
+      { label: 'Copy Path', action: () => { navigator.clipboard.writeText(path); addToast('info', 'Path copied'); } },
+    ],
+  });
+}, [addToast, loadLibrary]);
+
+const handleFolderContextMenu = useCallback((e: React.MouseEvent, path: string, name: string) => {
+  e.preventDefault();
+  setContextMenu({
+    x: e.clientX, y: e.clientY,
+    items: [
+      { label: 'Rename', action: () => setRenameTarget({ path, name }) },
+      { label: 'Delete', action: async () => {
+        if (!window.confirm(`Delete folder '${name}' and all contents?`)) return;
+        await fileLibraryApi.delete(path);
+        addToast('success', `Deleted folder '${name}'`);
+        loadLibrary();
+      }, danger: true },
+    ],
+  });
+}, [addToast, loadLibrary]);
+
+// ---- Sorting ----
+
+const handleSort = useCallback((column: 'name' | 'size' | 'modified') => {
+  setSortBy(prev => {
+    if (prev === column) {
+      setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+      return column;
+    }
+    setSortOrder('asc');
+    return column;
+  });
+}, []);
+
+// Sort entries based on sortBy/sortOrder
+const sortedEntries = useMemo(() => {
+  const list = searchResults ?? entries;
+  if (!sortBy) return list;
+  return [...list].sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
+    else if (sortBy === 'size') cmp = a.size - b.size;
+    else if (sortBy === 'modified') cmp = (a.modified_at || '').localeCompare(b.modified_at || '');
+    return sortOrder === 'asc' ? cmp : -cmp;
+  });
+}, [entries, searchResults, sortBy, sortOrder]);
+```
+
+Replace the placeholder sections in render with:
+
+```typescript
+{/* Toolbar with file type filter */}
 <FileLibraryToolbar
   onCreateFolder={handleCreateFolder}
   onUpload={handleUpload}
@@ -2490,27 +2728,63 @@ Replace the placeholder sections in `FileLibraryPage.tsx` with real components. 
   uploading={uploading}
 />
 
-// Replace the folder tree placeholder with:
-<FolderTree
-  currentPath={currentPath}
-  onNavigate={handleNavigate}
-  onContextMenu={handleFolderContextMenu}
-/>
+{/* File type filter bar */}
+<div className="flex items-center gap-3 px-4 py-1.5 border-b border-border bg-surface/50 text-xs">
+  <span className="text-text-muted">Show:</span>
+  {(['all', 'txt', 'csv'] as const).map(t => (
+    <button
+      key={t}
+      onClick={() => setFilterType(t)}
+      className={cn(
+        'px-2.5 py-0.5 rounded-full border transition-colors',
+        filterType === t
+          ? 'border-primary bg-primary/10 text-primary font-medium'
+          : 'border-border text-text-muted hover:border-text-muted',
+      )}
+    >
+      {t === 'all' ? 'All Files' : t.toUpperCase()}
+    </button>
+  ))}
+</div>
 
-// Replace the file list placeholder with:
-<FileList
-  entries={displayedEntries}
-  currentPath={currentPath}
-  selectedPaths={selectedPaths}
-  onToggleSelect={handleToggleSelect}
-  onSelectAll={handleSelectAll}
-  onClearSelection={() => setSelectedPaths(new Set())}
-  onNavigate={handleNavigate}
-  onContextMenu={handleFileContextMenu}
-/>
+<div className="flex-1 flex overflow-hidden">
+  <div className="w-72 border-r border-border bg-surface/50 overflow-y-auto">
+    <FolderTree
+      currentPath={currentPath}
+      onNavigate={handleNavigate}
+      onContextMenu={handleFolderContextMenu}
+    />
+  </div>
+  <div className="flex-1 overflow-hidden">
+    <FileList
+      entries={sortedEntries}
+      currentPath={currentPath}
+      selectedPaths={selectedPaths}
+      onToggleSelect={handleToggleSelect}
+      onSelectAll={handleSelectAll}
+      onClearSelection={() => setSelectedPaths(new Set())}
+      onNavigate={handleNavigate}
+      onContextMenu={handleFileContextMenu}
+      sortBy={sortBy}
+      sortOrder={sortOrder}
+      onSort={handleSort}
+      filterType={filterType}
+    />
+  </div>
+</div>
+
+{/* Context menu */}
+{contextMenu && (
+  <ContextMenu
+    x={contextMenu.x}
+    y={contextMenu.y}
+    items={contextMenu.items}
+    onClose={() => setContextMenu(null)}
+  />
+)}
 ```
 
-Add the handler functions and state for `uploading`, `searchResults`, `contextMenu`, `renameTarget`, etc. These are standard React state management — full implementation details follow from the component interfaces above.
+Also update the `loadLibrary` dependency in the `useCallback` — remove `currentPath` from deps and instead call `fileLibraryApi.listDirectory(currentPath)` inside with the captured path variable. Add `useMemo` import at top of file.
 
 - [ ] **Step 6: Verify the full file explorer works**
 
@@ -2555,7 +2829,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Produces: Modified upload page — renders "Browse File Library" button instead of FileUploadZone for TMT/DIA
 - Produces: Modified metadata page — renders "Import from Library" button
 
-- [ ] **Step 1: Create FileLibraryPicker**
+- [ ] **Step 1: Create FileLibraryPicker (reuses FolderTree from Task 6)**
 
 ```typescript
 // frontend/src/components/files/FileLibraryPicker.tsx
@@ -2566,6 +2840,7 @@ import { X, Loader2, Search, FolderOpen } from 'lucide-react';
 import { fileLibraryApi, FileLibraryEntry } from '@/lib/api-client';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
+import { FolderTree } from '@/components/files/FolderTree';
 
 interface FileLibraryPickerProps {
   sessionId: string;
@@ -2587,9 +2862,11 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const [entries, setEntries] = useState<FileLibraryEntry[]>([]);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
+  const [copyProgress, setCopyProgress] = useState({ current: 0, total: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileLibraryEntry[] | null>(null);
   const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [pickerFilter, setPickerFilter] = useState<'all' | 'txt' | 'csv'>('all');
 
   // Load directory on mount and on path change
   const loadDirectory = useCallback(async (path: string) => {
@@ -2611,7 +2888,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
     loadDirectory(currentPath);
   }, [currentPath, loadDirectory]);
 
-  // Debounced search
+  // Debounced search — 300ms
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
     if (searchTimer) clearTimeout(searchTimer);
@@ -2633,7 +2910,14 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
     setSearchTimer(timer);
   }, [fileType, searchTimer]);
 
-  const displayedEntries = searchResults ?? entries;
+  // Apply picker-level file type filter on top of search results or directory entries
+  const displayedEntries = useMemo(() => {
+    const source = searchResults ?? entries;
+    return source.filter(e => {
+      if (pickerFilter === 'all' || e.type === 'folder') return true;
+      return e.type === pickerFilter;
+    });
+  }, [searchResults, entries, pickerFilter]);
 
   const handleToggleSelect = (path: string) => {
     const next = new Set(selectedPaths);
@@ -2651,7 +2935,6 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   };
 
   const handleClearSelection = () => {
-    // Only clear visible entries
     const next = new Set(selectedPaths);
     for (const e of displayedEntries) {
       next.delete(e.path);
@@ -2673,6 +2956,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
     if (paths.length === 0) return;
 
     setCopying(true);
+    setCopyProgress({ current: 0, total: paths.length });
     try {
       if (fileType === 'csv-only') {
         // Metadata mode: just pass paths back, parent fetches content
@@ -2680,7 +2964,6 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
       } else {
         // Pipeline mode: copy to session + parse
         const result = await fileLibraryApi.selectForSession(sessionId, paths);
-        // Pass selected file info back via paths (parent handles the file metadata via API response)
         onSelect(paths);
       }
     } catch (err) {
@@ -2707,9 +2990,32 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
           </button>
         </div>
 
-        {/* Search bar */}
-        <div className="px-4 py-2 border-b border-border bg-surface/50">
-          <div className="relative">
+        {/* Filter bar: file type dropdown + search */}
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-surface/50">
+          {/* File type filter dropdown */}
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-text-muted">Show:</span>
+            {(['all', 'txt', 'csv'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setPickerFilter(t)}
+                disabled={fileType === 'csv-only' && t !== 'csv' && t !== 'all'}
+                className={cn(
+                  'px-2 py-0.5 rounded-full border transition-colors',
+                  pickerFilter === t
+                    ? 'border-primary bg-primary/10 text-primary font-medium'
+                    : 'border-border text-text-muted hover:border-text-muted',
+                  fileType === 'csv-only' && t === 'txt' && 'opacity-30 cursor-not-allowed',
+                )}
+              >
+                {t === 'all' ? 'All Files' : t.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          {/* Spacer */}
+          <div className="flex-1" />
+          {/* Search */}
+          <div className="relative w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
             <input
               type="text"
@@ -2721,30 +3027,22 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
           </div>
         </div>
 
-        {/* Body */}
+        {/* Body: folder tree + file list */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Folder tree */}
-          <div className="w-56 border-r border-border overflow-y-auto bg-surface/30 p-2">
+          {/* Folder tree — reuses component from Task 6 */}
+          <div className="w-56 border-r border-border overflow-y-auto bg-surface/30">
             {searchQuery ? (
               <p className="text-xs text-text-muted p-2">Search active — showing all matching files</p>
             ) : (
-              <div className="text-xs text-text-muted p-2">
-                {/* Simplified folder tree for picker; reuses FolderTree logic inline */}
-                <button
-                  onClick={() => setCurrentPath('')}
-                  className={cn(
-                    'block w-full text-left px-2 py-1 rounded text-sm',
-                    currentPath === '' ? 'bg-primary/10 text-primary font-medium' : 'text-text-secondary hover:bg-surface',
-                  )}
-                >
-                  📁 All Files
-                </button>
-                {/* For full implementation: import FolderTree and pass onNavigate */}
-              </div>
+              <FolderTree
+                currentPath={currentPath}
+                onNavigate={setCurrentPath}
+                onContextMenu={() => {}} // no context menu in picker
+              />
             )}
           </div>
 
-          {/* File list */}
+          {/* File list (checkboxes for selection) */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-20">
@@ -2754,9 +3052,11 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
               <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
                 <FolderOpen className="w-10 h-10 text-text-muted" />
                 <p className="text-sm text-text-muted">
-                  {fileType === 'csv-only'
-                    ? 'No CSV files found in the library.'
-                    : 'Your file library is empty. Upload .txt or .csv files from the Files page first.'}
+                  {searchQuery
+                    ? `No files matching '${searchQuery}'`
+                    : fileType === 'csv-only'
+                      ? 'No CSV files found in the library.'
+                      : 'Your file library is empty. Upload .txt or .csv files from the Files page first.'}
                 </p>
               </div>
             ) : (
@@ -2766,9 +3066,11 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
                     <th className="w-10 px-3 py-2">
                       <input
                         type="checkbox"
-                        checked={displayedEntries.length > 0 && displayedEntries.every(e => selectedPaths.has(e.path))}
+                        checked={displayedEntries.filter(e => e.type !== 'folder').length > 0
+                          && displayedEntries.filter(e => e.type !== 'folder').every(e => selectedPaths.has(e.path))}
                         onChange={() => {
-                          if (displayedEntries.every(e => selectedPaths.has(e.path))) {
+                          const files = displayedEntries.filter(e => e.type !== 'folder');
+                          if (files.every(e => selectedPaths.has(e.path))) {
                             handleClearSelection();
                           } else {
                             handleSelectAll();
@@ -2815,19 +3117,9 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-surface/50">
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleSelectAll}
-              className="text-xs text-primary hover:underline"
-            >
-              Select All
-            </button>
+            <button onClick={handleSelectAll} className="text-xs text-primary hover:underline">Select All</button>
             <span className="text-text-muted text-xs">·</span>
-            <button
-              onClick={handleClearSelection}
-              className="text-xs text-primary hover:underline"
-            >
-              Clear Selection
-            </button>
+            <button onClick={handleClearSelection} className="text-xs text-primary hover:underline">Clear Selection</button>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-text-muted">
@@ -2848,10 +3140,10 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
               {copying ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Copying...
+                  Copying {copyProgress.current}/{copyProgress.total}...
                 </>
               ) : (
-                'Select'
+                `Select (${selectedPaths.size})`
               )}
             </button>
           </div>
