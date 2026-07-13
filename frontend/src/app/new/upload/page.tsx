@@ -7,9 +7,9 @@
 
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3, Tag, FlaskConical, AlertCircle, FileText, Plus, Minus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3, Tag, FlaskConical, AlertCircle, FileText, Plus, Minus, X, FolderOpen } from 'lucide-react';
 import type { UploadedFileInfo } from '@/types';
-import FileUploadZone from '@/components/analysis/FileUploadZone';
+import { FileLibraryPicker } from '@/components/files/FileLibraryPicker';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
 import { useAnalysisStore, getValidation } from '@/stores/analysis-store';
@@ -33,6 +33,7 @@ function UploadContentInner() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
+  const [showPicker, setShowPicker] = useState(false);
 
   // Reset analysis store when session changes — prevents stale file/config leakage
   useEffect(() => {
@@ -385,7 +386,45 @@ function UploadContentInner() {
               </div>
             </div>
             <div className="p-5">
-              <FileUploadZone sessionId={sessionId} />
+              <button
+                data-testid="browse-library-btn"
+                onClick={() => setShowPicker(true)}
+                className="inline-flex items-center gap-2 px-6 py-4 border-2 border-dashed border-primary/40 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors"
+              >
+                <FolderOpen className="w-6 h-6 text-primary" />
+                <div className="text-left">
+                  <p className="text-base font-medium text-text">Browse File Library</p>
+                  <p className="text-sm text-text-muted">Select .txt or .csv PSM files</p>
+                </div>
+              </button>
+
+              {uploadedFiles.length > 0 && (
+                <p className="mt-3 text-sm text-text-muted">
+                  {uploadedFiles.length} files selected · {(uploadedFiles.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(1)} MB total
+                </p>
+              )}
+
+              {showPicker && (
+                <FileLibraryPicker
+                  sessionId={sessionId}
+                  fileType={analysisType as 'tmt' | 'dia'}
+                  onSelect={async (_paths) => {
+                    setShowPicker(false);
+                    // paths were already copied to session by the picker
+                    // Reload session files to get parsed metadata
+                    const resp = await fetch(`/api/sessions/${sessionId}`);
+                    if (resp.ok) {
+                      const raw = await resp.json();
+                      const files = mapBackendFiles(raw.files);
+                      const { addUploadedFile } = useAnalysisStore.getState();
+                      for (const file of files) {
+                        addUploadedFile(file);
+                      }
+                    }
+                  }}
+                  onClose={() => setShowPicker(false)}
+                />
+              )}
             </div>
           </section>
 

@@ -12,12 +12,14 @@ import React, { useEffect, useState, useRef, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Loader2, BarChart3, Dna, CheckCircle,
-  AlertCircle, ChevronDown, ChevronRight,
+  AlertCircle, ChevronDown, ChevronRight, FolderOpen,
 } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi } from '@/lib/api-client';
+import { sessionsApi, fileLibraryApi } from '@/lib/api-client';
+import { parseCSVLine } from '@/lib/csv';
 import { cn } from '@/lib/utils';
+import { FileLibraryPicker } from '@/components/files/FileLibraryPicker';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import TmtChannelMapping from '@/components/analysis/TmtChannelMapping';
 import DiaMetadataTable from '@/components/analysis/DiaMetadataTable';
@@ -37,6 +39,10 @@ function MetadataContentInner() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [showMetadataPicker, setShowMetadataPicker] = useState(false);
+
+  const importChannelMapping = useAnalysisStore((s) => s.importChannelMapping);
+  const importMetadataColumns = useAnalysisStore((s) => s.importMetadataColumns);
 
   const resetAnalysis = useAnalysisStore((s) => s.reset);
 
@@ -304,6 +310,14 @@ function MetadataContentInner() {
                 Map each TMT channel to a condition group and replicate
               </p>
             </div>
+            <button
+              onClick={() => setShowMetadataPicker(true)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors"
+              data-testid="import-from-library-btn"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Import from Library
+            </button>
           </div>
           <div className="p-5 space-y-6">
             {isMultiTmt ? (
@@ -359,11 +373,67 @@ function MetadataContentInner() {
                 Assign experiment, condition groups, replicate, and batch to each file
               </p>
             </div>
+            <button
+              onClick={() => setShowMetadataPicker(true)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors"
+              data-testid="import-from-library-btn"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Import from Library
+            </button>
           </div>
           <div className="p-5">
             <DiaMetadataTable />
           </div>
         </section>
+      )}
+
+      {showMetadataPicker && (
+        <FileLibraryPicker
+          sessionId={sessionId}
+          fileType="csv-only"
+          onSelect={async (paths) => {
+            setShowMetadataPicker(false);
+            if (paths.length > 0) {
+              // Fetch first selected CSV content and parse
+              const content = await fileLibraryApi.getContent(paths[0]);
+              if (analysisType === 'tmt') {
+                importChannelMapping(content);
+                addToast('success', 'Channel mapping imported from library');
+              } else {
+                // DIA: parse CSV with expected columns: filename, experiment, ..., replicate, batch
+                const text = content.replace(/\r/g, '');
+                const lines = text.split('\n').filter((l) => l.trim());
+                if (lines.length < 2) {
+                  addToast('warning', 'CSV must have a header and at least one data row');
+                  return;
+                }
+                const headers = parseCSVLine(lines[0]);
+                const filenameIdx = headers.indexOf('filename');
+                if (filenameIdx === -1) {
+                  addToast('warning', 'CSV must have a "filename" column');
+                  return;
+                }
+                const colNames = headers.filter((h) => h !== 'filename');
+                const imported: Record<string, Record<string, string>> = {};
+                for (let i = 1; i < lines.length; i++) {
+                  const values = parseCSVLine(lines[i]);
+                  const fn = values[filenameIdx];
+                  if (!fn) continue;
+                  const entry: Record<string, string> = {};
+                  colNames.forEach((col) => {
+                    const colIdx = headers.indexOf(col);
+                    if (colIdx >= 0) entry[col] = values[colIdx] || '';
+                  });
+                  imported[fn] = entry;
+                }
+                importMetadataColumns(imported);
+                addToast('success', `Metadata imported from library (${Object.keys(imported).length} files)`);
+              }
+            }
+          }}
+          onClose={() => setShowMetadataPicker(false)}
+        />
       )}
 
       {/* Validation */}
