@@ -94,7 +94,7 @@ class FileIndexService:
                     "name": root_path.name,
                     "size": 0,
                     "file_type": "folder",
-                    "parent_path": str(Path(rel).parent) if str(Path(rel).parent) != "." else "",
+                    "parent_path": Path(rel).parent.as_posix() if str(Path(rel).parent) != "." else "",
                     "modified_at": datetime.fromtimestamp(st.st_mtime),
                 }
             # Add files
@@ -105,7 +105,7 @@ class FileIndexService:
                 ext = fp.suffix.lstrip(".").lower()
                 if ext not in ("txt", "csv"):
                     continue
-                parent = str(Path(rel).parent)
+                parent = Path(rel).parent.as_posix()
                 if parent == ".":
                     parent = ""
                 fs_paths[rel] = {
