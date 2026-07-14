@@ -13,7 +13,6 @@ interface FileLibraryToolbarProps {
   onRefresh: () => void;
   selectedCount: number;
   uploading: boolean;
-  uploadProgress: number;
 }
 
 export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
@@ -26,7 +25,6 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
   onRefresh,
   selectedCount,
   uploading,
-  uploadProgress,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -127,13 +125,10 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
         <RefreshCw className="w-4 h-4" />
       </button>
 
-      {/* Upload progress bar */}
+      {/* Upload indicator — animated bar */}
       {uploading && (
         <div className="h-1 bg-primary/20 overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${uploadProgress || 5}%` }}
-          />
+          <div className="h-full w-2/3 bg-primary animate-pulse rounded" />
         </div>
       )}
     </div>

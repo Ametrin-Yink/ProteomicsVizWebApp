@@ -23,7 +23,6 @@ export const FileLibraryPage: React.FC = () => {
   const [totalSize, setTotalSize] = useState(0);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileLibraryEntry[] | null>(null);
   const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
@@ -108,9 +107,8 @@ export const FileLibraryPage: React.FC = () => {
     const files = Array.from(fileList);
     if (files.length === 0) return;
     setUploading(true);
-    setUploadProgress(0);
     try {
-      const result = await fileLibraryApi.upload(files, currentPath, (pct) => setUploadProgress(pct));
+      const result = await fileLibraryApi.upload(files, currentPath);
       addToast('success', `Uploaded ${result.files.length} file(s)`);
       setTreeRefreshKey(k => k + 1);
       loadLibrary(currentPath);
@@ -118,7 +116,6 @@ export const FileLibraryPage: React.FC = () => {
       addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
-      setUploadProgress(0);
     }
   }, [currentPath, addToast, loadLibrary]);
 
@@ -336,7 +333,6 @@ export const FileLibraryPage: React.FC = () => {
         onRefresh={handleRefresh}
         selectedCount={selectedPaths.size}
         uploading={uploading}
-        uploadProgress={uploadProgress}
       />
 
       {/* File type filter bar */}
