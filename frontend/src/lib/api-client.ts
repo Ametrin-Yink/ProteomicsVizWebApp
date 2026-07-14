@@ -1140,25 +1140,38 @@ export const fileLibraryApi = {
   createFolder: (parentPath: string, name: string): Promise<{ path: string; name: string }> =>
     api.post(`/files/folders`, { parent_path: parentPath, name }).then(r => r.data),
 
-  upload: async (
+  upload: (
     files: File[],
     targetPath: string,
-    _onProgress?: (pct: number) => void,
+    onProgress?: (pct: number) => void,
   ): Promise<{ files: { name: string; size: number; type: string }[] }> => {
-    const formData = new FormData();
-    files.forEach(f => formData.append('files', f));
-    const response = await fetch(
-      `${API_PREFIX}/files/upload?target_path=${encodeURIComponent(targetPath)}`,
-      {
-        method: 'POST',
-        body: formData,
-      },
-    );
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text);
-    }
-    return response.json();
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_PREFIX}/files/upload?target_path=${encodeURIComponent(targetPath)}`);
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { reject(new Error('Invalid response from server')); }
+        } else {
+          reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
+        }
+      });
+
+      xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+      xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+      xhr.send(formData);
+    });
   },
 
   rename: (path: string, newName: string): Promise<{ path: string; name: string }> =>

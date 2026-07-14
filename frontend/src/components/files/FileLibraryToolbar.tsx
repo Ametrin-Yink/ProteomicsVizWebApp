@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { FolderPlus, Upload, Trash2, Pencil, Search, RefreshCw } from 'lucide-react';
+import { FolderPlus, Upload, Trash2, Pencil, Search, RefreshCw, X } from 'lucide-react';
 
 interface FileLibraryToolbarProps {
   onCreateFolder: () => void;
@@ -13,6 +13,7 @@ interface FileLibraryToolbarProps {
   onRefresh: () => void;
   selectedCount: number;
   uploading: boolean;
+  uploadProgress: number;
 }
 
 export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
@@ -25,10 +26,12 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
   onRefresh,
   selectedCount,
   uploading,
+  uploadProgress,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
+    <div>
     <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface">
       {/* Actions */}
       <button
@@ -103,8 +106,16 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search files..."
-          className="pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary w-48 lg:w-64"
+          className="pl-8 pr-8 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary w-48 lg:w-64"
         />
+        {searchQuery && (
+          <button
+            onClick={() => onSearchChange('')}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text rounded"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Refresh */}
@@ -115,6 +126,17 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
       >
         <RefreshCw className="w-4 h-4" />
       </button>
+
+      {/* Upload progress bar */}
+      {uploading && (
+        <div className="h-1 bg-primary/20 overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{ width: `${uploadProgress || 5}%` }}
+          />
+        </div>
+      )}
+    </div>
     </div>
   );
 };

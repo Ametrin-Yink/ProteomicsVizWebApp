@@ -23,6 +23,7 @@ export const FileLibraryPage: React.FC = () => {
   const [totalSize, setTotalSize] = useState(0);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileLibraryEntry[] | null>(null);
   const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
@@ -32,6 +33,7 @@ export const FileLibraryPage: React.FC = () => {
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterType, setFilterType] = useState<'all' | 'txt' | 'csv'>('all');
+  const [treeRefreshKey, setTreeRefreshKey] = useState(0);
 
   // ---- Core Library Loading ----
 
@@ -81,6 +83,9 @@ export const FileLibraryPage: React.FC = () => {
   const handleNavigate = useCallback((path: string) => {
     setCurrentPath(path);
     setSelectedPaths(new Set());
+    // Clear search when navigating
+    setSearchQuery('');
+    setSearchResults(null);
     loadLibrary(path);
   }, [loadLibrary]);
 
@@ -92,6 +97,7 @@ export const FileLibraryPage: React.FC = () => {
     try {
       await fileLibraryApi.createFolder(currentPath, name.trim());
       addToast('success', `Folder '${name.trim()}' created`);
+      setTreeRefreshKey(k => k + 1);
       loadLibrary(currentPath);
     } catch (err) {
       addToast('error', `Failed to create folder: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -102,14 +108,17 @@ export const FileLibraryPage: React.FC = () => {
     const files = Array.from(fileList);
     if (files.length === 0) return;
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const result = await fileLibraryApi.upload(files, currentPath);
+      const result = await fileLibraryApi.upload(files, currentPath, (pct) => setUploadProgress(pct));
       addToast('success', `Uploaded ${result.files.length} file(s)`);
+      setTreeRefreshKey(k => k + 1);
       loadLibrary(currentPath);
     } catch (err) {
       addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   }, [currentPath, addToast, loadLibrary]);
 
@@ -130,6 +139,7 @@ export const FileLibraryPage: React.FC = () => {
       }
       addToast('success', `Deleted ${count} item(s)`);
       setSelectedPaths(new Set());
+      setTreeRefreshKey(k => k + 1);
       loadLibrary(currentPath);
     } catch (err) {
       addToast('error', `Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -166,11 +176,11 @@ export const FileLibraryPage: React.FC = () => {
         const data = await fileLibraryApi.search(query);
         setSearchResults(data.results);
       } catch {
-        // search failed silently
+        addToast('error', 'Search failed. Please try again.');
       }
     }, 300);
     setSearchTimer(timer);
-  }, [searchTimer]);
+  }, [searchTimer, addToast]);
 
   const handleToggleSelect = useCallback((path: string) => {
     setSelectedPaths(prev => {
@@ -181,13 +191,11 @@ export const FileLibraryPage: React.FC = () => {
   }, []);
 
   const handleSelectAll = useCallback(() => {
-    setSelectedPaths(prev => {
-      const next = new Set(prev);
-      for (const e of (searchResults ?? entries)) {
-        if (e.type !== 'folder') next.add(e.path);
-      }
-      return next;
-    });
+    const next = new Set<string>();
+    for (const e of (searchResults ?? entries)) {
+      if (e.type !== 'folder') next.add(e.path);
+    }
+    setSelectedPaths(next);
   }, [searchResults, entries]);
 
   // ---- Context menu handlers ----
@@ -250,7 +258,7 @@ export const FileLibraryPage: React.FC = () => {
     });
   }, [entries, searchResults, sortBy, sortOrder]);
 
-  // ---- Loading state ----
+  // ---- Full-page loading (initial load only) ----
   if (loading && entries.length === 0 && !error) {
     return (
       <div className="flex-1 flex items-center justify-center" data-testid="files-loading">
@@ -262,7 +270,7 @@ export const FileLibraryPage: React.FC = () => {
     );
   }
 
-  // ---- Error state ----
+  // ---- Full-page error (no cached entries) ----
   if (error && entries.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center" data-testid="files-error">
@@ -305,6 +313,19 @@ export const FileLibraryPage: React.FC = () => {
   // ---- Normal state ----
   return (
     <div className="flex-1 flex flex-col h-full" data-testid="files-page">
+      {/* Loading bar for folder navigation (when entries already exist) */}
+      {loading && entries.length > 0 && (
+        <div className="h-1 bg-primary/20 overflow-hidden">
+          <div className="h-full bg-primary animate-pulse w-2/3 rounded" />
+        </div>
+      )}
+      {/* Error banner for navigation failures (when entries already exist) */}
+      {error && entries.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-error/10 border-b border-error/20 text-sm text-error">
+          <span className="flex-1">{error}</span>
+          <button onClick={handleRefresh} className="px-2 py-0.5 text-xs bg-error/20 rounded hover:bg-error/30">Retry</button>
+        </div>
+      )}
       <FileLibraryToolbar
         onCreateFolder={handleCreateFolder}
         onUpload={handleUpload}
@@ -315,6 +336,7 @@ export const FileLibraryPage: React.FC = () => {
         onRefresh={handleRefresh}
         selectedCount={selectedPaths.size}
         uploading={uploading}
+        uploadProgress={uploadProgress}
       />
 
       {/* File type filter bar */}
@@ -342,6 +364,7 @@ export const FileLibraryPage: React.FC = () => {
             currentPath={currentPath}
             onNavigate={handleNavigate}
             onContextMenu={handleFolderContextMenu}
+            refreshKey={treeRefreshKey}
           />
         </div>
         <div className="flex-1 overflow-hidden">

@@ -27,7 +27,6 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const [entries, setEntries] = useState<FileLibraryEntry[]>([]);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
-  const [copyProgress, setCopyProgress] = useState({ current: 0, total: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileLibraryEntry[] | null>(null);
   const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
@@ -100,11 +99,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   };
 
   const handleClearSelection = () => {
-    const next = new Set(selectedPaths);
-    for (const e of displayedEntries) {
-      next.delete(e.path);
-    }
-    setSelectedPaths(next);
+    setSelectedPaths(new Set());
   };
 
   const totalSize = useMemo(() => {
@@ -121,7 +116,6 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
     if (paths.length === 0) return;
 
     setCopying(true);
-    setCopyProgress({ current: 0, total: paths.length });
     try {
       if (fileType === 'csv-only') {
         // Metadata mode: just pass paths back, parent fetches content
@@ -141,7 +135,11 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const isEmpty = !loading && displayedEntries.length === 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" data-testid="file-picker">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      data-testid="file-picker"
+      onKeyDown={(e) => { if (e.key === 'Escape' && !copying) onClose(); }}
+    >
       <div className="bg-background rounded-xl shadow-2xl w-[900px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
@@ -305,7 +303,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
               {copying ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Copying {copyProgress.current}/{copyProgress.total}...
+                  Copying {selectedPaths.size} file{selectedPaths.size !== 1 ? 's' : ''}...
                 </>
               ) : (
                 `Select (${selectedPaths.size})`

@@ -72,8 +72,9 @@ export const FileList: React.FC<FileListProps> = ({
       return e.type === filterType;
     });
 
-  const allSelected = displayed.length > 0 && displayed.every(e => selectedPaths.has(e.path));
-  const someSelected = displayed.some(e => selectedPaths.has(e.path));
+  const displayedFiles = displayed.filter(e => e.type !== 'folder');
+  const allSelected = displayedFiles.length > 0 && displayedFiles.every(e => selectedPaths.has(e.path));
+  const someSelected = displayedFiles.some(e => selectedPaths.has(e.path));
 
   const sortIndicator = (col: string): string => {
     if (sortBy !== col) return '';
@@ -204,7 +205,9 @@ export const FileList: React.FC<FileListProps> = ({
             {displayed.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-12 text-center text-sm text-text-muted">
-                  This folder is empty.
+                  {filterType !== 'all'
+                  ? `No ${filterType.toUpperCase()} files in this folder.`
+                  : 'This folder is empty.'}
                 </td>
               </tr>
             )}

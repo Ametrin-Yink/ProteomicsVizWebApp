@@ -9,6 +9,8 @@ interface FolderTreeProps {
   currentPath: string;
   onNavigate: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, path: string, name: string) => void;
+  /** Increment to force tree refresh (e.g. after folder create/delete) */
+  refreshKey?: number;
 }
 
 interface TreeNode {
@@ -22,6 +24,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   currentPath,
   onNavigate,
   onContextMenu,
+  refreshKey,
 }) => {
   const [rootNodes, setRootNodes] = useState<TreeNode[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -39,7 +42,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         }));
       setRootNodes(folders);
     }).catch(() => {});
-  }, []);
+  }, [refreshKey]);
 
   const toggleExpand = useCallback(async (node: TreeNode) => {
     const newExpanded = new Set(expandedPaths);

@@ -21,13 +21,20 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleMouseDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         onClose();
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [onClose]);
 
   // Adjust position to stay within viewport
