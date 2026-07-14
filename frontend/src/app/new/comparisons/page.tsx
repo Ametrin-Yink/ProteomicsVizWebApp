@@ -134,7 +134,7 @@ function ComparisonsContent() {
       const groupCols = new Set<string>();
       Object.values(mapping).forEach((entry) => {
         Object.keys(entry).forEach((k) => {
-          if (k !== 'replicate') groupCols.add(k);
+          if (k.toLowerCase() !== 'replicate') groupCols.add(k);
         });
       });
       Object.values(mapping).forEach((entry) => {
@@ -147,7 +147,7 @@ function ComparisonsContent() {
     } else {
       Object.values(config.metadata_columns || {}).forEach((row) => {
         const vals = Object.entries(row)
-          .filter(([k]) => k !== 'experiment' && k !== 'replicate' && k !== 'batch')
+          .filter(([k]) => k !== 'experiment' && k.toLowerCase() !== 'replicate' && k !== 'batch')
           .map(([, v]) => v?.trim())
           .filter(Boolean);
         if (vals.length > 0) uniqueConditions.add(vals.join('+'));
@@ -181,7 +181,7 @@ function ComparisonsContent() {
       if (analysisType === 'tmt') {
         // For TMT, derive from mapping
         const mapping = config.tmt_channel_mapping || {};
-        const groupCols = Object.keys(Object.values(mapping)[0] || {}).filter(k => k !== 'replicate');
+        const groupCols = Object.keys(Object.values(mapping)[0] || {}).filter(k => k.toLowerCase() !== 'replicate');
         groupCols.forEach((col, idx) => {
           group1[col] = condParts[idx] || '';
           group2[col] = refParts[idx] || '';
@@ -189,7 +189,7 @@ function ComparisonsContent() {
       } else {
         // For DIA, derive from metadata columns
         const sampleEntry = Object.values(config.metadata_columns || {})[0] || {};
-        const groupCols = Object.keys(sampleEntry).filter(k => k !== 'experiment' && k !== 'replicate' && k !== 'batch');
+        const groupCols = Object.keys(sampleEntry).filter(k => k !== 'experiment' && k.toLowerCase() !== 'replicate' && k !== 'batch');
         groupCols.forEach((col, idx) => {
           group1[col] = condParts[idx] || '';
           group2[col] = refParts[idx] || '';

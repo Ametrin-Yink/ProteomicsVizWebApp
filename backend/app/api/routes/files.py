@@ -1,7 +1,9 @@
 """File library API routes -- global file management independent of sessions."""
 
+import asyncio
 import logging
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -126,13 +128,6 @@ async def upload_files(
                 detail=f"Only .txt and .csv files are allowed. '{safe_name}' is '{ext}'.",
             )
 
-        # Reject FASTA by extension
-        if ext in (".fasta", ".fa", ".faa") or safe_name.lower().endswith((".fasta", ".fa", ".faa")):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="FASTA files must be uploaded in the PTM wizard, not the file library.",
-            )
-
         # Check for duplicate
         dest = target_dir / safe_name
         if dest.exists():
@@ -197,7 +192,6 @@ async def rename_entry(
     new_rel = str((Path(old_rel).parent / new_name).as_posix()) if Path(old_rel).parent != Path(".") else new_name
     new_parent = str(Path(new_rel).parent) if Path(new_rel).parent != Path(".") else ""
 
-    import shutil
     await _run_in_thread(shutil.move, str(old_abs), str(new_abs))
 
     index.update_entry(
@@ -248,7 +242,6 @@ async def move_entry(
             detail=f"'{src_abs.name}' already exists in the target folder.",
         )
 
-    import shutil
     await _run_in_thread(shutil.move, str(src_abs), str(dest_abs))
 
     old_rel = str(Path(source_path).as_posix())
@@ -277,7 +270,6 @@ async def delete_entry(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"'{path}' not found.")
 
     if abs_path.is_dir():
-        import shutil
         await _run_in_thread(shutil.rmtree, str(abs_path))
     else:
         await _run_in_thread(os.unlink, str(abs_path))
@@ -341,8 +333,6 @@ async def select_files_for_session(
     index: FileIndexService = Depends(get_index_service),
 ):
     """Copy files from library to a session and parse them. Returns ProteomicsFileInfo list."""
-    import asyncio
-    import shutil
 
     from app.db.session_store import SessionStore
     from app.models.session import ProteomicsFileInfo
@@ -425,5 +415,4 @@ async def select_files_for_session(
 
 async def _run_in_thread(func, *args, **kwargs):
     """Run a synchronous function in a thread to avoid blocking the event loop."""
-    import asyncio
     return await asyncio.to_thread(func, *args, **kwargs)

@@ -29,10 +29,6 @@ export const FileLibraryPage: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; items: ContextMenuItem[];
   } | null>(null);
-   
-  const [_renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
-   
-  const [_moveTarget, setMoveTarget] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterType, setFilterType] = useState<'all' | 'txt' | 'csv'>('all');
@@ -157,28 +153,6 @@ export const FileLibraryPage: React.FC = () => {
     }
   }, [selectedPaths, entries, currentPath, addToast, loadLibrary]);
 
-   
-  const _handleMove = useCallback(() => {
-    if (selectedPaths.size === 0) return;
-    const target = window.prompt('Move to folder (blank = root, or type folder path):', '');
-    if (target === null) return;
-    const targetParent = (target || '').trim();
-    const doMove = async () => {
-      try {
-        let moved = 0;
-        for (const path of selectedPaths) {
-          await fileLibraryApi.move(path, targetParent);
-          moved++;
-        }
-        addToast('success', `Moved ${moved} item(s)`);
-        setSelectedPaths(new Set());
-        loadLibrary(currentPath);
-      } catch (err) {
-        addToast('error', `Move failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      }
-    };
-    doMove();
-  }, [selectedPaths, currentPath, addToast, loadLibrary]);
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
@@ -223,8 +197,7 @@ export const FileLibraryPage: React.FC = () => {
     setContextMenu({
       x: e.clientX, y: e.clientY,
       items: [
-        { label: 'Rename', action: () => { setSelectedPaths(new Set([path])); setRenameTarget({ path, name }); } },
-        { label: 'Move...', action: () => { setSelectedPaths(new Set([path])); setMoveTarget(path); } },
+        { label: 'Rename', action: () => { setSelectedPaths(new Set([path])); } },
         { label: 'Delete', action: async () => {
           if (!window.confirm(`Delete '${name}'?`)) return;
           await fileLibraryApi.delete(path);
@@ -241,7 +214,7 @@ export const FileLibraryPage: React.FC = () => {
     setContextMenu({
       x: e.clientX, y: e.clientY,
       items: [
-        { label: 'Rename', action: () => setRenameTarget({ path, name }) },
+        { label: 'Rename', action: () => { setSelectedPaths(new Set([path])); } },
         { label: 'Delete', action: async () => {
           if (!window.confirm(`Delete folder '${name}' and all contents?`)) return;
           await fileLibraryApi.delete(path);

@@ -189,7 +189,7 @@ for (i in seq_along(comparisons_raw)) {
                 g1_mask <- g1_mask & (as.character(pdata[[col_name]]) == target_val)
             } else if ("GROUP" %in% names(pdata)) {
                 cat("  Column", col_name, "not in ProteinLevelData, matching '", target_val, "' against GROUP\n")
-                g1_mask <- g1_mask & (as.character(pdata[["GROUP"]]) == target_val)
+                g1_mask <- g1_mask & grepl(target_val, as.character(pdata[["GROUP"]]), fixed=TRUE)
             } else {
                 stop("Column '", col_name, "' not found and no GROUP column for fallback matching")
             }
@@ -205,7 +205,7 @@ for (i in seq_along(comparisons_raw)) {
                 g2_mask <- g2_mask & (as.character(pdata[[col_name]]) == target_val)
             } else if ("GROUP" %in% names(pdata)) {
                 cat("  Column", col_name, "not in ProteinLevelData, matching '", target_val, "' against GROUP\n")
-                g2_mask <- g2_mask & (as.character(pdata[["GROUP"]]) == target_val)
+                g2_mask <- g2_mask & grepl(target_val, as.character(pdata[["GROUP"]]), fixed=TRUE)
             } else {
                 stop("Column '", col_name, "' not found and no GROUP column for fallback matching")
             }

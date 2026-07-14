@@ -74,9 +74,7 @@ class FileIndexService:
         # Collect current filesystem state
         fs_paths: dict[str, dict] = {}
         for root, dirs, files in os.walk(str(self.library_dir)):
-            # Skip the DuckDB file itself
-            if ".library_index.duckdb" in dirs:
-                dirs.remove(".library_index.duckdb")
+            # The DuckDB index file is filtered by extension below (only .txt/.csv indexed)
             root_path = Path(root)
             # Add directories
             if root_path != self.library_dir:
