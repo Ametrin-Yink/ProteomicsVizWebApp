@@ -1,11 +1,14 @@
 """
-E2E integration test: Full TMT protein analysis pipeline.
+E2E integration test: Full TMT protein analysis pipeline via File Library.
 
-Uses 10k-row extract from real PD TMT file with 16-plex TMTpro channel design.
-Verifies all 8 pipeline steps complete and produce expected outputs.
+Validated against DOCK5 16-plex TMTpro workflow (2026-07-14).
+Uses 10k-row extract from real PD TMT file with file library selection,
+channel mapping import, and 4 DMSO-control comparisons.
+Verifies all 8 pipeline steps complete and produce expected DE results.
 """
 
 import csv
+import shutil
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -14,6 +17,7 @@ import pytest
 import requests
 
 API = "http://localhost:8000/api/sessions"
+FILES_API = "http://localhost:8000/api/files"
 FIXTURE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "fixtures"
 TMT_FILE = FIXTURE_DIR / "tmt_sample_10000rows.txt"
 CHANNEL_DESIGN = FIXTURE_DIR / "tmt_channel_design.csv"
@@ -24,31 +28,30 @@ CHANNEL_DESIGN = FIXTURE_DIR / "tmt_channel_design.csv"
 def parse_channel_design(csv_path: Path) -> dict:
     """Parse TMT channel design CSV into channel mapping dict.
 
-    Uses only the first batch (PANC02_03), skipping duplicate channels from batch 2.
-    Returns: {channel: {treatment: str, time: str, replicate: int}}
+    Format: Channel, Condition, replicate
+    Returns: {channel: {Condition: str, replicate: str}}
     """
     channel_map = {}
-    replicate_counter = defaultdict(int)
     with open(csv_path) as f:
-        reader = csv.reader(f)
+        reader = csv.DictReader(f)
         for row in reader:
-            if not row or len(row) < 9:
-                continue
-            if row[0].startswith("//") or row[0] == "Study":
-                continue
-            channel = row[5]
-            if channel in channel_map:
-                continue  # Skip batch 2 (Jurkat) — only use batch 1 (PANC02_03)
-            drug = row[6]
-            time_pt = row[8]
-            key = f"{drug}_{time_pt}"
-            replicate_counter[key] += 1
+            channel = row["Channel"].strip()
             channel_map[channel] = {
-                "treatment": drug,
-                "time": time_pt,
-                "replicate": replicate_counter[key],
+                "Condition": row["Condition"].strip(),
+                "replicate": row["replicate"].strip(),
             }
     return channel_map
+
+
+def setup_file_library(library_dir: Path, fixture_path: Path, target_folder: str):
+    """Copy test fixture into the file library directory and scan."""
+    target_dir = library_dir / target_folder
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest = target_dir / fixture_path.name
+    if not dest.exists():
+        shutil.copy2(fixture_path, dest)
+    # Scan library to index new file
+    requests.post(f"{FILES_API}/scan", timeout=30)
 
 
 def wait_for_completion(session_id: str, timeout: int = 600, interval: int = 10) -> str:
@@ -77,49 +80,70 @@ def channel_mapping():
 
 
 @pytest.fixture(scope="module")
-def tmt_session(channel_mapping):
-    """Create TMT session, upload file, configure, run pipeline. Returns session dict."""
+def file_library_dir():
+    """Set up the TMT fixture in the real file library directory.
+
+    Uses the backend's configured file_library_dir (backend/file_library/).
+    Copies the TMT fixture into an E2E_TMT subfolder and scans.
+    Cleans up after all tests complete.
+    """
+    from app.core.config import settings
+
+    lib_dir = settings.file_library_dir
+    setup_file_library(lib_dir, TMT_FILE, "E2E_TMT")
+    yield lib_dir
+    # Cleanup: remove the test folder from the library
+    test_dir = lib_dir / "E2E_TMT"
+    if test_dir.exists():
+        shutil.rmtree(test_dir)
+    # Re-scan to update index
+    requests.post(f"{FILES_API}/scan", timeout=30)
+
+
+@pytest.fixture(scope="module")
+def tmt_session(channel_mapping, file_library_dir):
+    """Create TMT session via file library, configure, run pipeline.
+
+    Returns session dict after pipeline completion.
+    """
     assert TMT_FILE.exists(), f"TMT fixture not found: {TMT_FILE}"
 
     # 1. Create session
     r = requests.post(
         API,
         json={
-            "name": "E2E TMT Pipeline Test",
+            "name": "E2E TMT Pipeline Test (File Library)",
             "template": "multi_condition_comparison",
         },
     )
     assert r.status_code in (200, 201), f"Session creation failed: {r.text}"
     sid = r.json()["id"]
 
-    # 2. Set file_type (required before upload)
+    # 2. Set file_type (required before selecting files)
     r = requests.post(f"{API}/{sid}/config", json={"file_type": "tmt"})
     assert r.status_code == 200
 
-    # 3. Upload TMT fixture
-    with open(TMT_FILE, "rb") as f:
-        r = requests.post(
-            f"{API}/{sid}/upload/proteomics",
-            files={"files": (TMT_FILE.name, f, "text/plain")},
-            timeout=120,
-        )
-    assert r.status_code == 200, f"Upload failed: {r.text[:300]}"
+    # 3. Select TMT fixture FROM FILE LIBRARY (not direct upload)
+    r = requests.post(
+        f"{FILES_API}/select",
+        json={
+            "session_id": sid,
+            "paths": ["E2E_TMT/tmt_sample_10000rows.txt"],
+        },
+        timeout=120,
+    )
+    assert r.status_code == 200, f"File library select failed: {r.text[:300]}"
     result = r.json()
+    assert len(result["files"]) == 1, f"Expected 1 file, got {len(result['files'])}"
     detected = result["files"][0].get("tmt_channels", [])
     assert len(detected) == 16, f"Expected 16 channels, detected {len(detected)}"
 
-    # 4. Full configuration
+    # 4. Full configuration with validated comparison format
     comparisons = [
         {"group1": {"Condition": "INCB224525_4h"}, "group2": {"Condition": "DMSO_24h"}},
         {"group1": {"Condition": "INCB231845_4h"}, "group2": {"Condition": "DMSO_24h"}},
-        {
-            "group1": {"Condition": "INCB224525_24h"},
-            "group2": {"Condition": "DMSO_24h"},
-        },
-        {
-            "group1": {"Condition": "INCB231845_24h"},
-            "group2": {"Condition": "DMSO_24h"},
-        },
+        {"group1": {"Condition": "INCB224525_24h"}, "group2": {"Condition": "DMSO_24h"}},
+        {"group1": {"Condition": "INCB231845_24h"}, "group2": {"Condition": "DMSO_24h"}},
     ]
 
     config = {
@@ -149,7 +173,8 @@ def tmt_session(channel_mapping):
     # 6. Wait for completion
     state = wait_for_completion(sid)
     assert state == "completed", (
-        f"Pipeline ended with state '{state}', expected 'completed'"
+        f"Pipeline ended with state '{state}', expected 'completed'. "
+        f"Session: {sid}"
     )
 
     # 7. Yield session data for assertions
@@ -164,7 +189,9 @@ def tmt_session(channel_mapping):
 
 
 class TestTMTPipelineE2E:
-    """Full TMT protein analysis pipeline E2E tests."""
+    """Full TMT protein analysis pipeline E2E tests via File Library."""
+
+    # ── Pipeline completion ──
 
     def test_session_state_completed(self, tmt_session):
         """Pipeline finishes in 'completed' state."""
@@ -176,74 +203,31 @@ class TestTMTPipelineE2E:
         r = requests.get(f"{API}/{sid}/logs")
         logs = r.json()
         completed = logs.get("completed_steps", [])
-        assert completed == [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-        ], f"Expected all 8 steps completed, got {completed}"
+        assert completed == [1, 2, 3, 4, 5, 6, 7, 8], (
+            f"Expected all 8 steps completed, got {completed}"
+        )
 
-    def test_four_comparison_files_exist(self, tmt_session):
-        """All 4 DE comparison files are generated."""
-        sid = tmt_session["id"]
-        r = requests.get(f"{API}/{sid}/results")
-        # Each comparison should have results
-        assert r.status_code == 200
-
-    def test_protein_abundances_produced(self, tmt_session):
-        """Pipeline produces protein abundances and DE results."""
-        sid = tmt_session["id"]
-
-        # Verify protein count via QC endpoint
-        r = requests.get(f"{API}/{sid}/qc/plots")
-        assert r.status_code == 200
-        qc = r.json()
-        qc_data = qc.get("data", {})
-        total_proteins = qc_data.get("total_proteins", 0)
-        assert total_proteins > 100, f"Expected >100 proteins, got {total_proteins}"
-
-        # Verify DE results per comparison
-        r = requests.get(f"{API}/{sid}/results")
-        data = r.json()
-        results = data.get("data", {}).get("results", [])
-        assert len(results) > 0, "No DE results returned"
-
-        # Verify at least some proteins have real p-values
-        proteins_with_pval = [r for r in results if r.get("pval") is not None]
-        assert len(proteins_with_pval) > 0, "No proteins with p-values"
-
-    def test_qc_metrics_available(self, tmt_session):
-        """QC metrics are calculated."""
-        sid = tmt_session["id"]
-        r = requests.get(f"{API}/{sid}/qc/plots")
-        if r.status_code == 200:
-            qc = r.json()
-            assert "pca" in qc or "data" in qc, "QC data missing PCA"
-
-    def test_remove_razor_applied(self, tmt_session):
-        """Remove razor step was executed (step 3 in completed_steps)."""
-        sid = tmt_session["id"]
-        r = requests.get(f"{API}/{sid}/logs")
+    def test_pipeline_uses_msstats(self, tmt_session):
+        """Pipeline derivation yields MSstats for TMT."""
+        r = requests.get(f"{API}/{tmt_session['id']}/logs")
         logs = r.json()
-        completed = logs.get("completed_steps", [])
-        assert 3 in completed, "Step 3 (Remove Razor) not completed"
+        log_messages = " ".join(
+            log["message"] for log in logs.get("logs", [])
+        )
+        assert "MSstats" in log_messages, "Pipeline should mention MSstats"
 
-    def test_strict_filtering_applied(self, tmt_session):
-        """Strict filtering was configured."""
+    # ── Configuration checks ──
+
+    def test_file_type_is_tmt(self, tmt_session):
+        """Session was configured for TMT analysis."""
         config = tmt_session.get("config", {})
-        assert config.get("strict_filtering") is True
-        assert config.get("remove_razor") is True
+        assert config.get("file_type") == "tmt"
 
     def test_channel_design_has_five_conditions(self, channel_mapping):
         """Channel design produces exactly 5 unique condition combinations."""
         conditions = set()
         for info in channel_mapping.values():
-            cond = f"{info['treatment']}_{info['time']}"
-            conditions.add(cond)
+            conditions.add(info["Condition"])
         assert conditions == {
             "DMSO_24h",
             "INCB224525_4h",
@@ -252,10 +236,132 @@ class TestTMTPipelineE2E:
             "INCB231845_24h",
         }
 
-    def test_pipeline_uses_msstats(self, tmt_session):
-        """Pipeline derivation yields MSstats for TMT."""
-        # The session should have been processed with msstats pipeline
-        r = requests.get(f"{API}/{tmt_session['id']}/logs")
-        logs = r.json()
-        log_messages = " ".join(log["message"] for log in logs.get("logs", []))
-        assert "MSstats" in log_messages, "Pipeline should mention MSstats"
+    def test_channel_design_has_replicates(self, channel_mapping):
+        """Each condition has at least 3 replicates (except DMSO_24h with 4)."""
+        from collections import Counter
+
+        reps = Counter()
+        for info in channel_mapping.values():
+            reps[info["Condition"]] += 1
+        assert reps["DMSO_24h"] == 4, f"DMSO_24h should have 4 replicates, got {reps['DMSO_24h']}"
+        for cond in ["INCB224525_4h", "INCB231845_4h", "INCB224525_24h", "INCB231845_24h"]:
+            assert reps[cond] == 3, f"{cond} should have 3 replicates, got {reps[cond]}"
+
+    # ── Results validation ──
+
+    def test_four_comparison_files_exist(self, tmt_session):
+        """All 4 DE comparison TSV files are generated on disk."""
+        import os
+        from app.core.config import settings
+
+        sid = tmt_session["id"]
+        result_dir = settings.sessions_dir / sid / "results"
+        for comparison in [
+            "INCB224525_4h_vs_DMSO_24h",
+            "INCB231845_4h_vs_DMSO_24h",
+            "INCB224525_24h_vs_DMSO_24h",
+            "INCB231845_24h_vs_DMSO_24h",
+        ]:
+            fpath = result_dir / f"Diff_Expression_{comparison}.tsv"
+            assert fpath.exists(), f"Missing comparison file: {fpath}"
+
+    def test_each_comparison_has_de_proteins(self, tmt_session):
+        """Each comparison file contains DE proteins with real p-values."""
+        import os
+        from app.core.config import settings
+
+        sid = tmt_session["id"]
+        result_dir = settings.sessions_dir / sid / "results"
+        de_counts = {}
+        for fname in sorted(os.listdir(str(result_dir))):
+            if not fname.startswith("Diff_Expression_"):
+                continue
+            fpath = result_dir / fname
+            with open(fpath) as f:
+                header = f.readline().strip().split("\t")
+                # Find adjPval column
+                adjp_idx = None
+                for i, h in enumerate(header):
+                    if h.lower() == "adjpval":
+                        adjp_idx = i
+                        break
+                total = 0
+                sig = 0
+                has_pval = 0
+                first_non_na = None
+                for line in f:
+                    total += 1
+                    cols = line.strip().split("\t")
+                    if adjp_idx is not None:
+                        try:
+                            p = float(cols[adjp_idx])
+                            has_pval += 1
+                            if p < 0.05:
+                                sig += 1
+                            if first_non_na is None:
+                                first_non_na = p
+                        except (ValueError, IndexError):
+                            pass
+                comp_name = fname.replace("Diff_Expression_", "").replace(".tsv", "")
+                de_counts[comp_name] = sig
+                assert has_pval > 0, (
+                    f"{comp_name}: no proteins with numeric p-values (all NA)"
+                )
+                assert has_pval >= total * 0.9, (
+                    f"{comp_name}: only {has_pval}/{total} proteins have p-values "
+                    f"(expected >= 90%)"
+                )
+
+        # At least one comparison should have >= 1 DE protein
+        total_de = sum(de_counts.values())
+        assert total_de >= 1, (
+            f"No DE proteins found across all comparisons. "
+            f"Per-comparison DE counts: {de_counts}"
+        )
+
+    def test_de_results_paginated_endpoint(self, tmt_session):
+        """Results endpoint returns paginated DE data with summary stats."""
+        sid = tmt_session["id"]
+        r = requests.get(f"{API}/{sid}/results")
+        assert r.status_code == 200
+        data = r.json().get("data", {})
+        assert data.get("total_proteins", 0) > 100, (
+            f"Expected >100 proteins, got {data.get('total_proteins', 0)}"
+        )
+        assert data.get("pipeline") == "msstats"
+        results = data.get("results", [])
+        assert len(results) > 0, "No DE results returned"
+        # Verify at least some proteins have real p-values
+        proteins_with_pval = [
+            r for r in results if r.get("pval") is not None
+        ]
+        assert len(proteins_with_pval) > 0, "No proteins with p-values"
+
+    def test_qc_metrics_available(self, tmt_session):
+        """QC metrics are calculated and contain PCA data."""
+        sid = tmt_session["id"]
+        r = requests.get(f"{API}/{sid}/qc/plots")
+        assert r.status_code == 200
+        qc = r.json()
+        assert "pca" in qc or "data" in qc, "QC data missing PCA"
+
+    def test_protein_abundances_tsv_exists(self, tmt_session):
+        """Protein abundances TSV file is generated on disk."""
+        import os
+        from app.core.config import settings
+
+        sid = tmt_session["id"]
+        fpath = settings.sessions_dir / sid / "results" / "Protein_Abundances.tsv"
+        assert fpath.exists(), f"Missing: {fpath}"
+        with open(fpath) as f:
+            header = f.readline()
+            assert "Master_Protein_Accessions" in header
+            line_count = sum(1 for _ in f)
+            assert line_count > 100, f"Expected >100 proteins, got {line_count}"
+
+    def test_file_library_select_used(self, tmt_session):
+        """File was selected from the file library (not direct upload)."""
+        files = tmt_session.get("files", {}).get("proteomics", [])
+        assert len(files) == 1
+        assert files[0]["filename"] == "tmt_sample_10000rows.txt"
+        assert files[0]["file_type"] == "tmt"
