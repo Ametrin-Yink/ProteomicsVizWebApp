@@ -318,9 +318,14 @@ function UploadContentInner() {
   const hasCriticalErrors = validation.warnings.filter((w) => w.type === 'error').length > 0;
   const ptmHasEnrichmentFiles = ptmEnrichmentFiles.length > 0;
   const ptmHasFasta = ptmFastaFile !== null || ptmFastaUploadMethod !== null;
+  // TMT: just need files selected (metadata is per-channel on next page)
+  // DIA: need files + no critical errors (ExperimentTable validation)
+  // PTM: need enrichment files + FASTA
   const canContinue = analysisType === 'ptm'
     ? ptmHasEnrichmentFiles && ptmHasFasta
-    : uploadedFiles.length > 0 && !hasCriticalErrors;
+    : analysisType === 'tmt'
+      ? uploadedFiles.length > 0
+      : uploadedFiles.length > 0 && !hasCriticalErrors;
 
   const handleContinue = async () => {
     if (!canContinue || !sessionId) return;
@@ -428,7 +433,9 @@ function UploadContentInner() {
             </div>
           </section>
 
-          {uploadedFiles.length > 0 && (
+          {/* DIA: per-file experiment structure + validation */}
+        {analysisType === 'dia' && uploadedFiles.length > 0 && (
+          <>
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <Database className="w-5 h-5 text-primary" />
@@ -443,9 +450,7 @@ function UploadContentInner() {
                 <ExperimentTable />
               </div>
             </section>
-          )}
 
-          {uploadedFiles.length > 0 && (
             <section className="bg-background border border-border rounded-lg">
               <div className="px-5 py-3 border-b border-border flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-primary" />
@@ -458,7 +463,35 @@ function UploadContentInner() {
                 <ValidationPanel />
               </div>
             </section>
-          )}
+          </>
+        )}
+
+        {/* TMT: summary after file selection (metadata is per-channel on next page) */}
+        {analysisType === 'tmt' && uploadedFiles.length > 0 && (
+          <section className="bg-background border border-border rounded-lg">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-primary" />
+              <div>
+                <h2 className="font-semibold text-text-primary">File Selected</h2>
+                <p className="text-sm text-text-muted">
+                  TMT channels will be configured on the next page
+                </p>
+              </div>
+            </div>
+            <div className="p-5">
+              {uploadedFiles.map(f => (
+                <div key={f.filename} className="flex items-center gap-3 p-2 text-sm">
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                  <span className="text-text font-medium">{f.filename}</span>
+                  <span className="text-text-muted">
+                    {(f.size / (1024 * 1024)).toFixed(1)} MB
+                    {f.tmt_channels && ` · ${f.tmt_channels.length} channels detected`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         </>
       ) : (
         <>
@@ -930,7 +963,7 @@ function UploadContentInner() {
             </>
           ) : (
             <>
-              Continue to Comparisons
+              {analysisType === 'ptm' ? 'Continue to Comparisons' : 'Continue to Metadata'}
               <ArrowRight className="w-4 h-4" />
             </>
           )}
