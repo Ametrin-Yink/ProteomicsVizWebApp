@@ -160,8 +160,12 @@ class FileIndexService:
                 removed = 0
                 gone = db_path_set - fs_path_set
                 if gone:
-                    for path in gone:
-                        conn.execute("DELETE FROM files WHERE path = ?", [path])
+                    # Batch delete: build IN clause from gone paths
+                    placeholders = ",".join(["?"] * len(gone))
+                    conn.execute(
+                        f"DELETE FROM files WHERE path IN ({placeholders})",
+                        list(gone),
+                    )
                     removed = len(gone)
 
                 try:
@@ -264,7 +268,9 @@ class FileIndexService:
 
     def insert_entry(self, path: str, size: int, file_type: str, modified_at: datetime):
         """Insert a single entry. Caller must hold no lock."""
-        parent = str(Path(path).parent) if str(Path(path).parent) != "." else ""
+        parent = Path(path).parent.as_posix()
+        if parent == ".":
+            parent = ""
         name = Path(path).name
         with self._write_lock:
             conn = self._get_conn()
@@ -297,6 +303,7 @@ class FileIndexService:
                     "SELECT file_type FROM files WHERE path = ?", [old_path]
                 ).fetchone()
                 if is_folder and is_folder[0] == "folder":
+                    # LIKE 'prefix/%' ensures only children are matched (not prefix siblings like 'prefix_extra')
                     conn.execute(
                         """UPDATE files
                            SET path = REPLACE(path, ?, ?),

@@ -189,8 +189,8 @@ async def rename_entry(
         )
 
     old_rel = str(Path(path).as_posix())
-    new_rel = str((Path(old_rel).parent / new_name).as_posix()) if Path(old_rel).parent != Path(".") else new_name
-    new_parent = str(Path(new_rel).parent) if Path(new_rel).parent != Path(".") else ""
+    new_rel = (Path(old_rel).parent / new_name).as_posix() if str(Path(old_rel).parent) != "." else new_name
+    new_parent = Path(new_rel).parent.as_posix() if str(Path(new_rel).parent) != "." else ""
 
     await _run_in_thread(shutil.move, str(old_abs), str(new_abs))
 

@@ -187,3 +187,105 @@ class TestFileIndexServiceScan:
 
         entry2 = index_service.get_entry("change.txt")
         assert entry2["size"] > old_size
+
+
+class TestFileIndexServicePaths:
+    """Path normalization — forward slashes on all platforms."""
+
+    def test_parent_path_uses_forward_slashes(self, index_service, tmp_path):
+        """parent_path uses / not \\ on all platforms."""
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "file.txt").write_text("data")
+        index_service.scan_and_sync()
+
+        entry = index_service.get_entry("sub/file.txt")
+        assert entry is not None
+        assert "\\" not in entry["parent_path"], f"parent_path has backslash: {entry['parent_path']}"
+        assert entry["parent_path"] == "sub"
+
+    def test_insert_entry_parent_path(self, index_service):
+        """insert_entry stores normalized parent_path."""
+        now = datetime.now()
+        index_service.insert_entry("a/b/file.txt", 100, "txt", now)
+        entry = index_service.get_entry("a/b/file.txt")
+        assert entry is not None
+        assert "\\" not in entry["parent_path"]
+        assert entry["parent_path"] == "a/b"
+
+    def test_nested_folder_parents(self, index_service, tmp_path):
+        """Scan with nested folders produces correct parent_path at all levels."""
+        (tmp_path / "a").mkdir()
+        (tmp_path / "a" / "b").mkdir()
+        (tmp_path / "a" / "b" / "c").mkdir()
+        (tmp_path / "a" / "b" / "c" / "deep.txt").write_text("deep")
+        (tmp_path / "a" / "top.txt").write_text("top")
+
+        index_service.scan_and_sync()
+
+        top = index_service.get_entry("a/top.txt")
+        assert top is not None
+        assert top["parent_path"] == "a"
+
+        deep = index_service.get_entry("a/b/c/deep.txt")
+        assert deep is not None
+        assert deep["parent_path"] == "a/b/c"
+
+    def test_scan_after_external_file_added(self, index_service, tmp_path):
+        """Drop file via OS, scan picks it up."""
+        (tmp_path / "existing.txt").write_text("old")
+        index_service.scan_and_sync()
+        assert index_service.get_entry("existing.txt") is not None
+
+        # Add file externally
+        (tmp_path / "external.txt").write_text("new")
+        result = index_service.scan_and_sync()
+        assert result["added"] == 1
+        assert index_service.get_entry("external.txt") is not None
+
+    def test_scan_after_external_file_deleted(self, index_service, tmp_path):
+        """Delete file via OS, scan removes it from index."""
+        (tmp_path / "remove_me.txt").write_text("bye")
+        index_service.scan_and_sync()
+        assert index_service.get_entry("remove_me.txt") is not None
+
+        (tmp_path / "remove_me.txt").unlink()
+        result = index_service.scan_and_sync()
+        assert result["removed"] == 1
+        assert index_service.get_entry("remove_me.txt") is None
+
+    def test_scan_after_db_file_deleted(self, tmp_path):
+        """Delete the .duckdb file, service still works after re-init."""
+        from app.services.file_index_service import FileIndexService
+
+        svc = FileIndexService(tmp_path)
+        (tmp_path / "data.txt").write_text("stuff")
+        svc.scan_and_sync()
+        assert svc.get_entry("data.txt") is not None
+
+        # Delete the DB file
+        db_path = tmp_path / ".library_index.duckdb"
+        db_path.unlink()
+        assert not db_path.exists()
+
+        # scan_and_sync should recreate schema and re-index
+        result = svc.scan_and_sync()
+        assert result["added"] >= 1  # data.txt was added
+        assert svc.get_entry("data.txt") is not None
+
+    def test_update_entry_folder_no_prefix_collision(self, index_service):
+        """Renaming 'proj' does not affect 'proj_extra'."""
+        now = datetime.now()
+        index_service.insert_entry("proj", 0, "folder", now)
+        index_service.insert_entry("proj/file.txt", 10, "txt", now)
+        index_service.insert_entry("proj_extra", 0, "folder", now)
+        index_service.insert_entry("proj_extra/file.txt", 20, "txt", now)
+
+        index_service.update_entry("proj", "project", "project", 0, now)
+
+        # proj_extra should be unaffected
+        assert index_service.get_entry("proj_extra") is not None
+        assert index_service.get_entry("proj_extra/file.txt") is not None
+        # proj should be renamed
+        assert index_service.get_entry("proj") is None
+        assert index_service.get_entry("project") is not None
+        assert index_service.get_entry("project/file.txt") is not None
