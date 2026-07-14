@@ -25,8 +25,14 @@ class FileIndexService:
     # ---- Connection helpers ----
 
     def _get_conn(self) -> duckdb.DuckDBPyConnection:
-        """Open a new DuckDB connection to the index database."""
-        return duckdb.connect(str(self.db_path))
+        """Open a new DuckDB connection to the index database.
+
+        Ensures schema exists (handles case where DB file was deleted
+        externally while the singleton service was still alive).
+        """
+        conn = duckdb.connect(str(self.db_path))
+        self._ensure_schema_on(conn)
+        return conn
 
     def _normalize_path(self, disk_path: Path) -> str:
         """Convert an absolute disk path to a forward-slash relative path."""
@@ -35,32 +41,36 @@ class FileIndexService:
 
     # ---- Schema ----
 
+    def _ensure_schema_on(self, conn):
+        """Run CREATE TABLE IF NOT EXISTS on an open connection (idempotent)."""
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS files (
+                path TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                size BIGINT NOT NULL DEFAULT 0,
+                file_type TEXT NOT NULL,
+                modified_at TIMESTAMP NOT NULL,
+                parent_path TEXT NOT NULL,
+                indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_parent ON files(parent_path)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_name ON files(name)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_type ON files(file_type)"
+        )
+
     def _ensure_schema(self):
-        """Create tables and indexes if they don't exist."""
+        """Create library directory and schema on first init."""
         self.library_dir.mkdir(parents=True, exist_ok=True)
         with self._write_lock:
             conn = self._get_conn()
             try:
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS files (
-                        path TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        size BIGINT NOT NULL DEFAULT 0,
-                        file_type TEXT NOT NULL,
-                        modified_at TIMESTAMP NOT NULL,
-                        parent_path TEXT NOT NULL,
-                        indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_parent ON files(parent_path)"
-                )
-                conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_name ON files(name)"
-                )
-                conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_type ON files(file_type)"
-                )
+                self._ensure_schema_on(conn)
             finally:
                 conn.close()
 
