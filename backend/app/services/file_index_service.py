@@ -111,10 +111,13 @@ class FileIndexService:
         with self._write_lock:
             conn = self._get_conn()
             try:
-                # Get current DB state
-                db_rows = conn.execute(
-                    "SELECT path, size, modified_at FROM files"
-                ).fetchall()
+                # Get current DB state (handle empty table gracefully)
+                try:
+                    db_rows = conn.execute(
+                        "SELECT path, size, modified_at FROM files"
+                    ).fetchall()
+                except Exception:
+                    db_rows = []
                 db_paths: dict[str, tuple] = {
                     row[0]: (row[1], row[2]) for row in db_rows
                 }
@@ -151,7 +154,10 @@ class FileIndexService:
                         conn.execute("DELETE FROM files WHERE path = ?", [path])
                     removed = len(gone)
 
-                total = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+                try:
+                    total = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+                except Exception:
+                    total = 0
             finally:
                 conn.close()
 
