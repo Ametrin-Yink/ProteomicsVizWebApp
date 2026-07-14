@@ -4,7 +4,8 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 
 ## Features
 
-- **Data Input:** Upload TMT or DIA proteomics data files (tab-delimited `.txt` or `.csv`)
+- **File Library:** Centralized file management with DuckDB-backed indexing. Create folders, upload/manage `.txt` and `.csv` files, then select from the library when creating analyses — no re-uploading needed.
+- **Data Input:** Upload TMT or DIA proteomics data files (tab-delimited `.txt` or `.csv`), or select from the File Library
 - **Processing Pipeline:** 8-step analysis pipeline with TMT→MSstats or DIA→msqrob2 paths
 - **Visualization:** Interactive volcano plots, QC metrics, GSEA enrichment, BioNet networks
 - **Session Management:** Persistent sessions that survive server restarts
@@ -56,14 +57,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 From the welcome page, create a new analysis session and give it a name.
 
-### 2. Upload Data
+### 2. Manage Files (Optional)
 
-Upload Proteome Discoverer export files (`.txt` or `.csv`, tab or comma delimited). Any filename is accepted.
+Use the **Files** tab to upload and organize your proteomics data files. Create folders, upload `.txt`/`.csv` files, rename, move, or delete them. The file library is indexed by DuckDB and survives across sessions.
 
-- **TMT data:** Multiplexed reporter ion channels (e.g., `Abundance 126` through `Abundance 134N`)
-- **DIA data:** Label-free with single `Quan Value` column per PSM
+### 3. Create a Session and Select Files
 
-Select the analysis type (TMT or DIA) when creating a session. The pipeline is auto-derived from your file type.
+From the Home page, click a workflow card (TMT, DIA, or PTM) to create a new analysis session. On the upload step, click **Browse File Library** to select files from your library instead of uploading them each time. Files are copied into the session for processing.
+
+For TMT data, you can also import a channel design CSV from the file library on the Metadata page.
 
 ### 3. Configure and Process
 

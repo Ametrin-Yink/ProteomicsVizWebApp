@@ -89,7 +89,8 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 ```
 
 **Key Modules:**
-- `app/api/routes/` - 6 route modules (sessions, upload, processing, visualization, reports, compare)
+- `app/api/routes/` - 7 route modules (sessions, upload, processing, visualization, reports, compare, files)
+- `app/services/file_index_service.py` - DuckDB-backed file library index with scan-and-sync diffing
 - `app/services/pipeline_engine.py` - Plugin-based step execution engine with PipelineState tracking
 - `app/services/pipeline_registry.py` - Pipeline definitions for msqrob2, MSstats, and PTM tools
 - `app/services/steps/` - Individual step handlers (15 handler files across inputs, shared, engines, and PTM)
@@ -102,6 +103,35 @@ HTTP Request -> API Router -> Service Layer -> R Script / Python Processing
 - `app/db/session_store.py` - JSON-based session persistence
 - `app/models/` - Pydantic models: analysis.py (PipelineTool, AnalysisConfig), data.py (PSM, DE results), session.py (Session, SessionState)
 - `scripts/` - R scripts called via subprocess (see Pipeline section below)
+
+**File Library Architecture:**
+```
+File Library (global, cross-session)
+├── {FILE_LIBRARY_DIR}/                         # configurable via .env, default backend/file_library/
+│   ├── .library_index.duckdb                   # DuckDB metadata index
+│   └── user-created folders with .txt/.csv files
+│
+├── FileIndexService (backend/app/services/file_index_service.py)
+│   ├── DuckDB schema: files(path TEXT PK, name, size, file_type, parent_path, modified_at)
+│   ├── scan_and_sync() — os.walk diff against DB, guarded by threading.Lock
+│   ├── CRUD: insert_entry, update_entry, delete_entry (cascade for folders)
+│   └── Read: list_directory, search (LIKE with escape), get_entry, count
+│
+├── Files API (backend/app/api/routes/files.py) — 10 endpoints at /api/files/*
+│   ├── GET /tree?path= — list directory (lazy, per-folder on expand)
+│   ├── POST /folders, /upload, /scan
+│   ├── PUT /rename, /move
+│   ├── DELETE /delete
+│   ├── GET /search?q=, /content?path= (10MB max, for metadata CSV import)
+│   └── POST /select — copy files from library to session, parse, return metadata
+│
+└── Frontend: /files page + FileLibraryPicker modal
+    ├── FileLibraryPage — folder tree, file list, toolbar, context menu
+    ├── FolderTree — lazy-loaded recursive tree with expand/collapse
+    ├── FileList — sortable table with checkboxes, breadcrumbs, file type filter
+    ├── FileLibraryPicker — modal picker reusing FolderTree, used in wizard + metadata
+    └── fileLibraryApi (api-client.ts) — 10 typed methods
+```
 
 **Critical Pattern - R Integration via Subprocess:**
 ```python
@@ -125,6 +155,17 @@ frontend/src/stores/
 ├── ui-store.ts            # UI state
 ├── analysis-store.ts      # Analysis state
 ├── processing-store.ts    # Real-time processing status + WebSocket + queue tracking
+```
+
+**File Library Components:**
+```
+frontend/src/components/files/
+├── FileLibraryPage.tsx    # Main page layout, state management, all handlers
+├── FileLibraryToolbar.tsx # New Folder, Upload, Delete, Rename, Search, Refresh
+├── FolderTree.tsx         # Lazy-loaded recursive folder tree
+├── FileList.tsx           # Sortable table, breadcrumbs, checkboxes, file type filter
+├── FileLibraryPicker.tsx  # Modal picker (reuses FolderTree) for wizard + metadata
+└── ContextMenu.tsx        # Right-click menu (Rename, Delete, Copy Path)
 ```
 
 **Pattern - Store Usage:**
@@ -208,7 +249,7 @@ backend/app/services/steps/
 | `msqrob2_data_process.R` | 6 (msqrob2) | Full QFeatures pipeline: filter, log2, normalize, impute, aggregate, gene map, batch correct |
 | `msqrob2_group_comparison_multi.R` | 7 (msqrob2) | Multi-condition DE via msqrob v1.16 API (`msqrob()` + `makeContrast()` + `hypothesisTest()`) |
 | `msstats_data_process.R` | 6 (MSstats) | MSstats protein abundance (DDARawData → OpenMStoMSstatsFormat → dataProcess) |
-| `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison (contrast matrix → groupComparison) |
+| `msstats_group_comparison_multi.R` | 7 (MSstats) | MSstats group comparison (contrast matrix → groupComparison). Uses `grepl(fixed=TRUE)` for GROUP substring matching (not exact `==`). |
 | `bionet_network.R` | on-demand | INDRA subnetwork analysis via MSstatsBioNet |
 | `ptm_summarization.R` | PTM 2 | MSstatsPTM summarization |
 | `ptm_group_comparison.R` | PTM 3 | PTM group comparison via MSstatsPTM |
@@ -305,6 +346,8 @@ backend/app/services/steps/
 
 **Other:** `WS /ws/sessions/{id}` `GET /api/organisms` `POST /{id}/analysis/start` (deprecated→`/process`)
 
+**Files (File Library):** `GET /api/files/tree?path=` `POST /api/files/folders` `POST /api/files/upload` `PUT /api/files/rename` `PUT /api/files/move` `DELETE /api/files/delete` `POST /api/files/scan` `GET /api/files/search?q=` `GET /api/files/content?path=` `POST /api/files/select`
+
 ## Session Storage
 
 Sessions persisted to `backend/sessions/{session_id}/`:
@@ -318,7 +361,9 @@ Sessions persisted to `backend/sessions/{session_id}/`:
 ## Key Files Reference
 
 - `backend/app/main.py` - FastAPI application, route mounting, lifespan handlers
-- `backend/app/core/config.py` - Settings (pydantic-settings: R paths, timeouts, caching)
+- `backend/app/core/config.py` - Settings (pydantic-settings: R paths, timeouts, caching, file_library_dir)
+- `backend/app/services/file_index_service.py` - DuckDB-backed file library index with scan-and-sync
+- `backend/app/api/routes/files.py` - File library API (10 endpoints at /api/files/*)
 - `backend/app/services/pipeline_engine.py` - Pipeline step execution engine with PipelineState
 - `backend/app/services/pipeline_registry.py` - Pipeline definitions for msqrob2 and MSstats tools
 - `backend/app/services/processing_orchestrator.py` - Pipeline orchestration (adapts engine to session lifecycle)
@@ -458,6 +503,14 @@ python -m venv .venv
 ### R Scripts
 - **Use `fixed=TRUE` in `grepl()`** when matching user-provided strings to avoid regex injection
 - **Don't use `colMedians`** (not in base R) - Use `apply(x, 2, median, na.rm=TRUE)`
+- **MSstats GROUP matching:** Use `grepl(target_val, GROUP, fixed=TRUE)` for substring matching, not `==` exact match. MSstats embeds BioReplicate/Run suffixes in GROUP values (e.g., `DMSO_24h_1_1`), so exact-match comparisons silently produce empty groups and "No valid comparisons" errors.
+
+### File Library
+- **DuckDB `LIKE` with leading wildcard causes full table scan.** Use exact `WHERE parent_path = ?` for directory listing, and indexed lookups where possible. The `path LIKE 'prefix/%'` pattern for folder cascades cannot use the PK index.
+- **`threading.Lock` is required for DuckDB writes.** DuckDB allows concurrent readers but serializes writers. The `FileIndexService._write_lock` guards all write operations (scan, insert, update, delete).
+- **`ProteomicsFileInfo` lacks `tmt_channels` field.** TMT channel info is attached to API response dicts but lost on session save. Workaround: frontend re-derives channels from `columns` matching `/^Abundance\s+(\d+[NC]?)$/`.
+- **Replicate key is case-sensitive across the stack** — CSV import checks `h === 'Replicate'`, validation checks `entry.replicate`, comparisons auto-generate filters `k !== 'replicate'`. Always normalize to lowercase at the parse boundary.
+- **Next.js dev proxy drops large multipart uploads** — files >200MB through `npm run dev` time out with 500. Use direct backend port 8000 for large uploads, or `npm run build && npm start`.
 
 ### Testing
 - **Always run tests from project root** - `backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit` not `cd backend && pytest`
