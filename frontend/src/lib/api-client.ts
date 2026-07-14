@@ -67,6 +67,8 @@ export interface SelectedFileInfo {
 // Use empty base URL to go through Next.js proxy (avoids CORS)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const API_PREFIX = '/api';  // Backend routes are at /api
+// Large file uploads bypass Next.js proxy (which drops >200MB multipart requests)
+const UPLOAD_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Helper to build API URLs
 const apiUrl = (path: string) => `${API_BASE_URL}${API_PREFIX}${path}`;
@@ -1148,7 +1150,7 @@ export const fileLibraryApi = {
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
     const response = await fetch(
-      `${API_PREFIX}/files/upload?target_path=${encodeURIComponent(targetPath)}`,
+      `${UPLOAD_BASE_URL}${API_PREFIX}/files/upload?target_path=${encodeURIComponent(targetPath)}`,
       { method: 'POST', body: formData },
     );
     if (!response.ok) {
