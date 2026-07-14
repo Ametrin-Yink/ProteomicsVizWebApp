@@ -5,6 +5,7 @@ Uses 12 DIA sample files (10K rows each) with 4 conditions across 3 drugs.
 Verifies all 8 msqrob2 pipeline steps complete via file library selection.
 """
 
+import os
 import shutil
 import time
 from pathlib import Path
@@ -131,8 +132,12 @@ def dia_session():
     r = requests.get(f"{API}/{sid}")
     yield r.json()
 
-    # Cleanup: delete session + remove test folder from library
+    # Cleanup: delete session + remove only the test subfolder
     requests.delete(f"{API}/{sid}")
+    test_dir = dia_folder.resolve()
+    lib_root = lib_dir.resolve()
+    if test_dir == lib_root or not str(test_dir).startswith(str(lib_root) + os.sep):
+        raise RuntimeError(f"Safety: refusing to delete {test_dir} (not a subfolder of library)")
     if dia_folder.exists():
         shutil.rmtree(dia_folder)
     requests.post(f"{FILES_API}/scan", timeout=30)

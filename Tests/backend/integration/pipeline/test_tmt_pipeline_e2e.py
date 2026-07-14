@@ -8,6 +8,7 @@ Verifies all 8 pipeline steps complete and produce expected DE results.
 """
 
 import csv
+import os
 import shutil
 import time
 from collections import defaultdict
@@ -44,7 +45,12 @@ def parse_channel_design(csv_path: Path) -> dict:
 
 
 def setup_file_library(library_dir: Path, fixture_path: Path, target_folder: str):
-    """Copy test fixture into the file library directory and scan."""
+    """Copy test fixture into a subfolder of the file library and scan.
+
+    Safety: only creates files in a named subfolder, never at library root.
+    """
+    if not target_folder or not target_folder.strip():
+        raise ValueError("target_folder must be a non-empty string")
     target_dir = library_dir / target_folder
     target_dir.mkdir(parents=True, exist_ok=True)
     dest = target_dir / fixture_path.name
@@ -92,8 +98,11 @@ def file_library_dir():
     lib_dir = settings.file_library_dir
     setup_file_library(lib_dir, TMT_FILE, "E2E_TMT")
     yield lib_dir
-    # Cleanup: remove the test folder from the library
-    test_dir = lib_dir / "E2E_TMT"
+    # Cleanup: remove only the test subfolder (never the library root)
+    test_dir = (lib_dir / "E2E_TMT").resolve()
+    lib_root = lib_dir.resolve()
+    if test_dir == lib_root or not str(test_dir).startswith(str(lib_root) + os.sep):
+        raise RuntimeError(f"Safety: refusing to delete {test_dir} (not a subfolder of library)")
     if test_dir.exists():
         shutil.rmtree(test_dir)
     # Re-scan to update index
