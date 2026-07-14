@@ -84,6 +84,7 @@ nosetests.xml
 # --- Project: runtime data ---
 sessions/
 backend/sessions/
+backend/file_library/
 backend/reports/
 backend/Tests/
 uploads/
