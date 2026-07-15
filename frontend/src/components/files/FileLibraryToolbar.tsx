@@ -29,8 +29,8 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div>
-    <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface">
+    <div className="border-b border-border bg-surface">
+    <div className="flex items-center gap-2 px-4 py-2">
       {/* Actions */}
       <button
         onClick={onCreateFolder}
@@ -125,13 +125,14 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
         <RefreshCw className="w-4 h-4" />
       </button>
 
-      {/* Upload indicator — animated bar */}
+    </div>
+
+      {/* Upload indicator — animated bar (below toolbar) */}
       {uploading && (
         <div className="h-1 bg-primary/20 overflow-hidden">
           <div className="h-full w-2/3 bg-primary animate-pulse rounded" />
         </div>
       )}
-    </div>
     </div>
   );
 };

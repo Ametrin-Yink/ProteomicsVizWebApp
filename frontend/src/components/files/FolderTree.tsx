@@ -28,6 +28,8 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
 }) => {
   const [rootNodes, setRootNodes] = useState<TreeNode[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [rootError, setRootError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Load root-level folders on mount
   useEffect(() => {
@@ -41,8 +43,12 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
           loaded: false,
         }));
       setRootNodes(folders);
-    }).catch(() => {});
-  }, [refreshKey]);
+      setRootError(null);
+    }).catch((err) => {
+      console.error('Failed to load root folders:', err);
+      setRootError('Failed to load folders');
+    });
+  }, [refreshKey, loadAttempt]);
 
   const toggleExpand = useCallback(async (node: TreeNode) => {
     const newExpanded = new Set(expandedPaths);
@@ -57,18 +63,24 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
 
     // Lazy-load children
     if (!node.loaded) {
-      const data = await fileLibraryApi.listDirectory(node.path);
-      const children = data.entries
-        .filter(e => e.type === 'folder')
-        .map(e => ({
-          name: e.name,
-          path: e.path,
-          children: [],
-          loaded: false,
-        }));
-      node.children = children;
-      node.loaded = true;
-      setRootNodes([...rootNodes]);
+      try {
+        const data = await fileLibraryApi.listDirectory(node.path);
+        const children = data.entries
+          .filter(e => e.type === 'folder')
+          .map(e => ({
+            name: e.name,
+            path: e.path,
+            children: [],
+            loaded: false,
+          }));
+        node.children = children;
+        node.loaded = true;
+        setRootNodes([...rootNodes]);
+      } catch (err) {
+        console.error('Failed to load children:', err);
+        // Keep node collapsed so user can retry
+        setExpandedPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
+      }
     }
   }, [expandedPaths, rootNodes]);
 
@@ -125,6 +137,12 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         <Folder className="w-4 h-4 flex-shrink-0" />
         <span className="truncate">File Library</span>
       </div>
+      {rootError && (
+        <div className="px-3 py-2 text-xs text-error">
+          <p>{rootError}</p>
+          <button onClick={() => { setRootError(null); setLoadAttempt(c => c + 1); }} className="underline">Retry</button>
+        </div>
+      )}
       {rootNodes.map(node => renderNode(node, 1))}
     </div>
   );

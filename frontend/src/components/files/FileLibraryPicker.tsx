@@ -29,6 +29,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
   const [pickerFilter, setPickerFilter] = useState<'all' | 'txt' | 'csv'>('all');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
     entries,
@@ -38,18 +39,19 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   // Load directory on mount and on path change
   const loadDirectory = useCallback(async (path: string) => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await fileLibraryApi.listDirectory(path);
       setEntries(data.entries.filter(e => {
         if (fileType === 'csv-only') return e.type === 'csv' || e.type === 'folder';
         return e.type === 'txt' || e.type === 'csv' || e.type === 'folder';
       }));
-    } catch {
-      addToast('error', 'Failed to load file library');
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [fileType, addToast]);
+  }, [fileType]);
 
   useEffect(() => {
     loadDirectory(currentPath);
@@ -106,7 +108,12 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
         onSelect(paths);
       }
     } catch (err) {
-      addToast('error', `Failed to select files: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      if (fileType === 'csv-only') {
+        addToast('error', `Failed to read CSV file: ${msg}`);
+      } else {
+        addToast('error', `Failed to copy files to session: ${msg}`);
+      }
     } finally {
       setCopying(false);
     }
@@ -190,6 +197,11 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              </div>
+            ) : loadError ? (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <p className="text-sm text-error">{loadError}</p>
+                <button onClick={() => loadDirectory(currentPath)} className="underline">Retry</button>
               </div>
             ) : isEmpty ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
