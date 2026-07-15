@@ -117,6 +117,12 @@ class ProteomicsFileInfo(FileInfo):
     file_type: str | None = Field(
         default=None, description="Detected file type: 'tmt' or 'dia'"
     )
+    tmt_channels: list[str] | None = Field(
+        default=None, description="Detected TMT reporter ion channels"
+    )
+    has_quan_value: bool | None = Field(
+        default=None, description="Whether the file has a Quan Value column (DIA)"
+    )
 
 
 class SessionFiles(BaseModel):

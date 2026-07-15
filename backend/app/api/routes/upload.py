@@ -97,6 +97,8 @@ async def upload_proteomics_files(
             uploaded_at=datetime.now(UTC),
             columns=result["columns"],
             file_type=file_type,
+            tmt_channels=result.get("tmt_channels"),
+            has_quan_value=result.get("has_quan_value", False),
         )
         session.files.proteomics.append(proteomics_file)
 

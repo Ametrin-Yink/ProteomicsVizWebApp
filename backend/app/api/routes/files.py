@@ -390,6 +390,8 @@ async def select_files_for_session(
             size=dest.stat().st_size,
             columns=result["columns"],
             file_type=file_type,
+            tmt_channels=result.get("tmt_channels"),
+            has_quan_value=result.get("has_quan_value", False),
         )
         session.files.proteomics.append(proteomics_file)
 
