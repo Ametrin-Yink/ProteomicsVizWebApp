@@ -7,7 +7,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Plus, Download, Upload, AlertCircle } from 'lucide-react';
+import { Plus, Download, Upload, AlertCircle, Undo2 } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import type { UploadedFileInfo } from '@/types';
@@ -22,6 +22,7 @@ interface TmtChannelMappingProps {
 
 export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, compact }) => {
   const allMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping ?? {});
+  const setConfig = useAnalysisStore((s) => s.setConfig);
   const updateChannelMapping = useAnalysisStore((s) => s.updateChannelMapping);
   const importChannelMapping = useAnalysisStore((s) => s.importChannelMapping);
   const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
@@ -29,6 +30,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
 
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [history, setHistory] = useState<Array<Record<string, Record<string, unknown>>>>([]);
 
   const channels = useMemo(() => file.tmt_channels || [], [file.tmt_channels]);
 
@@ -111,8 +113,17 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
     });
   };
 
-  const updateField = (channel: string, col: string, value: string | number) => {
+  const handleUpdateWithUndo = (channel: string, col: string, value: string | number) => {
+    const current = useAnalysisStore.getState().config.tmt_channel_mapping ?? {};
+    setHistory(prev => [...prev.slice(-20), structuredClone(current)]);
     updateChannelMapping(file.filename, channel, { [col]: value });
+  };
+
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setConfig({ tmt_channel_mapping: prev as Record<string, Record<string, string | number>> });
   };
 
   const updateExperimentName = (name: string) => {
@@ -242,6 +253,14 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
           >
             <Download className="w-4 h-4" /> Export Mapping CSV
           </button>
+          <button
+            onClick={handleUndo}
+            disabled={history.length === 0}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-surface border border-border rounded-md hover:bg-border/20 transition-colors text-text disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Undo last change"
+          >
+            <Undo2 className="w-4 h-4" /> Undo
+          </button>
         </div>
       </div>
 
@@ -280,7 +299,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
                       <input
                         type="text"
                         value={String(entry[col] ?? '')}
-                        onChange={(e) => updateField(channel, col, e.target.value)}
+                        onChange={(e) => handleUpdateWithUndo(channel, col, e.target.value)}
                         className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                       />
                     </td>
@@ -290,7 +309,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
                       type="number"
                       min={1}
                       value={entry.replicate ?? ''}
-                      onChange={(e) => updateField(channel, 'replicate', parseInt(e.target.value, 10) || 0)}
+                      onChange={(e) => handleUpdateWithUndo(channel, 'replicate', parseInt(e.target.value, 10) || 0)}
                       className="w-20 px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                     />
                   </td>

@@ -78,6 +78,13 @@ function ComparisonsContent() {
     setGroup2Cards(prev => [...prev, card]);
   };
 
+  // Warn user before leaving page with unsaved data
+  React.useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   // --- Saving state ---
   const [isSaving, setIsSaving] = React.useState(false);
 
@@ -423,6 +430,10 @@ function ComparisonsContent() {
         </div>
         <div className="p-5 space-y-4">
           {/* Condition Palette */}
+          <p className="text-xs text-text-muted mb-2">
+            Drag cards to groups or use the A/B buttons. Each card represents one attribute.
+            Combine multiple cards to define a condition.
+          </p>
           <div
             className="p-3 bg-surface rounded-lg border border-border min-h-[60px]"
             onDragOver={handleDragOver}
@@ -430,7 +441,14 @@ function ComparisonsContent() {
           >
             <p className="text-xs text-text-muted mb-2 font-medium">Condition Palette (drag to groups or drop here to return)</p>
             {Object.keys(paletteGroups).length === 0 ? (
-              <p className="text-xs text-text-muted italic">No condition cards available. Configure metadata first.</p>
+              <div className="flex flex-col items-center gap-3 py-8">
+              <p className="text-sm text-text-muted">No condition cards available.</p>
+              <p className="text-xs text-text-muted">Configure metadata first to define conditions.</p>
+              <button onClick={() => router.push(`/new/metadata?session=${sessionId}`)}
+                className="px-4 py-2 text-sm text-primary border border-primary rounded-lg hover:bg-primary/5">
+                Go to Metadata
+              </button>
+            </div>
             ) : (
               <div className="space-y-2">
                 {Object.entries(paletteGroups).map(([colName, cards]) => {

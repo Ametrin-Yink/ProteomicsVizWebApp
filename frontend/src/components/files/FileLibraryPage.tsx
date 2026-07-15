@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { FolderOpen, Loader2 } from 'lucide-react';
 import { useFileSearch } from '@/hooks/use-file-search';
 import { fileLibraryApi, FileLibraryEntry } from '@/lib/api-client';
@@ -24,6 +24,7 @@ export const FileLibraryPage: React.FC = () => {
   const [totalSize, setTotalSize] = useState(0);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
   const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
     entries,
     fileType: 'all',
@@ -42,15 +43,20 @@ export const FileLibraryPage: React.FC = () => {
   // ---- Core Library Loading ----
 
   const loadLibrary = useCallback(async (path: string) => {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
     setLoading(true);
     setError(null);
     try {
       if (path === '') {
         const scanResult = await fileLibraryApi.scan();
+        if (signal.aborted) return;
         setTotalFiles(scanResult.total);
         setLastScan(new Date());
       }
-      const data = await fileLibraryApi.listDirectory(path);
+      const data = await fileLibraryApi.listDirectory(path, signal);
+      if (signal.aborted) return;
       setEntries(data.entries);
       let size = 0;
       for (const e of data.entries) {
@@ -58,16 +64,18 @@ export const FileLibraryPage: React.FC = () => {
       }
       setTotalSize(size);
     } catch (_err) {
+      if (_err instanceof DOMException && (_err as DOMException).name === 'AbortError') return;
       const msg = _err instanceof Error ? _err.message : 'Failed to load file library';
       setError(msg);
       addToast('error', msg);
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, [addToast]);
 
   useEffect(() => {
     loadLibrary('');
+    return () => { if (abortRef.current) abortRef.current.abort(); };
   }, [loadLibrary]);
 
   const handleRefresh = useCallback(async () => {

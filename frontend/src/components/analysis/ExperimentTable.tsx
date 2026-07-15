@@ -553,6 +553,7 @@ export const ExperimentTable: React.FC = () => {
           <tbody className="bg-background divide-y divide-border">
             {filteredAndSortedFiles.slice((page - 1) * pageSize, page * pageSize).map((file, index) => {
               const isSelected = selectedFiles.has(file.filename);
+              const meta = config.metadata_columns?.[file.filename] || {};
 
               return (
                 <tr
@@ -580,7 +581,7 @@ export const ExperimentTable: React.FC = () => {
                   </td>
                   <td className="px-4 py-3">
                     <EditableBadge
-                      value={file.experiment}
+                      value={meta.experiment || file.experiment}
                       isEditing={editingCell === `${file.filename}-exp`}
                       onEdit={() => setEditingCell(`${file.filename}-exp`)}
                       onSave={(val) => { updateFileMetadata(file.filename, { experiment: val }); setEditingCell(null); }}
@@ -601,7 +602,7 @@ export const ExperimentTable: React.FC = () => {
                   ))}
                   <td className="px-4 py-3 text-right">
                     <span className="text-sm text-text font-mono">
-                      #{file.replicate}
+                      #{meta.replicate || file.replicate}
                     </span>
                   </td>
                   <td className="px-4 py-3">

@@ -35,6 +35,7 @@ function UploadContentInner() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
+  const [isProcessingSelection, setIsProcessingSelection] = useState(false);
 
   // Reset analysis store when session changes — prevents stale file/config leakage
   useEffect(() => {
@@ -104,16 +105,8 @@ function UploadContentInner() {
         for (const pf of parsedFiles) store.addUploadedFile(pf);
         setPtmEnrichmentFiles((prev) => [...prev, ...parsedFiles]);
         addToast('success', `Uploaded ${data.files.length} PTM enrichment file(s)`);
-        if (detectedMods.length === 0) {
-          setTimeout(() => {
-            setDetectedMods([
-              'Phosphorylation (STY)',
-              'Acetylation (K)',
-              'Methylation (KR)',
-              'Ubiquitination (K)',
-            ]);
-          }, 1000);
-        }
+        // Modifications detection requires a backend endpoint (not yet available)
+        // When ready, call: const result = await api.detectPTMModifications(sessionId);
       }
     } catch (err) {
       addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -281,8 +274,9 @@ function UploadContentInner() {
             }
           }
         }
-      } catch {
-        // Network error — allow continuing offline
+      } catch (err) {
+        console.error('Session restore failed:', err);
+        // Don't addToast here — useErrorStore may not be available. Set state instead.
       } finally {
         setIsRestoring(false);
       }
@@ -305,6 +299,13 @@ function UploadContentInner() {
       router.replace('/');
     }
   }, [sessionId, analysisType, isRestoring, router, addToast]);
+
+  // Warn user before leaving page with unsaved data
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   const hasCriticalErrors = validation.warnings.filter((w) => w.type === 'error').length > 0;
   const ptmHasEnrichmentFiles = ptmEnrichmentFiles.length > 0;
@@ -337,6 +338,16 @@ function UploadContentInner() {
       setIsSaving(false);
     }
   };
+
+  if (isRestoring) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="h-6 bg-surface rounded animate-pulse w-1/2" />
+        <div className="h-48 bg-surface rounded animate-pulse w-full" />
+        <div className="h-6 bg-surface rounded animate-pulse w-3/4" />
+      </div>
+    );
+  }
 
   if (!sessionId) {
     return (
@@ -406,20 +417,30 @@ function UploadContentInner() {
                   fileType={analysisType as 'tmt' | 'dia'}
                   onSelect={async (_paths) => {
                     setShowPicker(false);
+                    setIsProcessingSelection(true);
                     // paths were already copied to session by the picker
                     // Reload session files to get parsed metadata
-                    const resp = await fetch(`/api/sessions/${sessionId}`);
-                    if (resp.ok) {
-                      const raw = await resp.json();
-                      const files = mapBackendFiles(raw.files);
-                      const { addUploadedFile } = useAnalysisStore.getState();
-                      for (const file of files) {
-                        addUploadedFile(file);
+                    try {
+                      const resp = await fetch(`/api/sessions/${sessionId}`);
+                      if (resp.ok) {
+                        const raw = await resp.json();
+                        const files = mapBackendFiles(raw.files);
+                        const { addUploadedFile } = useAnalysisStore.getState();
+                        for (const file of files) {
+                          addUploadedFile(file);
+                        }
                       }
+                    } finally {
+                      setIsProcessingSelection(false);
                     }
                   }}
                   onClose={() => setShowPicker(false)}
                 />
+              )}
+              {isProcessingSelection && (
+                <div className="flex items-center gap-2 text-sm text-text-muted mt-3">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Processing files...
+                </div>
               )}
             </div>
           </section>

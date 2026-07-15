@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { X, Loader2, Search, FolderOpen } from 'lucide-react';
 import { fileLibraryApi, FileLibraryEntry } from '@/lib/api-client';
 import { useUIStore } from '@/stores/ui-store';
@@ -30,6 +30,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const [copying, setCopying] = useState(false);
   const [pickerFilter, setPickerFilter] = useState<'all' | 'txt' | 'csv'>('all');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
     entries,
@@ -38,23 +39,29 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
 
   // Load directory on mount and on path change
   const loadDirectory = useCallback(async (path: string) => {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await fileLibraryApi.listDirectory(path);
+      const data = await fileLibraryApi.listDirectory(path, signal);
+      if (signal.aborted) return;
       setEntries(data.entries.filter(e => {
         if (fileType === 'csv-only') return e.type === 'csv' || e.type === 'folder';
         return e.type === 'txt' || e.type === 'csv' || e.type === 'folder';
       }));
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setLoadError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, [fileType]);
 
   useEffect(() => {
     loadDirectory(currentPath);
+    return () => { if (abortRef.current) abortRef.current.abort(); };
   }, [currentPath, loadDirectory]);
 
   // Apply picker-level file type filter on top of search results or directory entries
@@ -257,7 +264,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
                           className="w-4 h-4 rounded"
                         />
                       </td>
-                      <td className="px-2 py-2 text-sm text-text">{entry.name}</td>
+                      <td className="px-2 py-2 text-sm text-text truncate max-w-[300px]" title={entry.name}>{entry.name}</td>
                       <td className="px-2 py-2 text-sm text-text-muted">
                         {entry.size < 1024 ? `${entry.size} B` : `${(entry.size / (1024 * 1024)).toFixed(1)} MB`}
                       </td>

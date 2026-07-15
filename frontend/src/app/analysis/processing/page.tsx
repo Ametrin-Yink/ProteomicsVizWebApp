@@ -250,18 +250,28 @@ function ProcessingContent() {
     if (!sessionId || isComplete || error) return;
 
     let active = true;
+    const MAX_POLL_RETRIES = 200;
+    let retryCount = 0;
     let timeoutId: ReturnType<typeof setTimeout>;
+
+    const scheduleNext = (delay: number) => {
+      if (!active) return;
+      timeoutId = setTimeout(poll, delay);
+    };
 
     const poll = async () => {
       if (!active) return;
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const fetchTimeoutId = setTimeout(() => controller.abort(), 15000);
         const logData = await processingApi.getLogs(sessionId);
-        clearTimeout(timeoutId);
+        clearTimeout(fetchTimeoutId);
 
         if (!active) return;
+
+        // Reset retry count on successful response
+        retryCount = 0;
 
         if (logData) {
           // Sync step progress from completed_steps and current_step
@@ -327,10 +337,15 @@ function ProcessingContent() {
         } else {
           console.error('Polling error:', err);
         }
+        retryCount++;
+        const delay = retryCount >= MAX_POLL_RETRIES ? null : Math.min(3000 * Math.pow(1.5, Math.min(retryCount, 10)), 30000);
+        if (!delay) return; // Stop polling after max retries
+        scheduleNext(delay);
+        return;
       }
 
       if (active) {
-        timeoutId = setTimeout(poll, 3000);
+        scheduleNext(3000);
       }
     };
 

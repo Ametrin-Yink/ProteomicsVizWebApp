@@ -53,6 +53,13 @@ function SummaryContent() {
   const selectedPipeline = getPipelineFromType(analysisType);
   const { addToast } = useUIStore();
 
+  // Warn user before leaving page with unsaved data
+  React.useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
   const [isStarting, setIsStarting] = React.useState(false);
 

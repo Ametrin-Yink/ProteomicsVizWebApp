@@ -1136,8 +1136,8 @@ export const exportApi = {
 // ═══════════════════════════════════════════════════════════════════════
 
 export const fileLibraryApi = {
-  listDirectory: (path: string): Promise<{ path: string; entries: FileLibraryEntry[] }> =>
-    api.get(`/files/tree?path=${encodeURIComponent(path)}`).then(r => r.data),
+  listDirectory: (path: string, signal?: AbortSignal): Promise<{ path: string; entries: FileLibraryEntry[] }> =>
+    api.get(`/files/tree?path=${encodeURIComponent(path)}`, { signal }).then(r => r.data),
 
   createFolder: (parentPath: string, name: string): Promise<{ path: string; name: string }> =>
     api.post(`/files/folders`, { parent_path: parentPath, name }).then(r => r.data),

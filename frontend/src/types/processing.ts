@@ -143,7 +143,7 @@ export const PROCESSING_STEPS: Omit<ProcessingStepDef, 'status' | 'progress' | '
   },
   {
     id: 3,
-    name: 'Remove Razor Information',
+    name: 'Remove Razor Peptides',
     description: 'Filter out razor peptide assignments',
     moduleName: 'Python',
     method: 'Custom logic',

@@ -85,6 +85,13 @@ function MetadataContentInner() {
     }
   }, [sessionId, analysisType, uploadedFiles.length, isRestoring, router, addToast]);
 
+  // Warn user before leaving page with unsaved data
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   // Restore session state on mount
   useEffect(() => {
     if (!sessionId) return;

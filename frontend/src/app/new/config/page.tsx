@@ -40,6 +40,13 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
 
   const [isStarting, setIsStarting] = React.useState(false);
 
+  // Warn user before leaving page with unsaved data
+  React.useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   // Redirect guard: no session or no analysis type -> back to earlier step
   React.useEffect(() => {
     if (!sessionId) {

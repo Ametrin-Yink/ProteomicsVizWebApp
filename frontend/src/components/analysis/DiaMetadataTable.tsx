@@ -23,6 +23,7 @@ export const DiaMetadataTable: React.FC = () => {
 
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
 
   // Derive data column names from metadata_columns (exclude core fields)
   const dataColumns = useMemo(() => {
@@ -115,6 +116,20 @@ export const DiaMetadataTable: React.FC = () => {
     if (col === 'batch') {
       updateFileMetadata(filename, { batch: value });
     }
+  };
+
+  const validateCell = (filename: string, col: string, value: string) => {
+    const key = `${filename}:${col}`;
+    if (col === 'experiment' && !value.trim()) {
+      setCellErrors(prev => ({ ...prev, [key]: 'Required' }));
+      return false;
+    }
+    if (col === 'replicate' && (isNaN(Number(value)) || Number(value) < 1)) {
+      setCellErrors(prev => ({ ...prev, [key]: 'Must be ≥ 1' }));
+      return false;
+    }
+    setCellErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+    return true;
   };
 
   // --- CSV Import ---
@@ -290,8 +305,12 @@ export const DiaMetadataTable: React.FC = () => {
                       type="text"
                       value={meta.experiment || ''}
                       onChange={(e) => updateCell(file.filename, 'experiment', e.target.value)}
+                      onBlur={(e) => validateCell(file.filename, 'experiment', e.target.value)}
                       className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                     />
+                    {cellErrors[`${file.filename}:experiment`] && (
+                      <span className="text-xs text-error block mt-0.5">{cellErrors[`${file.filename}:experiment`]}</span>
+                    )}
                   </td>
                   {dataColumns.map((col) => (
                     <td key={col} className="px-4 py-3">
@@ -299,6 +318,7 @@ export const DiaMetadataTable: React.FC = () => {
                         type="text"
                         value={meta[col] || ''}
                         onChange={(e) => updateCell(file.filename, col, e.target.value)}
+                        onBlur={(e) => validateCell(file.filename, col, e.target.value)}
                         className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                       />
                     </td>
@@ -309,8 +329,12 @@ export const DiaMetadataTable: React.FC = () => {
                       min={1}
                       value={meta.replicate || ''}
                       onChange={(e) => updateCell(file.filename, 'replicate', e.target.value)}
+                      onBlur={(e) => validateCell(file.filename, 'replicate', e.target.value)}
                       className="w-20 px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                     />
+                    {cellErrors[`${file.filename}:replicate`] && (
+                      <span className="text-xs text-error block mt-0.5">{cellErrors[`${file.filename}:replicate`]}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <input
