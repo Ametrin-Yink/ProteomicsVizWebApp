@@ -40,9 +40,6 @@ interface AnalysisState {
   // Analysis type (replaces selectedTemplate + selectedPipeline)
   analysisType: AnalysisType | null;
 
-  // TMT channel-to-condition mapping
-  tmtChannelMapping: Record<string, Record<string, string | number>>;
-
   // PTM-specific state
   ptmLabelingType: 'LF' | 'TMT';
   ptmDetectedMods: string[];
@@ -83,7 +80,7 @@ interface AnalysisState {
   setPtmFastaFile: (filename: string | null) => void;
   setPtmGlobalProteomeFiles: (count: number) => void;
   // TMT channel mapping actions
-  updateChannelMapping: (channel: string, groups: Record<string, string | number>) => void;
+  updateChannelMapping: (filename: string, channel: string, groups: Record<string, string | number>) => void;
   importChannelMapping: (csvData: string) => void;
   importMetadataColumns: (data: Record<string, Record<string, string>>) => void;
   reset: () => void;
@@ -130,7 +127,6 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadProgress: [],
     selectedFiles: new Set<string>(),
     analysisType: null,
-    tmtChannelMapping: {},
     ptmLabelingType: 'LF',
     ptmDetectedMods: [],
     ptmSelectedMods: [],
@@ -185,6 +181,15 @@ export const useAnalysisStore = create<AnalysisState>()(
         state.uploadedFiles = state.uploadedFiles.filter((f: UploadedFileInfo) => f.filename !== filename);
         state.selectedFiles.delete(filename);
         state.uploadProgress = state.uploadProgress.filter((p: UploadProgress) => p.filename !== filename);
+        // Clean up TMT channel mapping entries for this file
+        if (state.config.tmt_channel_mapping) {
+          const prefix = filename + '::';
+          for (const key of Object.keys(state.config.tmt_channel_mapping)) {
+            if (key.startsWith(prefix)) {
+              delete state.config.tmt_channel_mapping[key];
+            }
+          }
+        }
       });
     },
 
@@ -316,11 +321,13 @@ export const useAnalysisStore = create<AnalysisState>()(
       });
     },
 
-    updateChannelMapping: (channel, groups) => {
+    updateChannelMapping: (filename, channel, groups) => {
       set((state) => {
-        state.tmtChannelMapping[channel] = { ...(state.tmtChannelMapping[channel] || {}), ...groups };
-        // Also sync to config
-        state.config.tmt_channel_mapping = { ...state.tmtChannelMapping };
+        const key = filename + '::' + channel;
+        if (!state.config.tmt_channel_mapping) {
+          state.config.tmt_channel_mapping = {};
+        }
+        state.config.tmt_channel_mapping[key] = { ...(state.config.tmt_channel_mapping[key] || {}), ...groups };
       });
     },
 
@@ -347,7 +354,6 @@ export const useAnalysisStore = create<AnalysisState>()(
           });
           mapping[channel] = entry;
         }
-        state.tmtChannelMapping = mapping;
         state.config.tmt_channel_mapping = { ...mapping };
       });
     },
@@ -377,7 +383,6 @@ export const useAnalysisStore = create<AnalysisState>()(
         state.uploadProgress = [];
         state.selectedFiles.clear();
         state.analysisType = null;
-        state.tmtChannelMapping = {};
         state.ptmLabelingType = 'LF';
         state.ptmDetectedMods = [];
         state.ptmSelectedMods = [];
@@ -541,11 +546,11 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   }
 
   // TMT-specific: check all channels mapped
-  if (state.analysisType === 'tmt' && Object.keys(state.tmtChannelMapping).length > 0) {
+  if (state.analysisType === 'tmt' && state.config.tmt_channel_mapping && Object.keys(state.config.tmt_channel_mapping).length > 0) {
     // Count channels from uploaded TMT files
     const tmtFiles = selected.filter((f) => f.file_type === 'tmt');
     const totalChannels = tmtFiles.reduce((sum, f) => sum + (f.tmt_channels?.length || 0), 0);
-    const mappedChannels = Object.keys(state.tmtChannelMapping).length;
+    const mappedChannels = Object.keys(state.config.tmt_channel_mapping).length;
 
     if (mappedChannels < totalChannels) {
       warnings.push({

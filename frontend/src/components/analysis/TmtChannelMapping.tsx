@@ -20,7 +20,7 @@ interface TmtChannelMappingProps {
 }
 
 export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, compact }) => {
-  const tmtChannelMapping = useAnalysisStore((s) => s.tmtChannelMapping);
+  const allMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping ?? {});
   const updateChannelMapping = useAnalysisStore((s) => s.updateChannelMapping);
   const importChannelMapping = useAnalysisStore((s) => s.importChannelMapping);
   const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
@@ -30,6 +30,18 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const channels = useMemo(() => file.tmt_channels || [], [file.tmt_channels]);
+
+  // Filter mapping to only this file's entries (keys are filename::channel)
+  const tmtChannelMapping = useMemo(() => {
+    const prefix = file.filename + '::';
+    const result: Record<string, Record<string, string | number>> = {};
+    for (const [key, val] of Object.entries(allMapping)) {
+      if (key.startsWith(prefix)) {
+        result[key.slice(prefix.length)] = val;
+      }
+    }
+    return result;
+  }, [allMapping, file.filename]);
 
   // Derive group column names from existing mapping (exclude 'replicate')
   const groupColumns = useMemo(() => {
@@ -67,7 +79,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
       return;
     }
     channels.forEach((channel) => {
-      updateChannelMapping(channel, { [name]: '' });
+      updateChannelMapping(file.filename, channel, { [name]: '' });
     });
     setNewColName('');
   };
@@ -77,7 +89,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
       const entry = tmtChannelMapping[channel];
       if (!entry) return;
       const { [colName]: _, ...rest } = entry;
-      updateChannelMapping(channel, rest);
+      updateChannelMapping(file.filename, channel, rest);
     });
   };
 
@@ -92,13 +104,13 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
       if (oldName in entry) {
         const val = entry[oldName];
         const { [oldName]: _, ...rest } = entry;
-        updateChannelMapping(channel, { ...rest, [newName]: val });
+        updateChannelMapping(file.filename, channel, { ...rest, [newName]: val });
       }
     });
   };
 
   const updateField = (channel: string, col: string, value: string | number) => {
-    updateChannelMapping(channel, { [col]: value });
+    updateChannelMapping(file.filename, channel, { [col]: value });
   };
 
   const updateExperimentName = (name: string) => {
