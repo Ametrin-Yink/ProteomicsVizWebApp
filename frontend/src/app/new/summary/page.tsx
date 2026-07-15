@@ -211,6 +211,41 @@ function SummaryContent() {
         )}
       </section>
 
+      {/* TMT Channel Mapping */}
+      {analysisType === 'tmt' && config.tmt_channel_mapping && (
+        <section className="bg-background border border-border rounded-lg">
+          <SectionHeader icon={Table2} title="TMT Channel Mapping" collapsed={isCollapsed('tmt-mapping')} onToggle={() => toggleSection('tmt-mapping')} />
+          {!isCollapsed('tmt-mapping') && (
+          <div className="p-5">
+            <div className="border border-border rounded-lg overflow-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-surface">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Channel</th>
+                    <th className="px-3 py-2 text-left">Condition</th>
+                    <th className="px-3 py-2 text-left">Replicate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(config.tmt_channel_mapping).map(([key, entry]) => (
+                    <tr key={key} className="border-t border-border">
+                      <td className="px-3 py-1.5">{key.split('::')[1] || key}</td>
+                      <td className="px-3 py-1.5">
+                        {Object.entries(entry)
+                          .filter(([k]) => k !== 'replicate' && k !== 'experiment')
+                          .map(([k, v]) => `${k}=${v}`).join(', ') || '—'}
+                      </td>
+                      <td className="px-3 py-1.5">{entry.replicate || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          )}
+        </section>
+      )}
+
       {/* Comparisons */}
       <section className="bg-background border border-border rounded-lg">
         <SectionHeader icon={GitCompare} title="Comparisons" collapsed={isCollapsed('comparisons')} onToggle={() => toggleSection('comparisons')} />

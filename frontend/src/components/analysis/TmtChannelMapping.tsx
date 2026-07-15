@@ -86,6 +86,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   };
 
   const removeColumn = (colName: string) => {
+    if (!window.confirm(`Delete column "${colName}" and all its data? This cannot be undone.`)) return;
     channels.forEach((channel) => {
       const entry = tmtChannelMapping[channel];
       if (!entry) return;
@@ -122,6 +123,14 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
     const csvFile = e.target.files?.[0];
     if (!csvFile) return;
+    const mapping = useAnalysisStore.getState().config.tmt_channel_mapping ?? {};
+    const hasExistingData = Object.keys(mapping).length > 0;
+    if (hasExistingData) {
+      if (!window.confirm('Importing CSV will replace all current channel assignments. Continue?')) {
+        e.target.value = '';
+        return;
+      }
+    }
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {

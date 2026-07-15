@@ -418,6 +418,24 @@ function MetadataContentInner() {
                   });
                   imported[fn] = entry;
                 }
+                // Check for conflicts before overwriting
+                const conflicts: string[] = [];
+                const existing = config.metadata_columns ?? {};
+                for (const fn of Object.keys(imported)) {
+                  if (existing[fn]) {
+                    for (const key of Object.keys(imported[fn])) {
+                      if (existing[fn][key] && existing[fn][key] !== imported[fn][key]) {
+                        conflicts.push(`${fn}: ${key} (${existing[fn][key]} → ${imported[fn][key]})`);
+                      }
+                    }
+                  }
+                }
+                if (conflicts.length > 0) {
+                  const confirmed = window.confirm(
+                    `This will overwrite ${conflicts.length} value(s):\n${conflicts.slice(0, 5).join('\n')}${conflicts.length > 5 ? `\n...and ${conflicts.length - 5} more` : ''}\n\nContinue?`
+                  );
+                  if (!confirmed) return;
+                }
                 importMetadataColumns(imported);
                 addToast('success', `Metadata imported from library (${Object.keys(imported).length} files)`);
               }

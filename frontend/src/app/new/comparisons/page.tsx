@@ -181,7 +181,13 @@ function ComparisonsContent() {
       if (analysisType === 'tmt') {
         // For TMT, derive from mapping
         const mapping = config.tmt_channel_mapping || {};
-        const groupCols = Object.keys(Object.values(mapping)[0] || {}).filter(k => k.toLowerCase() !== 'replicate');
+        const allKeys = new Set<string>();
+        for (const entry of Object.values(mapping)) {
+          for (const key of Object.keys(entry)) {
+            if (key.toLowerCase() !== 'replicate') allKeys.add(key);
+          }
+        }
+        const groupCols = Array.from(allKeys).sort();
         groupCols.forEach((col, idx) => {
           group1[col] = condParts[idx] || '';
           group2[col] = refParts[idx] || '';

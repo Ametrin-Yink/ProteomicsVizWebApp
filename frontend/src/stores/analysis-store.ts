@@ -584,7 +584,21 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
 };
 
 export const canStartAnalysis = (state: AnalysisState): boolean => {
-  const validation = getValidation(state);
-  const hasComparisons = (state.config.comparisons?.length ?? 0) > 0;
-  return validation.isValid && state.selectedFiles.size > 0 && hasComparisons;
+  const baseValid = state.selectedFiles.size > 0 && (state.config.comparisons?.length ?? 0) > 0;
+  if (!baseValid) return false;
+
+  // TMT-specific: all channels must be mapped
+  if (state.config.file_type === 'tmt') {
+    const mapping = state.config.tmt_channel_mapping ?? {};
+    const tmtFiles = state.uploadedFiles.filter(f => f.tmt_channels && f.tmt_channels.length > 0);
+    for (const file of tmtFiles) {
+      const fileChannels = file.tmt_channels ?? [];
+      for (const ch of fileChannels) {
+        const key = `${file.filename}::${ch}`;
+        const entry = mapping[key];
+        if (!entry || Object.values(entry).every(v => !v)) return false;
+      }
+    }
+  }
+  return true;
 };

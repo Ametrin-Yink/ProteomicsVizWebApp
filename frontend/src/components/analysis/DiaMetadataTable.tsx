@@ -92,6 +92,7 @@ export const DiaMetadataTable: React.FC = () => {
   };
 
   const removeColumn = (colName: string) => {
+    if (!window.confirm(`Delete column "${colName}" and all its data? This cannot be undone.`)) return;
     const current = { ...(config.metadata_columns || {}) };
     Object.keys(current).forEach((fn) => {
       const row = { ...current[fn] };
