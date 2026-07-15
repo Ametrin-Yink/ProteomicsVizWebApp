@@ -6,10 +6,12 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from '@/components/layout/SidebarContext';
 import { SessionManager } from '@/components/session/SessionManager';
+import { WizardStepper } from '@/components/ui/WizardStepper';
 
 export default function NewAnalysisLayout({
   children,
@@ -17,6 +19,8 @@ export default function NewAnalysisLayout({
   children: React.ReactNode;
 }) {
   const { isExpanded } = useSidebar();
+  const searchParams = useSearchParams();
+  const analysisType = searchParams.get('type') as 'tmt' | 'dia' | 'ptm' | null;
 
   return (
     <div className="flex w-full h-full relative">
@@ -37,6 +41,11 @@ export default function NewAnalysisLayout({
             <ArrowLeft className="w-4 h-4" />
             Back to Home
           </Link>
+        </div>
+
+        {/* Wizard step indicator */}
+        <div className="border-b border-border bg-surface">
+          <WizardStepper analysisType={analysisType ?? undefined} />
         </div>
 
         {/* Page content */}

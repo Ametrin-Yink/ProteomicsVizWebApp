@@ -17,6 +17,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, mapBackendFiles } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { useSessionValidation } from '@/hooks/use-session-validation';
+import { useAutoSave } from '@/hooks/use-auto-save';
 
 function UploadContentInner() {
   const router = useRouter();
@@ -292,17 +293,7 @@ function UploadContentInner() {
   }, [sessionId, setConfig]);
 
   // Auto-save config to backend on changes (debounced) so edits survive refresh
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!sessionId) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      sessionsApi.updateConfig(sessionId, config).catch(() => {});
-    }, 800);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [sessionId, config]);
+  const { isSaving: isAutoSaving, saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });
 
   // Validate session ID and analysis type (deferred until session restore completes)
   useEffect(() => {
@@ -969,6 +960,9 @@ function UploadContentInner() {
           )}
         </button>
       </div>
+      {saveError && (
+        <p className="text-xs text-error mt-1" role="alert">{saveError}</p>
+      )}
     </div>
   );
 }

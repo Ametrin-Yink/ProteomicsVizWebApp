@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo, Suspense } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Loader2, BarChart3, Dna, CheckCircle,
@@ -21,6 +21,7 @@ import { parseCSVLine } from '@/lib/csv';
 import { cn } from '@/lib/utils';
 import { FileLibraryPicker } from '@/components/files/FileLibraryPicker';
 import { useSessionValidation } from '@/hooks/use-session-validation';
+import { useAutoSave } from '@/hooks/use-auto-save';
 import TmtChannelMapping from '@/components/analysis/TmtChannelMapping';
 import DiaMetadataTable from '@/components/analysis/DiaMetadataTable';
 
@@ -128,18 +129,8 @@ function MetadataContentInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, setConfig]);
 
-  // Auto-save with 800ms debounce (FR3.4)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!sessionId || isRestoring) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      sessionsApi.updateConfig(sessionId, config).catch(() => {});
-    }, 800);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [sessionId, config, isRestoring]);
+  // Auto-save config to backend on changes (debounced) so edits survive refresh
+  const { isSaving: isAutoSaving, saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });
 
   // Initialize expanded files (expand all on mount)
   useEffect(() => {
@@ -488,6 +479,9 @@ function MetadataContentInner() {
           )}
         </button>
       </div>
+      {saveError && (
+        <p className="text-xs text-error mt-1" role="alert">{saveError}</p>
+      )}
     </div>
   );
 }

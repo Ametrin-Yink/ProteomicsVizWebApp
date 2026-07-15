@@ -1,17 +1,17 @@
 'use client';
 import { useState, useRef, useCallback, useMemo } from 'react';
 
-interface FileEntry { name: string; file_type?: string; path: string; [key: string]: unknown; }
+type BaseEntry = { name: string; file_type?: string; path: string };
 
-interface UseFileSearchOptions { entries: FileEntry[]; fileType?: 'csv' | 'txt' | 'all' | 'csv-only'; }
+interface UseFileSearchOptions<T extends BaseEntry> { entries: T[]; fileType?: 'csv' | 'txt' | 'all' | 'csv-only'; }
 
-interface UseFileSearchResult {
+interface UseFileSearchResult<T extends BaseEntry> {
   searchQuery: string; setSearchQuery: (q: string) => void;
   handleSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  filteredEntries: FileEntry[]; isSearching: boolean;
+  filteredEntries: T[]; isSearching: boolean;
 }
 
-export function useFileSearch({ entries, fileType = 'all' }: UseFileSearchOptions): UseFileSearchResult {
+export function useFileSearch<T extends BaseEntry>({ entries, fileType = 'all' }: UseFileSearchOptions<T>): UseFileSearchResult<T> {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -27,11 +27,11 @@ export function useFileSearch({ entries, fileType = 'all' }: UseFileSearchOption
 
   const filteredEntries = useMemo(() => {
     let result = entries;
-    if (fileType === 'csv-only' || fileType === 'csv') result = result.filter(e => e.file_type === 'csv' || e.file_type === 'tsv');
-    else if (fileType === 'txt') result = result.filter(e => e.file_type === 'txt');
+    if (fileType === 'csv-only' || fileType === 'csv') result = result.filter((e) => e.file_type === 'csv' || e.file_type === 'tsv') as typeof result;
+    else if (fileType === 'txt') result = result.filter((e) => e.file_type === 'txt') as typeof result;
     if (debouncedQuery.trim()) {
       const q = debouncedQuery.toLowerCase();
-      result = result.filter(e => e.name.toLowerCase().includes(q));
+      result = result.filter((e) => e.name.toLowerCase().includes(q));
     }
     return result;
   }, [entries, fileType, debouncedQuery]);

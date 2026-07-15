@@ -6,6 +6,7 @@ import { fileLibraryApi, FileLibraryEntry } from '@/lib/api-client';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 import { FolderTree } from '@/components/files/FolderTree';
+import { useFileSearch } from '@/hooks/use-file-search';
 
 interface FileLibraryPickerProps {
   sessionId: string;
@@ -27,10 +28,12 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const [entries, setEntries] = useState<FileLibraryEntry[]>([]);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<FileLibraryEntry[] | null>(null);
-  const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [pickerFilter, setPickerFilter] = useState<'all' | 'txt' | 'csv'>('all');
+
+  const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
+    entries,
+    fileType: pickerFilter === 'all' ? 'all' : pickerFilter,
+  });
 
   // Load directory on mount and on path change
   const loadDirectory = useCallback(async (path: string) => {
@@ -52,36 +55,13 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
     loadDirectory(currentPath);
   }, [currentPath, loadDirectory]);
 
-  // Debounced search — 300ms
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    if (searchTimer) clearTimeout(searchTimer);
-    if (!query.trim()) {
-      setSearchResults(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const data = await fileLibraryApi.search(query);
-        setSearchResults(data.results.filter(e => {
-          if (fileType === 'csv-only') return e.type === 'csv';
-          return e.type === 'txt' || e.type === 'csv';
-        }));
-      } catch {
-        // Search failed silently
-      }
-    }, 300);
-    setSearchTimer(timer);
-  }, [fileType, searchTimer]);
-
   // Apply picker-level file type filter on top of search results or directory entries
   const displayedEntries = useMemo(() => {
-    const source = searchResults ?? entries;
-    return source.filter(e => {
+    return filteredEntries.filter(e => {
       if (pickerFilter === 'all' || e.type === 'folder') return true;
       return e.type === pickerFilter;
     });
-  }, [searchResults, entries, pickerFilter]);
+  }, [filteredEntries, pickerFilter]);
 
   const handleToggleSelect = (path: string) => {
     const next = new Set(selectedPaths);
@@ -183,7 +163,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
+              onChange={handleSearchChange}
               placeholder="Search files..."
               className="pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-full"
             />

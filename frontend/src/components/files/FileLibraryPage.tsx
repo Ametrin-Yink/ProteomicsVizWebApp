@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { FolderOpen, Loader2 } from 'lucide-react';
+import { useFileSearch } from '@/hooks/use-file-search';
 import { fileLibraryApi, FileLibraryEntry } from '@/lib/api-client';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
@@ -23,9 +24,13 @@ export const FileLibraryPage: React.FC = () => {
   const [totalSize, setTotalSize] = useState(0);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<FileLibraryEntry[] | null>(null);
-  const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
+    entries,
+    fileType: 'all',
+  });
+  const handleToolbarSearchChange = useCallback((query: string) => {
+    handleSearchChange({ target: { value: query } } as React.ChangeEvent<HTMLInputElement>);
+  }, [handleSearchChange]);
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; items: ContextMenuItem[];
   } | null>(null);
@@ -84,9 +89,8 @@ export const FileLibraryPage: React.FC = () => {
     setSelectedPaths(new Set());
     // Clear search when navigating
     setSearchQuery('');
-    setSearchResults(null);
     loadLibrary(path);
-  }, [loadLibrary]);
+  }, [loadLibrary, setSearchQuery]);
 
   // ---- Handlers ----
 
@@ -161,24 +165,6 @@ export const FileLibraryPage: React.FC = () => {
   }, [selectedPaths, entries, currentPath, addToast, loadLibrary]);
 
 
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    if (searchTimer) clearTimeout(searchTimer);
-    if (!query.trim()) {
-      setSearchResults(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const data = await fileLibraryApi.search(query);
-        setSearchResults(data.results);
-      } catch {
-        addToast('error', 'Search failed. Please try again.');
-      }
-    }, 300);
-    setSearchTimer(timer);
-  }, [searchTimer, addToast]);
-
   const handleToggleSelect = useCallback((path: string) => {
     setSelectedPaths(prev => {
       const next = new Set(prev);
@@ -189,11 +175,11 @@ export const FileLibraryPage: React.FC = () => {
 
   const handleSelectAll = useCallback(() => {
     const next = new Set<string>();
-    for (const e of (searchResults ?? entries)) {
+    for (const e of filteredEntries) {
       if (e.type !== 'folder') next.add(e.path);
     }
     setSelectedPaths(next);
-  }, [searchResults, entries]);
+  }, [filteredEntries]);
 
   // ---- Context menu handlers ----
 
@@ -244,16 +230,15 @@ export const FileLibraryPage: React.FC = () => {
   }, []);
 
   const sortedEntries = useMemo(() => {
-    const list = searchResults ?? entries;
-    if (!sortBy) return list;
-    return [...list].sort((a, b) => {
+    if (!sortBy) return filteredEntries;
+    return [...filteredEntries].sort((a, b) => {
       let cmp = 0;
       if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
       else if (sortBy === 'size') cmp = a.size - b.size;
       else if (sortBy === 'modified') cmp = (a.modified_at || '').localeCompare(b.modified_at || '');
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [entries, searchResults, sortBy, sortOrder]);
+  }, [filteredEntries, sortBy, sortOrder]);
 
   // ---- Full-page loading (initial load only) ----
   if (loading && entries.length === 0 && !error) {
@@ -329,7 +314,7 @@ export const FileLibraryPage: React.FC = () => {
         onDelete={handleDelete}
         onRename={handleRename}
         searchQuery={searchQuery}
-        onSearchChange={handleSearchChange}
+        onSearchChange={handleToolbarSearchChange}
         onRefresh={handleRefresh}
         selectedCount={selectedPaths.size}
         uploading={uploading}

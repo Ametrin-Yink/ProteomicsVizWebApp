@@ -7,10 +7,11 @@
 'use client';
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Plus, Download, Upload, X, AlertCircle } from 'lucide-react';
+import { Plus, Download, Upload, AlertCircle } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import type { UploadedFileInfo } from '@/types';
+import { EditableColumnHeader } from '@/components/ui/EditableColumnHeader';
 
 interface TmtChannelMappingProps {
   /** Single TMT file whose channels to map */
@@ -246,7 +247,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
               {groupColumns.map((col) => (
                 <th key={col} className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">
                   <EditableColumnHeader
-                    colName={col}
+                    name={col}
                     onRename={(newName) => renameColumn(col, newName)}
                     onRemove={() => removeColumn(col)}
                   />
@@ -302,58 +303,5 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   );
 };
 
-/** Editable column header with rename/remove */
-const EditableColumnHeader: React.FC<{
-  colName: string;
-  onRename: (newName: string) => void;
-  onRemove: () => void;
-}> = ({ colName, onRename, onRemove }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(colName);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  if (isEditing) {
-    return (
-      <div className="flex items-center gap-1">
-        <input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { onRename(editValue.trim()); setIsEditing(false); }
-            if (e.key === 'Escape') { setIsEditing(false); setEditValue(colName); }
-          }}
-          onBlur={() => { onRename(editValue.trim()); setIsEditing(false); }}
-          className="w-24 px-1 py-0.5 bg-surface border border-primary rounded text-xs focus:outline-none"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1 group">
-      <button
-        onClick={() => { setEditValue(colName); setIsEditing(true); }}
-        className="hover:text-primary transition-colors text-left"
-      >
-        {colName}
-      </button>
-      <button
-        onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-500 transition-all"
-        title={`Remove ${colName}`}
-      >
-        <X className="w-3 h-3" />
-      </button>
-    </div>
-  );
-};
 
 export default TmtChannelMapping;
