@@ -33,6 +33,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   const [focusedPath, setFocusedPath] = useState<string>('');
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const treeRef = useRef<HTMLDivElement>(null);
+  const lastAutoExpandedPath = useRef<string>('');
 
   const findNodeByPath = useCallback((path: string, nodes: TreeNode[]): TreeNode | null => {
     for (const node of nodes) {
@@ -64,7 +65,64 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     });
   }, [refreshKey, loadAttempt]);
 
-  const toggleExpand = useCallback(async (node: TreeNode) => {
+  // F-022: Auto-expand ancestor folders when navigating to a nested path
+  useEffect(() => {
+    if (!currentPath || currentPath === lastAutoExpandedPath.current) return;
+    lastAutoExpandedPath.current = currentPath;
+
+    const expandAncestors = async () => {
+      const parts = currentPath.split('/');
+      let accumulatedPath = '';
+
+      for (let i = 0; i < parts.length; i++) {
+        accumulatedPath = accumulatedPath ? accumulatedPath + '/' + parts[i] : parts[i];
+
+        // Root-level folders need to be found in rootNodes directly
+        // Deeper folders are found via findNodeByPath which traverses children
+        const node = findNodeByPath(accumulatedPath, rootNodes);
+        if (node && !expandedPaths.has(accumulatedPath)) {
+          await toggleExpandNode(node);
+        }
+      }
+    };
+
+    expandAncestors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath]);
+
+  // Separate expand function (no toggle) for auto-expand
+  const expandNode = useCallback(async (node: TreeNode) => {
+    const newExpanded = new Set(expandedPaths);
+    newExpanded.add(node.path);
+    setExpandedPaths(newExpanded);
+
+    // Lazy-load children if not loaded
+    if (!node.loaded) {
+      setLoadingPaths(prev => new Set(prev).add(node.path));
+      try {
+        const data = await fileLibraryApi.listDirectory(node.path);
+        const children = data.entries
+          .filter(e => e.type === 'folder')
+          .map(e => ({
+            name: e.name,
+            path: e.path,
+            children: [],
+            loaded: false,
+          }));
+        node.children = children;
+        node.loaded = true;
+        setRootNodes([...rootNodes]);
+      } catch (err) {
+        console.error('Failed to load children for auto-expand:', err);
+        setExpandedPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
+      } finally {
+        setLoadingPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
+      }
+    }
+  }, [expandedPaths, rootNodes]);
+
+  // Wrapper for toggle that also updates state (used by both user clicks and auto-expand)
+  const toggleExpandNode = useCallback(async (node: TreeNode) => {
     const newExpanded = new Set(expandedPaths);
     if (newExpanded.has(node.path)) {
       newExpanded.delete(node.path);
@@ -100,6 +158,10 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
       }
     }
   }, [expandedPaths, rootNodes]);
+
+  const toggleExpand = useCallback(async (node: TreeNode) => {
+    await toggleExpandNode(node);
+  }, [toggleExpandNode]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const items = treeRef.current?.querySelectorAll('[role="treeitem"]');

@@ -13,7 +13,7 @@ import { useWebSocket } from '@/hooks/use-websocket';
 import { processingApi } from '@/lib/api-client';
 import { LogPanel } from '@/components/processing/LogPanel';
 import { SessionManager } from '@/components/session/SessionManager';
-import { formatDuration } from '@/lib/utils';
+import { formatDuration, cn } from '@/lib/utils';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import type { LogEntry } from '@/types/processing';
 
@@ -29,6 +29,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Check,
+  Loader2,
 } from 'lucide-react';
 
 
@@ -638,6 +640,38 @@ function ProcessingContent() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* NEW-D-055: Step progress stepper */}
+          {!isQueued && steps.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 p-4 bg-surface border border-border rounded-lg overflow-x-auto">
+              {steps.map((step, i) => (
+                <React.Fragment key={step.id}>
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className={cn(
+                      'flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium',
+                      step.status === 'completed' && 'bg-success text-white',
+                      step.status === 'in_progress' && 'bg-primary text-white animate-pulse',
+                      step.status === 'error' && 'bg-error text-white',
+                      step.status === 'not_started' && 'bg-surface border border-border text-text-muted',
+                    )}>
+                      {step.status === 'completed' ? <Check className="w-3.5 h-3.5" /> : step.status === 'in_progress' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : step.status === 'error' ? <X className="w-3.5 h-3.5" /> : i + 1}
+                    </span>
+                    <span className="text-xs text-text-secondary hidden md:inline">{step.name}</span>
+                  </div>
+                  {i < steps.length - 1 && (
+                    <span className={cn(
+                      'flex-1 h-0.5 min-w-[16px] rounded-full',
+                      step.status === 'completed'
+                        ? 'bg-success'
+                        : step.status === 'error'
+                          ? 'bg-error'
+                          : 'bg-border',
+                    )} />
+                  )}
+                </React.Fragment>
+              ))}
             </div>
           )}
 

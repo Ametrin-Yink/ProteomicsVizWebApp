@@ -67,7 +67,7 @@ interface AnalysisState {
   toggleFileSelection: (filename: string) => void;
   selectAllFiles: () => void;
   deselectAllFiles: () => void;
-  updateFileMetadata: (filename: string, updates: Partial<Pick<UploadedFileInfo, 'experiment' | 'batch' | 'file_type'>>) => void;
+  updateFileMetadata: (filename: string, updates: Partial<Pick<UploadedFileInfo, 'experiment' | 'batch' | 'file_type' | 'replicate'>>) => void;
   setAnalysisType: (analysisType: AnalysisType) => void;
   setConfig: (config: Partial<SessionConfig>) => void;
   setAvailableOrganisms: (organisms: Organism[]) => void;
@@ -212,6 +212,7 @@ export const useAnalysisStore = create<AnalysisState>()(
           if (updates.experiment !== undefined) file.experiment = updates.experiment;
           if (updates.batch !== undefined) file.batch = updates.batch;
           if (updates.file_type !== undefined) file.file_type = updates.file_type;
+          if (updates.replicate !== undefined) file.replicate = updates.replicate;
           // Sync to metadata_columns
           const mc = state.config.metadata_columns;
           if (!mc) {

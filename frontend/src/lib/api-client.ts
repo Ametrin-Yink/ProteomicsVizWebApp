@@ -1137,50 +1137,70 @@ export const exportApi = {
 
 export const fileLibraryApi = {
   listDirectory: (path: string, signal?: AbortSignal): Promise<{ path: string; entries: FileLibraryEntry[] }> =>
-    api.get(`/files/tree?path=${encodeURIComponent(path)}`, { signal }).then(r => r.data),
+    api.get<{ path: string; entries: FileLibraryEntry[] }>(`/files/tree?path=${encodeURIComponent(path)}`, { signal }).then(r => r.data),
 
   createFolder: (parentPath: string, name: string): Promise<{ path: string; name: string }> =>
-    api.post(`/files/folders`, { parent_path: parentPath, name }).then(r => r.data),
+    api.post<{ path: string; name: string }>(`/files/folders`, { parent_path: parentPath, name }).then(r => r.data),
 
   upload: async (
     files: File[],
     targetPath: string,
     onProgress?: (pct: number) => void,
   ): Promise<{ files: { name: string; size: number; type: string }[] }> => {
-    const formData = new FormData();
-    files.forEach(f => formData.append('files', f));
-    const response = await fetch(
-      `${UPLOAD_BASE_URL}${API_PREFIX}/files/upload?target_path=${encodeURIComponent(targetPath)}`,
-      { method: 'POST', body: formData },
-    );
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text);
-    }
-    return response.json();
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+
+      const xhr = new XMLHttpRequest();
+      xhr.open(
+        'POST',
+        `${UPLOAD_BASE_URL}${API_PREFIX}/files/upload?target_path=${encodeURIComponent(targetPath)}`,
+      );
+
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(new Error('Failed to parse upload response'));
+          }
+        } else {
+          reject(new Error(xhr.responseText || `Upload failed with status ${xhr.status}`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Upload failed'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.send(formData);
+    });
   },
 
   rename: (path: string, newName: string): Promise<{ path: string; name: string }> =>
-    api.put(`/files/rename`, { path, new_name: newName }).then(r => r.data),
-
-  move: (sourcePath: string, targetParent: string): Promise<{ path: string; new_parent: string }> =>
-    api.put(`/files/move`, { source_path: sourcePath, target_parent: targetParent }).then(r => r.data),
+    api.put<{ path: string; name: string }>(`/files/rename`, { path, new_name: newName }).then(r => r.data),
 
   delete: (path: string): Promise<{ deleted: string }> =>
-    api.delete(`/files/delete`, { data: { path } }).then(r => r.data),
+    api.delete<{ deleted: string }>(`/files/delete`, { data: { path } }).then(r => r.data),
 
   scan: (): Promise<{ total: number; added: number; removed: number; updated: number }> =>
-    api.post(`/files/scan`).then(r => r.data),
+    api.post<{ total: number; added: number; removed: number; updated: number }>(`/files/scan`).then(r => r.data),
 
   search: (query: string): Promise<{ results: FileLibraryEntry[] }> =>
-    api.get(`/files/search?q=${encodeURIComponent(query)}`).then(r => r.data),
+    api.get<{ results: FileLibraryEntry[] }>(`/files/search?q=${encodeURIComponent(query)}`).then(r => r.data),
 
   getContent: (path: string): Promise<string> =>
-    api.get(`/files/content?path=${encodeURIComponent(path)}`, { responseType: 'text' }).then(r => r.data),
+    api.get<string>(`/files/content?path=${encodeURIComponent(path)}`, { responseType: 'text' }).then(r => r.data),
 
   selectForSession: (
     sessionId: string,
     paths: string[],
   ): Promise<{ files: SelectedFileInfo[] }> =>
-    api.post(`/files/select`, { session_id: sessionId, paths }).then(r => r.data),
+    api.post<{ files: SelectedFileInfo[] }>(`/files/select`, { session_id: sessionId, paths }).then(r => r.data),
 };

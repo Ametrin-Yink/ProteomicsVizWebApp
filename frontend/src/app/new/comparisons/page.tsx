@@ -547,7 +547,7 @@ function ComparisonsContent() {
             <div
               className={cn(
                 'p-3 rounded-lg border-2 border-dashed min-h-[100px] transition-colors',
-                group1Cards.length === 0 ? 'border-border bg-surface/50' : 'border-blue-400/50 bg-blue-50/30'
+                group1Cards.length === 0 ? 'border-border bg-surface/50' : 'border-[var(--color-info)]/50 bg-[var(--color-info-bg)]'
               )}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDropOnZone(e, 'group1')}
@@ -591,7 +591,7 @@ function ComparisonsContent() {
             <div
               className={cn(
                 'p-3 rounded-lg border-2 border-dashed min-h-[100px] transition-colors',
-                group2Cards.length === 0 ? 'border-border bg-surface/50' : 'border-red-400/50 bg-red-50/30'
+                group2Cards.length === 0 ? 'border-border bg-surface/50' : 'border-[var(--color-error)]/50 bg-[var(--color-error-bg)]'
               )}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDropOnZone(e, 'group2')}
@@ -656,9 +656,9 @@ function ComparisonsContent() {
                 <div key={idx} className="flex items-center justify-between px-3 py-2 bg-surface rounded-lg border border-border">
                   <div className="flex items-center gap-2 text-sm text-text-primary">
                     <CheckSquare className="w-4 h-4 text-primary flex-shrink-0" />
-                    <span className="font-medium text-blue-700">{formatGroup(comp.group1)}</span>
+                    <span className="font-medium text-[var(--color-info)]">{formatGroup(comp.group1)}</span>
                     <span className="text-text-muted">vs</span>
-                    <span className="font-medium text-red-700">{formatGroup(comp.group2)}</span>
+                    <span className="font-medium text-[var(--color-error)]">{formatGroup(comp.group2)}</span>
                   </div>
                   <button onClick={() => removeComparison(idx)} className="text-text-muted hover:text-red-500 transition-colors">
                     <Trash2 className="w-4 h-4" />
@@ -721,7 +721,7 @@ function ComparisonsContent() {
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           onClick={() => router.push(`${backRoute}?session=${sessionId}`)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primarybg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primary bg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           {analysisType === 'ptm' ? 'Back to Upload' : 'Back to Metadata'}

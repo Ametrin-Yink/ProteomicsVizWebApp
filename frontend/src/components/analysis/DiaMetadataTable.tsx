@@ -7,7 +7,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Plus, Download, Upload, FileText } from 'lucide-react';
+import { Plus, Download, Upload, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { parseCSVLine } from '@/lib/csv';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -24,6 +24,10 @@ export const DiaMetadataTable: React.FC = () => {
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
+
+  // NEW-D-053: Pagination state
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   // Derive data column names from metadata_columns (exclude core fields)
   const dataColumns = useMemo(() => {
@@ -57,6 +61,8 @@ export const DiaMetadataTable: React.FC = () => {
       setConfig({ metadata_columns: current });
     }
   }, [uploadedFiles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalPages = Math.ceil(uploadedFiles.length / pageSize);
 
   // --- Column management ---
   const addColumn = () => {
@@ -116,6 +122,13 @@ export const DiaMetadataTable: React.FC = () => {
     if (col === 'batch') {
       updateFileMetadata(filename, { batch: value });
     }
+    // NEW-D-058: Sync replicate changes to UploadedFileInfo
+    if (col === 'replicate') {
+      const num = parseInt(value, 10);
+      if (!isNaN(num) && num > 0) {
+        updateFileMetadata(filename, { replicate: num });
+      }
+    }
   };
 
   const validateCell = (filename: string, col: string, value: string) => {
@@ -150,10 +163,11 @@ export const DiaMetadataTable: React.FC = () => {
         const uploadedFilenames = new Set(uploadedFiles.map((f) => f.filename));
 
         const imported: Record<string, Record<string, string>> = {};
+        let skipped = 0;
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i]);
           const fn = values[filenameIdx];
-          if (!fn || !uploadedFilenames.has(fn)) continue;
+          if (!fn || !uploadedFilenames.has(fn)) { skipped++; continue; }
           const entry: Record<string, string> = {};
           colNames.forEach((col) => {
             const colIdx = headers.indexOf(col);
@@ -165,7 +179,11 @@ export const DiaMetadataTable: React.FC = () => {
         // Atomically update metadata_columns via store action (preserves Immer immutability)
         importMetadataColumns(imported);
 
-        addToast('success', `Merged metadata for ${Object.keys(imported).length} file(s)`);
+        const totalImported = Object.keys(imported).length;
+        const msg = skipped > 0
+          ? `Merged metadata for ${totalImported} file(s) (${skipped} skipped — not found in uploads)`
+          : `Merged metadata for ${totalImported} file(s)`;
+        addToast('success', msg);
       } catch (err) {
         addToast('error', `Failed to parse CSV: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -210,6 +228,8 @@ export const DiaMetadataTable: React.FC = () => {
       </div>
     );
   }
+
+  const paginatedFiles = uploadedFiles.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-4">
@@ -288,7 +308,7 @@ export const DiaMetadataTable: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-background divide-y divide-border">
-            {uploadedFiles.map((file) => {
+            {paginatedFiles.map((file) => {
               const meta = config.metadata_columns?.[file.filename] || {};
               return (
                 <tr key={file.filename} className="hover:bg-surface transition-colors">
@@ -355,6 +375,32 @@ export const DiaMetadataTable: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* NEW-D-053: Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-sm text-text-muted">
+            Page {page} of {totalPages} ({uploadedFiles.length} total)
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-1.5 rounded text-text-muted hover:bg-surface hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-text-muted px-1">{page}/{totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="p-1.5 rounded text-text-muted hover:bg-surface hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Summary */}
       <div className="text-sm text-text-secondary">

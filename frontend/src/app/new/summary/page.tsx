@@ -216,15 +216,15 @@ function SummaryContent() {
                   const meta = config.metadata_columns?.[file.filename] || {};
                   return (
                     <tr key={file.filename} className="border-b border-border/50">
-                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono truncate max-w-[200px]" title={file.filename}>
+                      <td className="py-1.5 px-3 text-text-primary text-xs font-mono truncate max-w-[200px]" title={file.filename}>
                         {file.filename}
                       </td>
-                      <td className="py-1.5 px-3 text-text-primarytext-xs">{meta.experiment || file.experiment}</td>
+                      <td className="py-1.5 px-3 text-text-primary text-xs">{meta.experiment || file.experiment}</td>
                       {dataColumns.map((col) => (
-                        <td key={col} className="py-1.5 px-3 text-text-primarytext-xs">{meta[col] || '—'}</td>
+                        <td key={col} className="py-1.5 px-3 text-text-primary text-xs">{meta[col] || '—'}</td>
                       ))}
-                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono">#{meta.replicate || file.replicate}</td>
-                      <td className="py-1.5 px-3 text-text-primarytext-xs font-mono">{meta.batch || file.batch || '—'}</td>
+                      <td className="py-1.5 px-3 text-text-primary text-xs font-mono">#{meta.replicate || file.replicate}</td>
+                      <td className="py-1.5 px-3 text-text-primary text-xs font-mono">{meta.batch || file.batch || '—'}</td>
                     </tr>
                   );
                 })}
@@ -280,10 +280,10 @@ function SummaryContent() {
           ) : (
             <div className="space-y-1">
               {config.comparisons.map((comp, idx) => (
-                <div key={idx} className="flex items-center gap-2 text-sm text-text-primarypx-3 py-2 bg-surface rounded-lg border border-border">
-                  <span className="font-medium text-blue-700">{formatGroup(comp.group1)}</span>
+                <div key={idx} className="flex items-center gap-2 text-sm text-text-primary px-3 py-2 bg-surface rounded-lg border border-border">
+                  <span className="font-medium text-[var(--color-info)]">{formatGroup(comp.group1)}</span>
                   <span className="text-text-muted">vs</span>
-                  <span className="font-medium text-red-700">{formatGroup(comp.group2)}</span>
+                  <span className="font-medium text-[var(--color-error)]">{formatGroup(comp.group2)}</span>
                 </div>
               ))}
             </div>
@@ -458,7 +458,7 @@ function SummaryContent() {
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <button
           onClick={handleBack}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primarybg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primary bg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Configuration
@@ -469,9 +469,9 @@ function SummaryContent() {
             onClick={handleStartAnalysis}
             disabled={isStarting || !canStartAnalysis}
             className={cn(
-              'inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
+              'inline-flex items-center gap-2 px-5 py-2 rounded-lg font-medium transition-all duration-200',
               isStarting || !canStartAnalysis
-                ? 'bg-border text-text-muted cursor-not-allowed'
+                ? 'bg-surface text-text-muted cursor-not-allowed'
                 : 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow'
             )}
           >

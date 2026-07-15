@@ -962,10 +962,10 @@ function UploadContentInner() {
           onClick={handleContinue}
           disabled={!canContinue || isSaving}
           className={cn(
-            'inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
+            'inline-flex items-center gap-2 px-5 py-2 rounded-lg font-medium transition-all duration-200',
             canContinue && !isSaving
               ? 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow'
-              : 'bg-border text-text-muted cursor-not-allowed'
+              : 'bg-surface text-text-muted cursor-not-allowed'
           )}
         >
           {isSaving ? (

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { FolderOpen, Loader2 } from 'lucide-react';
+import { FolderOpen, Loader2, Menu, X, Upload } from 'lucide-react';
 import { useFileSearch } from '@/hooks/use-file-search';
 import { fileLibraryApi, FileLibraryEntry } from '@/lib/api-client';
 import { useUIStore } from '@/stores/ui-store';
@@ -24,6 +24,9 @@ export const FileLibraryPage: React.FC = () => {
   const [totalSize, setTotalSize] = useState(0);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(-1);
+  const [isDragging, setIsDragging] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
     entries,
@@ -39,6 +42,7 @@ export const FileLibraryPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterType, setFilterType] = useState<'all' | 'txt' | 'csv'>('all');
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
+  const [tick, setTick] = useState(0); // F-021: force re-render every 60s for live timer
 
   // ---- Core Library Loading ----
 
@@ -77,6 +81,12 @@ export const FileLibraryPage: React.FC = () => {
     loadLibrary('');
     return () => { if (abortRef.current) abortRef.current.abort(); };
   }, [loadLibrary]);
+
+  // F-021: Live timer — re-render every 60s to update "X min ago"
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     setLoading(true);
@@ -119,8 +129,11 @@ export const FileLibraryPage: React.FC = () => {
     const files = Array.from(fileList);
     if (files.length === 0) return;
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const result = await fileLibraryApi.upload(files, currentPath);
+      const result = await fileLibraryApi.upload(files, currentPath, (pct) => {
+        setUploadProgress(pct);
+      });
       addToast('success', `Uploaded ${result.files.length} file(s)`);
       setTreeRefreshKey(k => k + 1);
       loadLibrary(currentPath);
@@ -128,8 +141,40 @@ export const FileLibraryPage: React.FC = () => {
       addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
+      setUploadProgress(-1);
     }
   }, [currentPath, addToast, loadLibrary]);
+
+  // F-029: Drag-and-drop upload
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only close overlay if leaving the entire drop zone
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleUpload(e.dataTransfer.files);
+    }
+  }, [handleUpload]);
 
   const handleDelete = useCallback(async () => {
     if (selectedPaths.size === 0) return;
@@ -226,16 +271,11 @@ export const FileLibraryPage: React.FC = () => {
 
   // ---- Sorting ----
 
+  // NEW-F-045: flatten nested state setter
   const handleSort = useCallback((column: 'name' | 'size' | 'modified') => {
-    setSortBy(prev => {
-      if (prev === column) {
-        setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
-        return column;
-      }
-      setSortOrder('asc');
-      return column;
-    });
-  }, []);
+    setSortBy(column);
+    setSortOrder(prev => sortBy === column ? (prev === 'asc' ? 'desc' : 'asc') : 'asc');
+  }, [sortBy]);
 
   const sortedEntries = useMemo(() => {
     if (!sortBy) return filteredEntries;
@@ -243,7 +283,12 @@ export const FileLibraryPage: React.FC = () => {
       let cmp = 0;
       if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
       else if (sortBy === 'size') cmp = a.size - b.size;
-      else if (sortBy === 'modified') cmp = (a.modified_at || '').localeCompare(b.modified_at || '');
+      // F-017: Use Date comparison instead of localeCompare
+      else if (sortBy === 'modified') {
+        const da = a.modified_at ? new Date(a.modified_at).getTime() : 0;
+        const db = b.modified_at ? new Date(b.modified_at).getTime() : 0;
+        cmp = da - db;
+      }
       return sortOrder === 'asc' ? cmp : -cmp;
     });
   }, [filteredEntries, sortBy, sortOrder]);
@@ -326,6 +371,7 @@ export const FileLibraryPage: React.FC = () => {
         onRefresh={handleRefresh}
         selectedCount={selectedPaths.size}
         uploading={uploading}
+        uploadProgress={uploadProgress}
       />
 
       {/* File type filter bar */}
@@ -348,15 +394,62 @@ export const FileLibraryPage: React.FC = () => {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-72 border-r border-border bg-surface/50 overflow-y-auto">
+        {/* Mobile sidebar toggle button */}
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="md:hidden fixed bottom-4 left-4 z-40 p-3 bg-primary text-white rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+          aria-label="Open folder tree"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Sidebar - responsive: always visible on md+, overlay on small screens */}
+        <div
+          className={cn(
+            'w-72 border-r border-border bg-surface/50 overflow-y-auto flex-shrink-0',
+            // Below md: overlay
+            'fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:relative md:inset-auto md:z-auto md:transition-none',
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+          )}
+        >
+          {/* Overlay close button (mobile only) */}
+          <div className="md:hidden flex items-center justify-end p-2 border-b border-border">
+            <span className="text-sm font-medium text-text flex-1 pl-2">Folders</span>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-2 text-text-muted hover:text-text hover:bg-border/20 rounded-lg transition-colors"
+              aria-label="Close folder tree"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
           <FolderTree
             currentPath={currentPath}
-            onNavigate={handleNavigate}
+            onNavigate={(path) => {
+              handleNavigate(path);
+              setSidebarOpen(false);
+            }}
             onContextMenu={handleFolderContextMenu}
             refreshKey={treeRefreshKey}
           />
         </div>
-        <div className="flex-1 overflow-hidden">
+
+        {/* Mobile backdrop */}
+        {sidebarOpen && (
+          <div
+            className="md:hidden fixed inset-0 z-40 bg-black/40"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* File list area with drag-and-drop */}
+        <div
+          className="flex-1 overflow-hidden relative"
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <FileList
             entries={sortedEntries}
             currentPath={currentPath}
@@ -370,7 +463,19 @@ export const FileLibraryPage: React.FC = () => {
             sortOrder={sortOrder}
             onSort={handleSort}
             filterType={filterType}
+            searchQuery={searchQuery}
           />
+
+          {/* F-029: Drag-and-drop overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-primary/10 backdrop-blur-sm border-2 border-dashed border-primary/40 rounded-lg m-2">
+              <div className="flex flex-col items-center gap-3 p-8 bg-background/90 rounded-xl shadow-lg">
+                <Upload className="w-12 h-12 text-primary" />
+                <p className="text-lg font-semibold text-text-primary">Drop files to upload</p>
+                <p className="text-sm text-text-muted">.txt and .csv files supported</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

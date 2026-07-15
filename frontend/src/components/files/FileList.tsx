@@ -18,6 +18,7 @@ interface FileListProps {
   sortOrder: 'asc' | 'desc';
   onSort: (column: 'name' | 'size' | 'modified') => void;
   filterType: 'all' | 'txt' | 'csv';
+  searchQuery?: string;
 }
 
 function formatSize(bytes: number): string {
@@ -43,11 +44,11 @@ function formatDate(iso: string | null): string {
 function getIcon(type: string) {
   switch (type) {
     case 'folder':
-      return <Folder className="w-5 h-5 text-amber-500 flex-shrink-0" />;
+      return <Folder className="w-5 h-5 text-[var(--color-secondary)] flex-shrink-0" />;
     case 'csv':
-      return <FileSpreadsheet className="w-5 h-5 text-green-600 flex-shrink-0" />;
+      return <FileSpreadsheet className="w-5 h-5 text-[var(--color-success)] flex-shrink-0" />;
     default:
-      return <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />;
+      return <FileText className="w-5 h-5 text-[var(--color-info)] flex-shrink-0" />;
   }
 }
 
@@ -64,6 +65,7 @@ export const FileList: React.FC<FileListProps> = ({
   sortOrder,
   onSort,
   filterType,
+  searchQuery,
 }) => {
   // Filter by type, then check allSelected against filtered entries
   const displayed = entries
@@ -164,6 +166,12 @@ export const FileList: React.FC<FileListProps> = ({
         >
           Clear Selection
         </button>
+        {searchQuery && (
+          <>
+            <span className="text-text-muted">·</span>
+            <span className="text-text-muted">{displayed.length} result{displayed.length !== 1 ? 's' : ''} for &lsquo;{searchQuery}&rsquo;</span>
+          </>
+        )}
       </div>
 
       {/* Table */}

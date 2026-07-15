@@ -13,6 +13,7 @@ interface FileLibraryToolbarProps {
   onRefresh: () => void;
   selectedCount: number;
   uploading: boolean;
+  uploadProgress?: number; // 0-100, shown as determinate bar when >= 0
 }
 
 export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
@@ -25,6 +26,7 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
   onRefresh,
   selectedCount,
   uploading,
+  uploadProgress = -1,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -133,10 +135,17 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
 
     </div>
 
-      {/* Upload indicator — animated bar (below toolbar) */}
+      {/* Upload indicator — animated bar (determinate when uploadProgress >= 0) */}
       {uploading && (
         <div className="h-1 bg-primary/20 overflow-hidden">
-          <div className="h-full w-2/3 bg-primary animate-pulse rounded" />
+          <div
+            className="h-full bg-primary rounded transition-all duration-300"
+            style={{ width: uploadProgress >= 0 ? `${uploadProgress}%` : '66%' }}
+          >
+            {uploadProgress >= 0 && (
+              <div className="h-full w-full bg-primary/30 animate-pulse" />
+            )}
+          </div>
         </div>
       )}
     </div>
