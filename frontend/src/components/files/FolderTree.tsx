@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { fileLibraryApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +30,20 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [rootError, setRootError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [focusedPath, setFocusedPath] = useState<string>('');
+  const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
+  const treeRef = useRef<HTMLDivElement>(null);
+
+  const findNodeByPath = useCallback((path: string, nodes: TreeNode[]): TreeNode | null => {
+    for (const node of nodes) {
+      if (node.path === path) return node;
+      if (node.children.length > 0) {
+        const found = findNodeByPath(path, node.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
 
   // Load root-level folders on mount
   useEffect(() => {
@@ -63,6 +77,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
 
     // Lazy-load children
     if (!node.loaded) {
+      setLoadingPaths(prev => new Set(prev).add(node.path));
       try {
         const data = await fileLibraryApi.listDirectory(node.path);
         const children = data.entries
@@ -80,9 +95,61 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         console.error('Failed to load children:', err);
         // Keep node collapsed so user can retry
         setExpandedPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
+      } finally {
+        setLoadingPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
       }
     }
   }, [expandedPaths, rootNodes]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const items = treeRef.current?.querySelectorAll('[role="treeitem"]');
+    if (!items || items.length === 0) return;
+
+    const currentIndex = Array.from(items).findIndex(
+      item => item.getAttribute('data-path') === focusedPath
+    );
+
+    switch (e.key) {
+      case 'ArrowDown': {
+        e.preventDefault();
+        const nextIndex = Math.min(currentIndex + 1, items.length - 1);
+        const nextPath = items[nextIndex].getAttribute('data-path') || '';
+        setFocusedPath(nextPath);
+        break;
+      }
+      case 'ArrowUp': {
+        e.preventDefault();
+        const prevIndex = Math.max(currentIndex - 1, 0);
+        const prevPath = items[prevIndex].getAttribute('data-path') || '';
+        setFocusedPath(prevPath);
+        break;
+      }
+      case 'ArrowRight': {
+        e.preventDefault();
+        const node = findNodeByPath(focusedPath, rootNodes);
+        if (node && !expandedPaths.has(focusedPath)) {
+          toggleExpand(node);
+        }
+        break;
+      }
+      case 'ArrowLeft': {
+        e.preventDefault();
+        if (expandedPaths.has(focusedPath)) {
+          const node = findNodeByPath(focusedPath, rootNodes);
+          if (node) toggleExpand(node);
+        } else {
+          const parentPath = focusedPath.split('/').slice(0, -1).join('/');
+          setFocusedPath(parentPath);
+        }
+        break;
+      }
+      case 'Enter': {
+        e.preventDefault();
+        onNavigate(focusedPath);
+        break;
+      }
+    }
+  }, [focusedPath, rootNodes, expandedPaths, onNavigate, toggleExpand, findNodeByPath]);
 
   const renderNode = (node: TreeNode, depth: number): React.ReactNode => {
     const isExpanded = expandedPaths.has(node.path);
@@ -92,19 +159,28 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
       <div key={node.path}>
         <div
           className={cn(
-            'flex items-center gap-1 px-2 py-1 cursor-pointer rounded text-sm transition-colors',
+            'flex items-center gap-1 px-2 py-1 cursor-pointer rounded text-sm transition-colors min-h-[44px]',
             isActive
               ? 'bg-primary/10 text-primary font-medium'
               : 'text-text-secondary hover:bg-surface hover:text-text',
           )}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          role="treeitem"
+          aria-expanded={isExpanded}
+          aria-selected={isActive}
+          aria-level={depth + 1}
+          data-path={node.path}
+          tabIndex={focusedPath === node.path ? 0 : -1}
           onClick={() => {
             onNavigate(node.path);
+            setFocusedPath(node.path);
             toggleExpand(node);
           }}
           onContextMenu={(e) => onContextMenu(e, node.path, node.name)}
         >
-          {isExpanded ? (
+          {loadingPaths.has(node.path) ? (
+            <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
+          ) : isExpanded ? (
             <ChevronDown className="w-4 h-4 flex-shrink-0" />
           ) : (
             <ChevronRight className="w-4 h-4 flex-shrink-0" />
@@ -122,17 +198,25 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   };
 
   return (
-    <div className="py-1" data-testid="folder-tree">
+    <div className="py-1" data-testid="folder-tree" role="tree" ref={treeRef} onKeyDown={handleKeyDown}>
       {/* Root link */}
       <div
         className={cn(
-          'flex items-center gap-1 px-2 py-1 cursor-pointer rounded text-sm transition-colors',
+          'flex items-center gap-1 px-2 py-1 cursor-pointer rounded text-sm transition-colors min-h-[44px]',
           currentPath === ''
             ? 'bg-primary/10 text-primary font-medium'
             : 'text-text-secondary hover:bg-surface hover:text-text',
         )}
         style={{ paddingLeft: '8px' }}
-        onClick={() => onNavigate('')}
+        role="treeitem"
+        aria-selected={currentPath === ''}
+        aria-level={1}
+        data-path=""
+        tabIndex={focusedPath === '' ? 0 : -1}
+        onClick={() => {
+          onNavigate('');
+          setFocusedPath('');
+        }}
       >
         <Folder className="w-4 h-4 flex-shrink-0" />
         <span className="truncate">File Library</span>

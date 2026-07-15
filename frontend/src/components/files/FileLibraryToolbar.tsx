@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { FolderPlus, Upload, Trash2, Pencil, Search, RefreshCw, X } from 'lucide-react';
+import { FolderPlus, Upload, Trash2, Pencil, Search, RefreshCw, X, Loader2 } from 'lucide-react';
 
 interface FileLibraryToolbarProps {
   onCreateFolder: () => void;
@@ -36,6 +36,7 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
         onClick={onCreateFolder}
         className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors"
         title="New Folder"
+        aria-label="Create new folder"
       >
         <FolderPlus className="w-4 h-4" />
         <span className="hidden lg:inline">New Folder</span>
@@ -46,9 +47,10 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
         disabled={uploading}
         className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors disabled:opacity-50"
         title="Upload Files"
+        aria-label="Upload files"
       >
         {uploading ? (
-          <RefreshCw className="w-4 h-4 animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
           <Upload className="w-4 h-4" />
         )}
@@ -73,6 +75,7 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
         disabled={selectedCount === 0}
         className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-error bg-background border border-border rounded-md hover:bg-error/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         title={`Delete (${selectedCount} selected)`}
+        aria-label="Delete selected files"
       >
         <Trash2 className="w-4 h-4" />
         <span className="hidden lg:inline">Delete</span>
@@ -88,6 +91,7 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
         disabled={selectedCount !== 1}
         className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         title="Rename"
+        aria-label="Rename file"
       >
         <Pencil className="w-4 h-4" />
         <span className="hidden lg:inline">Rename</span>
@@ -110,6 +114,7 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
           <button
             onClick={() => onSearchChange('')}
             className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text rounded"
+            aria-label="Clear search"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -121,6 +126,7 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
         onClick={onRefresh}
         className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors"
         title="Refresh (re-scan library)"
+        aria-label="Refresh file library"
       >
         <RefreshCw className="w-4 h-4" />
       </button>

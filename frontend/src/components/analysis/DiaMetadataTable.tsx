@@ -227,6 +227,7 @@ export const DiaMetadataTable: React.FC = () => {
           <button
             onClick={addColumn}
             className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+            data-testid="dia-add-group-btn"
           >
             <Plus className="w-4 h-4" /> Add Group
           </button>
@@ -243,6 +244,7 @@ export const DiaMetadataTable: React.FC = () => {
           <button
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-surface border border-border rounded-md hover:bg-border/20 transition-colors text-text"
+            data-testid="dia-import-btn"
           >
             <Upload className="w-4 h-4" /> Import Metadata CSV
           </button>
@@ -250,6 +252,7 @@ export const DiaMetadataTable: React.FC = () => {
             onClick={handleExportCSV}
             disabled={uploadedFiles.length === 0}
             className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-surface border border-border rounded-md hover:bg-border/20 transition-colors text-text disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="dia-export-btn"
           >
             <Download className="w-4 h-4" /> Export Metadata CSV
           </button>
@@ -289,7 +292,7 @@ export const DiaMetadataTable: React.FC = () => {
               const meta = config.metadata_columns?.[file.filename] || {};
               return (
                 <tr key={file.filename} className="hover:bg-surface transition-colors">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-testid="dia-filename">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-text-muted flex-shrink-0" />
                       <span className="text-sm text-text truncate max-w-[200px]" title={file.filename}>
@@ -307,6 +310,7 @@ export const DiaMetadataTable: React.FC = () => {
                       onChange={(e) => updateCell(file.filename, 'experiment', e.target.value)}
                       onBlur={(e) => validateCell(file.filename, 'experiment', e.target.value)}
                       className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
+                      data-testid="dia-experiment-input"
                     />
                     {cellErrors[`${file.filename}:experiment`] && (
                       <span className="text-xs text-error block mt-0.5">{cellErrors[`${file.filename}:experiment`]}</span>
@@ -331,6 +335,7 @@ export const DiaMetadataTable: React.FC = () => {
                       onChange={(e) => updateCell(file.filename, 'replicate', e.target.value)}
                       onBlur={(e) => validateCell(file.filename, 'replicate', e.target.value)}
                       className="w-20 px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
+                      data-testid="dia-replicate-input"
                     />
                     {cellErrors[`${file.filename}:replicate`] && (
                       <span className="text-xs text-error block mt-0.5">{cellErrors[`${file.filename}:replicate`]}</span>

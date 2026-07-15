@@ -558,6 +558,10 @@ function ProcessingContent() {
                 </div>
               </div>
               <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5 text-xs" title={`WebSocket: ${isConnected ? 'Connected' : 'Disconnected'}`}>
+                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-400'}`} />
+                  <span className="text-text-muted">{isConnected ? 'Connected' : 'Disconnected'}</span>
+                </div>
                 {!isComplete && !isCancelled && !error && !isQueued && (
                   <button
                     data-testid="cancel-processing-btn"
@@ -620,7 +624,15 @@ function ProcessingContent() {
           <LogPanel logs={logs} maxHeight="600px" />
           {/* Cancel Confirmation Dialog */}
           {showCancelDialog && (
-            <div data-testid="cancel-confirm-dialog" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div
+              data-testid="cancel-confirm-dialog"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+              role="alertdialog"
+              aria-modal="true"
+              aria-label="Cancel processing confirmation"
+              onKeyDown={(e) => { if (e.key === 'Escape') handleDismissCancelDialog(); }}
+              onClick={(e) => { if (e.target === e.currentTarget) handleDismissCancelDialog(); }}
+            >
               <div className="bg-background rounded-xl border border-border p-6 max-w-md w-full mx-4 shadow-2xl">
                 <h3 className="text-lg font-semibold text-text-primary mb-2">
                   Cancel Processing?

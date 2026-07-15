@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle, ChevronDown, XCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useAnalysisStore, getValidation, canStartAnalysis } from '@/stores/analysis-store';
 import type { ValidationWarning } from '@/types';
 
@@ -55,6 +56,7 @@ const WarningItem: React.FC<{ warning: ValidationWarning }> = ({ warning }) => {
 };
 
 export const ValidationPanel: React.FC = () => {
+  const router = useRouter();
   const state = useAnalysisStore();
   const validation = getValidation(state);
   const canStart = canStartAnalysis(state);
@@ -66,7 +68,7 @@ export const ValidationPanel: React.FC = () => {
   const infoWarnings = warnings.filter((w) => w.type === 'warning');
 
   // Determine status for each check
-  const experimentStatus = experiments.length === 1 ? 'valid' : experiments.length > 1 ? 'neutral' : 'neutral';
+  const experimentStatus = experiments.length >= 1 ? 'valid' : 'neutral';
 
   return (
     <div className="space-y-4">
@@ -144,6 +146,20 @@ export const ValidationPanel: React.FC = () => {
             {infoWarnings.map((warning, index) => (
               <WarningItem key={`warning-${index}`} warning={warning} />
             ))}
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={() => router.push('/new/metadata')}
+              className="text-sm text-primary underline-offset-2 hover:underline"
+            >
+              Go to Metadata
+            </button>
+            <button
+              onClick={() => router.push('/new/upload')}
+              className="text-sm text-primary underline-offset-2 hover:underline"
+            >
+              Add Files
+            </button>
           </div>
         </div>
       )}

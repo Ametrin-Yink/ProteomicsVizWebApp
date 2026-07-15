@@ -486,6 +486,34 @@ function ComparisonsContent() {
                           >
                             <ArrowLeftRight className="w-3 h-3" />
                           </button>
+                          <button
+                            onClick={() => {
+                              if (group1Cards.some(c => c.col === card.col)) {
+                                addToast('warning', `"${card.col}" is already in Group A`);
+                                return;
+                              }
+                              setGroup1Cards(prev => [...prev, card]);
+                            }}
+                            className="w-5 h-5 rounded-full text-[10px] font-bold bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0"
+                            title="Add to Group A only"
+                            aria-label={`Add ${card.col}:${card.val} to Group A`}
+                          >
+                            A
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (group2Cards.some(c => c.col === card.col)) {
+                                addToast('warning', `"${card.col}" is already in Group B`);
+                                return;
+                              }
+                              setGroup2Cards(prev => [...prev, card]);
+                            }}
+                            className="w-5 h-5 rounded-full text-[10px] font-bold bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors flex-shrink-0"
+                            title="Add to Group B only"
+                            aria-label={`Add ${card.col}:${card.val} to Group B`}
+                          >
+                            B
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -509,13 +537,16 @@ function ComparisonsContent() {
               onDrop={(e) => handleDropOnZone(e, 'group1')}
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group A</p>
-                  {group1Cards.length > 0 && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                      {groupSampleCounts.group1} sample{groupSampleCounts.group1 !== 1 ? 's' : ''}
-                    </span>
-                  )}
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group A</p>
+                    {group1Cards.length > 0 && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        {groupSampleCounts.group1} sample{groupSampleCounts.group1 !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-muted italic">(blue region)</p>
                 </div>
                 {group1Cards.length > 0 && (
                   <button onClick={() => setGroup1Cards([])} className="text-xs text-text-muted hover:text-error transition-colors">
@@ -550,13 +581,16 @@ function ComparisonsContent() {
               onDrop={(e) => handleDropOnZone(e, 'group2')}
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group B</p>
-                  {group2Cards.length > 0 && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
-                      {groupSampleCounts.group2} sample{groupSampleCounts.group2 !== 1 ? 's' : ''}
-                    </span>
-                  )}
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group B</p>
+                    {group2Cards.length > 0 && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                        {groupSampleCounts.group2} sample{groupSampleCounts.group2 !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-muted italic">(red region)</p>
                 </div>
                 {group2Cards.length > 0 && (
                   <button onClick={() => setGroup2Cards([])} className="text-xs text-text-muted hover:text-error transition-colors">

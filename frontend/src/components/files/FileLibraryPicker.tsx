@@ -32,10 +32,40 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
     entries,
     fileType: pickerFilter === 'all' ? 'all' : pickerFilter,
   });
+
+  // Focus trap: Tab wraps within the dialog
+  const handleDialogKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape' && !copying) {
+      onClose();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const container = dialogRef.current;
+    if (!container) return;
+    const focusable = container.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, [copying, onClose]);
 
   // Load directory on mount and on path change
   const loadDirectory = useCallback(async (path: string) => {
@@ -131,10 +161,13 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-label="File Library Picker"
       data-testid="file-picker"
-      onKeyDown={(e) => { if (e.key === 'Escape' && !copying) onClose(); }}
+      onKeyDown={handleDialogKeyDown}
     >
-      <div className="bg-background rounded-xl shadow-2xl w-[900px] max-h-[80vh] flex flex-col">
+      <div ref={dialogRef} className="bg-background rounded-xl shadow-2xl w-[900px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h2 className="font-semibold text-text-primary">Select Files for Analysis</h2>
@@ -179,8 +212,20 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
               value={searchQuery}
               onChange={handleSearchChange}
               placeholder="Search files..."
-              className="pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-full"
+              className={cn(
+                'pl-8 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-full',
+                searchQuery ? 'pr-8' : 'pr-3',
+              )}
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text rounded transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 

@@ -245,6 +245,7 @@ export const ExperimentTable: React.FC = () => {
   }, [uploadedFiles, filterText, filterExperiment, filterCondition, sort, config.metadata_columns]);
 
   const totalPages = Math.ceil(filteredAndSortedFiles.length / pageSize);
+  const hasActiveFilters = filterText !== '' || filterExperiment !== 'all' || filterCondition !== 'all';
 
   // Reset page when filters change
   React.useEffect(() => { setPage(1); }, [filterText, filterExperiment, filterCondition]);
@@ -629,7 +630,19 @@ export const ExperimentTable: React.FC = () => {
 
       {filteredAndSortedFiles.length === 0 && (
         <div className="text-center py-8 text-text-muted">
-          No files match the current filters
+          {hasActiveFilters ? (
+            <div className="flex flex-col items-center gap-2">
+              <p>No files match the current filters</p>
+              <button
+                onClick={() => { setFilterText(''); setFilterExperiment('all'); setFilterCondition('all'); }}
+                className="text-sm text-primary underline-offset-2 hover:underline"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <p>No files match the current filters</p>
+          )}
         </div>
       )}
 

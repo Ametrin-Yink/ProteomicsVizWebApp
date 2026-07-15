@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { FileText, FileSpreadsheet, Folder, ChevronRight } from 'lucide-react';
 import { FileLibraryEntry } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -84,6 +84,44 @@ export const FileList: React.FC<FileListProps> = ({
   // Breadcrumb segments
   const segments = currentPath ? currentPath.split('/') : [];
 
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+
+  const handleKeyDown = useCallback((
+    e: React.KeyboardEvent,
+    entry: FileLibraryEntry,
+    index: number
+  ) => {
+    switch (e.key) {
+      case 'ArrowDown': {
+        e.preventDefault();
+        const nextIndex = Math.min(index + 1, displayed.length - 1);
+        setFocusedIndex(nextIndex);
+        rowRefs.current[nextIndex]?.focus();
+        break;
+      }
+      case 'ArrowUp': {
+        e.preventDefault();
+        const prevIndex = Math.max(index - 1, 0);
+        setFocusedIndex(prevIndex);
+        rowRefs.current[prevIndex]?.focus();
+        break;
+      }
+      case 'Enter':
+        e.preventDefault();
+        if (entry.type === 'folder') {
+          onNavigate(entry.path);
+        } else {
+          onToggleSelect(entry.path);
+        }
+        break;
+      case ' ':
+        e.preventDefault();
+        onToggleSelect(entry.path);
+        break;
+    }
+  }, [displayed, onNavigate, onToggleSelect]);
+
   return (
     <div className="flex flex-col h-full" data-testid="file-list">
       {/* Breadcrumbs */}
@@ -102,6 +140,7 @@ export const FileList: React.FC<FileListProps> = ({
               <button
                 onClick={() => onNavigate(segPath)}
                 className="hover:text-text hover:underline truncate max-w-[200px]"
+                aria-current={i === segments.length - 1 ? 'page' : undefined}
               >
                 {seg}
               </button>
@@ -143,23 +182,27 @@ export const FileList: React.FC<FileListProps> = ({
                   className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
                 />
               </th>
-              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase cursor-pointer select-none hover:text-text" onClick={() => onSort('name')}>
+              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase cursor-pointer select-none hover:text-text" onClick={() => onSort('name')} aria-sort={sortBy === 'name' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 Name{sortIndicator('name')}
               </th>
-              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-24 cursor-pointer select-none hover:text-text" onClick={() => onSort('size')}>
+              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-24 cursor-pointer select-none hover:text-text" onClick={() => onSort('size')} aria-sort={sortBy === 'size' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 Size{sortIndicator('size')}
               </th>
-              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-44 cursor-pointer select-none hover:text-text" onClick={() => onSort('modified')}>
+              <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase w-44 cursor-pointer select-none hover:text-text" onClick={() => onSort('modified')} aria-sort={sortBy === 'modified' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 Modified{sortIndicator('modified')}
               </th>
             </tr>
           </thead>
           <tbody>
-            {displayed.map(entry => {
+            {displayed.map((entry, index) => {
               const isSelected = selectedPaths.has(entry.path);
               return (
                 <tr
                   key={entry.path}
+                  ref={(el) => { rowRefs.current[index] = el; }}
+                  tabIndex={focusedIndex === index ? 0 : -1}
+                  role="row"
+                  aria-selected={isSelected}
                   className={cn(
                     'border-b border-border/50 hover:bg-surface/50 transition-colors cursor-pointer',
                     isSelected && 'bg-primary/5',
@@ -171,6 +214,7 @@ export const FileList: React.FC<FileListProps> = ({
                       onToggleSelect(entry.path);
                     }
                   }}
+                  onKeyDown={(e) => handleKeyDown(e, entry, index)}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     onContextMenu(e, entry.path, entry.name);
@@ -188,7 +232,7 @@ export const FileList: React.FC<FileListProps> = ({
                   <td className="px-2 py-2">
                     <div className="flex items-center gap-2">
                       {getIcon(entry.type)}
-                      <span className="text-sm text-text truncate max-w-[400px]">
+                      <span className="text-sm text-text truncate max-w-[400px]" title={entry.name}>
                         {entry.name}
                       </span>
                     </div>
