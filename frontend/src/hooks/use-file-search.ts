@@ -12,13 +12,18 @@ interface UseFileSearchResult<T extends BaseEntry> {
 }
 
 export function useFileSearch<T extends BaseEntry>({ entries, fileType = 'all' }: UseFileSearchOptions<T>): UseFileSearchResult<T> {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQueryState] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const setSearchQuery = useCallback((q: string) => {
+    setSearchQueryState(q);
+    setDebouncedQuery(q);
+  }, []);
+
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setSearchQuery(value);
+    setSearchQueryState(value);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setDebouncedQuery(value), 300);
   }, []);
@@ -27,8 +32,8 @@ export function useFileSearch<T extends BaseEntry>({ entries, fileType = 'all' }
 
   const filteredEntries = useMemo(() => {
     let result = entries;
-    if (fileType === 'csv-only' || fileType === 'csv') result = result.filter((e) => e.type === 'csv' || e.type === 'tsv') as typeof result;
-    else if (fileType === 'txt') result = result.filter((e) => e.type === 'txt') as typeof result;
+    if (fileType === 'csv-only' || fileType === 'csv') result = result.filter((e) => e.type === 'folder' || e.type === 'csv' || e.type === 'tsv') as typeof result;
+    else if (fileType === 'txt') result = result.filter((e) => e.type === 'folder' || e.type === 'txt') as typeof result;
     if (debouncedQuery.trim()) {
       const q = debouncedQuery.toLowerCase();
       result = result.filter((e) => e.name.toLowerCase().includes(q));

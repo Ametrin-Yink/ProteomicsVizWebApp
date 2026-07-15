@@ -1,0 +1,170 @@
+"""Rescan file library, then run both pipelines."""
+import time
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+BASE = "http://127.0.0.1:3000"
+ROOT = Path(__file__).parent.parent.parent
+CHANNEL_CSV = str(ROOT / "Tests" / "fixtures" / "tmt_channel_design.csv")
+
+def log(msg):
+    print(f"[{time.strftime('%H:%M:%S')}] {msg.encode('ascii',errors='replace').decode()}", flush=True)
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    ctx = browser.new_context(viewport={"width": 1440, "height": 900})
+    page = ctx.new_page()
+    page.set_default_timeout(30000)
+
+    # Step 0: Go to Files page and click Refresh to rescan library
+    log("Step 0: Rescanning file library...")
+    page.goto(f"{BASE}/files", wait_until="networkidle")
+    time.sleep(2)
+
+    refresh_btn = page.locator('button[aria-label="Refresh file library"]').first
+    if refresh_btn.is_visible(timeout=5000):
+        refresh_btn.click()
+        log("Clicked Refresh (re-scan)")
+    time.sleep(5)  # Wait for scan to complete
+
+    # Navigate to proj/dock5 and verify files are visible
+    proj_row = page.locator('tr:has-text("proj")').first
+    if proj_row.is_visible(timeout=5000):
+        proj_row.click()
+        time.sleep(1)
+    dock5_row = page.locator('tr:has-text("dock5")').first
+    if dock5_row.is_visible(timeout=5000):
+        dock5_row.click()
+        time.sleep(1)
+
+    # Count files in dock5 on the main files page
+    file_count = page.locator('tbody tr').count()
+    log(f"Files in dock5 (Files page): {file_count}")
+    for i in range(min(file_count, 5)):
+        try:
+            text = page.locator('tbody tr').nth(i).text_content()
+            log(f"  [{i}] {text.strip()[:80]}")
+        except: pass
+
+    # ===== TMT PIPELINE =====
+    log("\n===== TMT PIPELINE =====")
+    page.goto(f"{BASE}/", wait_until="networkidle")
+    time.sleep(1)
+    page.locator('button:has-text("TMT")').first.click()
+    page.wait_for_url("**/new/upload**")
+    time.sleep(3)
+    log("TMT upload page")
+
+    # Open picker
+    page.locator('button:has-text("Browse File Library")').first.click()
+    time.sleep(2)
+
+    # Navigate to proj -> dock5
+    page.locator('[role="treeitem"]:has-text("proj")').first.click()
+    time.sleep(2)
+    page.locator('[role="treeitem"]:has-text("dock5")').first.click()
+    time.sleep(2)
+
+    # Check files now
+    rows = page.locator('tbody tr').count()
+    log(f"Files in dock5 (Picker): {rows}")
+
+    if rows == 0:
+        # Check if there's an empty state
+        body_text = page.locator('body').text_content()
+        if "No files" in body_text:
+            log("  Empty state: 'No files' message visible")
+        if "No CSV files" in body_text:
+            log("  Empty state: csv-only filter active!")
+            # Try changing filter
+            all_btn = page.locator('button:has-text("All")').first
+            if all_btn.is_visible():
+                all_btn.click()
+                time.sleep(1)
+                rows = page.locator('tbody tr').count()
+                log(f"  After filter: {rows} files")
+
+    if rows > 0:
+        # Select PANC0203 file
+        for i in range(rows):
+            row = page.locator('tbody tr').nth(i)
+            try:
+                name = row.text_content()
+                if "PANC" in name or "DOCK5" in name:
+                    row.locator('input[type="checkbox"]').check()
+                    log(f"  Selected: {name.strip()[:60]}")
+                    break
+            except: pass
+
+        # Confirm
+        page.locator('button:has-text("Select")').last.click(timeout=10000)
+        time.sleep(5)
+        log("  Selection confirmed")
+
+        # Wait for Continue
+        for i in range(60):
+            btn = page.locator('button:has-text("Continue")').first
+            if btn.is_visible() and btn.is_enabled():
+                log(f"  Continue enabled after {i}s")
+                btn.click()
+                break
+            time.sleep(2)
+
+        # Metadata
+        time.sleep(2)
+        try: page.wait_for_url("**/new/metadata**", timeout=20000)
+        except: pass
+        log(f"  Metadata URL: {page.url.split('?')[0]}")
+
+        if "metadata" in page.url:
+            # Upload CSV
+            fi = page.locator('input[type="file"]').first
+            if fi.is_visible(timeout=5000):
+                fi.set_input_files(CHANNEL_CSV)
+                log("  Channel CSV uploaded")
+                time.sleep(3)
+
+        # Continue through wizard
+        for step_name, url_part in [("comparisons", "comparisons"), ("config", "config"), ("summary", "summary")]:
+            for i in range(40):
+                btn = page.locator('button:has-text("Continue")').first
+                if btn.is_visible() and btn.is_enabled():
+                    btn.click()
+                    log(f"  {step_name} after {i}s")
+                    break
+                time.sleep(2)
+            try: page.wait_for_url(f"**/new/{url_part}**", timeout=25000)
+            except: pass
+            log(f"  {step_name} URL: {page.url.split('?')[0]}")
+
+            if url_part == "comparisons":
+                auto = page.locator('button:has-text("Auto-Generate")').first
+                if auto.is_visible(timeout=3000):
+                    auto.click()
+                    time.sleep(1)
+            elif url_part == "config":
+                sel = page.locator('select').first
+                if sel.is_visible(timeout=3000):
+                    sel.select_option(label="Human")
+                    time.sleep(1)
+
+        # Start analysis
+        if "summary" in page.url:
+            time.sleep(2)
+            page.once("dialog", lambda d: d.accept())
+            for i in range(30):
+                btn = page.locator('button:has-text("Start Analysis")').first
+                if btn.is_visible() and btn.is_enabled():
+                    btn.click()
+                    log(f"  TMT ANALYSIS STARTED!")
+                    break
+                time.sleep(2)
+            time.sleep(3)
+            try: page.wait_for_url("**/analysis/processing**", timeout=20000)
+            except: pass
+            log(f"  TMT final: {page.url.split('?')[0]}")
+    else:
+        log("[FAIL] No files found in dock5 after rescan")
+
+    browser.close()
+    log("\nDone")
