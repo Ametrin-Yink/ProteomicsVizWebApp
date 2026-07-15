@@ -33,7 +33,7 @@ function MetadataContentInner() {
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
-  const tmtChannelMapping = useAnalysisStore((s) => s.tmtChannelMapping);
+  const tmtChannelMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping ?? {});
   const { addToast } = useUIStore();
 
   const [isSaving, setIsSaving] = useState(false);
@@ -152,14 +152,14 @@ function MetadataContentInner() {
   const validation = useMemo(() => {
     if (analysisType === 'tmt') {
       const mapping = tmtChannelMapping || {};
-      const channels = tmtFiles.flatMap((f) => f.tmt_channels || []);
-      if (channels.length === 0) {
+      const fileChannelPairs = tmtFiles.flatMap((f) => (f.tmt_channels || []).map((ch) => ({ file: f, channel: ch, key: f.filename + '::' + ch })));
+      if (fileChannelPairs.length === 0) {
         return { isValid: false, message: 'No TMT channels detected', warnings: [] };
       }
 
       // Check all channels mapped
-      const unmapped = channels.filter((ch) => {
-        const entry = mapping[ch];
+      const unmapped = fileChannelPairs.filter(({ key }) => {
+        const entry = mapping[key];
         if (!entry) return true;
         const hasGroupVal = Object.entries(entry).some(
           ([k, v]) => k !== 'replicate' && v !== undefined && v !== null && String(v).trim() !== ''
@@ -170,8 +170,8 @@ function MetadataContentInner() {
 
       // Get unique condition combos
       const conditionCombos = new Set<string>();
-      channels.forEach((ch) => {
-        const entry = mapping[ch];
+      fileChannelPairs.forEach(({ key }) => {
+        const entry = mapping[key];
         if (!entry) return;
         const groupVals = Object.entries(entry)
           .filter(([k]) => k !== 'replicate')
@@ -182,7 +182,7 @@ function MetadataContentInner() {
       });
 
       const warnings: string[] = [];
-      if (conditionCombos.size < 2 && channels.length > 0) {
+      if (conditionCombos.size < 2 && fileChannelPairs.length > 0) {
         warnings.push('Need at least 2 unique condition combinations for comparison');
       }
       if (unmapped.length > 0) {
