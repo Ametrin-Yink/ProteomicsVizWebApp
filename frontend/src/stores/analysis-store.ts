@@ -81,7 +81,7 @@ interface AnalysisState {
   setPtmGlobalProteomeFiles: (count: number) => void;
   // TMT channel mapping actions
   updateChannelMapping: (filename: string, channel: string, groups: Record<string, string | number>) => void;
-  importChannelMapping: (csvData: string) => void;
+  importChannelMapping: (filename: string, csvData: string) => void;
   importMetadataColumns: (data: Record<string, Record<string, string>>) => void;
   reset: () => void;
 }
@@ -332,7 +332,7 @@ export const useAnalysisStore = create<AnalysisState>()(
       });
     },
 
-    importChannelMapping: (csvData) => {
+    importChannelMapping: (filename, csvData) => {
       set((state) => {
         const lines = csvData.split('\n').filter((l) => l.trim());
         if (lines.length < 2) return;
@@ -340,7 +340,9 @@ export const useAnalysisStore = create<AnalysisState>()(
         const channelIdx = headers.indexOf('Channel');
         if (channelIdx === -1) return;
         const groupHeaders = headers.filter((h) => h !== 'Channel');
-        const mapping: Record<string, Record<string, string | number>> = {};
+        if (!state.config.tmt_channel_mapping) {
+          state.config.tmt_channel_mapping = {};
+        }
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i]);
           const channel = values[channelIdx];
@@ -353,9 +355,8 @@ export const useAnalysisStore = create<AnalysisState>()(
               entry[h] = h === 'Replicate' ? parseInt(val, 10) || 0 : val;
             }
           });
-          mapping[channel] = entry;
+          state.config.tmt_channel_mapping[`${filename}::${channel}`] = { ...entry };
         }
-        state.config.tmt_channel_mapping = { ...mapping };
       });
     },
 

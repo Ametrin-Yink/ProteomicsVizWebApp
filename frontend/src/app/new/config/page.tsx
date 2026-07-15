@@ -43,10 +43,15 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
   const [organismError, setOrganismError] = React.useState<string | null>(null);
 
   // Warn user before leaving page with unsaved data
+  const beforeUnloadRef = React.useRef<((e: BeforeUnloadEvent) => void) | null>(null);
   React.useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    beforeUnloadRef.current = handler;
     window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      beforeUnloadRef.current = null;
+    };
   }, []);
 
   // Redirect guard: no session or no analysis type -> back to earlier step
@@ -94,6 +99,9 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
 
   const handleContinue = async () => {
     if (!canContinue || !sessionId) return;
+    // Remove beforeunload handler so it doesn't trap user during programmatic navigation
+    const handler = beforeUnloadRef.current;
+    if (handler) window.removeEventListener('beforeunload', handler);
     setIsStarting(true);
 
     try {

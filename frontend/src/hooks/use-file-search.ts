@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useCallback, useMemo } from 'react';
 
-type BaseEntry = { name: string; file_type?: string; path: string };
+type BaseEntry = { name: string; type?: string; path: string };
 
 interface UseFileSearchOptions<T extends BaseEntry> { entries: T[]; fileType?: 'csv' | 'txt' | 'all' | 'csv-only'; }
 
@@ -27,8 +27,8 @@ export function useFileSearch<T extends BaseEntry>({ entries, fileType = 'all' }
 
   const filteredEntries = useMemo(() => {
     let result = entries;
-    if (fileType === 'csv-only' || fileType === 'csv') result = result.filter((e) => e.file_type === 'csv' || e.file_type === 'tsv') as typeof result;
-    else if (fileType === 'txt') result = result.filter((e) => e.file_type === 'txt') as typeof result;
+    if (fileType === 'csv-only' || fileType === 'csv') result = result.filter((e) => e.type === 'csv' || e.type === 'tsv') as typeof result;
+    else if (fileType === 'txt') result = result.filter((e) => e.type === 'txt') as typeof result;
     if (debouncedQuery.trim()) {
       const q = debouncedQuery.toLowerCase();
       result = result.filter((e) => e.name.toLowerCase().includes(q));

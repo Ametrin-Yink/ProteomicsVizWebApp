@@ -364,7 +364,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
     reader.onload = (evt) => {
       try {
         const text = (evt.target?.result as string).replace(/\r/g, '');
-        importChannelMapping(text);
+        importChannelMapping(file.filename, text);
         addToast('success', 'Channel mapping imported');
       } catch (err) {
         addToast('error', `Failed to parse CSV: ${err instanceof Error ? err.message : String(err)}`);

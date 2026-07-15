@@ -301,10 +301,15 @@ function UploadContentInner() {
   }, [sessionId, analysisType, isRestoring, router, addToast]);
 
   // Warn user before leaving page with unsaved data
+  const beforeUnloadRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    beforeUnloadRef.current = handler;
     window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      beforeUnloadRef.current = null;
+    };
   }, []);
 
   const hasCriticalErrors = validation.warnings.filter((w) => w.type === 'error').length > 0;
@@ -321,6 +326,10 @@ function UploadContentInner() {
 
   const handleContinue = async () => {
     if (!canContinue || !sessionId) return;
+
+    // Remove beforeunload handler so it doesn't trap user during programmatic navigation
+    const handler = beforeUnloadRef.current;
+    if (handler) window.removeEventListener('beforeunload', handler);
 
     setIsSaving(true);
     try {
