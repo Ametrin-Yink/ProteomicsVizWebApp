@@ -124,7 +124,9 @@ const ErrorDisplay: React.FC<{
 const CompletionDisplay: React.FC<{
   duration: number | null;
   onNavigate: () => void;
-}> = ({ duration, onNavigate }) => (
+  stepCount: number;
+  countdown: number;
+}> = ({ duration, onNavigate, stepCount, countdown }) => (
   <div data-testid="processing-complete" className="rounded-lg border border-success/20 bg-success/5 p-6">
     <div className="flex items-start gap-4">
       <div className="p-3 bg-success/10 rounded-full">
@@ -135,7 +137,7 @@ const CompletionDisplay: React.FC<{
           Processing Complete!
         </h3>
         <p className="text-success mb-4">
-          All 8 steps have been completed successfully.
+          All {stepCount} step{stepCount !== 1 ? 's' : ''} completed successfully.
           {duration && (
             <span className="flex items-center gap-1 mt-1">
               <Clock className="w-4 h-4" />
@@ -144,7 +146,7 @@ const CompletionDisplay: React.FC<{
           )}
         </p>
         <p className="text-sm text-success mb-4">
-          Redirecting to visualization page in 2 seconds...
+          Redirecting to visualization page in {countdown}...
         </p>
         <button
           onClick={onNavigate}
@@ -220,6 +222,7 @@ function ProcessingContent() {
     error,
     processingDuration,
     sessionId: storeSessionId,
+    steps,
     initializeSteps,
     setSessionId,
     setFirstStepProcessing,
@@ -232,6 +235,9 @@ function ProcessingContent() {
     retry,
     reset: resetStore,
   } = useProcessingStore();
+
+  const stepCount = steps.length;
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
 
   // Reset store when session ID changes — prevents state from leaking between sessions
   useEffect(() => {
@@ -440,13 +446,28 @@ function ProcessingContent() {
   // This page only connects to WebSocket and displays progress
   // No need to call startProcessing here - it's already running
 
-  // Auto-redirect on completion
+  // Auto-redirect on completion with countdown
   useEffect(() => {
     if (isComplete && sessionId) {
-      const timer = setTimeout(() => {
+      setRedirectCountdown(3);
+      const countdownTimer = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownTimer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      const redirectTimer = setTimeout(() => {
         router.push(`/analysis/visualization?session_id=${sessionId}&pipeline=${pipeline}`);
-      }, 2000);
-      return () => clearTimeout(timer);
+      }, 3000);
+
+      return () => {
+        clearInterval(countdownTimer);
+        clearTimeout(redirectTimer);
+      };
     }
   }, [isComplete, sessionId, pipeline, router]);
 
@@ -601,7 +622,7 @@ function ProcessingContent() {
                   {error && <ErrorDisplay error={error} onRetry={handleRetry} onBack={handleBack} />}
                   {isCancelled && !error && <CancelledDisplay onBack={handleBack} />}
                   {isComplete && !error && (
-                    <CompletionDisplay duration={processingDuration} onNavigate={handleNavigateToResults} />
+                    <CompletionDisplay duration={processingDuration} onNavigate={handleNavigateToResults} stepCount={stepCount} countdown={redirectCountdown} />
                   )}
                   {startError && !error && (
                     <div className="rounded-xl border border-warning/20 bg-warning/5 p-4">

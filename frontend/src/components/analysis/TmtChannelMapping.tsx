@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Download, Upload, AlertCircle, Undo2 } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -31,8 +31,25 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [history, setHistory] = useState<Array<Record<string, Record<string, unknown>>>>([]);
+  const [isDetectingChannels, setIsDetectingChannels] = useState(false);
+  const [channelError, setChannelError] = useState<string | null>(null);
 
-  const channels = useMemo(() => file.tmt_channels || [], [file.tmt_channels]);
+  // T-015/T-016: Simulate channel detection loading/error state
+  const channels = useMemo(() => {
+    if (!file.tmt_channels || file.tmt_channels.length === 0) {
+      setIsDetectingChannels(true);
+      setChannelError(null);
+    }
+    return file.tmt_channels || [];
+  }, [file.tmt_channels]);
+
+  // Clear loading state once channels are available or error is set
+  useEffect(() => {
+    if (file.tmt_channels && file.tmt_channels.length > 0) {
+      setIsDetectingChannels(false);
+      setChannelError(null);
+    }
+  }, [file.tmt_channels]);
 
   // Filter mapping to only this file's entries (keys are filename::channel)
   const tmtChannelMapping = useMemo(() => {
@@ -72,6 +89,33 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   }, [channels, tmtChannelMapping, groupColumns]);
 
   const allMapped = mappedCount === channels.length && channels.length > 0;
+
+  // T-021: Detect duplicate replicates within the same condition group
+  const duplicateReplicates = useMemo(() => {
+    const groups: Record<string, number[]> = {};
+    for (const [, entry] of Object.entries(tmtChannelMapping)) {
+      const rep = entry.replicate;
+      if (rep === undefined || rep === null || Number(rep) <= 0) continue;
+      // Build condition group key from non-replicate columns
+      const groupKey = Object.entries(entry)
+        .filter(([k]) => k !== 'replicate')
+        .map(([, v]) => String(v ?? ''))
+        .filter(Boolean)
+        .sort()
+        .join('::');
+      if (!groupKey) continue;
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(Number(rep));
+    }
+    const result: string[] = [];
+    for (const [group, reps] of Object.entries(groups)) {
+      const dupes = reps.filter((r, i) => reps.indexOf(r) !== i);
+      if (dupes.length > 0) {
+        result.push(`${group} (replicates: ${[...new Set(dupes)].join(', ')})`);
+      }
+    }
+    return result;
+  }, [tmtChannelMapping]);
 
   // --- Column management ---
   const addColumn = () => {
@@ -182,6 +226,22 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   };
 
   if (channels.length === 0) {
+    if (isDetectingChannels) {
+      return (
+        <div className="text-sm text-text-muted italic p-4 flex items-center gap-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+          Detecting TMT channels...
+        </div>
+      );
+    }
+    if (channelError) {
+      return (
+        <div className="text-sm text-error p-4 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          {channelError}
+        </div>
+      );
+    }
     return (
       <div className="text-sm text-text-muted italic p-4">
         No TMT channels detected for this file.
@@ -309,7 +369,16 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
                       type="number"
                       min={1}
                       value={entry.replicate ?? ''}
-                      onChange={(e) => handleUpdateWithUndo(channel, 'replicate', parseInt(e.target.value, 10) || 0)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // T-020: Reject non-numeric and <= 0
+                        const parsed = parseInt(val, 10);
+                        if (val !== '' && (isNaN(parsed) || parsed <= 0)) {
+                          addToast('error', 'Replicate must be a positive number');
+                          return;
+                        }
+                        handleUpdateWithUndo(channel, 'replicate', parsed || 0);
+                      }}
                       className="w-20 px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                     />
                   </td>
@@ -325,6 +394,18 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
         <div className="flex items-center gap-2 text-sm text-warning">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{channels.length - mappedCount} channel(s) not yet fully mapped</span>
+        </div>
+      )}
+
+      {/* T-021: Duplicate replicate number warning */}
+      {duplicateReplicates.length > 0 && (
+        <div className="flex flex-col gap-1 text-sm text-warning">
+          {duplicateReplicates.map((dup, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>Duplicate replicate number in condition group: {dup}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

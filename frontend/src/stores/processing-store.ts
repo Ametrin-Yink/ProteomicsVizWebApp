@@ -22,6 +22,7 @@ interface ProcessingStore {
   // State
   steps: ProcessingStepDef[];
   logs: LogEntry[];
+  previousLogs: LogEntry[];
   isConnected: boolean;
   isComplete: boolean;
   isCancelled: boolean;
@@ -77,6 +78,7 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Initial state
     steps: [],
     logs: [],
+    previousLogs: [],
     isConnected: false,
     isComplete: false,
     isCancelled: false,
@@ -153,11 +155,11 @@ export const useProcessingStore = create<ProcessingStore>()(
       });
     },
 
-    // Set multiple logs (for loading historical logs)
+    // Set multiple logs (for loading historical logs) — ID-based dedup
     setLogs: (logs: LogEntry[]) => {
       set((state) => {
-        const existingKeys = new Set(state.logs.map(l => `${l.step}-${l.level}-${l.message}-${l.timestamp}`));
-        const newLogs = logs.filter(l => !existingKeys.has(`${l.step}-${l.level}-${l.message}-${l.timestamp}`));
+        const existingIds = new Set(state.logs.map(l => l.id));
+        const newLogs = logs.filter(l => !existingIds.has(l.id));
         state.logs.push(...newLogs);
       });
     },
@@ -214,8 +216,9 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Sync step progress from polling data (fallback when WebSocket is unavailable)
     syncStepProgress: (completedSteps: number[], currentStep: number) => {
       set((state) => {
-        // Don't clear queued state here - it should only be cleared when
-        // actual processing activity is detected (via WebSocket or logs)
+        // X-013: Don't update if already in terminal state
+        if (state.isComplete || state.isCancelled || state.error) return;
+
         // Mark completed steps
         for (const stepNum of completedSteps) {
           const step = state.steps.find((s: ProcessingStepDef) => s.id === stepNum);
@@ -267,9 +270,10 @@ export const useProcessingStore = create<ProcessingStore>()(
       });
     },
 
-    // Retry processing - reset error state but keep session
+    // Retry processing — archive logs before clearing
     retry: () => {
       set((state) => {
+        state.previousLogs = state.logs;
         state.error = null;
         state.isComplete = false;
         state.isCancelled = false;

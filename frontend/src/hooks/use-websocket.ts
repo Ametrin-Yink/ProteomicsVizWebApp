@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useProcessingStore } from '@/stores/processing-store';
+import { useUIStore } from '@/stores/ui-store';
 import {
   WSMessage,
   ProgressMessage,
@@ -19,12 +20,16 @@ import {
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || '';
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY = 1000; // 1 second
+const CONNECTION_TIMEOUT = 10000; // 10 seconds
 
 export const useWebSocket = (sessionId: string | null) => {
   const ws = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
   const isManualClose = useRef(false);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { addToast } = useUIStore();
 
   const {
     updateStepProgress,
@@ -114,17 +119,34 @@ export const useWebSocket = (sessionId: string | null) => {
     try {
       ws.current = new WebSocket(wsUrl);
 
+      // X-007: Connection timeout
+      connectionTimeoutRef.current = setTimeout(() => {
+        if (ws.current?.readyState === WebSocket.CONNECTING || ws.current?.readyState === WebSocket.OPEN) {
+          console.warn('WebSocket connection timed out after 10s');
+          ws.current.close();
+        }
+      }, CONNECTION_TIMEOUT);
+
       ws.current.onopen = () => {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         setConnected(true);
         reconnectAttempts.current = 0;
         isManualClose.current = false;
 
         // Subscribe to session updates
         if (ws.current?.readyState === WebSocket.OPEN) {
-          ws.current.send(JSON.stringify({
-            type: 'subscribe',
-            payload: { session_id: sessionId },
-          }));
+          try {
+            ws.current.send(JSON.stringify({
+              type: 'subscribe',
+              payload: { session_id: sessionId },
+            }));
+          } catch (subscribeError) {
+            console.error('Failed to send subscribe message:', subscribeError);
+            addToast('warning', 'Failed to subscribe to session updates via WebSocket');
+          }
         }
       };
 
@@ -165,6 +187,10 @@ export const useWebSocket = (sessionId: string | null) => {
       };
 
       ws.current.onclose = (event) => {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         setConnected(false);
 
         // Don't reconnect if manually closed
@@ -186,6 +212,7 @@ export const useWebSocket = (sessionId: string | null) => {
           }, delay);
         } else {
           console.error('Max WebSocket reconnection attempts reached');
+          addToast('warning', 'Unable to maintain real-time connection. Updates may be delayed.');
         }
       };
 
@@ -215,6 +242,15 @@ export const useWebSocket = (sessionId: string | null) => {
         clearTimeout(reconnectTimeout.current);
         reconnectTimeout.current = null;
       }
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
+      // D-035: Clear ping interval on disconnect
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
       if (ws.current) {
         ws.current.close();
         ws.current = null;
@@ -226,7 +262,7 @@ export const useWebSocket = (sessionId: string | null) => {
   useEffect(() => {
     if (!sessionId) return;
 
-    const pingInterval = setInterval(() => {
+    pingIntervalRef.current = setInterval(() => {
       if (ws.current?.readyState === WebSocket.OPEN) {
         ws.current.send(JSON.stringify({
           type: 'ping',
@@ -235,7 +271,12 @@ export const useWebSocket = (sessionId: string | null) => {
       }
     }, 30000); // Ping every 30 seconds
 
-    return () => clearInterval(pingInterval);
+    return () => {
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+    };
   }, [sessionId]);
 
   return {

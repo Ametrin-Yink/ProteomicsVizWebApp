@@ -39,6 +39,8 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
   const { addToast } = useUIStore();
 
   const [isStarting, setIsStarting] = React.useState(false);
+  const [isLoadingOrganisms, setIsLoadingOrganisms] = React.useState(true);
+  const [organismError, setOrganismError] = React.useState<string | null>(null);
 
   // Warn user before leaving page with unsaved data
   React.useEffect(() => {
@@ -57,25 +59,32 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
   }, [sessionId, analysisType, router]);
 
   // Load organisms on mount
-  React.useEffect(() => {
+  const loadOrganisms = React.useCallback(async () => {
     if (!sessionId) return;
-    const loadOrganisms = async () => {
-      try {
-        const organisms = await organismsApi.list();
-        setAvailableOrganisms(
-          organisms.map((o) => ({
-            id: o.id,
-            name: o.name,
-            display_name: o.display_name || o.name,
-            available: o.available,
-          }))
-        );
-      } catch (error) {
-        console.error('Failed to load organisms:', error);
-      }
-    };
+    setIsLoadingOrganisms(true);
+    setOrganismError(null);
+    try {
+      const organisms = await organismsApi.list();
+      setAvailableOrganisms(
+        organisms.map((o) => ({
+          id: o.id,
+          name: o.name,
+          display_name: o.display_name || o.name,
+          available: o.available,
+        }))
+      );
+    } catch (error) {
+      console.error('Failed to load organisms:', error);
+      setOrganismError('Failed to load organisms');
+      addToast('error', `Failed to load organisms: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoadingOrganisms(false);
+    }
+  }, [sessionId, setAvailableOrganisms, addToast]);
+
+  React.useEffect(() => {
     loadOrganisms();
-  }, [sessionId, setAvailableOrganisms]);
+  }, [loadOrganisms]);
 
   const canContinue = canStart && config.organism !== '';
 
@@ -128,22 +137,37 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
         <div className="p-5">
           <div className="mb-5">
             <label className="block text-sm font-medium text-text-primary mb-1.5">Organism</label>
-            <select
-              data-testid="organism-select"
-              value={config.organism}
-              onChange={(e) => setConfig({ organism: e.target.value })}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
-                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            >
-              <option value="">Select organism...</option>
-              {availableOrganisms
-                .filter((o) => o.available)
-                .map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.display_name || org.name}
-                  </option>
-                ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                data-testid="organism-select"
+                value={config.organism}
+                onChange={(e) => setConfig({ organism: e.target.value })}
+                disabled={isLoadingOrganisms || !!organismError}
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
+                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors
+                  disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {isLoadingOrganisms ? 'Loading...' : organismError ? 'Failed to load' : 'Select organism...'}
+                </option>
+                {!isLoadingOrganisms && !organismError && availableOrganisms
+                  .filter((o) => o.available)
+                  .map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.display_name || org.name}
+                    </option>
+                  ))}
+              </select>
+              {organismError && (
+                <button
+                  onClick={loadOrganisms}
+                  className="flex items-center gap-1 px-3 py-2 text-sm font-medium bg-surface border border-border rounded-lg hover:bg-border/20 text-text-primary transition-colors"
+                  title="Retry loading organisms"
+                >
+                  <Loader2 className="w-4 h-4" /> Retry
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-5">

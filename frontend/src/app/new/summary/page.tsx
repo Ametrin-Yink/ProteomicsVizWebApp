@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Play, Loader2, Dna, BarChart3,
@@ -106,6 +106,12 @@ function SummaryContent() {
 
   const handleStartAnalysis = async () => {
     if (!sessionId) return;
+
+    // D-027: Confirm before starting
+    if (!window.confirm('Are you sure you want to start the analysis? This will begin processing your data and cannot be undone.')) {
+      return;
+    }
+
     setIsStarting(true);
 
     try {
@@ -124,8 +130,19 @@ function SummaryContent() {
       return;
     }
 
-    router.replace(`/analysis/processing?session_id=${sessionId}&pipeline=${selectedPipeline}`);
+    const params = new URLSearchParams({
+      session_id: sessionId,
+      pipeline: selectedPipeline ?? 'msqrob2',
+      remove_razor: String(config.remove_razor ?? true),
+    });
+    router.replace(`/analysis/processing?${params}`);
   };
+
+  // D-028: Disable button when prereqs not met
+  const canStartAnalysis = sessionId && analysisType && config.organism && config.comparisons && config.comparisons.length > 0;
+  const startButtonTitle = !canStartAnalysis
+    ? 'Ensure an organism is selected and comparisons are defined before starting.'
+    : undefined;
 
   const pipelineLabel = selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2';
   const PipelineIcon = selectedPipeline === 'msstats' ? BarChart3 : Dna;
@@ -446,27 +463,31 @@ function SummaryContent() {
           <ArrowLeft className="w-4 h-4" />
           Back to Configuration
         </button>
-        <button
-          data-testid="summary-start-analysis-btn"
-          onClick={handleStartAnalysis}
-          disabled={isStarting}
-          className={cn(
-            'inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
-            'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow'
-          )}
-        >
-          {isStarting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Starting Analysis...
-            </>
-          ) : (
-            <>
-              <Play className="w-4 h-4" />
-              Start Analysis
-            </>
-          )}
-        </button>
+        <div className="relative" title={startButtonTitle}>
+          <button
+            data-testid="summary-start-analysis-btn"
+            onClick={handleStartAnalysis}
+            disabled={isStarting || !canStartAnalysis}
+            className={cn(
+              'inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
+              isStarting || !canStartAnalysis
+                ? 'bg-border text-text-muted cursor-not-allowed'
+                : 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow'
+            )}
+          >
+            {isStarting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Starting Analysis...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                Start Analysis
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

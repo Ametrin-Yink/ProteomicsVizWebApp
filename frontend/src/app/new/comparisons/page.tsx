@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAnalysisStore, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
+import { useAutoSave } from '@/hooks/use-auto-save';
 import { sessionsApi } from '@/lib/api-client';
 import { cn, formatGroup } from '@/lib/utils';
 
@@ -23,6 +24,9 @@ function ComparisonsContent() {
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const selectedPipeline = getPipelineFromType(analysisType);
   const { addToast } = useUIStore();
+
+  // NEW-D-057: Restoring guard
+  const [isRestoring, setIsRestoring] = React.useState(true);
 
   // --- Auto-generate state ---
   const [selectedReference, setSelectedReference] = React.useState<string>('');
@@ -88,12 +92,21 @@ function ComparisonsContent() {
   // --- Saving state ---
   const [isSaving, setIsSaving] = React.useState(false);
 
-  // --- Redirect guard ---
+  // T-026/D-022: Auto-save comparisons
+  const { isSaving: isAutoSaving } = useAutoSave(sessionId, config, { enabled: !!sessionId && !!config.comparisons && config.comparisons.length > 0 });
+
+  // Restore guard: mark as restored after first render
   React.useEffect(() => {
+    setIsRestoring(false);
+  }, []);
+
+  // --- Redirect guard with isRestoring guard ---
+  React.useEffect(() => {
+    if (isRestoring) return;
     if (!sessionId) { router.replace('/'); }
     else if (!analysisType) { router.replace('/'); }
     else if (uploadedFiles.length === 0) { router.replace(`/new/upload?session=${sessionId}`); }
-  }, [sessionId, analysisType, uploadedFiles.length, router]);
+  }, [sessionId, analysisType, uploadedFiles.length, router, isRestoring]);
 
   // --- Derive condition cards from metadata or TMT mapping ---
   const conditionCards = React.useMemo(() => {
@@ -209,7 +222,10 @@ function ComparisonsContent() {
         });
       }
 
-      generated.push({ group1, group2 });
+      // T-023: Validate Group A != Group B
+      if (JSON.stringify(group1) !== JSON.stringify(group2)) {
+        generated.push({ group1, group2 });
+      }
     });
 
     setComparisons((prev) => {
@@ -355,7 +371,7 @@ function ComparisonsContent() {
     try {
       await sessionsApi.updateConfig(sessionId, { ...config, comparisons });
     } catch (error) {
-      addToast('warning', `Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      addToast('error', `Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsSaving(false);
       return;
     }
