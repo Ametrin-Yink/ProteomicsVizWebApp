@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi, fileLibraryApi } from '@/lib/api-client';
+import { sessionsApi, fileLibraryApi, mapBackendFiles } from '@/lib/api-client';
 import { parseCSVLine } from '@/lib/csv';
 import { cn } from '@/lib/utils';
 import { FileLibraryPicker } from '@/components/files/FileLibraryPicker';
@@ -34,7 +34,7 @@ function MetadataContentInner() {
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
-  const tmtChannelMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping ?? {});
+  const tmtChannelMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping);
   const { addToast } = useUIStore();
 
   const [isSaving, setIsSaving] = useState(false);
@@ -127,6 +127,21 @@ function MetadataContentInner() {
 
             if (Object.keys(updates).length > 0) {
               setConfig(updates);
+            }
+
+            // Restore analysis type from file_type config field
+            const fileTypeFromConfig = cfg.file_type as string | undefined;
+            if (fileTypeFromConfig === 'tmt' || fileTypeFromConfig === 'dia') {
+              useAnalysisStore.getState().setAnalysisType(fileTypeFromConfig as 'tmt' | 'dia');
+            }
+          }
+
+          // Restore uploaded files
+          const restoredFiles = mapBackendFiles(raw.files);
+          if (restoredFiles.length > 0) {
+            const { addUploadedFile } = useAnalysisStore.getState();
+            for (const file of restoredFiles) {
+              addUploadedFile(file);
             }
           }
         }

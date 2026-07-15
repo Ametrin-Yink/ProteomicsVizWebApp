@@ -77,7 +77,7 @@ function getPlateLayout(channels: string[]): string[][] {
 }
 
 export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, compact }) => {
-  const allMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping ?? {});
+  const allMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping);
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const updateChannelMapping = useAnalysisStore((s) => s.updateChannelMapping);
   const importChannelMapping = useAnalysisStore((s) => s.importChannelMapping);
@@ -141,7 +141,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const tmtChannelMapping = useMemo(() => {
     const prefix = file.filename + '::';
     const result: Record<string, Record<string, string | number>> = {};
-    for (const [key, val] of Object.entries(allMapping)) {
+    for (const [key, val] of Object.entries(allMapping ?? {})) {
       if (key.startsWith(prefix)) {
         result[key.slice(prefix.length)] = val;
       }

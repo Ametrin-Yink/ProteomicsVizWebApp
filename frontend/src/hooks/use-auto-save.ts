@@ -27,12 +27,15 @@ export function useAutoSave(
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const configRef = useRef(config);
+  configRef.current = config;
+
   const saveNow = useCallback(async () => {
     if (!sessionId || savingRef.current) return;
     savingRef.current = true;
     setIsSaving(true);
     try {
-      await sessionsApi.updateConfig(sessionId, config);
+      await sessionsApi.updateConfig(sessionId, configRef.current);
       consecutiveFailuresRef.current = 0;
       setSaveError(null);
     } catch (err) {
@@ -43,12 +46,9 @@ export function useAutoSave(
       savingRef.current = false;
       setIsSaving(false);
     }
-  }, [sessionId, config]);
+  }, [sessionId]);
 
   // Debounced auto-save when config changes
-  const configRef = useRef(config);
-  configRef.current = config;
-
   useEffect(() => {
     if (!enabled || !sessionId) return;
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -58,7 +58,7 @@ export function useAutoSave(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [config, sessionId, debounceMs, enabled, saveNow]);
+  }, [config, sessionId, debounceMs, enabled]);
 
   return { isSaving, saveError, saveNow };
 }
