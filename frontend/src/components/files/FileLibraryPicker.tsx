@@ -34,7 +34,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
+  const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries } = useFileSearch({
     entries,
     fileType: pickerFilter === 'all' ? 'all' : pickerFilter,
   });

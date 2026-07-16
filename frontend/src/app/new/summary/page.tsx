@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Play, Loader2, Dna, BarChart3,

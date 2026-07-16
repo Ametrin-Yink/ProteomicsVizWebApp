@@ -31,6 +31,7 @@ function UploadContentInner() {
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const validation = useMemo(
     () => getValidation(useAnalysisStore.getState()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [analysisType, uploadedFiles, config]
   );
   const { addToast } = useUIStore();
@@ -62,7 +63,7 @@ function UploadContentInner() {
   const [isDraggingPtmEnrichment, setIsDraggingPtmEnrichment] = useState(false);
   const [isDraggingPtmGlobal, setIsDraggingPtmGlobal] = useState(false);
   const [isDraggingFasta, setIsDraggingFasta] = useState(false);
-  const [detectedMods, setDetectedMods] = useState<string[]>([]);
+  const [detectedMods] = useState<string[]>([]);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
 
   const ptmEnrichmentInputRef = useRef<HTMLInputElement>(null);
@@ -117,7 +118,7 @@ function UploadContentInner() {
     } finally {
       setPtmEnrichmentUploading(false);
     }
-  }, [sessionId, addToast, detectedMods.length]);
+  }, [sessionId, addToast]);
 
   const uploadPtmGlobal = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
@@ -291,7 +292,7 @@ function UploadContentInner() {
   }, [sessionId, setConfig]);
 
   // Auto-save config to backend on changes (debounced) so edits survive refresh
-  const { isSaving: isAutoSaving, saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });
+  const { saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });
 
   // Validate session ID and analysis type (deferred until session restore completes)
   useEffect(() => {

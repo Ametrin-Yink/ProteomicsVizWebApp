@@ -148,7 +148,7 @@ function MetadataContentInner() {
   }, [sessionId, setConfig]);
 
   // Auto-save config to backend on changes (debounced) so edits survive refresh
-  const { isSaving: isAutoSaving, saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });
+  const { saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });
 
   // Initialize expanded files (expand all on mount)
   useEffect(() => {

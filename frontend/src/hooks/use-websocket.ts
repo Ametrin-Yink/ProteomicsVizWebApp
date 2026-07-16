@@ -238,7 +238,7 @@ export const useWebSocket = (sessionId: string | null) => {
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
     }
-  }, [sessionId, setConnected, getReconnectDelay, handleMessage]);
+  }, [sessionId, setConnected, getReconnectDelay, handleMessage, addToast]);
 
   // Sync connect ref so reconnect callbacks can invoke latest connect
   useEffect(() => {

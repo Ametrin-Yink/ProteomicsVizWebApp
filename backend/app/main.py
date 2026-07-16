@@ -16,12 +16,14 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import (
     compare,
-    files as files_routes,
     processing,
     reports,
     sessions,
     upload,
     visualization,
+)
+from app.api.routes import (
+    files as files_routes,
 )
 from app.core.config import settings
 from app.core.exceptions import AppException

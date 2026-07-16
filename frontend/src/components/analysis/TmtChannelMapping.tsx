@@ -91,9 +91,11 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
 
   // Expose store action for E2E testing (React controlled inputs don't work with Playwright)
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__updateTmtMapping = (filename: string, channel: string, groups: Record<string, string | number>) => {
       updateChannelMapping(filename, channel, groups);
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return () => { delete (window as any).__updateTmtMapping; };
   }, [updateChannelMapping]);
 

@@ -28,7 +28,7 @@ export const FileLibraryPage: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries, isSearching } = useFileSearch({
+  const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries } = useFileSearch({
     entries,
     fileType: 'all',
   });
@@ -42,7 +42,7 @@ export const FileLibraryPage: React.FC = () => {
   const [sort, setSort] = useState<{ by: 'name' | 'size' | 'modified' | null; order: 'asc' | 'desc' }>({ by: null, order: 'asc' });
   const [filterType, setFilterType] = useState<'all' | 'txt' | 'csv'>('all');
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
-  const [tick, setTick] = useState(0); // F-021: force re-render every 60s for live timer
+  const [, setTick] = useState(0); // F-021: force re-render every 60s for live timer
 
   // ---- Core Library Loading ----
 

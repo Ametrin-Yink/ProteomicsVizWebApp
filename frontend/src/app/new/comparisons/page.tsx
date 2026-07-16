@@ -89,7 +89,7 @@ function ComparisonsContent() {
   const [isSaving, setIsSaving] = React.useState(false);
 
   // T-026/D-022: Auto-save comparisons
-  const { isSaving: isAutoSaving } = useAutoSave(sessionId, config, { enabled: !!sessionId && !!config.comparisons && config.comparisons.length > 0 });
+  useAutoSave(sessionId, config, { enabled: !!sessionId && !!config.comparisons && config.comparisons.length > 0 });
 
   // Restore guard: mark as restored after first render
   React.useEffect(() => {

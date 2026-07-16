@@ -58,7 +58,7 @@ export function useAutoSave(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [config, sessionId, debounceMs, enabled]);
+  }, [config, sessionId, debounceMs, enabled, saveNow]);
 
   return { isSaving, saveError, saveNow };
 }

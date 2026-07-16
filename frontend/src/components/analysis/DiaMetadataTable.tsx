@@ -23,9 +23,11 @@ export const DiaMetadataTable: React.FC = () => {
 
   // Expose store action for E2E testing (React controlled inputs don't work with Playwright)
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__setDiaMetadata = (data: Record<string, Record<string, string>>) => {
       setConfig({ metadata_columns: data });
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return () => { delete (window as any).__setDiaMetadata; };
   }, [setConfig]);
 
