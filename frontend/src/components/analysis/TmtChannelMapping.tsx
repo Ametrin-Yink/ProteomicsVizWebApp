@@ -429,6 +429,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
             value={file.experiment || ''}
             onChange={(e) => updateExperimentName(e.target.value)}
             placeholder="Enter experiment name"
+            aria-label={`Experiment name for ${file.filename}`}
             className="px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-56"
           />
         </div>
@@ -450,6 +451,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
             value={newColName}
             onChange={(e) => setNewColName(e.target.value)}
             placeholder="New group (e.g., drug, time)"
+            aria-label="New condition group name"
             className="px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-48"
             onKeyDown={(e) => { if (e.key === 'Enter') addColumn(); }}
           />
@@ -635,6 +637,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
                           value={String(entry[col] ?? '')}
                           onChange={(e) => handleUpdateWithUndo(channel, col, e.target.value)}
                           onKeyDown={(e) => handleCellKeyDown(e, channel, col)}
+                          aria-label={`${col} for channel ${channel}`}
                           className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                         />
                       </td>
@@ -648,6 +651,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
                         type="number"
                         min={1}
                         value={entry.replicate ?? ''}
+                        aria-label={`Replicate for channel ${channel}`}
                         onChange={(e) => {
                           const val = e.target.value;
                           // T-020: Reject non-numeric and <= 0

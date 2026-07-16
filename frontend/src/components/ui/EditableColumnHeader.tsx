@@ -45,7 +45,7 @@ export function EditableColumnHeader({ name, onRename, onRemove, canRemove = tru
       </button>
       {canRemove && onRemove && (
         <button onClick={onRemove}
-          className="p-0.5 rounded hover:bg-error/10 text-text-muted hover:text-error transition-colors opacity-0 group-hover:opacity-100"
+          className="column-remove-btn p-0.5 rounded hover:bg-error/10 text-text-muted hover:text-error transition-colors opacity-0 group-hover:opacity-100"
           title={`Remove column "${name}"`} aria-label={`Remove column "${name}"`}>
           <X className="w-3 h-3" />
         </button>

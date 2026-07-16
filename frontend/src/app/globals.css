@@ -137,6 +137,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+@media (hover: none) {
+  .column-remove-btn {
+    opacity: 0.5;
+  }
+}
+
 /* Typography Scale - compact for data-dense scientific UI */
 h1, h2, h3, h4, h5, h6 {
   font-weight: 700;

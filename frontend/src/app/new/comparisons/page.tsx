@@ -507,7 +507,7 @@ function ComparisonsContent() {
                               }
                               setGroup1Cards(prev => [...prev, card]);
                             }}
-                            className="w-5 h-5 rounded-full text-[10px] font-bold bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0"
+                            className="w-5 h-5 rounded-full text-[10px] font-bold bg-info text-white flex items-center justify-center hover:bg-info/80 transition-colors flex-shrink-0"
                             title="Add to Group A only"
                             aria-label={`Add ${card.col}:${card.val} to Group A`}
                           >
@@ -521,7 +521,7 @@ function ComparisonsContent() {
                               }
                               setGroup2Cards(prev => [...prev, card]);
                             }}
-                            className="w-5 h-5 rounded-full text-[10px] font-bold bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors flex-shrink-0"
+                            className="w-5 h-5 rounded-full text-[10px] font-bold bg-error text-white flex items-center justify-center hover:bg-error/80 transition-colors flex-shrink-0"
                             title="Add to Group B only"
                             aria-label={`Add ${card.col}:${card.val} to Group B`}
                           >
@@ -544,7 +544,7 @@ function ComparisonsContent() {
             <div
               className={cn(
                 'p-3 rounded-lg border-2 border-dashed min-h-[100px] transition-colors',
-                group1Cards.length === 0 ? 'border-border bg-surface/50' : 'border-[var(--color-info)]/50 bg-[var(--color-info-bg)]'
+                group1Cards.length === 0 ? 'border-border bg-surface/50' : 'border-info/50 bg-info/10'
               )}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDropOnZone(e, 'group1')}
@@ -554,7 +554,7 @@ function ComparisonsContent() {
                   <div className="flex items-center gap-1.5">
                     <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group A</p>
                     {group1Cards.length > 0 && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-info/10 text-info">
                         {groupSampleCounts.group1} sample{groupSampleCounts.group1 !== 1 ? 's' : ''}
                       </span>
                     )}
@@ -572,10 +572,10 @@ function ComparisonsContent() {
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {group1Cards.map((card) => (
-                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-blue-100 border border-blue-300 rounded-md text-xs text-text-primary">
-                      <span className="font-medium text-blue-700">{card.col}:</span>
+                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-info/10 border border-info/30 rounded-md text-xs text-text-primary">
+                      <span className="font-medium text-info">{card.col}:</span>
                       <span>{card.val}</span>
-                      <button onClick={() => removeFromZone('group1', card.id)} className="text-text-muted hover:text-red-500">
+                      <button onClick={() => removeFromZone('group1', card.id)} className="text-text-muted hover:text-error">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -588,7 +588,7 @@ function ComparisonsContent() {
             <div
               className={cn(
                 'p-3 rounded-lg border-2 border-dashed min-h-[100px] transition-colors',
-                group2Cards.length === 0 ? 'border-border bg-surface/50' : 'border-[var(--color-error)]/50 bg-[var(--color-error-bg)]'
+                group2Cards.length === 0 ? 'border-border bg-surface/50' : 'border-error/50 bg-error/10'
               )}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDropOnZone(e, 'group2')}
@@ -598,7 +598,7 @@ function ComparisonsContent() {
                   <div className="flex items-center gap-1.5">
                     <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group B</p>
                     {group2Cards.length > 0 && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-error/10 text-error">
                         {groupSampleCounts.group2} sample{groupSampleCounts.group2 !== 1 ? 's' : ''}
                       </span>
                     )}
@@ -616,10 +616,10 @@ function ComparisonsContent() {
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {group2Cards.map((card) => (
-                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-red-100 border border-red-300 rounded-md text-xs text-text-primary">
-                      <span className="font-medium text-red-700">{card.col}:</span>
+                    <div key={card.id} className="flex items-center gap-1 px-2 py-1 bg-error/10 border border-error/30 rounded-md text-xs text-text-primary">
+                      <span className="font-medium text-error">{card.col}:</span>
                       <span>{card.val}</span>
-                      <button onClick={() => removeFromZone('group2', card.id)} className="text-text-muted hover:text-red-500">
+                      <button onClick={() => removeFromZone('group2', card.id)} className="text-text-muted hover:text-error">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -657,7 +657,7 @@ function ComparisonsContent() {
                     <span className="text-text-muted">vs</span>
                     <span className="font-medium text-[var(--color-error)]">{formatGroup(comp.group2)}</span>
                   </div>
-                  <button onClick={() => removeComparison(idx)} className="text-text-muted hover:text-red-500 transition-colors">
+                  <button onClick={() => removeComparison(idx)} className="text-text-muted hover:text-error transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

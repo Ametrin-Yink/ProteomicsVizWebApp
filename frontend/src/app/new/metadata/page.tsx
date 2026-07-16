@@ -243,6 +243,20 @@ function MetadataContentInner() {
       warnings.push(`${emptyFiles.length} file(s) missing experiment name`);
     }
 
+    const replicateKeys = new Set<string>();
+    const duplicateReplicates = new Set<string>();
+    uploadedFiles.forEach((file) => {
+      const meta = metadataColumns[file.filename] || {};
+      const replicate = meta.replicate?.trim();
+      if (!replicate) return;
+      const key = [meta.experiment, ...Array.from(condCols).map((col) => meta[col] || ''), replicate].join('::');
+      if (replicateKeys.has(key)) duplicateReplicates.add(key);
+      replicateKeys.add(key);
+    });
+    if (duplicateReplicates.size > 0) {
+      warnings.push(`${duplicateReplicates.size} duplicate condition and replicate combination(s)`);
+    }
+
     return {
       isValid: conditionCombos.size >= 2 && emptyFiles.length === 0,
       message: warnings.length > 0 ? warnings.join('; ') : '',
@@ -283,8 +297,10 @@ function MetadataContentInner() {
 
   if (isRestoring) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="p-6 space-y-4">
+        <div className="h-6 bg-surface rounded animate-pulse w-1/2" />
+        <div className="h-48 bg-surface rounded animate-pulse w-full" />
+        <div className="h-6 bg-surface rounded animate-pulse w-3/4" />
       </div>
     );
   }
@@ -320,14 +336,32 @@ function MetadataContentInner() {
                 Map each TMT channel to a condition group and replicate
               </p>
             </div>
-            <button
-              onClick={() => setShowMetadataPicker(true)}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors"
-              data-testid="import-from-library-btn"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Import from Library
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              {isMultiTmt && (
+                <>
+                  <button
+                    onClick={() => setExpandedFiles(new Set(tmtFiles.map((file) => file.filename)))}
+                    className="px-2 py-1 text-xs font-medium text-text-secondary hover:text-text"
+                  >
+                    Expand All
+                  </button>
+                  <button
+                    onClick={() => setExpandedFiles(new Set())}
+                    className="px-2 py-1 text-xs font-medium text-text-secondary hover:text-text"
+                  >
+                    Collapse All
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setShowMetadataPicker(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text bg-background border border-border rounded-md hover:bg-surface/80 transition-colors"
+                data-testid="import-from-library-btn"
+              >
+                <FolderOpen className="w-4 h-4" />
+                Import from Library
+              </button>
+            </div>
           </div>
           <div className="p-5 space-y-6">
             {isMultiTmt ? (

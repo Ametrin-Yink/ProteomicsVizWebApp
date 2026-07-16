@@ -288,6 +288,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
                   <input
                     type="text"
                     placeholder="Search sessions..."
+                    aria-label="Search sessions"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-8 pr-2 py-1.5 text-xs bg-surface border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-text-muted"

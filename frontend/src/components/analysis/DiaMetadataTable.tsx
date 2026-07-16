@@ -251,6 +251,7 @@ export const DiaMetadataTable: React.FC = () => {
             value={newColName}
             onChange={(e) => setNewColName(e.target.value)}
             placeholder="New column (e.g., Drug, Time)"
+            aria-label="New condition group name"
             className="px-3 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-48"
             onKeyDown={(e) => { if (e.key === 'Enter') addColumn(); }}
           />
@@ -339,6 +340,7 @@ export const DiaMetadataTable: React.FC = () => {
                       value={meta.experiment || ''}
                       onChange={(e) => updateCell(file.filename, 'experiment', e.target.value)}
                       onBlur={(e) => validateCell(file.filename, 'experiment', e.target.value)}
+                      aria-label={`Experiment for ${file.filename}`}
                       className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                       data-testid="dia-experiment-input"
                     />
@@ -353,6 +355,7 @@ export const DiaMetadataTable: React.FC = () => {
                         value={meta[col] || ''}
                         onChange={(e) => updateCell(file.filename, col, e.target.value)}
                         onBlur={(e) => validateCell(file.filename, col, e.target.value)}
+                        aria-label={`${col} for ${file.filename}`}
                         className="w-full px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                       />
                     </td>
@@ -364,6 +367,7 @@ export const DiaMetadataTable: React.FC = () => {
                       value={meta.replicate || ''}
                       onChange={(e) => updateCell(file.filename, 'replicate', e.target.value)}
                       onBlur={(e) => validateCell(file.filename, 'replicate', e.target.value)}
+                      aria-label={`Replicate for ${file.filename}`}
                       className="w-20 px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                       data-testid="dia-replicate-input"
                     />
@@ -376,6 +380,7 @@ export const DiaMetadataTable: React.FC = () => {
                       type="text"
                       value={meta.batch || ''}
                       onChange={(e) => updateCell(file.filename, 'batch', e.target.value)}
+                      aria-label={`Batch for ${file.filename}`}
                       className="w-24 px-2 py-1 bg-surface border border-border rounded text-text text-xs focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary"
                     />
                   </td>
@@ -396,6 +401,7 @@ export const DiaMetadataTable: React.FC = () => {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
+              aria-label="Previous metadata page"
               className="p-1.5 rounded text-text-muted hover:bg-surface hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -404,6 +410,7 @@ export const DiaMetadataTable: React.FC = () => {
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
+              aria-label="Next metadata page"
               className="p-1.5 rounded text-text-muted hover:bg-surface hover:text-text disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <ChevronRight className="w-4 h-4" />

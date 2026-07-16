@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useCallback, useState, useRef } from 'react';
-import { Upload, File, X, Database, ChevronDown } from 'lucide-react';
+import { Upload, File, X, ChevronDown } from 'lucide-react';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { uploadApi } from '@/lib/api-client';
@@ -312,20 +312,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId, onDet
               <span>Max {formatFileSize(MAX_FILE_SIZE)}</span>
             </div>
           </div>
-        </div>
-
-        {/* Upload from Database Button */}
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => {
-              addToast('info', 'Database upload feature coming soon (TBD)');
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text bg-background border border-border rounded-lg hover:bg-surface focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-          >
-            <Database className="w-4 h-4" />
-            Upload from Database
-          </button>
         </div>
 
         {/* Uploaded Files List — collapsible, folded by default */}

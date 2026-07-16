@@ -13,17 +13,10 @@ interface Msqrob2ConfigFormProps {
 export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }: Msqrob2ConfigFormProps) {
   const customColumnNames = useMemo(() => {
     if (!metadataColumns) return [];
-    const conditionColSet = new Set<string>();
-    // Discover condition_N columns from the data
-    Object.values(metadataColumns).forEach((row) => {
-      Object.keys(row).forEach((k) => {
-        if (/^condition_\d+$/.test(k)) conditionColSet.add(k);
-      });
-    });
     const cols = new Set<string>();
     Object.values(metadataColumns).forEach((row) => {
       Object.keys(row).forEach((k) => {
-        if (k !== 'experiment' && k !== 'replicate' && !conditionColSet.has(k)) cols.add(k);
+        if (k !== 'experiment' && k !== 'replicate') cols.add(k);
       });
     });
     return Array.from(cols).sort();

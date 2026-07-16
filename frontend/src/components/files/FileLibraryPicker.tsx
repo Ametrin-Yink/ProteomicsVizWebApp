@@ -175,6 +175,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
             onClick={onClose}
             className="p-1 text-text-muted hover:text-text rounded transition-colors"
             disabled={copying}
+            aria-label="Close file library picker"
           >
             <X className="w-5 h-5" />
           </button>
@@ -212,6 +213,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
               value={searchQuery}
               onChange={handleSearchChange}
               placeholder="Search files..."
+              aria-label="Search files in library"
               className={cn(
                 'pl-8 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-full',
                 searchQuery ? 'pr-8' : 'pr-3',
@@ -273,6 +275,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
                     <th className="w-10 px-3 py-2">
                       <input
                         type="checkbox"
+                        aria-label="Select all displayed files"
                         checked={displayedEntries.filter(e => e.type !== 'folder').length > 0
                           && displayedEntries.filter(e => e.type !== 'folder').every(e => selectedPaths.has(e.path))}
                         onChange={() => {
@@ -303,6 +306,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"
+                          aria-label={`Select ${entry.name}`}
                           checked={selectedPaths.has(entry.path)}
                           onChange={() => handleToggleSelect(entry.path)}
                           onClick={(e) => e.stopPropagation()}

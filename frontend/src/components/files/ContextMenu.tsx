@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface ContextMenuItem {
@@ -20,6 +20,7 @@ interface ContextMenuProps {
 export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }) => {
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: x, top: y });
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
@@ -55,13 +56,28 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
       }
     };
 
+    const handleViewportChange = () => onClose();
+
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
     return () => {
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
     };
   }, [onClose]);
+
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    setPosition({
+      left: Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)),
+      top: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
+    });
+  }, [x, y, items.length]);
 
   // Auto-focus first menu item on mount
   useEffect(() => {
@@ -73,17 +89,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
     }
   }, []);
 
-  // Adjust position to stay within viewport
-  const adjustedX = Math.min(x, window.innerWidth - 200);
-  const adjustedY = Math.min(y, window.innerHeight - items.length * 36);
-
   return (
     <div
       ref={ref}
       role="menu"
       aria-orientation="vertical"
       className="fixed z-50 bg-background border border-border rounded-lg shadow-lg py-1 min-w-[180px]"
-      style={{ left: adjustedX, top: adjustedY }}
+      style={position}
       data-testid="context-menu"
     >
       <div ref={menuRef}>

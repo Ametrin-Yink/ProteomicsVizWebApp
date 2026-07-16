@@ -52,6 +52,26 @@ function getIcon(type: string) {
   }
 }
 
+function highlightMatch(text: string, query: string): React.ReactNode {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return text;
+
+  const parts: React.ReactNode[] = [];
+  const normalizedText = text.toLowerCase();
+  let start = 0;
+  let matchIndex = normalizedText.indexOf(normalizedQuery);
+
+  while (matchIndex !== -1) {
+    parts.push(text.slice(start, matchIndex));
+    parts.push(<mark key={matchIndex}>{text.slice(matchIndex, matchIndex + normalizedQuery.length)}</mark>);
+    start = matchIndex + normalizedQuery.length;
+    matchIndex = normalizedText.indexOf(normalizedQuery, start);
+  }
+
+  parts.push(text.slice(start));
+  return parts;
+}
+
 export const FileList: React.FC<FileListProps> = ({
   entries,
   currentPath,
@@ -86,7 +106,7 @@ export const FileList: React.FC<FileListProps> = ({
   // Breadcrumb segments
   const segments = currentPath ? currentPath.split('/') : [];
 
-  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [focusedIndex, setFocusedIndex] = useState(0);
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
 
   const handleKeyDown = useCallback((
@@ -169,7 +189,9 @@ export const FileList: React.FC<FileListProps> = ({
         {searchQuery && (
           <>
             <span className="text-text-muted">·</span>
-            <span className="text-text-muted">{displayed.length} result{displayed.length !== 1 ? 's' : ''} for &lsquo;{searchQuery}&rsquo;</span>
+            <span className="text-text-muted" aria-live="polite" aria-atomic="true">
+              {displayed.length} result{displayed.length !== 1 ? 's' : ''} for &lsquo;{searchQuery}&rsquo;
+            </span>
           </>
         )}
       </div>
@@ -182,6 +204,7 @@ export const FileList: React.FC<FileListProps> = ({
               <th className="w-10 px-4 py-2">
                 <input
                   type="checkbox"
+                  aria-label="Select all displayed files"
                   checked={allSelected}
                   ref={(el) => {
                     if (el) el.indeterminate = someSelected && !allSelected;
@@ -231,6 +254,7 @@ export const FileList: React.FC<FileListProps> = ({
                   <td className="px-4 py-2">
                     <input
                       type="checkbox"
+                      aria-label={`Select ${entry.name}`}
                       checked={isSelected}
                       onChange={() => onToggleSelect(entry.path)}
                       onClick={(e) => e.stopPropagation()}
@@ -241,7 +265,7 @@ export const FileList: React.FC<FileListProps> = ({
                     <div className="flex items-center gap-2">
                       {getIcon(entry.type)}
                       <span className="text-sm text-text truncate max-w-[400px]" title={entry.name}>
-                        {entry.name}
+                        {searchQuery ? highlightMatch(entry.name, searchQuery) : entry.name}
                       </span>
                     </div>
                   </td>
@@ -257,9 +281,11 @@ export const FileList: React.FC<FileListProps> = ({
             {displayed.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-12 text-center text-sm text-text-muted">
-                  {filterType !== 'all'
-                  ? `No ${filterType.toUpperCase()} files in this folder.`
-                  : 'This folder is empty.'}
+                  {searchQuery
+                    ? `No files match “${searchQuery}”.`
+                    : filterType !== 'all'
+                      ? `No ${filterType.toUpperCase()} files in this folder.`
+                      : 'This folder is empty.'}
                 </td>
               </tr>
             )}

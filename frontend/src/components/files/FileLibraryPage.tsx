@@ -32,7 +32,6 @@ export const FileLibraryPage: React.FC = () => {
     entries,
     fileType: 'all',
   });
-  console.log('filteredEntries:', filteredEntries.length, 'entries state:', entries.length);
   const handleToolbarSearchChange = useCallback((query: string) => {
     handleSearchChange({ target: { value: query } } as React.ChangeEvent<HTMLInputElement>);
   }, [handleSearchChange]);
@@ -62,7 +61,6 @@ export const FileLibraryPage: React.FC = () => {
       const data = await fileLibraryApi.listDirectory(path, signal);
       if (signal.aborted) return;
       setEntries(data.entries);
-      console.log('loadLibrary entries:', data.entries.length, data.entries.map(e => e.type));
       let size = 0;
       for (const e of data.entries) {
         size += e.size;

@@ -110,6 +110,7 @@ export const FileLibraryToolbar: React.FC<FileLibraryToolbarProps> = ({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search files..."
+          aria-label="Search files"
           className="pl-8 pr-8 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary w-48 lg:w-64"
         />
         {searchQuery && (
