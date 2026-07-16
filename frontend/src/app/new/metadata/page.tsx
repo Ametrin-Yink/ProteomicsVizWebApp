@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo, useRef, Suspense } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Loader2, BarChart3, Dna, CheckCircle,
@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { FileLibraryPicker } from '@/components/files/FileLibraryPicker';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import { useAutoSave } from '@/hooks/use-auto-save';
+import { useBeforeUnload } from '@/hooks/use-beforeunload';
 import TmtChannelMapping from '@/components/analysis/TmtChannelMapping';
 import DiaMetadataTable from '@/components/analysis/DiaMetadataTable';
 
@@ -85,17 +86,7 @@ function MetadataContentInner() {
     }
   }, [sessionId, analysisType, uploadedFiles.length, isRestoring, router, addToast]);
 
-  // Warn user before leaving page with unsaved data
-  const beforeUnloadRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-    beforeUnloadRef.current = handler;
-    window.addEventListener('beforeunload', handler);
-    return () => {
-      window.removeEventListener('beforeunload', handler);
-      beforeUnloadRef.current = null;
-    };
-  }, []);
+  const { dismiss: dismissBeforeUnload } = useBeforeUnload();
 
   // Restore session state on mount
   useEffect(() => {
@@ -269,9 +260,7 @@ function MetadataContentInner() {
       addToast('warning', 'Please resolve validation issues before continuing');
       return;
     }
-    // Remove beforeunload handler so it doesn't trap user during programmatic navigation
-    const handler = beforeUnloadRef.current;
-    if (handler) window.removeEventListener('beforeunload', handler);
+    dismissBeforeUnload();
     setIsSaving(true);
     try {
       await sessionsApi.updateConfig(sessionId, config);

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi } from '@/lib/api-client';
+import { sessionsApi, APIError } from '@/lib/api-client';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
@@ -36,8 +36,7 @@ export function useSessionValidation(sessionId: string | null | undefined) {
           if (cancelled) return;
 
           // Check if it's a 404
-          const is404 = err instanceof Error &&
-            (err.message.includes('404') || err.message.includes('not found'));
+          const is404 = err instanceof APIError && err.status === 404;
 
           if (is404) {
             attemptsRef.current += 1;

@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
+import React, { useEffect, useState, useRef, useCallback, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3, Tag, FlaskConical, AlertCircle, FileText, Plus, Minus, X, FolderOpen } from 'lucide-react';
 import type { UploadedFileInfo } from '@/types';
@@ -18,6 +18,7 @@ import { sessionsApi, mapBackendFiles } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import { useAutoSave } from '@/hooks/use-auto-save';
+import { useBeforeUnload } from '@/hooks/use-beforeunload';
 
 function UploadContentInner() {
   const router = useRouter();
@@ -28,7 +29,10 @@ function UploadContentInner() {
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
-  const validation = getValidation(useAnalysisStore.getState());
+  const validation = useMemo(
+    () => getValidation(useAnalysisStore.getState()),
+    [analysisType, uploadedFiles, config]
+  );
   const { addToast } = useUIStore();
   const resetAnalysis = useAnalysisStore((s) => s.reset);
 
@@ -300,17 +304,7 @@ function UploadContentInner() {
     }
   }, [sessionId, analysisType, isRestoring, router, addToast]);
 
-  // Warn user before leaving page with unsaved data
-  const beforeUnloadRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-    beforeUnloadRef.current = handler;
-    window.addEventListener('beforeunload', handler);
-    return () => {
-      window.removeEventListener('beforeunload', handler);
-      beforeUnloadRef.current = null;
-    };
-  }, []);
+  const { dismiss: dismissBeforeUnload } = useBeforeUnload();
 
   const hasCriticalErrors = validation.warnings.filter((w) => w.type === 'error').length > 0;
   const ptmHasEnrichmentFiles = ptmEnrichmentFiles.length > 0;
@@ -327,10 +321,7 @@ function UploadContentInner() {
   const handleContinue = async () => {
     if (!canContinue || !sessionId) return;
 
-    // Remove beforeunload handler so it doesn't trap user during programmatic navigation
-    const handler = beforeUnloadRef.current;
-    if (handler) window.removeEventListener('beforeunload', handler);
-
+    dismissBeforeUnload();
     setIsSaving(true);
     try {
       await sessionsApi.updateConfig(sessionId, config);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Play, Loader2, Dna, BarChart3,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAnalysisStore, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
+import { useBeforeUnload } from '@/hooks/use-beforeunload';
 import { sessionsApi, processingApi } from '@/lib/api-client';
 import { cn, formatGroup } from '@/lib/utils';
 
@@ -53,17 +54,7 @@ function SummaryContent() {
   const selectedPipeline = getPipelineFromType(analysisType);
   const { addToast } = useUIStore();
 
-  // Warn user before leaving page with unsaved data
-  const beforeUnloadRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
-  React.useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-    beforeUnloadRef.current = handler;
-    window.addEventListener('beforeunload', handler);
-    return () => {
-      window.removeEventListener('beforeunload', handler);
-      beforeUnloadRef.current = null;
-    };
-  }, []);
+  const { dismiss: dismissBeforeUnload } = useBeforeUnload();
 
   const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
   const [isStarting, setIsStarting] = React.useState(false);
@@ -117,10 +108,7 @@ function SummaryContent() {
       return;
     }
 
-    // Remove beforeunload handler so it doesn't trap user during programmatic navigation
-    const handler = beforeUnloadRef.current;
-    if (handler) window.removeEventListener('beforeunload', handler);
-
+    dismissBeforeUnload();
     setIsStarting(true);
 
     try {

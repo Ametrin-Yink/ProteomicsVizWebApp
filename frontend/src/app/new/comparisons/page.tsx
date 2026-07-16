@@ -10,6 +10,7 @@ import {
 import { useAnalysisStore, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { useAutoSave } from '@/hooks/use-auto-save';
+import { useBeforeUnload } from '@/hooks/use-beforeunload';
 import { sessionsApi } from '@/lib/api-client';
 import { cn, formatGroup } from '@/lib/utils';
 
@@ -82,17 +83,7 @@ function ComparisonsContent() {
     setGroup2Cards(prev => [...prev, card]);
   };
 
-  // Warn user before leaving page with unsaved data
-  const beforeUnloadRef = React.useRef<((e: BeforeUnloadEvent) => void) | null>(null);
-  React.useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-    beforeUnloadRef.current = handler;
-    window.addEventListener('beforeunload', handler);
-    return () => {
-      window.removeEventListener('beforeunload', handler);
-      beforeUnloadRef.current = null;
-    };
-  }, []);
+  const { dismiss: dismissBeforeUnload } = useBeforeUnload();
 
   // --- Saving state ---
   const [isSaving, setIsSaving] = React.useState(false);
@@ -372,9 +363,7 @@ function ComparisonsContent() {
       addToast('warning', 'Add at least one comparison to continue');
       return;
     }
-    // Remove beforeunload handler so it doesn't trap user during programmatic navigation
-    const handler = beforeUnloadRef.current;
-    if (handler) window.removeEventListener('beforeunload', handler);
+    dismissBeforeUnload();
     setIsSaving(true);
     try {
       await sessionsApi.updateConfig(sessionId, { ...config, comparisons });

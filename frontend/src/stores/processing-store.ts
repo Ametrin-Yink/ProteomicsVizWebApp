@@ -22,7 +22,6 @@ interface ProcessingStore {
   // State
   steps: ProcessingStepDef[];
   logs: LogEntry[];
-  previousLogs: LogEntry[];
   isConnected: boolean;
   isComplete: boolean;
   isCancelled: boolean;
@@ -78,7 +77,6 @@ export const useProcessingStore = create<ProcessingStore>()(
     // Initial state
     steps: [],
     logs: [],
-    previousLogs: [],
     isConnected: false,
     isComplete: false,
     isCancelled: false,
@@ -270,10 +268,9 @@ export const useProcessingStore = create<ProcessingStore>()(
       });
     },
 
-    // Retry processing — archive logs before clearing
+    // Retry processing — clear error and reset steps
     retry: () => {
       set((state) => {
-        state.previousLogs = state.logs;
         state.error = null;
         state.isComplete = false;
         state.isCancelled = false;

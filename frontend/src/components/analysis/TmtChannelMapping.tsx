@@ -88,7 +88,6 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [history, setHistory] = useState<Array<Record<string, Record<string, unknown>>>>([]);
   const [isDetectingChannels, setIsDetectingChannels] = useState(false);
-  const [channelError, setChannelError] = useState<string | null>(null);
 
   // T-040: Presets state
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -109,20 +108,14 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const getCellKey = (channel: string, col: string) => `${channel}::${col}`;
 
-  // T-015/T-016: Simulate channel detection loading/error state
-  const channels = useMemo(() => {
+  const channels = useMemo(() => file.tmt_channels || [], [file.tmt_channels]);
+
+  // T-015/T-016: Manage channel detection loading state
+  useEffect(() => {
     if (!file.tmt_channels || file.tmt_channels.length === 0) {
       setIsDetectingChannels(true);
-      setChannelError(null);
-    }
-    return file.tmt_channels || [];
-  }, [file.tmt_channels]);
-
-  // Clear loading state once channels are available or error is set
-  useEffect(() => {
-    if (file.tmt_channels && file.tmt_channels.length > 0) {
+    } else {
       setIsDetectingChannels(false);
-      setChannelError(null);
     }
   }, [file.tmt_channels]);
 
@@ -405,14 +398,6 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
         <div className="text-sm text-text-muted italic p-4 flex items-center gap-2">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
           Detecting TMT channels...
-        </div>
-      );
-    }
-    if (channelError) {
-      return (
-        <div className="text-sm text-error p-4 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" />
-          {channelError}
         </div>
       );
     }

@@ -334,7 +334,7 @@ export const useAnalysisStore = create<AnalysisState>()(
 
     importChannelMapping: (filename, csvData) => {
       set((state) => {
-        const lines = csvData.split('\n').filter((l) => l.trim());
+        const lines = csvData.split('\n').filter((l) => l.trim() && !l.startsWith('//'));
         if (lines.length < 2) return;
         const headers = parseCSVLine(lines[0]);
         const channelIdx = headers.indexOf('Channel');

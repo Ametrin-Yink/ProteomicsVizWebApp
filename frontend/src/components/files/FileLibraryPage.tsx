@@ -39,8 +39,7 @@ export const FileLibraryPage: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; items: ContextMenuItem[];
   } | null>(null);
-  const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | null>(null);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sort, setSort] = useState<{ by: 'name' | 'size' | 'modified' | null; order: 'asc' | 'desc' }>({ by: null, order: 'asc' });
   const [filterType, setFilterType] = useState<'all' | 'txt' | 'csv'>('all');
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
   const [tick, setTick] = useState(0); // F-021: force re-render every 60s for live timer
@@ -190,9 +189,7 @@ export const FileLibraryPage: React.FC = () => {
       : `Delete ${count} file(s)?`;
     if (!window.confirm(msg)) return;
     try {
-      for (const path of selectedPaths) {
-        await fileLibraryApi.delete(path);
-      }
+      await Promise.all(Array.from(selectedPaths).map(path => fileLibraryApi.delete(path)));
       addToast('success', `Deleted ${count} item(s)`);
       setSelectedPaths(new Set());
       setTreeRefreshKey(k => k + 1);
@@ -273,27 +270,28 @@ export const FileLibraryPage: React.FC = () => {
 
   // ---- Sorting ----
 
-  // NEW-F-045: flatten nested state setter
   const handleSort = useCallback((column: 'name' | 'size' | 'modified') => {
-    setSortBy(column);
-    setSortOrder(prev => sortBy === column ? (prev === 'asc' ? 'desc' : 'asc') : 'asc');
-  }, [sortBy]);
+    setSort(prev => ({
+      by: column,
+      order: prev.by === column ? (prev.order === 'asc' ? 'desc' : 'asc') : 'asc',
+    }));
+  }, []);
 
   const sortedEntries = useMemo(() => {
-    if (!sortBy) return filteredEntries;
+    if (!sort.by) return filteredEntries;
     return [...filteredEntries].sort((a, b) => {
       let cmp = 0;
-      if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
-      else if (sortBy === 'size') cmp = a.size - b.size;
+      if (sort.by === 'name') cmp = a.name.localeCompare(b.name);
+      else if (sort.by === 'size') cmp = a.size - b.size;
       // F-017: Use Date comparison instead of localeCompare
-      else if (sortBy === 'modified') {
+      else if (sort.by === 'modified') {
         const da = a.modified_at ? new Date(a.modified_at).getTime() : 0;
         const db = b.modified_at ? new Date(b.modified_at).getTime() : 0;
         cmp = da - db;
       }
-      return sortOrder === 'asc' ? cmp : -cmp;
+      return sort.order === 'asc' ? cmp : -cmp;
     });
-  }, [filteredEntries, sortBy, sortOrder]);
+  }, [filteredEntries, sort.by, sort.order]);
 
   // ---- Full-page loading (initial load only) ----
   if (loading && entries.length === 0 && !error) {
@@ -461,8 +459,8 @@ export const FileLibraryPage: React.FC = () => {
             onClearSelection={() => setSelectedPaths(new Set())}
             onNavigate={handleNavigate}
             onContextMenu={handleFileContextMenu}
-            sortBy={sortBy}
-            sortOrder={sortOrder}
+            sortBy={sort.by}
+            sortOrder={sort.order}
             onSort={handleSort}
             filterType={filterType}
             searchQuery={searchQuery}

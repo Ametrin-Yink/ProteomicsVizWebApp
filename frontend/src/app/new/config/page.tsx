@@ -21,6 +21,7 @@ import { useAnalysisStore, canStartAnalysis, getPipelineFromType } from '@/store
 import { useUIStore } from '@/stores/ui-store';
 import { organismsApi, sessionsApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { useBeforeUnload } from '@/hooks/use-beforeunload';
 import { HelpTooltip } from '@/components/ui/HelpTooltip';
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 import Msqrob2ConfigForm from '@/components/analysis/Msqrob2ConfigForm';
@@ -42,17 +43,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
   const [isLoadingOrganisms, setIsLoadingOrganisms] = React.useState(true);
   const [organismError, setOrganismError] = React.useState<string | null>(null);
 
-  // Warn user before leaving page with unsaved data
-  const beforeUnloadRef = React.useRef<((e: BeforeUnloadEvent) => void) | null>(null);
-  React.useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-    beforeUnloadRef.current = handler;
-    window.addEventListener('beforeunload', handler);
-    return () => {
-      window.removeEventListener('beforeunload', handler);
-      beforeUnloadRef.current = null;
-    };
-  }, []);
+  const { dismiss: dismissBeforeUnload } = useBeforeUnload();
 
   // Redirect guard: no session or no analysis type -> back to earlier step
   React.useEffect(() => {
@@ -99,9 +90,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
 
   const handleContinue = async () => {
     if (!canContinue || !sessionId) return;
-    // Remove beforeunload handler so it doesn't trap user during programmatic navigation
-    const handler = beforeUnloadRef.current;
-    if (handler) window.removeEventListener('beforeunload', handler);
+    dismissBeforeUnload();
     setIsStarting(true);
 
     try {

@@ -31,9 +31,16 @@ export function useFileSearch<T extends BaseEntry>({ entries, fileType = 'all' }
   const isSearching = searchQuery !== debouncedQuery;
 
   const filteredEntries = useMemo(() => {
-    let result = entries;
-    if (fileType === 'csv-only' || fileType === 'csv') result = result.filter((e) => e.type === 'folder' || e.type === 'csv' || e.type === 'tsv') as typeof result;
-    else if (fileType === 'txt') result = result.filter((e) => e.type === 'folder' || e.type === 'txt') as typeof result;
+    const folders = entries.filter(e => e.type === 'folder');
+    let files = entries.filter(e => e.type !== 'folder');
+
+    if (fileType === 'csv-only' || fileType === 'csv') {
+      files = files.filter(e => e.type === 'csv' || e.type === 'tsv');
+    } else if (fileType === 'txt') {
+      files = files.filter(e => e.type === 'txt');
+    }
+
+    let result = [...folders, ...files] as T[];
     if (debouncedQuery.trim()) {
       const q = debouncedQuery.toLowerCase();
       result = result.filter((e) => e.name.toLowerCase().includes(q));

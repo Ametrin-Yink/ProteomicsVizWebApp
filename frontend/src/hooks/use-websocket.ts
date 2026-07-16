@@ -136,6 +136,17 @@ export const useWebSocket = (sessionId: string | null) => {
         reconnectAttempts.current = 0;
         isManualClose.current = false;
 
+        // Start keepalive ping interval (only runs while connected)
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = setInterval(() => {
+          if (ws.current?.readyState === WebSocket.OPEN) {
+            ws.current.send(JSON.stringify({
+              type: 'ping',
+              payload: { timestamp: new Date().toISOString() },
+            }));
+          }
+        }, 30000);
+
         // Subscribe to session updates
         if (ws.current?.readyState === WebSocket.OPEN) {
           try {
@@ -190,6 +201,11 @@ export const useWebSocket = (sessionId: string | null) => {
         if (connectionTimeoutRef.current) {
           clearTimeout(connectionTimeoutRef.current);
           connectionTimeoutRef.current = null;
+        }
+        // Clear keepalive ping interval on disconnect
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = null;
         }
         setConnected(false);
 
@@ -246,7 +262,6 @@ export const useWebSocket = (sessionId: string | null) => {
         clearTimeout(connectionTimeoutRef.current);
         connectionTimeoutRef.current = null;
       }
-      // D-035: Clear ping interval on disconnect
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = null;
@@ -257,27 +272,6 @@ export const useWebSocket = (sessionId: string | null) => {
       }
     };
   }, [sessionId, connect]);
-
-  // Keepalive ping
-  useEffect(() => {
-    if (!sessionId) return;
-
-    pingIntervalRef.current = setInterval(() => {
-      if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({
-          type: 'ping',
-          payload: { timestamp: new Date().toISOString() },
-        }));
-      }
-    }, 30000); // Ping every 30 seconds
-
-    return () => {
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = null;
-      }
-    };
-  }, [sessionId]);
 
   return {
     isConnected: useProcessingStore((s) => s.isConnected),

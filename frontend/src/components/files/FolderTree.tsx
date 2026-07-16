@@ -90,38 +90,6 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath]);
 
-  // Separate expand function (no toggle) for auto-expand
-  const expandNode = useCallback(async (node: TreeNode) => {
-    const newExpanded = new Set(expandedPaths);
-    newExpanded.add(node.path);
-    setExpandedPaths(newExpanded);
-
-    // Lazy-load children if not loaded
-    if (!node.loaded) {
-      setLoadingPaths(prev => new Set(prev).add(node.path));
-      try {
-        const data = await fileLibraryApi.listDirectory(node.path);
-        const children = data.entries
-          .filter(e => e.type === 'folder')
-          .map(e => ({
-            name: e.name,
-            path: e.path,
-            children: [],
-            loaded: false,
-          }));
-        node.children = children;
-        node.loaded = true;
-        setRootNodes([...rootNodes]);
-      } catch (err) {
-        console.error('Failed to load children for auto-expand:', err);
-        setExpandedPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
-      } finally {
-        setLoadingPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
-      }
-    }
-  }, [expandedPaths, rootNodes]);
-
-  // Wrapper for toggle that also updates state (used by both user clicks and auto-expand)
   const toggleExpandNode = useCallback(async (node: TreeNode) => {
     const newExpanded = new Set(expandedPaths);
     if (newExpanded.has(node.path)) {
@@ -159,10 +127,6 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     }
   }, [expandedPaths, rootNodes]);
 
-  const toggleExpand = useCallback(async (node: TreeNode) => {
-    await toggleExpandNode(node);
-  }, [toggleExpandNode]);
-
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const items = treeRef.current?.querySelectorAll('[role="treeitem"]');
     if (!items || items.length === 0) return;
@@ -190,7 +154,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         e.preventDefault();
         const node = findNodeByPath(focusedPath, rootNodes);
         if (node && !expandedPaths.has(focusedPath)) {
-          toggleExpand(node);
+          toggleExpandNode(node);
         }
         break;
       }
@@ -198,7 +162,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         e.preventDefault();
         if (expandedPaths.has(focusedPath)) {
           const node = findNodeByPath(focusedPath, rootNodes);
-          if (node) toggleExpand(node);
+          if (node) toggleExpandNode(node);
         } else {
           const parentPath = focusedPath.split('/').slice(0, -1).join('/');
           setFocusedPath(parentPath);
@@ -211,7 +175,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         break;
       }
     }
-  }, [focusedPath, rootNodes, expandedPaths, onNavigate, toggleExpand, findNodeByPath]);
+  }, [focusedPath, rootNodes, expandedPaths, onNavigate, toggleExpandNode, findNodeByPath]);
 
   const renderNode = (node: TreeNode, depth: number): React.ReactNode => {
     const isExpanded = expandedPaths.has(node.path);
@@ -236,7 +200,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
           onClick={() => {
             onNavigate(node.path);
             setFocusedPath(node.path);
-            toggleExpand(node);
+            toggleExpandNode(node);
           }}
           onContextMenu={(e) => onContextMenu(e, node.path, node.name)}
         >
