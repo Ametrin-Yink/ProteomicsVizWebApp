@@ -137,6 +137,12 @@ settings.local.json
 .worktrees/
 .superpowers/
 
+# --- Local AI assistant instructions ---
+# Keep personal tool prompts and machine-specific agent context out of Git.
+AGENT.md
+AGENTS.md
+CLAUDE.md
+
 # --- Design docs (local only) ---
 DESIGN.json
 DESIGN.md
