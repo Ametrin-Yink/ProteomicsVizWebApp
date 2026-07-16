@@ -1137,10 +1137,10 @@ export const exportApi = {
 
 export const fileLibraryApi = {
   listDirectory: (path: string): Promise<{ path: string; entries: FileLibraryEntry[] }> =>
-    api.get(`/files/tree?path=${encodeURIComponent(path)}`).then(r => r.data),
+    api.get<{ path: string; entries: FileLibraryEntry[] }>(`/files/tree?path=${encodeURIComponent(path)}`).then(r => r.data),
 
   createFolder: (parentPath: string, name: string): Promise<{ path: string; name: string }> =>
-    api.post(`/files/folders`, { parent_path: parentPath, name }).then(r => r.data),
+    api.post<{ path: string; name: string }>(`/files/folders`, { parent_path: parentPath, name }).then(r => r.data),
 
   upload: async (
     files: File[],
@@ -1161,26 +1161,26 @@ export const fileLibraryApi = {
   },
 
   rename: (path: string, newName: string): Promise<{ path: string; name: string }> =>
-    api.put(`/files/rename`, { path, new_name: newName }).then(r => r.data),
+    api.put<{ path: string; name: string }>(`/files/rename`, { path, new_name: newName }).then(r => r.data),
 
   move: (sourcePath: string, targetParent: string): Promise<{ path: string; new_parent: string }> =>
-    api.put(`/files/move`, { source_path: sourcePath, target_parent: targetParent }).then(r => r.data),
+    api.put<{ path: string; new_parent: string }>(`/files/move`, { source_path: sourcePath, target_parent: targetParent }).then(r => r.data),
 
   delete: (path: string): Promise<{ deleted: string }> =>
-    api.delete(`/files/delete`, { data: { path } }).then(r => r.data),
+    api.delete<{ deleted: string }>(`/files/delete`, { data: { path } }).then(r => r.data),
 
   scan: (): Promise<{ total: number; added: number; removed: number; updated: number }> =>
-    api.post(`/files/scan`).then(r => r.data),
+    api.post<{ total: number; added: number; removed: number; updated: number }>(`/files/scan`).then(r => r.data),
 
   search: (query: string): Promise<{ results: FileLibraryEntry[] }> =>
-    api.get(`/files/search?q=${encodeURIComponent(query)}`).then(r => r.data),
+    api.get<{ results: FileLibraryEntry[] }>(`/files/search?q=${encodeURIComponent(query)}`).then(r => r.data),
 
   getContent: (path: string): Promise<string> =>
-    api.get(`/files/content?path=${encodeURIComponent(path)}`, { responseType: 'text' }).then(r => r.data),
+    api.get<string>(`/files/content?path=${encodeURIComponent(path)}`, { responseType: 'text' }).then(r => r.data),
 
   selectForSession: (
     sessionId: string,
     paths: string[],
   ): Promise<{ files: SelectedFileInfo[] }> =>
-    api.post(`/files/select`, { session_id: sessionId, paths }).then(r => r.data),
+    api.post<{ files: SelectedFileInfo[] }>(`/files/select`, { session_id: sessionId, paths }).then(r => r.data),
 };

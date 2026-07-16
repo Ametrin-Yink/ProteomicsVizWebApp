@@ -163,7 +163,6 @@ class TestDIAPipelineE2E:
 
     def test_three_comparison_files_exist(self, dia_session):
         """All 3 DE comparison files are generated on disk."""
-        import os
         from app.core.config import settings
 
         sid = dia_session["id"]

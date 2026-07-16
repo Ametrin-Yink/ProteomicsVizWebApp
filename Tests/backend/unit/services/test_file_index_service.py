@@ -1,6 +1,5 @@
 import time
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -15,10 +14,10 @@ def index_service(tmp_path):
 class TestFileIndexServiceSchema:
     def test_schema_created_on_init(self, tmp_path):
         """DuckDB file and schema are created on first init."""
-        from app.services.file_index_service import FileIndexService
         import duckdb
+        from app.services.file_index_service import FileIndexService
 
-        svc = FileIndexService(tmp_path)
+        FileIndexService(tmp_path)
         db_path = tmp_path / ".library_index.duckdb"
         assert db_path.exists()
 
