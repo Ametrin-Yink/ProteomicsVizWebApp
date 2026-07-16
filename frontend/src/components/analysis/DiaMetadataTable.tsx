@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Download, Upload, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { parseCSVLine } from '@/lib/csv';
 import { useAnalysisStore } from '@/stores/analysis-store';

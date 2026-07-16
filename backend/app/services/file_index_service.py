@@ -83,7 +83,7 @@ class FileIndexService:
         """
         # Collect current filesystem state
         fs_paths: dict[str, dict] = {}
-        for root, dirs, files in os.walk(str(self.library_dir)):
+        for root, _dirs, files in os.walk(str(self.library_dir)):
             # The DuckDB index file is filtered by extension below (only .txt/.csv indexed)
             root_path = Path(root)
             # Add directories

@@ -6,7 +6,6 @@ import os
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -18,7 +17,7 @@ router = APIRouter()
 logger = logging.getLogger("proteomics")
 
 # ---- Singleton index service ----
-_index_service: Optional[FileIndexService] = None
+_index_service: FileIndexService | None = None
 
 
 def get_index_service() -> FileIndexService:
