@@ -85,3 +85,6 @@ refactor: simplify data transformation
 - **TypeScript**: strict mode required, no `as any` or `@ts-ignore`
 
 For full developer guides, see the [AGENTS/](../AGENTS/) directory.
+
+For the current local environment and baseline verification commands, see
+[DEVELOPMENT.md](DEVELOPMENT.md).
