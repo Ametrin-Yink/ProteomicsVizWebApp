@@ -116,18 +116,21 @@ if (length(covariates) > 0 && !is.null(processed$ProteinLevelData)) {
 # Build combined GROUP column from all metadata condition columns
 # Exclude core MSstats columns and known non-condition columns
 core_cols <- c("RUN", "Protein", "LogIntensities", "originalRUN", "GROUP",
-               "SUBJECT", "Label", "NumMeasuredFeature", "MissingPercentage",
+               "SUBJECT", "Label", "LABEL", "NumMeasuredFeature", "MissingPercentage",
                "more50missing", "NumImputedFeature")
 all_pdata_cols <- names(processed$ProteinLevelData)
 
 # Also track covariate columns that were injected (used for GROUP building)
 covariate_cols <- if (exists("cov_names") && length(cov_names) > 0) cov_names else character(0)
 
-# Use covariate columns for GROUP when available; otherwise fall back to
-# non-core columns (excluding technical measures like TotalGroupMeasurements)
+# Use injected covariate columns for GROUP when available. Otherwise preserve
+# MSstats' existing GROUP column; newer MSstats versions expose an uppercase
+# LABEL technical column that must never replace the condition groups.
 core_cols <- c(core_cols, "TotalGroupMeasurements")
 if (length(covariate_cols) > 0) {
     condition_cols <- covariate_cols
+} else if ("GROUP" %in% all_pdata_cols) {
+    condition_cols <- character(0)
 } else {
     condition_cols <- setdiff(all_pdata_cols, core_cols)
 }

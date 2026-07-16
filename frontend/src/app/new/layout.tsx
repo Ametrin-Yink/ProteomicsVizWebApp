@@ -13,7 +13,7 @@ import { useSidebar } from '@/components/layout/SidebarContext';
 import { SessionManager } from '@/components/session/SessionManager';
 import { WizardStepper } from '@/components/ui/WizardStepper';
 
-export default function NewAnalysisLayout({
+function NewAnalysisLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -54,5 +54,17 @@ export default function NewAnalysisLayout({
         </div>
       </main>
     </div>
+  );
+}
+
+export default function NewAnalysisLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <React.Suspense fallback={<div className="flex-1 bg-surface" />}>
+      <NewAnalysisLayoutContent>{children}</NewAnalysisLayoutContent>
+    </React.Suspense>
   );
 }

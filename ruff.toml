@@ -21,7 +21,7 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-"Tests/**" = ["ARG001", "ARG002", "E402"]  # allow unused args + sys.path imports in tests
+"Tests/**" = ["ARG001", "ARG002", "E402", "N999"]  # allow unused args + sys.path imports + module name in tests
 "Tests/backend/unit/infrastructure/test_session_manager.py" = ["B017"]  # pytest.raises(Exception) — both Pydantic and custom ValidationError valid
 "**/__init__.py" = ["F401"]                 # allow unused imports in __init__.py re-exports
 

@@ -1185,6 +1185,8 @@ export const fileLibraryApi = {
 
   rename: (path: string, newName: string): Promise<{ path: string; name: string }> =>
     api.put<{ path: string; name: string }>(`/files/rename`, { path, new_name: newName }).then(r => r.data),
+  move: (sourcePath: string, targetParent: string): Promise<{ path: string; new_parent: string }> =>
+    api.put<{ path: string; new_parent: string }>(`/files/move`, { source_path: sourcePath, target_parent: targetParent }).then(r => r.data),
 
   delete: (path: string): Promise<{ deleted: string }> =>
     api.delete<{ deleted: string }>(`/files/delete`, { data: { path } }).then(r => r.data),

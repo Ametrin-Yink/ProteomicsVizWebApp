@@ -11,7 +11,6 @@ import csv
 import os
 import shutil
 import time
-from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -260,7 +259,6 @@ class TestTMTPipelineE2E:
 
     def test_four_comparison_files_exist(self, tmt_session):
         """All 4 DE comparison TSV files are generated on disk."""
-        import os
         from app.core.config import settings
 
         sid = tmt_session["id"]
@@ -277,6 +275,7 @@ class TestTMTPipelineE2E:
     def test_each_comparison_has_de_proteins(self, tmt_session):
         """Each comparison file contains DE proteins with real p-values."""
         import os
+
         from app.core.config import settings
 
         sid = tmt_session["id"]
@@ -356,7 +355,6 @@ class TestTMTPipelineE2E:
 
     def test_protein_abundances_tsv_exists(self, tmt_session):
         """Protein abundances TSV file is generated on disk."""
-        import os
         from app.core.config import settings
 
         sid = tmt_session["id"]

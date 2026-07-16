@@ -1,8 +1,6 @@
 """End-to-end tests for file library API with real filesystem."""
 
 import io
-import uuid
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient

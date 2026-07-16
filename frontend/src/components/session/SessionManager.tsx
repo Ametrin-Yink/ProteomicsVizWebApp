@@ -8,7 +8,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Loader2,
@@ -37,13 +37,18 @@ export interface SessionManagerProps {
   className?: string;
 }
 
+function getPageSessionId(): string {
+  if (typeof window === 'undefined') return '';
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get('session_id') || params.get('session') || '';
+}
+
 /**
  * Session Manager component
  */
 export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const pageSessionId = searchParams.get('session_id') || searchParams.get('session') || '';
   const sessions = useSessions();
   const sessionsList = React.useMemo(() => sessions || [], [sessions]);
   const currentSession = useCurrentSession();
@@ -138,7 +143,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       addToast('success', 'Session deleted successfully');
 
       // Redirect if user is viewing the deleted session
-      if (pageSessionId === sessionId) {
+      if (getPageSessionId() === sessionId) {
         router.push('/');
       }
     } catch (error) {
@@ -220,7 +225,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       addToast('success', `${count} session${count > 1 ? 's' : ''} deleted`);
 
       // Redirect if user is viewing one of the deleted sessions
-      if (idsToDelete.includes(pageSessionId)) {
+      if (idsToDelete.includes(getPageSessionId())) {
         router.push('/');
       }
     } catch (error) {

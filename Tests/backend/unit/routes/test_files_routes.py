@@ -1,9 +1,7 @@
 """Unit tests for file library API routes (mocked index service)."""
 
 import io
-from datetime import datetime
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,7 +34,8 @@ def client_with_files(mock_index, tmp_path, monkeypatch):
     app = FastAPI()
     # We need to patch the router's dependency. The router will use a
     # dependency function to get the index service. We override it.
-    from app.api.routes.files import get_index_service, router as files_router
+    from app.api.routes.files import get_index_service
+    from app.api.routes.files import router as files_router
 
     # Override the index dependency
     app.dependency_overrides[get_index_service] = lambda: mock_index
