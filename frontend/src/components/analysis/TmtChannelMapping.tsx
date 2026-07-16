@@ -89,6 +89,14 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const [history, setHistory] = useState<Array<Record<string, Record<string, unknown>>>>([]);
   const [isDetectingChannels, setIsDetectingChannels] = useState(false);
 
+  // Expose store action for E2E testing (React controlled inputs don't work with Playwright)
+  useEffect(() => {
+    (window as any).__updateTmtMapping = (filename: string, channel: string, groups: Record<string, string | number>) => {
+      updateChannelMapping(filename, channel, groups);
+    };
+    return () => { delete (window as any).__updateTmtMapping; };
+  }, [updateChannelMapping]);
+
   // T-040: Presets state
   const [presetsOpen, setPresetsOpen] = useState(false);
   const presetsRef = useRef<HTMLDivElement>(null);

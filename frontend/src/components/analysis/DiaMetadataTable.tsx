@@ -21,6 +21,14 @@ export const DiaMetadataTable: React.FC = () => {
   const importMetadataColumns = useAnalysisStore((s) => s.importMetadataColumns);
   const { addToast } = useUIStore();
 
+  // Expose store action for E2E testing (React controlled inputs don't work with Playwright)
+  useEffect(() => {
+    (window as any).__setDiaMetadata = (data: Record<string, Record<string, string>>) => {
+      setConfig({ metadata_columns: data });
+    };
+    return () => { delete (window as any).__setDiaMetadata; };
+  }, [setConfig]);
+
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
