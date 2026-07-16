@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canStartAnalysis } from '@/stores/analysis-store';
+import type { AnalysisState } from '@/stores/analysis-store';
 import type { SessionConfig } from '@/types';
 
 const makeState = (overrides: Record<string, unknown> = {}) => ({
@@ -15,12 +16,12 @@ const makeState = (overrides: Record<string, unknown> = {}) => ({
 describe('canStartAnalysis', () => {
   it('should return false when no files selected', () => {
     const state = makeState({ selectedFiles: new Set(), config: { comparisons: [{ group1: { Condition: 'A' }, group2: { Condition: 'B' } }] } });
-    expect(canStartAnalysis(state as Parameters<typeof canStartAnalysis>[0])).toBe(false);
+    expect(canStartAnalysis(state as unknown as AnalysisState)).toBe(false);
   });
 
   it('should return false when no comparisons defined', () => {
     const state = makeState({ selectedFiles: new Set(['file1']), config: {} });
-    expect(canStartAnalysis(state as Parameters<typeof canStartAnalysis>[0])).toBe(false);
+    expect(canStartAnalysis(state as unknown as AnalysisState)).toBe(false);
   });
 
   it('should return true when files selected and comparisons defined (non-TMT)', () => {
@@ -28,7 +29,7 @@ describe('canStartAnalysis', () => {
       selectedFiles: new Set(['file1', 'file2']),
       config: { comparisons: [{ group1: { Condition: 'A' }, group2: { Condition: 'B' } }] },
     });
-    expect(canStartAnalysis(state as Parameters<typeof canStartAnalysis>[0])).toBe(true);
+    expect(canStartAnalysis(state as unknown as AnalysisState)).toBe(true);
   });
 
   it('should return false for TMT when channels are not fully mapped', () => {
@@ -43,7 +44,7 @@ describe('canStartAnalysis', () => {
         tmt_channel_mapping: {},
       },
     });
-    expect(canStartAnalysis(state as Parameters<typeof canStartAnalysis>[0])).toBe(false);
+    expect(canStartAnalysis(state as unknown as AnalysisState)).toBe(false);
   });
 
   it('should return true for TMT when all channels are mapped', () => {
@@ -61,6 +62,6 @@ describe('canStartAnalysis', () => {
         },
       },
     });
-    expect(canStartAnalysis(state as Parameters<typeof canStartAnalysis>[0])).toBe(true);
+    expect(canStartAnalysis(state as unknown as AnalysisState)).toBe(true);
   });
 });

@@ -29,7 +29,7 @@ export function getPipelineFromType(analysisType: AnalysisType | null): 'msstats
   }
 }
 
-interface AnalysisState {
+export interface AnalysisState {
   // File upload state
   uploadedFiles: UploadedFileInfo[];
   uploadProgress: UploadProgress[];
