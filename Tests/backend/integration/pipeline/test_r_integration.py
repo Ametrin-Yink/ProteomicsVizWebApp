@@ -4,27 +4,52 @@ Integration tests for R integration.
 Tests R package availability and script execution.
 """
 
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 
+def _find_rscript() -> str:
+    """Find Rscript from configuration, PATH, or standard Windows locations."""
+    configured = os.environ.get("R_EXECUTABLE")
+    if configured:
+        return configured
+
+    on_path = shutil.which("Rscript")
+    if on_path:
+        return on_path
+
+    roots = [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "R",
+        Path(os.environ.get("PROGRAMFILES", "C:/Program Files")) / "R",
+    ]
+    candidates = sorted(
+        (
+            candidate
+            for root in roots
+            if root.is_dir()
+            for candidate in root.glob("R-*/bin/x64/Rscript.exe")
+        ),
+        reverse=True,
+    )
+    return str(candidates[0]) if candidates else "Rscript"
+
+
+RSCRIPT_EXEC = _find_rscript()
+
+
 def _rscript_available() -> bool:
-    """Check if Rscript is on PATH or at known Windows path."""
-    for cmd in ["Rscript", "C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe"]:
-        try:
-            result = subprocess.run(
-                [cmd, "--version"], capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0:
-                return True
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-    return False
-
-
-RSCRIPT_EXEC = "C:/Program Files/R/R-4.5.1/bin/x64/Rscript.exe"
+    """Check whether the resolved Rscript executable can run."""
+    try:
+        result = subprocess.run(
+            [RSCRIPT_EXEC, "--version"], capture_output=True, text=True, timeout=10
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
 
 
 @pytest.mark.skipif(

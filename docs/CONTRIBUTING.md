@@ -4,7 +4,7 @@
 
 - **Python 3.12** — backend venv at `backend/.venv/`
 - **Node.js 20+** — frontend
-- **R 4.5+** — installed at `C:/Program Files/R/R-4.5.1/`
+- **R 4.5+** — with `Rscript` available on `PATH`
 - **Git**
 
 ## Setup
