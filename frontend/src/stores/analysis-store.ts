@@ -115,7 +115,6 @@ const defaultConfig: SessionConfig = {
   msstats_name_standards: undefined,
   msstats_save_fitted_models: true,
   msstats_n_cores: undefined,
-  condition_column: 'condition',
   covariate_columns: [],
   msqrob2_batch_column: 'batch',
 };

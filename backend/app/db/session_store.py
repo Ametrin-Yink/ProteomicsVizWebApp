@@ -189,7 +189,7 @@ class SessionStore:
         # Delete all files in session directory
         import shutil
 
-        shutil.rmtree(session_dir)
+        await asyncio.to_thread(shutil.rmtree, session_dir)
 
         logger.info(f"Session deleted: {session_id}", extra={"session_id": session_id})
 

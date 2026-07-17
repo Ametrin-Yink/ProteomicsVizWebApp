@@ -32,8 +32,7 @@ class FakeWrapper(BaseRWrapper):
 # ---------------------------------------------------------------------------
 # Module-level build_batch_cmd callbacks
 #
-# These must be module-level (or partial-wrapped module-level functions) so
-# they can be pickled by ProcessPoolExecutor.
+# These are module-level so they can also be reused by subprocess workers.
 # ---------------------------------------------------------------------------
 
 
@@ -72,7 +71,7 @@ class TestRunBatched:
     # Single-batch path (items <= batch_size)
     #
     # The single-batch path still calls _run_r_script (no
-    # ProcessPoolExecutor), so we can mock it as before.
+    # worker pool), so we can mock it as before.
     # ------------------------------------------------------------------
 
     def test_single_batch_when_items_leq_batch_size(self, wrapper):
@@ -97,12 +96,12 @@ class TestRunBatched:
     # ------------------------------------------------------------------
     # Multi-batch path (items > batch_size)
     #
-    # These go through ProcessPoolExecutor + subprocess.run, so we use
+    # These go through ThreadPoolExecutor + subprocess.Popen, so we use
     # real commands and module-level callbacks.
     # ------------------------------------------------------------------
 
     def test_splits_into_correct_batches(self, wrapper):
-        """15 items with batch_size=10 -> 2 batches via ProcessPoolExecutor."""
+        """15 items with batch_size=10 -> 2 batches via the worker pool."""
         items = [{"i": i} for i in range(15)]
         asyncio.run(
             wrapper.run_batched(

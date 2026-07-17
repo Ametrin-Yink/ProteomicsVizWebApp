@@ -93,11 +93,16 @@ async def generate_report_endpoint(session_id: str, request: Request):
     if not name:
         raise HTTPException(status_code=400, detail="Report name is required")
 
-    metadata = create_report(name=name, session_id=session_id, session_name="")
+    metadata = await asyncio.to_thread(
+        create_report,
+        name=name,
+        session_id=session_id,
+        session_name="",
+    )
     try:
-        generate_report(session_id, metadata["report_id"])
+        await asyncio.to_thread(generate_report, session_id, metadata["report_id"])
     except ValueError as e:
-        delete_report(metadata["report_id"])
+        await asyncio.to_thread(delete_report, metadata["report_id"])
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Update session_name from the session.json that was just copied in
@@ -127,7 +132,7 @@ async def generate_report_endpoint(session_id: str, request: Request):
 @global_router.get("/reports")
 async def get_reports():
     """List all reports."""
-    return {"reports": list_reports()}
+    return {"reports": await asyncio.to_thread(list_reports)}
 
 
 @global_router.get("/reports/{report_id}")
@@ -167,7 +172,7 @@ async def rename_report(report_id: str, request: Request):
 @global_router.delete("/reports/{report_id}")
 async def delete_report_endpoint(report_id: str):
     """Delete a report."""
-    if not delete_report(report_id):
+    if not await asyncio.to_thread(delete_report, report_id):
         raise HTTPException(status_code=404, detail="Report not found")
     return {"message": "Report deleted"}
 

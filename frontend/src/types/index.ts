@@ -74,14 +74,9 @@ export interface SessionConfig {
   msqrob2_normalization?: string;
   msqrob2_imputation?: string;
   msqrob2_aggregation?: string;
-  msqrob2_model?: string;
-  msqrob2_robust?: boolean;
   msqrob2_ridge?: boolean;
   msqrob2_adjust_method?: string;
-  msqrob2_min_peptides?: number;
   msqrob2_n_cores?: number;
-  // Condition column name (user-renamable, defaults to "condition")
-  condition_column?: string;
   // Covariates
   covariate_columns?: string[];
   // Batch correction (msqrob2)
@@ -98,6 +93,7 @@ export interface SessionFiles {
 
 export interface UploadedFileInfo {
   filename: string;
+  original_filename?: string;
   size: number;
   columns?: string[];
   experiment: string;

@@ -19,6 +19,11 @@ from enum import Enum
 from typing import Any
 
 from app.core.config import settings
+from app.services.r_process_registry import (
+    cancel_processes,
+    reset_current_session,
+    set_current_session,
+)
 
 logger = logging.getLogger("proteomics")
 
@@ -44,7 +49,6 @@ DEFAULT_TIMEOUTS: dict[TaskKind, int] = {
     TaskKind.BIONET: 30 * 60,
     TaskKind.COMPUTE: 10 * 60,
 }
-PIPELINE_R_STEP_TIMEOUT = 12 * 60 * 60  # steps 6-7
 
 
 @dataclass
@@ -101,9 +105,6 @@ class TaskManager:
 
         # Cancel events per session
         self._cancel_events: dict[str, asyncio.Event] = {}
-        # Timeout timer threads per task_id
-        self._timeout_timers: dict[str, threading.Timer] = {}
-
         # Recover from restart: mark any stale running/queued tasks
         self._recover_stale_tasks()
 
@@ -135,11 +136,11 @@ class TaskManager:
             started_at=datetime.now(UTC).isoformat(),
         )
 
-        if cancel_event is None:
-            cancel_event = asyncio.Event()
-            self._cancel_events.setdefault(session_id, cancel_event)
-        else:
-            self._cancel_events[session_id] = cancel_event
+        shared_cancel_event = self._cancel_events.get(session_id)
+        if shared_cancel_event is None:
+            shared_cancel_event = cancel_event or asyncio.Event()
+            self._cancel_events[session_id] = shared_cancel_event
+        cancel_event = shared_cancel_event
 
         # Compute queue position
         queue = self._queues[kind]
@@ -157,6 +158,7 @@ class TaskManager:
             if cancel_event.is_set():
                 self._dequeue(kind, session_id, task_id)
                 self._active_tasks.pop(task_id, None)
+                self._cleanup_idle_session(session_id)
                 raise TaskCancelledError(f"Task {task_id} cancelled while queued")
 
             # Check if we're at head of queue
@@ -222,14 +224,54 @@ class TaskManager:
                 )
                 if timeout_event is None:
                     timeout_event = threading.Event()
-                timer = threading.Timer(effective_timeout, timeout_event.set)
-                timer.daemon = True
-                self._timeout_timers[task_id] = timer
-                timer.start()
+
+                worker_future: asyncio.Future | None = None
+                cancel_waiter: asyncio.Task | None = None
+                lingering_worker = False
 
                 try:
                     loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(self._pools[kind], fn, *args)
+
+                    def run_with_session_context():
+                        token = set_current_session(session_id)
+                        try:
+                            return fn(*args)
+                        finally:
+                            reset_current_session(token)
+
+                    worker_future = loop.run_in_executor(
+                        self._pools[kind], run_with_session_context
+                    )
+                    cancel_waiter = asyncio.create_task(cancel_event.wait())
+                    done, _ = await asyncio.wait(
+                        {worker_future, cancel_waiter},
+                        timeout=effective_timeout,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+
+                    if not done:
+                        timeout_event.set()
+                        cancel_event.set()
+                        self._kill_r_processes(session_id)
+                        lingering_worker = not worker_future.done()
+                        if lingering_worker:
+                            self._track_lingering_worker(
+                                worker_future, session_id, kind
+                            )
+                        raise TaskTimeoutError(
+                            f"Task {task_id} timed out after {effective_timeout}s"
+                        )
+
+                    if cancel_waiter in done and cancel_event.is_set():
+                        self._kill_r_processes(session_id)
+                        lingering_worker = not worker_future.done()
+                        if lingering_worker:
+                            self._track_lingering_worker(
+                                worker_future, session_id, kind
+                            )
+                        raise TaskCancelledError(f"Task {task_id} cancelled")
+
+                    result = await worker_future
                     info.status = "completed"
                     info.completed_at = datetime.now(UTC).isoformat()
                     return result
@@ -241,24 +283,28 @@ class TaskManager:
                     info.status = "timed_out"
                     info.error = "Task timed out"
                     raise
+                except asyncio.CancelledError:
+                    info.status = "cancelled"
+                    info.error = "Task coroutine cancelled"
+                    if worker_future is not None and not worker_future.done():
+                        cancel_event.set()
+                        self._kill_r_processes(session_id)
+                        lingering_worker = True
+                        self._track_lingering_worker(worker_future, session_id, kind)
+                    raise
                 except Exception as e:
                     logger.exception("Task failed")
                     info.status = "error"
                     info.error = str(e)
                     raise
                 finally:
-                    timer.cancel()
-                    self._timeout_timers.pop(task_id, None)
+                    if cancel_waiter is not None:
+                        cancel_waiter.cancel()
                     self._active_tasks.pop(task_id, None)
-                    # Drop session entries when no active tasks remain
-                    if self.get_active_count(session_id) == 0:
-                        self._session_active.pop(session_id, None)
-                        self._session_locks.pop(session_id, None)
-                        self._cancel_events.pop(session_id, None)
+                    if not lingering_worker:
+                        self._release_session(session_id, kind)
                     else:
-                        self._session_active[session_id] = None
-                    self._write_task_status(session_id)
-                    self._wake_next(kind)
+                        self._write_task_status(session_id)
 
     def cancel(self, session_id: str) -> bool:
         """Cancel running + queued tasks for a session. Returns True if anything was cancelled."""
@@ -280,19 +326,16 @@ class TaskManager:
                 self._wake_next(kind)
 
         # Kill any running R subprocess for this session
-        self._kill_r_processes()
+        self._kill_r_processes(session_id)
+        self._cleanup_idle_session(session_id)
 
         self._write_task_status(session_id)
         return cancelled
 
-    def _kill_r_processes(self) -> None:
-        """Kill any running R subprocesses managed by the pipeline wrappers."""
+    def _kill_r_processes(self, session_id: str) -> None:
+        """Kill only the R subprocesses owned by one session."""
         try:
-            from app.services.msqrob2_wrapper import msqrob2_wrapper
-            from app.services.msstats_wrapper import msstats_wrapper
-
-            msqrob2_wrapper.cancel()
-            msstats_wrapper.cancel()
+            cancel_processes(session_id)
         except Exception as e:
             logger.warning("Error killing R processes: %s", e)
 
@@ -361,6 +404,45 @@ class TaskManager:
         if queue:
             _, ready_event, _ = queue[0]
             ready_event.set()
+
+    def _track_lingering_worker(
+        self,
+        worker_future: asyncio.Future,
+        session_id: str,
+        kind: TaskKind,
+    ) -> None:
+        """Keep a timed-out or cancelled session blocked until its thread exits."""
+
+        def release_when_done(completed: asyncio.Future) -> None:
+            if not completed.cancelled():
+                try:
+                    completed.exception()
+                except Exception:
+                    logger.debug("Lingering worker exited with an error", exc_info=True)
+            self._release_session(session_id, kind)
+
+        worker_future.add_done_callback(release_when_done)
+
+    def _release_session(self, session_id: str, kind: TaskKind) -> None:
+        """Release task ownership and wake the next queued task."""
+        if self.get_active_count(session_id) == 0:
+            self._session_active.pop(session_id, None)
+            self._session_locks.pop(session_id, None)
+            self._cancel_events.pop(session_id, None)
+        else:
+            self._session_active[session_id] = None
+        self._write_task_status(session_id)
+        self._wake_next(kind)
+
+    def _cleanup_idle_session(self, session_id: str) -> None:
+        """Remove per-session coordination state when no task owns it."""
+        if (
+            self.get_active_count(session_id) == 0
+            and self._session_active.get(session_id) is None
+        ):
+            self._session_active.pop(session_id, None)
+            self._session_locks.pop(session_id, None)
+            self._cancel_events.pop(session_id, None)
 
     # Match SessionStore._get_session_dir() UUID validation to prevent
     # non-UUID session directories from being created outside the store.

@@ -7,14 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  # ── Backend: lint & unit tests ──────────────────────────────────────────
-
   backend:
     name: Backend (Python)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -25,24 +20,27 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r backend/requirements.txt
 
       - name: Lint (ruff)
-        run: ruff check .
+        run: ruff check backend Tests
 
-      - name: Tests (pytest — unit)
+      - name: Verify generated OpenAPI contract
+        run: python backend/scripts/generate_openapi.py --check
+
+      - name: Tests (pytest - unit)
         run: pytest Tests/backend/unit -v --tb=short
-        working-directory: .
 
-      - name: Tests (pytest — integration routes)
-        run: pytest Tests/backend/integration/routes -v --tb=short
-        working-directory: .
+      - name: Tests (pytest - integration API)
+        run: >-
+          pytest Tests/backend/integration/routes
+          Tests/backend/integration/test_file_library_e2e.py
+          -v --tb=short
 
-      - name: Tests (pytest — integration pipeline, skip if no R)
-        run: pytest Tests/backend/integration/pipeline -v --tb=short --ignore-glob="*e2e*" || true
-        working-directory: .
-
-  # ── Frontend: lint & type check ────────────────────────────────────────
+      - name: Tests (pytest - pipeline structure)
+        run: >-
+          pytest Tests/backend/integration/pipeline
+          -v --tb=short --ignore-glob="*e2e*"
 
   frontend:
     name: Frontend (TypeScript)
@@ -64,4 +62,10 @@ jobs:
         run: npm run lint
 
       - name: Type check (tsc)
-        run: npx tsc --noEmit
+        run: npm run typecheck
+
+      - name: Tests (Vitest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build

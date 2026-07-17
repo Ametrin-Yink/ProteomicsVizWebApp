@@ -344,16 +344,6 @@ function SummaryContent() {
                   <span className="text-text-primary font-medium">{config.msqrob2_aggregation ?? 'robustSummary'}</span>
                 </div>
                 <div className="bg-surface rounded-lg p-3">
-                  <span className="text-text-muted block text-xs">DE Model</span>
-                  <span className="text-text-primary font-medium">{config.msqrob2_model ?? 'msqrobLm'}</span>
-                </div>
-                <div className="bg-surface rounded-lg p-3">
-                  <span className="text-text-muted block text-xs">Robust Estimation</span>
-                  <span className={cn('font-medium', config.msqrob2_robust !== false ? 'text-success' : 'text-text-muted')}>
-                    {config.msqrob2_robust !== false ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                <div className="bg-surface rounded-lg p-3">
                   <span className="text-text-muted block text-xs">Ridge Penalty</span>
                   <span className={cn('font-medium', config.msqrob2_ridge ? 'text-success' : 'text-text-muted')}>
                     {config.msqrob2_ridge ? 'Yes' : 'No'}

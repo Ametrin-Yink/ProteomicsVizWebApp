@@ -9,6 +9,10 @@ All tests use specific assertions (no status code ranges).
 class TestSessionAPI:
     """Test session management endpoints."""
 
+    def test_client_uses_isolated_session_store(self, client, test_sessions_dir):
+        assert client.app.state.session_store.sessions_dir == test_sessions_dir
+        assert client.app.state.session_manager.store is client.app.state.session_store
+
     def test_create_session_success(self, client):
         """Create new session successfully."""
         response = client.post(
@@ -149,6 +153,7 @@ class TestSessionConfigAPI:
                 "organism": "human",
                 "remove_razor": True,
                 "strict_filtering": False,
+                "min_peptides_per_protein": 4,
             },
         )
 
@@ -159,7 +164,23 @@ class TestSessionConfigAPI:
         assert data["config"]["organism"] == "human"
         assert data["config"]["remove_razor"] is True
         assert data["config"]["strict_filtering"] is False
+        assert data["config"]["min_peptides_per_protein"] == 4
         assert data["state"] == "configuring"
+
+    def test_update_config_rejects_unknown_fields(self, client):
+        create_response = client.post(
+            "/api/sessions",
+            json={"name": "Strict Config", "template": "multi_condition_comparison"},
+        )
+        session_id = create_response.json()["id"]
+
+        response = client.put(
+            f"/api/sessions/{session_id}/config",
+            json={"file_type": "dia", "not_a_real_setting": True},
+        )
+
+        assert response.status_code == 422
+        assert "not_a_real_setting" in response.text
 
     def test_update_config_treatment_equals_control(self, client):
         """Reject config where treatment equals control."""
@@ -285,7 +306,7 @@ class TestFileUploadAPI:
                 f"/api/sessions/{session_id}/upload/proteomics",
                 files=[
                     ("files", ("tmt_sample_10000rows.txt", f1, "text/plain")),
-                    ("files", ("tmt_sample_10000rows.txt", f2, "text/plain")),
+                    ("files", ("tmt_sample_02_10000rows.txt", f2, "text/plain")),
                 ],
             )
 
@@ -293,6 +314,96 @@ class TestFileUploadAPI:
         data = response.json()
         assert "files" in data
         assert len(data["files"]) == 2
+
+    def test_upload_uses_canonical_filename(self, client, test_data_dir):
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Canonical Filename",
+                "template": "multi_condition_comparison",
+            },
+        )
+        session_id = create_response.json()["id"]
+        client.put(f"/api/sessions/{session_id}/config", json={"file_type": "tmt"})
+
+        file_path = test_data_dir / "tmt_sample_10000rows.txt"
+        with open(file_path, "rb") as source:
+            response = client.post(
+                f"/api/sessions/{session_id}/upload/proteomics",
+                files={"files": ("tmt:sample.txt", source, "text/plain")},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["files"][0]["filename"] == "tmt_sample.txt"
+
+        session = client.get(f"/api/sessions/{session_id}").json()
+        uploaded = session["files"]["proteomics"][0]
+        assert uploaded["filename"] == "tmt_sample.txt"
+        assert uploaded["original_filename"] == "tmt:sample.txt"
+        upload_path = (
+            client.app.state.session_store.sessions_dir / session_id / "uploads"
+        )
+        assert (upload_path / "tmt_sample.txt").is_file()
+
+    def test_upload_rejects_sanitized_name_collision(self, client, test_data_dir):
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Filename Collision",
+                "template": "multi_condition_comparison",
+            },
+        )
+        session_id = create_response.json()["id"]
+        client.put(f"/api/sessions/{session_id}/config", json={"file_type": "tmt"})
+
+        file_path = test_data_dir / "tmt_sample_10000rows.txt"
+        with open(file_path, "rb") as first, open(file_path, "rb") as second:
+            response = client.post(
+                f"/api/sessions/{session_id}/upload/proteomics",
+                files=[
+                    ("files", ("sample?.txt", first, "text/plain")),
+                    ("files", ("sample*.txt", second, "text/plain")),
+                ],
+            )
+
+        assert response.status_code == 409
+        session = client.get(f"/api/sessions/{session_id}").json()
+        assert session["files"]["proteomics"] == []
+        upload_path = (
+            client.app.state.session_store.sessions_dir / session_id / "uploads"
+        )
+        assert list(upload_path.iterdir()) == []
+
+    def test_multi_upload_rolls_back_when_later_file_is_invalid(
+        self, client, test_data_dir
+    ):
+        create_response = client.post(
+            "/api/sessions",
+            json={
+                "name": "Atomic Session Upload",
+                "template": "multi_condition_comparison",
+            },
+        )
+        session_id = create_response.json()["id"]
+        client.put(f"/api/sessions/{session_id}/config", json={"file_type": "tmt"})
+
+        file_path = test_data_dir / "tmt_sample_10000rows.txt"
+        with open(file_path, "rb") as valid:
+            response = client.post(
+                f"/api/sessions/{session_id}/upload/proteomics",
+                files=[
+                    ("files", ("valid.txt", valid, "text/plain")),
+                    ("files", ("invalid.csv", b"col1,col2\n1,2", "text/csv")),
+                ],
+            )
+
+        assert response.status_code == 400
+        session = client.get(f"/api/sessions/{session_id}").json()
+        assert session["files"]["proteomics"] == []
+        upload_path = (
+            client.app.state.session_store.sessions_dir / session_id / "uploads"
+        )
+        assert list(upload_path.iterdir()) == []
 
     def test_upload_invalid_file_content(self, client):
         """Reject file with invalid content for the configured file_type."""

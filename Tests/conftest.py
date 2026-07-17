@@ -2,8 +2,15 @@
 Pytest configuration and shared fixtures for backend tests.
 """
 
+import os
 import sys
+import tempfile
 from pathlib import Path
+
+# Keep import-time stores and task recovery away from runtime data. Retaining
+# the TemporaryDirectory object keeps this directory alive for the pytest run.
+_test_runtime = tempfile.TemporaryDirectory(prefix="proteomicsviz-tests-")
+os.environ["SESSIONS_DIR"] = str(Path(_test_runtime.name) / "sessions")
 
 # Add backend directory to Python path for imports
 backend_dir = Path(__file__).parent.parent / "backend"
@@ -14,9 +21,19 @@ import pandas as pd
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def test_sessions_dir(tmp_path_factory, monkeypatch) -> Path:
+    """Return an isolated session directory for a single test."""
+    sessions_dir = tmp_path_factory.mktemp("session-isolation")
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "sessions_dir", sessions_dir)
+    return sessions_dir
+
+
 @pytest.fixture
-def client():
-    """Create FastAPI test client with lifespan startup."""
+def client(test_sessions_dir: Path):
+    """Create a FastAPI test client backed by an isolated session store."""
     from app.main import app
     from fastapi.testclient import TestClient
 

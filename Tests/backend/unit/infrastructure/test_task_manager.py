@@ -143,7 +143,8 @@ async def test_cancel_queued_task():
 
     with pytest.raises(TaskCancelledError):
         await task_queued
-    await task_blocking
+    with pytest.raises(TaskCancelledError):
+        await task_blocking
 
 
 @pytest.mark.asyncio
@@ -169,7 +170,74 @@ async def test_timeout_event_fires():
             timeout_seconds=0.1,
         )
 
-    assert checkpoint_hit.is_set()
+    assert checkpoint_hit.wait(timeout=0.5)
+
+
+@pytest.mark.asyncio
+async def test_timeout_returns_promptly_and_blocks_session_until_worker_exits():
+    tm = TaskManager()
+    session_id = "550e8400-e29b-41d4-a716-446655440009"
+    started = threading.Event()
+    release = threading.Event()
+
+    def uncooperative_fn():
+        started.set()
+        release.wait(timeout=5)
+        return "late result"
+
+    start = time.monotonic()
+    with pytest.raises(TaskTimeoutError):
+        await tm.submit(
+            session_id,
+            TaskKind.COMPUTE,
+            uncooperative_fn,
+            timeout_seconds=0.05,
+        )
+    elapsed = time.monotonic() - start
+
+    assert started.is_set()
+    assert elapsed < 0.5
+    try:
+        assert tm._session_active[session_id] == TaskKind.COMPUTE
+    finally:
+        release.set()
+    for _ in range(100):
+        if session_id not in tm._session_active:
+            break
+        await asyncio.sleep(0.01)
+
+    assert session_id not in tm._session_active
+
+
+@pytest.mark.asyncio
+async def test_coroutine_cancellation_blocks_session_until_worker_exits():
+    tm = TaskManager()
+    session_id = "550e8400-e29b-41d4-a716-446655440010"
+    started = threading.Event()
+    release = threading.Event()
+
+    def uncooperative_fn():
+        started.set()
+        release.wait(timeout=5)
+
+    task = asyncio.create_task(
+        tm.submit(session_id, TaskKind.COMPUTE, uncooperative_fn)
+    )
+    assert await asyncio.to_thread(started.wait, 2)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert tm._session_active[session_id] == TaskKind.COMPUTE
+
+    release.set()
+    for _ in range(100):
+        if session_id not in tm._session_active:
+            break
+        await asyncio.sleep(0.01)
+
+    assert session_id not in tm._session_active
 
 
 @pytest.mark.asyncio
@@ -202,9 +270,9 @@ async def test_get_status_shows_running_task():
             break
 
     tasks = tm.get_status("550e8400-e29b-41d4-a716-446655440001")["tasks"]
-    assert any(t["kind"] == "compute" and t["status"] == "running" for t in tasks), (
-        f"Expected running task, got: {tasks}"
-    )
+    assert any(
+        t["kind"] == "compute" and t["status"] == "running" for t in tasks
+    ), f"Expected running task, got: {tasks}"
 
     done.set()
     await task

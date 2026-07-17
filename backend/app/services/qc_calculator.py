@@ -336,6 +336,32 @@ class QCCalculator:
 
         return PValueDistribution(bins=bin_edges.tolist(), counts=counts.tolist())
 
+    @staticmethod
+    def _lognormal_cv_percent(sd_ln: np.ndarray) -> np.ndarray:
+        """Convert log-scale standard deviations to CV% without warnings."""
+        with np.errstate(over="ignore", invalid="ignore"):
+            variance = np.square(np.maximum(sd_ln, 0))
+            return np.sqrt(np.expm1(variance)) * 100
+
+    def _summarize_cv(
+        self, cvs: np.ndarray, condition: object, level: str
+    ) -> dict | None:
+        """Summarize representable CVs and report excluded non-finite values."""
+        finite = cvs[np.isfinite(cvs)]
+        invalid_count = int(len(cvs) - len(finite))
+        if len(finite) == 0:
+            logger.warning(
+                "Omitting %s CV for condition %s: all %d values were non-finite",
+                level,
+                condition,
+                invalid_count,
+            )
+            return None
+
+        stats = self._compute_box_stats(finite)
+        stats["invalid_count"] = invalid_count
+        return stats
+
     def _calculate_cv(self, psm_df: pd.DataFrame) -> dict[str, dict]:
         """
         Calculate exact CV% per condition for PSM abundances.
@@ -370,8 +396,10 @@ class QCCalculator:
                 continue
             sd_log2 = valid["std"].values
             sd_ln = sd_log2 * np.log(2)
-            cvs = np.sqrt(np.exp(sd_ln**2) - 1) * 100
-            cv_by_condition[str(condition)] = self._compute_box_stats(cvs)
+            cvs = self._lognormal_cv_percent(sd_ln)
+            stats = self._summarize_cv(cvs, condition, "PSM")
+            if stats is not None:
+                cv_by_condition[str(condition)] = stats
 
         return cv_by_condition
 
@@ -379,10 +407,8 @@ class QCCalculator:
         """
         Calculate variation per condition for protein abundances.
 
-        Computes SD of log2 abundance x 100 across replicates.  Protein
-        abundances are already log2-transformed, so no conversion is needed.
-        SD_log2 x 100 gives an approximate CV% that is stable across the
-        abundance range.
+        Protein abundances are already log2-transformed. The replicate SD is
+        converted to an exact log-normal CV%, matching the PSM calculation.
         """
         if protein_df is None:
             return {}
@@ -415,11 +441,10 @@ class QCCalculator:
             mat = protein_df[cols].values.astype(float)
             sd_log2 = np.nanstd(mat, axis=1, ddof=1)
             sd_ln = sd_log2 * np.log(2)
-            # Exact CV for log-normal data
-            cvs = np.sqrt(np.exp(np.maximum(sd_ln, 0) ** 2) - 1) * 100
-            cv_by_condition[str(condition)] = self._compute_box_stats(
-                cvs[~np.isnan(cvs)]
-            )
+            cvs = self._lognormal_cv_percent(sd_ln)
+            stats = self._summarize_cv(cvs, condition, "protein")
+            if stats is not None:
+                cv_by_condition[str(condition)] = stats
 
         return cv_by_condition
 

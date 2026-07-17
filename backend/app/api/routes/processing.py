@@ -18,7 +18,12 @@ from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism, Pipe
 from app.models.session import ProcessingStatus, Session, SessionState
 from app.services.processing_orchestrator import ProcessingOrchestrator
 from app.services.session_manager import session_manager
-from app.services.task_manager import TaskKind, task_manager
+from app.services.task_manager import (
+    TaskCancelledError,
+    TaskKind,
+    TaskTimeoutError,
+    task_manager,
+)
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
@@ -297,72 +302,21 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         session.state = SessionState.PROCESSING
         await session_manager.update_session_state(session_id, SessionState.PROCESSING)
 
-        # Define all config fields to forward from SessionConfig to AnalysisConfig
-        config_forward_fields = [
-            # Core
-            "treatment",
-            "control",
-            "remove_razor",
-            "strict_filtering",
-            # Shared advanced
-            "pvalue_threshold",
-            "logfc_threshold",
-            "min_peptides_per_protein",
-            # MSstats basic (existing)
-            "msstats_normalization",
-            "msstats_feature_selection",
-            "msstats_summary_method",
-            "msstats_impute",
-            "msstats_log_base",
-            "msstats_censored_int",
-            "msstats_max_quantile",
-            "msstats_remove50missing",
-            # MSstats advanced (new)
-            "msstats_n_top_feature",
-            "msstats_min_feature_count",
-            "msstats_remove_uninformative_feature_outlier",
-            "msstats_equal_feature_var",
-            "msstats_name_standards",
-            "msstats_save_fitted_models",
-            "msstats_n_cores",
-            # Multi-condition
-            "comparisons",
-            # Batch correction (msqrob2)
-            "msqrob2_batch_column",
-            # msqrob2 advanced
-            "msqrob2_ridge",
-            "msqrob2_normalization",
-            "msqrob2_imputation",
-            "msqrob2_aggregation",
-            "msqrob2_adjust_method",
-            "msqrob2_n_cores",
-            # Pipeline reform: file type and TMT channel mapping
-            "file_type",
-            "tmt_channel_mapping",
-        ]
-
         sc = session.config
         pipeline = _derive_pipeline(session)
         template = _derive_template(session.template)
-        config_kwargs = {
-            "organism": Organism(sc.organism) if sc.organism else Organism.HUMAN,
-            "template": template,
-            "pipeline": pipeline,
-        }
-
-        for field in config_forward_fields:
-            if hasattr(sc, field):
-                val = getattr(sc, field)
-                if val is not None:
-                    config_kwargs[field] = val
-
-        # Map metadata_columns to metadata (different field name)
-        if hasattr(sc, "metadata_columns") and sc.metadata_columns:
-            config_kwargs["metadata"] = sc.metadata_columns
-
-        # Map covariate_columns (new)
-        if hasattr(sc, "covariate_columns") and sc.covariate_columns:
-            config_kwargs["covariate_columns"] = sc.covariate_columns
+        config_kwargs = sc.model_dump(exclude_none=True)
+        organism = config_kwargs.pop("organism", None)
+        metadata = config_kwargs.pop("metadata_columns", None)
+        config_kwargs.update(
+            {
+                "organism": Organism(organism) if organism else Organism.HUMAN,
+                "template": template,
+                "pipeline": pipeline,
+            }
+        )
+        if metadata:
+            config_kwargs["metadata"] = metadata
 
         config = AnalysisConfig(**config_kwargs)
         logger.info(
@@ -404,6 +358,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             TaskKind.PIPELINE,
             _run_pipeline,
             label=f"Pipeline ({pipeline.value})",
+            cancel_event=cancel_event,
             timeout_seconds=12 * 60 * 60,
         )
 
@@ -434,6 +389,14 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         except Exception as e:
             logger.warning(f"Failed to send completion message: {e}")
 
+    except TaskCancelledError:
+        logger.info("Processing cancelled for session %s", session_id)
+        await session_manager.update_session_state(session_id, SessionState.CANCELLED)
+    except TaskTimeoutError as e:
+        logger.error("Processing timed out for session %s: %s", session_id, e)
+        await session_manager.update_session_state(
+            session_id, SessionState.ERROR, str(e)
+        )
     except ProcessingError as e:
         logger.error(
             f"Processing failed for session {session_id}: {e.message}",

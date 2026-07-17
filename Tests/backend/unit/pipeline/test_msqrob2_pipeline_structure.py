@@ -66,8 +66,6 @@ class TestMsqrob2Config:
         assert config.msqrob2_normalization == "center.median"
         assert config.msqrob2_imputation == "none"
         assert config.msqrob2_aggregation == "robustSummary"
-        assert config.msqrob2_model == "msqrobLm"
-        assert config.msqrob2_robust is True
         assert (
             config.msqrob2_ridge is False
         )  # default False: ridge breaks with ≤3 replicates
@@ -79,7 +77,7 @@ class TestMsqrob2Config:
         d = config.model_dump()
         assert "msqrob2_normalization" in d
         assert d["msqrob2_normalization"] == "center.median"
-        assert d["msqrob2_robust"] is True
+        assert "msqrob2_ridge" in d
 
     def test_data_process_config_json(self):
         """Wrapper builds correct config JSON for data_process."""
@@ -89,19 +87,15 @@ class TestMsqrob2Config:
             msqrob2_imputation="knn",
             msqrob2_aggregation="medianPolish",
             msqrob2_n_cores=8,
+            min_peptides_per_protein=4,
         )
-        r_config = {
-            "normalization": config.msqrob2_normalization,
-            "imputation": config.msqrob2_imputation,
-            "aggregation": config.msqrob2_aggregation,
-            "min_peptides": config.msqrob2_min_peptides,
-            "numberOfCores": config.msqrob2_n_cores,
-        }
+        r_config = msqrob2_wrapper._build_data_process_config(config, 8)
         json_str = json.dumps(r_config)
         parsed = json.loads(json_str)
         assert parsed["normalization"] == "quantiles"
         assert parsed["imputation"] == "knn"
         assert parsed["aggregation"] == "medianPolish"
+        assert parsed["min_peptides"] == 4
         assert parsed["numberOfCores"] == 8
 
 

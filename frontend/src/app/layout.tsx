@@ -8,21 +8,12 @@
  */
 
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { TopNavigation } from '@/components/layout/TopNavigation';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
 import { TaskStatusBar } from '@/components/layout/TaskStatusBar';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-
-// Load Plus Jakarta Sans font
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-  weight: ['400', '500', '600', '700'],
-});
 
 // Metadata
 export const metadata: Metadata = {
@@ -48,10 +39,8 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en" className={plusJakartaSans.variable}>
+    <html lang="en">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Fix Plotly tooltip issues:
             1. overflow:visible — prevent SVG from clipping tooltips near edges
             2. transition:none — prevent Tailwind transitions from animating tooltip from (0,0) */}

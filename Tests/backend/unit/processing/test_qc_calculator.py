@@ -1,5 +1,7 @@
 """Unit tests for QC calculator functions."""
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -437,6 +439,47 @@ class TestCalculateCV:
         result = calculator._calculate_cv(df)
 
         assert result == {}
+
+    def test_unrepresentable_psm_cv_is_omitted_without_runtime_warning(
+        self, calculator
+    ):
+        df = pd.DataFrame(
+            {
+                "Unique_PSM": ["PSM1", "PSM1"],
+                "Condition": ["DMSO", "DMSO"],
+                "Replicate": [1, 2],
+                "Abundance": [1e-300, 1e300],
+            }
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            result = calculator._calculate_cv(df)
+
+        assert result == {}
+
+    def test_nonfinite_protein_cv_is_counted_not_reported_as_zero(self, calculator):
+        df = pd.DataFrame(
+            {
+                "Master Protein Accessions": ["Extreme", "Stable"],
+                "DMSO_1": [0.0, 10.0],
+                "DMSO_2": [2000.0, 10.0],
+            }
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            result = calculator._calculate_protein_cv(df)
+
+        assert result["DMSO"]["median"] == 0.0
+        assert result["DMSO"]["invalid_count"] == 1
+
+    def test_lognormal_cv_suppresses_square_overflow_warning(self, calculator):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            result = calculator._lognormal_cv_percent(np.array([1e200]))
+
+        assert np.isinf(result[0])
 
 
 class TestCalculateCompletenessRate:

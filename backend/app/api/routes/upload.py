@@ -23,9 +23,18 @@ from app.utils.file_parser import (
     read_file_columns,
     sanitize_filename,
 )
+from app.utils.uploads import stream_upload_to_file
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
+
+
+def _canonical_upload_filename(filename: str | None) -> str:
+    """Return the safe filename used as the upload's persistent identity."""
+    safe_filename = sanitize_filename(filename or "").strip()
+    if safe_filename in {"", ".", ".."}:
+        raise ValidationError(message="Upload filename is empty or invalid")
+    return safe_filename
 
 
 @router.post("/{session_id}/upload/proteomics")
@@ -59,30 +68,57 @@ async def upload_proteomics_files(
     session_uploads_dir = Path(settings.sessions_dir) / session_id / "uploads"
     session_uploads_dir.mkdir(parents=True, exist_ok=True)
 
+    used_names = {
+        _canonical_upload_filename(uploaded.filename)
+        for uploaded in session.files.proteomics
+    }
+    planned_uploads = []
+    for file in files:
+        safe_filename = _canonical_upload_filename(file.filename)
+        file_path = session_uploads_dir / safe_filename
+        if safe_filename in used_names or file_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A file named '{safe_filename}' already exists in this session.",
+            )
+        used_names.add(safe_filename)
+        planned_uploads.append((file, safe_filename, file_path))
+
     response_files = []
 
-    for file in files:
-        # Check file size
-        content = await file.read()
-        if len(content) > settings.max_upload_size_bytes:
-            raise ValidationError(
-                message=f"File {file.filename} exceeds maximum size of {settings.max_upload_size_mb}MB"
+    for file, safe_filename, file_path in planned_uploads:
+        try:
+            size = await stream_upload_to_file(
+                file, file_path, settings.max_upload_size_bytes
             )
-
-        # Sanitize and save file
-        safe_filename = sanitize_filename(file.filename)
-        file_path = session_uploads_dir / safe_filename
-
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(content)
+        except FileExistsError as e:
+            for uploaded in response_files:
+                await asyncio.to_thread(
+                    (session_uploads_dir / uploaded["filename"]).unlink,
+                    missing_ok=True,
+                )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A file named '{safe_filename}' already exists in this session.",
+            ) from e
+        except BaseException:
+            for uploaded in response_files:
+                await asyncio.to_thread(
+                    (session_uploads_dir / uploaded["filename"]).unlink,
+                    missing_ok=True,
+                )
+            raise
 
         # Validate and detect features using parse_proteomics_file
         try:
             result = await _run_parse_proteomics_file(file_path, file_type)
         except Exception as e:
-            # Clean up saved file on error
-            if file_path.exists():
-                file_path.unlink()
+            await asyncio.to_thread(file_path.unlink, missing_ok=True)
+            for uploaded in response_files:
+                await asyncio.to_thread(
+                    (session_uploads_dir / uploaded["filename"]).unlink,
+                    missing_ok=True,
+                )
             logger.error(
                 f"Upload validation error for {file.filename}: {traceback.format_exc()}"
             )
@@ -92,8 +128,9 @@ async def upload_proteomics_files(
 
         # Build ProteomicsFileInfo (no conditions field — removed in pipeline reform)
         proteomics_file = ProteomicsFileInfo(
-            filename=file.filename,
-            size=len(content),
+            filename=safe_filename,
+            original_filename=file.filename,
+            size=size,
             uploaded_at=datetime.now(UTC),
             columns=result["columns"],
             file_type=file_type,
@@ -104,8 +141,9 @@ async def upload_proteomics_files(
 
         # Build frontend-compatible response with detection results
         file_response = {
-            "filename": file.filename,
-            "size": len(content),
+            "filename": safe_filename,
+            "original_filename": file.filename,
+            "size": size,
             "columns": result["columns"],
             "file_type": file_type,
         }
@@ -116,7 +154,15 @@ async def upload_proteomics_files(
 
         response_files.append(file_response)
 
-    await store.save(session)
+    try:
+        await store.save(session)
+    except BaseException:
+        for uploaded in response_files:
+            await asyncio.to_thread(
+                (session_uploads_dir / uploaded["filename"]).unlink,
+                missing_ok=True,
+            )
+        raise
 
     return {
         "message": f"Successfully uploaded {len(response_files)} files",

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SessionState(str, Enum):
@@ -26,6 +26,8 @@ class SessionState(str, Enum):
 
 class SessionConfig(BaseModel):
     """Session configuration model."""
+
+    model_config = ConfigDict(extra="forbid")
 
     treatment: str | None = Field(default=None, description="Treatment condition name")
     control: str | None = Field(default=None, description="Control condition name")
@@ -98,7 +100,10 @@ class SessionConfig(BaseModel):
 class FileInfo(BaseModel):
     """File metadata model."""
 
-    filename: str = Field(..., description="Original filename")
+    filename: str = Field(..., description="Canonical filename used on disk")
+    original_filename: str | None = Field(
+        default=None, description="Filename supplied by the user before sanitization"
+    )
     size: int = Field(..., ge=0, description="File size in bytes")
     uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     columns: list[str] = Field(default_factory=list, description="CSV columns")

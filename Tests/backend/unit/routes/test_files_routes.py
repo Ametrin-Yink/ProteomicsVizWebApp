@@ -12,14 +12,27 @@ def mock_index():
     """Return a mock FileIndexService."""
     idx = MagicMock()
     idx.list_directory.return_value = [
-        {"name": "sample.txt", "path": "proj/sample.txt", "type": "txt",
-         "size": 1024, "modified_at": "2026-07-13T00:00:00"},
+        {
+            "name": "sample.txt",
+            "path": "proj/sample.txt",
+            "type": "txt",
+            "size": 1024,
+            "modified_at": "2026-07-13T00:00:00",
+        },
     ]
-    idx.scan_and_sync.return_value = {"total": 1, "added": 0, "removed": 0, "updated": 0}
+    idx.scan_and_sync.return_value = {
+        "total": 1,
+        "added": 0,
+        "removed": 0,
+        "updated": 0,
+    }
     idx.search.return_value = []
     idx.get_entry.return_value = {
-        "name": "sample.txt", "path": "proj/sample.txt", "type": "txt",
-        "size": 1024, "modified_at": "2026-07-13T00:00:00",
+        "name": "sample.txt",
+        "path": "proj/sample.txt",
+        "type": "txt",
+        "size": 1024,
+        "modified_at": "2026-07-13T00:00:00",
     }
     idx.count.return_value = 1
     return idx
@@ -104,8 +117,13 @@ class TestUpload:
 class TestSearch:
     def test_search_returns_results(self, client_with_files, mock_index):
         mock_index.search.return_value = [
-            {"name": "sample.txt", "path": "proj/sample.txt", "type": "txt",
-             "size": 1024, "modified_at": "2026-07-13T00:00:00"},
+            {
+                "name": "sample.txt",
+                "path": "proj/sample.txt",
+                "type": "txt",
+                "size": 1024,
+                "modified_at": "2026-07-13T00:00:00",
+            },
         ]
         resp = client_with_files.get("/api/files/search?q=sample")
         assert resp.status_code == 200
@@ -119,3 +137,20 @@ class TestScan:
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 1
+
+
+class TestDelete:
+    @pytest.mark.parametrize("path", ["", "."])
+    def test_delete_rejects_library_root(self, client_with_files, tmp_path, path):
+        sentinel = tmp_path / "keep.txt"
+        sentinel.write_text("user data")
+
+        resp = client_with_files.request(
+            "DELETE",
+            "/api/files/delete",
+            json={"path": path},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Cannot delete the file library root."
+        assert sentinel.read_text() == "user data"

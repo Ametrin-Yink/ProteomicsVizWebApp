@@ -99,52 +99,8 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
         </p>
       </div>
 
-      {/* DE Model */}
-      <div>
-        <label className="block text-sm font-medium text-text-primary mb-2">
-          Differential Expression Model
-          <HelpTooltip text="The statistical model used for detecting differentially expressed proteins. 'msqrobLm' uses M-estimation with Huber weights, providing resistance to outliers. 'msqrobGlm' uses a generalized linear model, suitable for count-based or non-normal data." />
-        </label>
-        <select
-          data-testid="msqrob2-model-select"
-          value={config.msqrob2_model ?? 'msqrobLm'}
-          onChange={(e) => setConfig({ msqrob2_model: e.target.value })}
-          className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
-            focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-        >
-          <option value="msqrobLm">msqrobLm (Robust Linear Model, recommended)</option>
-          <option value="msqrobGlm">msqrobGlm (Generalized Linear Model)</option>
-        </select>
-        <p className="text-xs text-text-muted mt-1">
-          msqrobLm uses M-estimation with Huber weights for outlier resistance
-        </p>
-      </div>
-
-      {/* Robust estimation toggle (only visible when model is msqrobLm) */}
-      {(config.msqrob2_model ?? 'msqrobLm') === 'msqrobLm' && (
-        <>
-          <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
-            <div>
-              <span className="text-sm font-medium text-text-primary">Robust Estimation (M-estimation)</span>
-              <p className="text-xs text-text-muted mt-0.5">
-                Use Huber weights to down-weight outlier observations
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              data-testid="msqrob2-robust-checkbox"
-              checked={config.msqrob2_robust ?? true}
-              onChange={(e) => setConfig({ msqrob2_robust: e.target.checked })}
-              className="sr-only peer"
-            />
-            <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-              after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-              after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-              peer-checked:after:translate-x-5"
-            />
-          </label>
-
-          <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
+      {/* Ridge penalty */}
+      <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
             <div>
               <span className="text-sm font-medium text-text-primary">Ridge Penalty</span>
               <p className="text-xs text-text-muted mt-0.5">
@@ -163,9 +119,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
               after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
               peer-checked:after:translate-x-5"
             />
-          </label>
-        </>
-      )}
+      </label>
 
       {/* Batch Correction */}
       <div>

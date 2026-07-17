@@ -1,13 +1,14 @@
 """Unit tests for processing API routes — /process, /cancel, /retry, /logs."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.api.routes.processing import _derive_pipeline
 from app.main import app
 from app.models.analysis import PipelineTool
 from app.models.session import Session, SessionConfig, SessionFiles, SessionState
+from app.services.task_manager import TaskCancelledError
 from fastapi.testclient import TestClient
 
 
@@ -125,6 +126,30 @@ class TestCancelProcessing:
             "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
         )
         assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_background_cancellation_preserves_cancelled_state(self, mock_store):
+        from app.api.routes import processing
+
+        session = mock_store.get.return_value
+        update_state = AsyncMock()
+        with (
+            patch.object(
+                processing.task_manager,
+                "submit",
+                new=AsyncMock(side_effect=TaskCancelledError("cancelled")),
+            ),
+            patch.object(
+                processing.session_manager,
+                "update_session_state",
+                new=update_state,
+            ),
+        ):
+            await processing.run_processing_pipeline_async(session.id, session)
+
+        states = [call.args[1] for call in update_state.await_args_list]
+        assert states[-1] == SessionState.CANCELLED
+        assert SessionState.ERROR not in states
 
 
 class TestRetryProcessing:

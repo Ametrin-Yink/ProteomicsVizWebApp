@@ -20,6 +20,12 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.exceptions import RScriptError
 from app.models.analysis import AnalysisConfig
+from app.services.r_process_registry import (
+    cancel_processes,
+    get_current_session,
+    register_process,
+    unregister_process,
+)
 
 logger = logging.getLogger("proteomics")
 
@@ -42,34 +48,29 @@ def _execute_batch(
     batch_idx: int,
     n_cores_per: int,
     build_batch_cmd: Callable,
+    session_id: str | None,
 ) -> dict:
-    """Run a single batch subprocess (called from ProcessPoolExecutor worker).
-
-    This is a module-level function so it can be pickled by ProcessPoolExecutor.
-    """
+    """Run one batch subprocess in a worker thread."""
     cmd, timeout = build_batch_cmd(batch_items, batch_idx, n_cores_per)
     t0 = time.time()
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    process_owner = register_process(process, session_id)
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            check=False,
-        )
+        _stdout, stderr = process.communicate(timeout=timeout)
         elapsed = time.time() - t0
-        if result.returncode == 0:
-            if result.stderr:
-                logger.debug("Batch %d stderr: %s", batch_idx, result.stderr[:500])
+        if process.returncode == 0:
+            if stderr:
+                logger.debug("Batch %d stderr: %s", batch_idx, stderr[:500])
             return {"batch_idx": batch_idx, "ok": True, "elapsed": elapsed}
         else:
-            error_msg = (
-                result.stderr[:500]
-                if result.stderr
-                else f"exit code {result.returncode}"
-            )
+            error_msg = stderr[:500] if stderr else f"exit code {process.returncode}"
             return {
                 "batch_idx": batch_idx,
                 "ok": False,
@@ -77,6 +78,8 @@ def _execute_batch(
                 "error": error_msg,
             }
     except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
         elapsed = time.time() - t0
         return {
             "batch_idx": batch_idx,
@@ -84,6 +87,8 @@ def _execute_batch(
             "elapsed": elapsed,
             "error": "timeout",
         }
+    finally:
+        unregister_process(process, process_owner)
 
 
 class BaseRWrapper(ABC):
@@ -109,7 +114,6 @@ class BaseRWrapper(ABC):
     ):
         self.r_executable = settings.r_executable
         self._optimal_ncores: int | None = None
-        self._current_process: subprocess.Popen | None = None
         self.timeout = settings.r_script_timeout
         self.scripts_dir = Path(__file__).resolve().parent.parent.parent / "scripts"
 
@@ -128,17 +132,9 @@ class BaseRWrapper(ABC):
         """Return the cached optimal n_cores from calibration, or None."""
         return self._optimal_ncores
 
-    def cancel(self) -> None:
-        """Kill the currently running R subprocess, if any."""
-        proc = self._current_process
-        if proc is not None:
-            logger.warning("Killing running R subprocess (PID %d)", proc.pid)
-            try:
-                proc.kill()
-                proc.wait(timeout=5)
-            except Exception as e:
-                logger.error("Error killing R subprocess: %s", e)
-            self._current_process = None
+    def cancel(self, session_id: str | None = None) -> None:
+        """Kill R subprocesses for one session, or all sessions at shutdown."""
+        cancel_processes(session_id)
 
     # ------------------------------------------------------------------
     # Abstract: subclass-specific config builders
@@ -376,7 +372,7 @@ class BaseRWrapper(ABC):
             bufsize=1,
             env=os.environ,
         )
-        self._current_process = process
+        process_owner = register_process(process)
 
         stdout_lines: list[str] = []
         stderr_lines: list[str] = []
@@ -445,7 +441,7 @@ class BaseRWrapper(ABC):
             await asyncio.to_thread(process.wait)
             raise
         finally:
-            self._current_process = None
+            unregister_process(process, process_owner)
             heartbeat_stop.set()
             heartbeat_thread.join(timeout=1)
             # Join reader threads on ALL exit paths.
@@ -545,7 +541,8 @@ class BaseRWrapper(ABC):
         loop = asyncio.get_running_loop()
 
         try:
-            with concurrent.futures.ProcessPoolExecutor(
+            session_id = get_current_session()
+            with concurrent.futures.ThreadPoolExecutor(
                 max_workers=effective_workers,
             ) as executor:
                 futures = []
@@ -557,6 +554,7 @@ class BaseRWrapper(ABC):
                         idx,
                         n_cores_per,
                         build_batch_cmd,
+                        session_id,
                     )
                     futures.append((idx, fut))
 

@@ -121,7 +121,7 @@ class Msqrob2Wrapper(BaseRWrapper):
             "normalization": config.msqrob2_normalization,
             "imputation": config.msqrob2_imputation,
             "aggregation": config.msqrob2_aggregation,
-            "min_peptides": config.msqrob2_min_peptides,
+            "min_peptides": config.min_peptides_per_protein,
             "remove_razor": config.remove_razor,
             "strict_filtering": config.strict_filtering,
             "numberOfCores": n_cores,

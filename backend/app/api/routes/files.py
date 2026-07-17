@@ -11,7 +11,9 @@ import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.core.config import settings
+from app.core.exceptions import FileTooLargeError, ValidationError
 from app.services.file_index_service import FileIndexService
+from app.utils.uploads import stream_upload_to_file
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
@@ -41,12 +43,15 @@ def _validate_path(path: str) -> Path:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Path traversal not allowed.",
         )
-    resolved = (settings.file_library_dir / path).resolve()
-    if not str(resolved).startswith(str(settings.file_library_dir.resolve())):
+    library_root = settings.file_library_dir.resolve()
+    resolved = (library_root / path).resolve()
+    try:
+        resolved.relative_to(library_root)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Path must be inside the file library.",
-        )
+        ) from e
     return resolved
 
 
@@ -112,14 +117,14 @@ async def upload_files(
     index: FileIndexService = Depends(get_index_service),
 ):
     """Upload files to the library. Only .txt and .csv accepted."""
-    target_dir = _validate_path(target_path) if target_path else settings.file_library_dir
+    target_dir = (
+        _validate_path(target_path) if target_path else settings.file_library_dir
+    )
 
-    response_files = []
+    planned_uploads = []
+    used_names: set[str] = set()
     for file in files:
-        # Validate filename
         safe_name = _validate_name(file.filename or "")
-
-        # Check extension
         ext = Path(safe_name).suffix.lower()
         if ext not in (".txt", ".csv"):
             raise HTTPException(
@@ -127,41 +132,77 @@ async def upload_files(
                 detail=f"Only .txt and .csv files are allowed. '{safe_name}' is '{ext}'.",
             )
 
-        # Check for duplicate
         dest = target_dir / safe_name
-        if dest.exists():
+        if safe_name in used_names or dest.exists():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"'{safe_name}' already exists in this folder.",
             )
+        used_names.add(safe_name)
+        rel = (
+            str((Path(target_path) / safe_name).as_posix())
+            if target_path
+            else safe_name
+        )
+        planned_uploads.append((file, safe_name, ext.lstrip("."), dest, rel))
 
-        # Read and validate
-        content = await file.read()
-        if len(content) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{safe_name}' is empty.",
+    saved_uploads = []
+    try:
+        for file, safe_name, file_type, dest, rel in planned_uploads:
+            size = await stream_upload_to_file(
+                file, dest, settings.max_upload_size_bytes
             )
-        if len(content) > settings.max_upload_size_bytes:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File '{safe_name}' exceeds {settings.max_upload_size_mb}MB maximum.",
+            saved_uploads.append((safe_name, file_type, dest, rel, size))
+    except FileTooLargeError as e:
+        for _, _, dest, _, _ in saved_uploads:
+            await asyncio.to_thread(dest.unlink, missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds {settings.max_upload_size_mb}MB maximum.",
+        ) from e
+    except ValidationError as e:
+        for _, _, dest, _, _ in saved_uploads:
+            await asyncio.to_thread(dest.unlink, missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.message,
+        ) from e
+    except FileExistsError as e:
+        for _, _, dest, _, _ in saved_uploads:
+            await asyncio.to_thread(dest.unlink, missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A file with that name already exists in this folder.",
+        ) from e
+    except BaseException:
+        for _, _, dest, _, _ in saved_uploads:
+            await asyncio.to_thread(dest.unlink, missing_ok=True)
+        raise
+
+    response_files = []
+    indexed_paths = []
+    try:
+        for safe_name, file_type, dest, rel, size in saved_uploads:
+            index.insert_entry(
+                rel,
+                size,
+                file_type,
+                datetime.fromtimestamp(dest.stat().st_mtime),
             )
-
-        # Write to disk
-        async with aiofiles.open(dest, "wb") as f:
-            await f.write(content)
-
-        # Index
-        rel = str((Path(target_path) / safe_name).as_posix()) if target_path else safe_name
-        file_type = ext.lstrip(".")
-        index.insert_entry(rel, len(content), file_type, datetime.fromtimestamp(dest.stat().st_mtime))
-
-        response_files.append({
-            "name": safe_name,
-            "size": len(content),
-            "type": file_type,
-        })
+            indexed_paths.append(rel)
+            response_files.append(
+                {
+                    "name": safe_name,
+                    "size": size,
+                    "type": file_type,
+                }
+            )
+    except BaseException:
+        for rel in indexed_paths:
+            index.delete_entry(rel)
+        for _, _, dest, _, _ in saved_uploads:
+            await asyncio.to_thread(dest.unlink, missing_ok=True)
+        raise
 
     return {"files": response_files}
 
@@ -177,7 +218,9 @@ async def rename_entry(
 
     old_abs = _validate_path(path)
     if not old_abs.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"'{path}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"'{path}' not found."
+        )
 
     parent = old_abs.parent
     new_abs = parent / new_name
@@ -188,13 +231,21 @@ async def rename_entry(
         )
 
     old_rel = str(Path(path).as_posix())
-    new_rel = (Path(old_rel).parent / new_name).as_posix() if str(Path(old_rel).parent) != "." else new_name
-    new_parent = Path(new_rel).parent.as_posix() if str(Path(new_rel).parent) != "." else ""
+    new_rel = (
+        (Path(old_rel).parent / new_name).as_posix()
+        if str(Path(old_rel).parent) != "."
+        else new_name
+    )
+    new_parent = (
+        Path(new_rel).parent.as_posix() if str(Path(new_rel).parent) != "." else ""
+    )
 
     await _run_in_thread(shutil.move, str(old_abs), str(new_abs))
 
     index.update_entry(
-        old_rel, new_rel, new_parent,
+        old_rel,
+        new_rel,
+        new_parent,
         new_abs.stat().st_size if new_abs.is_file() else 0,
         datetime.fromtimestamp(new_abs.stat().st_mtime),
     )
@@ -211,12 +262,18 @@ async def move_entry(
     target_parent = body.get("target_parent", "")
 
     src_abs = _validate_path(source_path)
-    tgt_dir = _validate_path(target_parent) if target_parent else settings.file_library_dir
+    tgt_dir = (
+        _validate_path(target_parent) if target_parent else settings.file_library_dir
+    )
 
     if not src_abs.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"'{source_path}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"'{source_path}' not found."
+        )
     if not tgt_dir.is_dir():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target must be a folder.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Target must be a folder."
+        )
 
     # Prevent moving into self or descendant
     if src_abs == tgt_dir:
@@ -244,12 +301,18 @@ async def move_entry(
     await _run_in_thread(shutil.move, str(src_abs), str(dest_abs))
 
     old_rel = str(Path(source_path).as_posix())
-    new_rel = str((Path(target_parent) / src_abs.name).as_posix()) if target_parent else src_abs.name
+    new_rel = (
+        str((Path(target_parent) / src_abs.name).as_posix())
+        if target_parent
+        else src_abs.name
+    )
     new_parent = target_parent
 
     is_folder = dest_abs.is_dir()
     index.update_entry(
-        old_rel, new_rel, new_parent,
+        old_rel,
+        new_rel,
+        new_parent,
         dest_abs.stat().st_size if not is_folder else 0,
         datetime.fromtimestamp(dest_abs.stat().st_mtime),
     )
@@ -264,9 +327,16 @@ async def delete_entry(
     """Delete a file or folder. Folders are deleted recursively."""
     path = body.get("path", "")
     abs_path = _validate_path(path)
+    if abs_path == settings.file_library_dir.resolve():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete the file library root.",
+        )
 
     if not abs_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"'{path}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"'{path}' not found."
+        )
 
     if abs_path.is_dir():
         await _run_in_thread(shutil.rmtree, str(abs_path))
@@ -305,7 +375,9 @@ async def get_file_content(
     abs_path = _validate_path(path)
 
     if not abs_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"'{path}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"'{path}' not found."
+        )
     if abs_path.is_dir():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -323,6 +395,7 @@ async def get_file_content(
         content = await f.read()
 
     from fastapi.responses import Response
+
     return Response(content=content, media_type="text/plain")
 
 

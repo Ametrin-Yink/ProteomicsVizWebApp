@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
     session_store = SessionStore(settings.sessions_dir)
     app.state.session_store = session_store
     # Use the global session_manager instance
-    session_manager.session_store = session_store
+    session_manager.store = session_store
     app.state.session_manager = session_manager
 
     # Scan existing sessions with timeout protection

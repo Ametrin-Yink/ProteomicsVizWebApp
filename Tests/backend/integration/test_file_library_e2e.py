@@ -12,6 +12,7 @@ def client_with_file_library(tmp_path, monkeypatch):
     monkeypatch.setattr("app.core.config.settings.file_library_dir", tmp_path)
     # Re-init the index service to point at our temp dir
     import app.api.routes.files as files_mod
+
     files_mod._index_service = None  # force re-init
 
     from app.main import app
@@ -122,6 +123,33 @@ class TestFileLibraryE2E:
             files={"files": ("dup.txt", fake2, "text/plain")},
         )
         assert resp.status_code == 409
+
+    def test_multi_upload_rolls_back_when_one_file_is_too_large(
+        self, client_with_file_library, tmp_path, monkeypatch
+    ):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "max_upload_size_mb", 1)
+        client_with_file_library.post(
+            "/api/files/folders",
+            json={"parent_path": "", "name": "Atomic"},
+        )
+
+        resp = client_with_file_library.post(
+            "/api/files/upload?target_path=Atomic",
+            files=[
+                ("files", ("small.txt", io.BytesIO(b"123"), "text/plain")),
+                (
+                    "files",
+                    ("large.txt", io.BytesIO(b"x" * (1024 * 1024 + 1)), "text/plain"),
+                ),
+            ],
+        )
+
+        assert resp.status_code == 413
+        assert list((tmp_path / "Atomic").iterdir()) == []
+        listing = client_with_file_library.get("/api/files/tree?path=Atomic").json()
+        assert listing["entries"] == []
 
     def test_scan_syncs_index(self, client_with_file_library, tmp_path):
         """POST /scan picks up externally added files."""

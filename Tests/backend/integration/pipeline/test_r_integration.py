@@ -95,6 +95,10 @@ class TestMsstatsScripts:
 
     """Test R package availability."""
 
+    @pytest.mark.skipif(
+        not _rscript_available(),
+        reason="Rscript not found on PATH or at known location",
+    )
     def test_rscript_available(self):
         """Verify Rscript is available."""
         result = subprocess.run(
@@ -103,6 +107,10 @@ class TestMsstatsScripts:
 
         assert result.returncode == 0
 
+    @pytest.mark.skipif(
+        not _rscript_available(),
+        reason="Rscript not found on PATH or at known location",
+    )
     @pytest.mark.parametrize("package", ["msqrob2", "QFeatures", "limma"])
     def test_r_package_available(self, package):
         """Verify R package is installed."""

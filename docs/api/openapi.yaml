@@ -1,339 +1,3410 @@
-openapi: 3.0.0
+openapi: 3.1.0
 info:
-  title: Proteomics Visualization Web App API
+  title: Proteomics Visualization API
+  description: Proteomics Visualization Web App API
   version: 1.0.0
-  description: API for proteomics data analysis and visualization
-
-servers:
-  - url: http://localhost:8000/api
-    description: Development server
-
 paths:
-  /sessions:
+  /health:
+    get:
+      summary: Health Check
+      description: Health check endpoint - responds immediately even if sessions aren't loaded.
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /{path}:
+    options:
+      summary: Handle Cors Preflight
+      description: Handle CORS preflight requests explicitly.
+      operationId: handle_cors_preflight__path__options
+      parameters:
+      - name: path
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Path
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/status:
+    get:
+      tags:
+      - processing
+      summary: Get Processing Status
+      description: Get detailed processing status.
+      operationId: get_processing_status_api_sessions__session_id__status_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessingStatus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/logs:
+    get:
+      tags:
+      - processing
+      summary: Get Processing Logs
+      description: 'Get processing logs and pipeline state for a session.
+
+
+        Returns historical logs, completed steps, and completion status.
+
+        Used by frontend when connecting to an already-running or completed session.'
+      operationId: get_processing_logs_api_sessions__session_id__logs_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/retry:
     post:
-      summary: Create a new session
+      tags:
+      - processing
+      summary: Retry Processing
+      description: Retry failed processing. Routes through the same semaphore/queue logic as start_processing.
+      operationId: retry_processing_api_sessions__session_id__retry_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/process:
+    post:
+      tags:
+      - processing
+      summary: Start Processing
+      description: "Start the processing pipeline for a session.\n\nArgs:\n    session_id: Session ID\n\
+        \    background_tasks: FastAPI background tasks\n    store: Session store dependency\n\nReturns:\n\
+        \    202 Accepted with WebSocket URL\n\nRaises:\n    HTTPException: 404 if session not found,\
+        \ 400 if validation fails, 409 if already processing"
+      operationId: start_processing_api_sessions__session_id__process_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/cancel:
+    post:
+      tags:
+      - processing
+      summary: Cancel Processing
+      description: Cancel processing or remove session from queue.
+      operationId: cancel_processing_api_sessions__session_id__cancel_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/upload/proteomics:
+    post:
+      tags:
+      - upload
+      summary: Upload Proteomics Files
+      description: Upload proteomics PD export files (.csv or .txt, TMT or DIA).
+      operationId: upload_proteomics_files_api_sessions__session_id__upload_proteomics_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_proteomics_files_api_sessions__session_id__upload_proteomics_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/upload/ptm-enrichment:
+    post:
+      tags:
+      - upload
+      summary: Upload Ptm Enrichment Files
+      description: Upload PTM enrichment CSV files.
+      operationId: upload_ptm_enrichment_files_api_sessions__session_id__upload_ptm_enrichment_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_ptm_enrichment_files_api_sessions__session_id__upload_ptm_enrichment_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/upload/global-proteome:
+    post:
+      tags:
+      - upload
+      summary: Upload Global Proteome Files
+      description: Upload global proteome CSV files.
+      operationId: upload_global_proteome_files_api_sessions__session_id__upload_global_proteome_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_global_proteome_files_api_sessions__session_id__upload_global_proteome_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/upload/fasta:
+    post:
+      tags:
+      - upload
+      summary: Upload Fasta File
+      description: Upload a single FASTA file.
+      operationId: upload_fasta_file_api_sessions__session_id__upload_fasta_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_fasta_file_api_sessions__session_id__upload_fasta_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/files/{file_type}/{filename}:
+    delete:
+      tags:
+      - upload
+      summary: Delete File
+      description: Delete a file from a session.
+      operationId: delete_file_api_sessions__session_id__files__file_type___filename__delete
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: file_type
+        in: path
+        required: true
+        schema:
+          type: string
+          title: File Type
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Filename
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/results:
+    get:
+      tags:
+      - visualization
+      summary: Get Results
+      description: Get differential expression results with pagination and filtering.
+      operationId: get_results_api_sessions__session_id__results_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 20000
+          minimum: 1
+          default: 50
+          title: Page Size
+      - name: sort_by
+        in: query
+        required: false
+        schema:
+          type: string
+          default: adj_pvalue
+          title: Sort By
+      - name: sort_order
+        in: query
+        required: false
+        schema:
+          type: string
+          default: asc
+          title: Sort Order
+      - name: significant_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Significant Only
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Search
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/qc/plots:
+    get:
+      tags:
+      - visualization
+      summary: Get Qc Plots
+      description: Get QC plot data.
+      operationId: get_qc_plots_api_sessions__session_id__qc_plots_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comparison label for per-comparison p-value distribution
+          default: ''
+          title: Comparison
+        description: Comparison label for per-comparison p-value distribution
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/gsea/{database}/plot:
+    get:
+      tags:
+      - visualization
+      summary: Get Gsea Plot Data
+      description: Get GSEA plot data (running ES curve + rank metric positions) for a specific pathway.
+      operationId: get_gsea_plot_data_api_sessions__session_id__gsea__database__plot_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: database
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Database
+      - name: term
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Pathway term identifier
+          title: Term
+        description: Pathway term identifier
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comparison name (for multi-condition)
+          default: ''
+          title: Comparison
+        description: Comparison name (for multi-condition)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/gsea/{database}/heatmap:
+    get:
+      tags:
+      - visualization
+      summary: Get Gsea Heatmap Data
+      description: Get GSEA heatmap data (z-scores for leading edge genes) for a specific pathway.
+      operationId: get_gsea_heatmap_data_api_sessions__session_id__gsea__database__heatmap_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: database
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Database
+      - name: term
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Pathway term identifier
+          title: Term
+        description: Pathway term identifier
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comparison name (for multi-condition)
+          default: ''
+          title: Comparison
+        description: Comparison name (for multi-condition)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/gsea/status:
+    get:
+      tags:
+      - visualization
+      summary: Get Gsea Run Status
+      operationId: get_gsea_run_status_api_sessions__session_id__gsea_status_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/tasks:
+    get:
+      tags:
+      - visualization
+      summary: Get Session Tasks
+      description: 'Return all task states for a session.
+
+
+        Merges in-memory TaskManager state with on-disk status files so the
+
+        TaskStatusBar sees on-demand tasks (GSEA, BIONET, compare) immediately
+
+        after they are triggered — before the background coroutine calls
+
+        task_manager.submit() — and after they complete and are removed from
+
+        the in-memory _active_tasks dict.'
+      operationId: get_session_tasks_api_sessions__session_id__tasks_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/tasks/cancel:
+    post:
+      tags:
+      - visualization
+      summary: Cancel Session Tasks
+      description: Cancel all running and queued tasks for a session.
+      operationId: cancel_session_tasks_api_sessions__session_id__tasks_cancel_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/gsea/run:
+    post:
+      tags:
+      - visualization
+      summary: Run Gsea On Demand
+      operationId: run_gsea_on_demand_api_sessions__session_id__gsea_run_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SessionCreate'
-      responses:
-        '201':
-          description: Session created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Session'
-    get:
-      summary: List all sessions
+              $ref: '#/components/schemas/GseaRunRequest'
       responses:
         '200':
-          description: List of sessions
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Session'
-
-  /sessions/{sessionId}:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/gsea/{database}:
     get:
-      summary: Get session details
+      tags:
+      - visualization
+      summary: Get Gsea Results
+      description: Get GSEA results for a database with pagination and filtering.
+      operationId: get_gsea_results_api_sessions__session_id__gsea__database__get
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: database
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Database
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comparison label for multi-condition
+          default: ''
+          title: Comparison
+        description: Comparison label for multi-condition
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 50
+          title: Page Size
+      - name: sort_by
+        in: query
+        required: false
+        schema:
+          type: string
+          default: nes
+          title: Sort By
+      - name: sort_order
+        in: query
+        required: false
+        schema:
+          type: string
+          default: desc
+          title: Sort Order
+      - name: significant_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Significant Only
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Search
       responses:
         '200':
-          description: Session details
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Session'
-    delete:
-      summary: Delete a session
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: Session deleted
-
-  /sessions/{sessionId}/upload/proteomics:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/bionet/run:
     post:
-      summary: Upload proteomics files
+      tags:
+      - visualization
+      summary: Run Bionet On Demand
+      operationId: run_bionet_on_demand_api_sessions__session_id__bionet_run_post
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
       requestBody:
+        required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
-              type: object
-              properties:
-                files:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
+              $ref: '#/components/schemas/BioNetRunRequest'
       responses:
-        '201':
-          description: Files uploaded
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/bionet/status:
+    get:
+      tags:
+      - visualization
+      summary: Get Bionet Run Status
+      operationId: get_bionet_run_status_api_sessions__session_id__bionet_status_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/bionet/subnetwork:
+    get:
+      tags:
+      - visualization
+      summary: Get Bionet Subnetwork
+      operationId: get_bionet_subnetwork_api_sessions__session_id__bionet_subnetwork_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/protein/{protein_id}/abundance:
+    get:
+      tags:
+      - visualization
+      summary: Get Protein Abundance
+      description: Get protein abundance data, optionally filtered by comparison.
+      operationId: get_protein_abundance_api_sessions__session_id__protein__protein_id__abundance_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: protein_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protein Id
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comparison name to filter samples
+          default: ''
+          title: Comparison
+        description: Comparison name to filter samples
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/protein/{protein_id}/peptide:
+    get:
+      tags:
+      - visualization
+      summary: Get Protein Peptide
+      description: Get peptide abundance data for a protein, optionally filtered by comparison.
+      operationId: get_protein_peptide_api_sessions__session_id__protein__protein_id__peptide_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: protein_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protein Id
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Comparison name to filter samples
+          default: ''
+          title: Comparison
+        description: Comparison name to filter samples
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/ptm/results:
+    get:
+      tags:
+      - visualization
+      summary: Get Ptm Results
+      description: 'Get PTM differential expression results with three-model output.
 
-  /sessions/{sessionId}/process:
+
+        Returns grouped data for each comparison label, containing the PTM model,
+
+        protein model, and adjusted model results where available.
+
+        Mode A comparisons only have the PTM model; Mode B has all three.'
+      operationId: get_ptm_results_api_sessions__session_id__ptm_results_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/ptm/site/{site_id}/abundance:
+    get:
+      tags:
+      - visualization
+      summary: Get Ptm Site Abundance
+      description: 'Get per-site PTM abundance data across conditions.
+
+
+        Currently returns a placeholder -- full data will be available after
+
+        the PTM pipeline completes.'
+      operationId: get_ptm_site_abundance_api_sessions__session_id__ptm_site__site_id__abundance_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: site_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Site Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/ptm/qc/plots:
+    get:
+      tags:
+      - visualization
+      summary: Get Ptm Qc Plots
+      description: Get PTM-specific QC data.
+      operationId: get_ptm_qc_plots_api_sessions__session_id__ptm_qc_plots_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/reports/generate:
     post:
-      summary: Start processing pipeline
+      tags:
+      - reports
+      summary: Generate Report Endpoint
+      description: Generate a self-contained report from a completed session.
+      operationId: generate_report_endpoint_api_sessions__session_id__reports_generate_post
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '202':
-          description: Processing started
-
-  /sessions/{sessionId}/results:
-    get:
-      summary: Get differential expression results
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
       responses:
         '200':
-          description: Results data
-
-  /sessions/{sessionId}/qc/plots:
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports:
     get:
-      summary: Get QC plot data
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      tags:
+      - reports
+      summary: Get Reports
+      description: List all reports.
+      operationId: get_reports_api_reports_get
       responses:
         '200':
-          description: QC plot data
-
-  /sessions/{sessionId}/processing/status:
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/reports/{report_id}:
     get:
-      summary: Get processing status and queue position
+      tags:
+      - reports
+      summary: Get Report Meta
+      description: 'Return report metadata and session data in a shape compatible with
+
+        getDataSource on the frontend (config, markers, etc. at top level).'
+      operationId: get_report_meta_api_reports__report_id__get
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
       responses:
         '200':
-          description: Processing status
-
-  /sessions/{sessionId}/processing/logs:
-    get:
-      summary: Get processing logs
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - reports
+      summary: Rename Report
+      description: Rename a report.
+      operationId: rename_report_api_reports__report_id__patch
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
       responses:
         '200':
-          description: Processing log entries
-
-  /sessions/{sessionId}/processing/retry:
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - reports
+      summary: Delete Report Endpoint
+      description: Delete a report.
+      operationId: delete_report_endpoint_api_reports__report_id__delete
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/results:
+    get:
+      tags:
+      - reports
+      summary: Get Report Results
+      description: Get paginated DE results from a report.
+      operationId: get_report_results_api_reports__report_id__results_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Comparison
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 20000
+          minimum: 1
+          default: 50
+          title: Page Size
+      - name: sort_by
+        in: query
+        required: false
+        schema:
+          type: string
+          default: adj_pvalue
+          title: Sort By
+      - name: sort_order
+        in: query
+        required: false
+        schema:
+          type: string
+          default: asc
+          title: Sort Order
+      - name: significant_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Significant Only
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Search
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/qc/plots:
+    get:
+      tags:
+      - reports
+      summary: Get Report Qc Plots
+      description: Get QC plot data.
+      operationId: get_report_qc_plots_api_reports__report_id__qc_plots_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/gsea/status:
+    get:
+      tags:
+      - reports
+      summary: Get Report Gsea Status
+      description: Read GSEA run status from the report's gsea_run_status.json.
+      operationId: get_report_gsea_status_api_reports__report_id__gsea_status_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/gsea/run:
     post:
-      summary: Retry failed pipeline step
+      tags:
+      - reports
+      summary: Run Report Gsea
+      description: Run GSEA on report data.
+      operationId: run_report_gsea_api_reports__report_id__gsea_run_post
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '202':
-          description: Retry started
-
-  /sessions/{sessionId}/gsea/{database}:
-    get:
-      summary: Get GSEA results
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: database
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [go_bp, go_mf, go_cc, kegg, reactome]
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
       responses:
         '200':
-          description: GSEA results
-
-  /sessions/{sessionId}/gsea/run:
-    post:
-      summary: Run GSEA on-demand for a comparison
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/gsea/{database}:
+    get:
+      tags:
+      - reports
+      summary: Get Report Gsea Results
+      description: Get paginated GSEA results for a database.
+      operationId: get_report_gsea_results_api_reports__report_id__gsea__database__get
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      - name: database
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Database
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Comparison
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 50
+          title: Page Size
+      - name: sort_by
+        in: query
+        required: false
+        schema:
+          type: string
+          default: nes
+          title: Sort By
+      - name: sort_order
+        in: query
+        required: false
+        schema:
+          type: string
+          default: desc
+          title: Sort Order
+      - name: significant_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Significant Only
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Search
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/gsea/{database}/plot:
+    get:
+      tags:
+      - reports
+      summary: Get Report Gsea Plot
+      description: Get GSEA enrichment plot data for a specific pathway.
+      operationId: get_report_gsea_plot_api_reports__report_id__gsea__database__plot_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      - name: database
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Database
+      - name: term
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Term
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/gsea/{database}/heatmap:
+    get:
+      tags:
+      - reports
+      summary: Get Report Gsea Heatmap
+      description: Get GSEA heatmap data (z-scores for leading-edge genes).
+      operationId: get_report_gsea_heatmap_api_reports__report_id__gsea__database__heatmap_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      - name: database
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Database
+      - name: term
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Term
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/bionet/run:
+    post:
+      tags:
+      - reports
+      summary: Run Report Bionet
+      description: Run BioNet on report data.
+      operationId: run_report_bionet_api_reports__report_id__bionet_run_post
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/bionet/status:
+    get:
+      tags:
+      - reports
+      summary: Get Report Bionet Status
+      description: Read BioNet run status from the report.
+      operationId: get_report_bionet_status_api_reports__report_id__bionet_status_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/bionet/subnetwork:
+    get:
+      tags:
+      - reports
+      summary: Get Report Bionet Subnetwork
+      description: Return the BioNet subnetwork JSON.
+      operationId: get_report_bionet_subnetwork_api_reports__report_id__bionet_subnetwork_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/protein/{protein_id}/abundance:
+    get:
+      tags:
+      - reports
+      summary: Get Report Protein Abundance
+      description: Get protein abundance data, optionally filtered by comparison.
+      operationId: get_report_protein_abundance_api_reports__report_id__protein__protein_id__abundance_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      - name: protein_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protein Id
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/protein/{protein_id}/peptide:
+    get:
+      tags:
+      - reports
+      summary: Get Report Protein Peptide
+      description: Get peptide abundance data for a protein.
+      operationId: get_report_protein_peptide_api_reports__report_id__protein__protein_id__peptide_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      - name: protein_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protein Id
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/compare/protein-correlation:
+    post:
+      tags:
+      - reports
+      summary: Run Report Protein Correlation
+      description: Run protein-correlation analysis on report data.
+      operationId: run_report_protein_correlation_api_reports__report_id__compare_protein_correlation_post
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - reports
+      summary: Get Report Protein Correlation Results
+      description: Return protein-correlation results.
+      operationId: get_report_protein_correlation_results_api_reports__report_id__compare_protein_correlation_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/compare/protein-correlation/status:
+    get:
+      tags:
+      - reports
+      summary: Get Report Protein Correlation Status
+      description: Read protein-correlation run status.
+      operationId: get_report_protein_correlation_status_api_reports__report_id__compare_protein_correlation_status_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/compare/comparison-correlation:
+    post:
+      tags:
+      - reports
+      summary: Run Report Comparison Correlation
+      description: Run comparison-correlation analysis on report data.
+      operationId: run_report_comparison_correlation_api_reports__report_id__compare_comparison_correlation_post
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - reports
+      summary: Get Report Comparison Correlation Results
+      description: Return comparison-correlation results.
+      operationId: get_report_comparison_correlation_results_api_reports__report_id__compare_comparison_correlation_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/compare/comparison-correlation/status:
+    get:
+      tags:
+      - reports
+      summary: Get Report Comparison Correlation Status
+      description: Read comparison-correlation run status.
+      operationId: get_report_comparison_correlation_status_api_reports__report_id__compare_comparison_correlation_status_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/compare/venn:
+    post:
+      tags:
+      - reports
+      summary: Run Report Venn
+      description: Compute Venn diagram data for report comparisons.
+      operationId: run_report_venn_api_reports__report_id__compare_venn_post
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/compare/proteins:
+    get:
+      tags:
+      - reports
+      summary: Get Report Compare Proteins
+      description: List all proteins across all comparisons.
+      operationId: get_report_compare_proteins_api_reports__report_id__compare_proteins_get
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/reports/{report_id}/visualization-state:
+    patch:
+      tags:
+      - reports
+      summary: Patch Report Visualization State
+      description: Update markers and/or volcano filters in the report's session.json.
+      operationId: patch_report_visualization_state_api_reports__report_id__visualization_state_patch
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/protein-correlation:
+    post:
+      tags:
+      - compare
+      summary: Trigger Protein Correlation
+      operationId: trigger_protein_correlation_api_sessions__session_id__compare_protein_correlation_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProteinCorrelationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - compare
+      summary: Get Protein Correlation Data
+      operationId: get_protein_correlation_data_api_sessions__session_id__compare_protein_correlation_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/protein-correlation/status:
+    get:
+      tags:
+      - compare
+      summary: Get Protein Correlation Status
+      operationId: get_protein_correlation_status_api_sessions__session_id__compare_protein_correlation_status_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/comparison-correlation:
+    post:
+      tags:
+      - compare
+      summary: Trigger Comparison Correlation
+      operationId: trigger_comparison_correlation_api_sessions__session_id__compare_comparison_correlation_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonCorrelationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - compare
+      summary: Get Comparison Correlation Data
+      operationId: get_comparison_correlation_data_api_sessions__session_id__compare_comparison_correlation_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/comparison-correlation/status:
+    get:
+      tags:
+      - compare
+      summary: Get Comparison Correlation Status
+      operationId: get_comparison_correlation_status_api_sessions__session_id__compare_comparison_correlation_status_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/proteins:
+    get:
+      tags:
+      - compare
+      summary: List Proteins
+      description: List all proteins across all comparisons for dropdown selectors.
+      operationId: list_proteins_api_sessions__session_id__compare_proteins_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/venn:
+    post:
+      tags:
+      - compare
+      summary: Trigger Venn
+      operationId: trigger_venn_api_sessions__session_id__compare_venn_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VennRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/tree:
+    get:
+      tags:
+      - files
+      summary: List Directory
+      description: List directory contents -- folders first, then files.
+      operationId: list_directory_api_files_tree_get
+      parameters:
+      - name: path
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Relative path to list
+          default: ''
+          title: Path
+        description: Relative path to list
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/folders:
+    post:
+      tags:
+      - files
+      summary: Create Folder
+      description: Create a new folder in the library.
+      operationId: create_folder_api_files_folders_post
       requestBody:
         content:
           application/json:
             schema:
               type: object
-              properties:
-                comparison:
-                  type: string
-                databases:
-                  type: array
-                  items:
-                    type: string
+              title: Body
+        required: true
       responses:
-        '202':
-          description: GSEA started
-
-  /sessions/{sessionId}/compare/protein:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/upload:
     post:
-      summary: Protein correlation analysis (PCA, UMAP, t-SNE)
+      tags:
+      - files
+      summary: Upload Files
+      description: Upload files to the library. Only .txt and .csv accepted.
+      operationId: upload_files_api_files_upload_post
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: target_path
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Target folder in library
+          default: ''
+          title: Target Path
+        description: Target folder in library
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_files_api_files_upload_post'
       responses:
-        '202':
-          description: Analysis started
-
-  /sessions/{sessionId}/compare/matrix:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/rename:
+    put:
+      tags:
+      - files
+      summary: Rename Entry
+      description: Rename a file or folder.
+      operationId: rename_entry_api_files_rename_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Body
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/move:
+    put:
+      tags:
+      - files
+      summary: Move Entry
+      description: Move a file or folder to a different parent directory.
+      operationId: move_entry_api_files_move_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Body
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/delete:
+    delete:
+      tags:
+      - files
+      summary: Delete Entry
+      description: Delete a file or folder. Folders are deleted recursively.
+      operationId: delete_entry_api_files_delete_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Body
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/scan:
     post:
-      summary: Similarity matrix clustering
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '202':
-          description: Analysis started
-
-  /sessions/{sessionId}/compare/status:
-    get:
-      summary: Get compare task status
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      tags:
+      - files
+      summary: Scan Library
+      description: Force a full re-scan of the library directory.
+      operationId: scan_library_api_files_scan_post
       responses:
         '200':
-          description: Task status
-
-  /sessions/{sessionId}/compare/result:
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/files/search:
     get:
-      summary: Get compare task result
+      tags:
+      - files
+      summary: Search Files
+      description: Search files by name substring.
+      operationId: search_files_api_files_search_get
       parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Search query
+          title: Q
+        description: Search query
       responses:
         '200':
-          description: Task result
-
-  /organisms:
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/content:
     get:
-      summary: List supported organisms
+      tags:
+      - files
+      summary: Get File Content
+      description: Download file contents (for client-side parsing). 10MB max.
+      operationId: get_file_content_api_files_content_get
+      parameters:
+      - name: path
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Relative path to file
+          title: Path
+        description: Relative path to file
       responses:
         '200':
-          description: List of organisms
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/files/select:
+    post:
+      tags:
+      - files
+      summary: Select Files For Session
+      description: Copy files from library to a session and parse them. Returns ProteomicsFileInfo list.
+      operationId: select_files_for_session_api_files_select_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Body
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions:
+    get:
+      tags:
+      - sessions
+      summary: List Sessions
+      description: List all sessions.
+      operationId: list_sessions_api_sessions_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SessionSummary'
+                type: array
+                title: Response List Sessions Api Sessions Get
+    post:
+      tags:
+      - sessions
+      summary: Create Session
+      description: Create a new analysis session.
+      operationId: create_session_api_sessions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}:
+    get:
+      tags:
+      - sessions
+      summary: Get Session
+      description: Get a specific session.
+      operationId: get_session_api_sessions__session_id__get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - sessions
+      summary: Update Session
+      description: Update a session.
+      operationId: update_session_api_sessions__session_id__put
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - sessions
+      summary: Delete Session
+      description: Delete a session and all its data.
+      operationId: delete_session_api_sessions__session_id__delete
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/config:
+    post:
+      tags:
+      - sessions
+      summary: Update Session Config
+      description: 'Update session configuration. Reads raw body to extract optional
 
+        ''pipeline'' field for template selection alongside SessionConfig fields.'
+      operationId: update_session_config_api_sessions__session_id__config_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - sessions
+      summary: Update Session Config
+      description: 'Update session configuration. Reads raw body to extract optional
+
+        ''pipeline'' field for template selection alongside SessionConfig fields.'
+      operationId: update_session_config_api_sessions__session_id__config_put
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization-state:
+    patch:
+      tags:
+      - sessions
+      summary: Update Visualization State
+      description: Update visualization state (markers and/or volcano filters) for a session.
+      operationId: update_visualization_state_api_sessions__session_id__visualization_state_patch
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisualizationStateUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/organisms:
+    get:
+      summary: List Organisms
+      description: List available organisms from protein database.
+      operationId: list_organisms_api_organisms_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
 components:
   schemas:
-    SessionCreate:
+    BioNetRunRequest:
+      properties:
+        comparison:
+          type: string
+          title: Comparison
+        pvalue_cutoff:
+          type: number
+          title: Pvalue Cutoff
+          default: 0.05
+        logfc_cutoff:
+          type: number
+          title: Logfc Cutoff
+          default: 0.5
+        statement_types:
+          items:
+            type: string
+          type: array
+          title: Statement Types
+          default:
+          - IncreaseAmount
+          - DecreaseAmount
+        paper_count_cutoff:
+          type: integer
+          title: Paper Count Cutoff
+          default: 1
+        evidence_count_cutoff:
+          type: integer
+          title: Evidence Count Cutoff
+          default: 1
+        correlation_cutoff:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Correlation Cutoff
+        sources_filter:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Sources Filter
       type: object
       required:
-        - name
-        - template
+      - comparison
+      title: BioNetRunRequest
+    Body_upload_fasta_file_api_sessions__session_id__upload_fasta_post:
       properties:
+        file:
+          type: string
+          format: binary
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_fasta_file_api_sessions__session_id__upload_fasta_post
+    Body_upload_files_api_files_upload_post:
+      properties:
+        files:
+          items:
+            type: string
+            format: binary
+          type: array
+          title: Files
+      type: object
+      required:
+      - files
+      title: Body_upload_files_api_files_upload_post
+    Body_upload_global_proteome_files_api_sessions__session_id__upload_global_proteome_post:
+      properties:
+        files:
+          items:
+            type: string
+            format: binary
+          type: array
+          title: Files
+      type: object
+      required:
+      - files
+      title: Body_upload_global_proteome_files_api_sessions__session_id__upload_global_proteome_post
+    Body_upload_proteomics_files_api_sessions__session_id__upload_proteomics_post:
+      properties:
+        files:
+          items:
+            type: string
+            format: binary
+          type: array
+          title: Files
+      type: object
+      required:
+      - files
+      title: Body_upload_proteomics_files_api_sessions__session_id__upload_proteomics_post
+    Body_upload_ptm_enrichment_files_api_sessions__session_id__upload_ptm_enrichment_post:
+      properties:
+        files:
+          items:
+            type: string
+            format: binary
+          type: array
+          title: Files
+      type: object
+      required:
+      - files
+      title: Body_upload_ptm_enrichment_files_api_sessions__session_id__upload_ptm_enrichment_post
+    ComparisonCorrelationRequest:
+      properties:
+        primary_comparison:
+          type: string
+          title: Primary Comparison
+        selected_comparisons:
+          items:
+            type: string
+          type: array
+          title: Selected Comparisons
+        marked_proteins:
+          additionalProperties:
+            items:
+              type: string
+            type: array
+          type: object
+          title: Marked Proteins
+        cluster_method:
+          type: string
+          enum:
+          - pca
+          - umap
+          - tsne
+          title: Cluster Method
+          default: pca
+      type: object
+      required:
+      - primary_comparison
+      - selected_comparisons
+      - marked_proteins
+      title: ComparisonCorrelationRequest
+    FileInfo:
+      properties:
+        filename:
+          type: string
+          title: Filename
+          description: Canonical filename used on disk
+        original_filename:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Original Filename
+          description: Filename supplied by the user before sanitization
+        size:
+          type: integer
+          minimum: 0.0
+          title: Size
+          description: File size in bytes
+        uploaded_at:
+          type: string
+          format: date-time
+          title: Uploaded At
+        columns:
+          items:
+            type: string
+          type: array
+          title: Columns
+          description: CSV columns
+      type: object
+      required:
+      - filename
+      - size
+      title: FileInfo
+      description: File metadata model.
+    GseaRunRequest:
+      properties:
+        comparison:
+          type: string
+          title: Comparison
+        databases:
+          items:
+            type: string
+          type: array
+          title: Databases
+        min_size:
+          type: integer
+          title: Min Size
+          default: 15
+        max_size:
+          type: integer
+          title: Max Size
+          default: 500
+        permutations:
+          type: integer
+          title: Permutations
+          default: 1000
+      type: object
+      required:
+      - comparison
+      - databases
+      title: GseaRunRequest
+      description: Request body for on-demand GSEA run.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ProcessingStatus:
+      properties:
+        state:
+          $ref: '#/components/schemas/SessionState'
+        current_step:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Current Step
+        step_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Step Name
+        progress:
+          type: integer
+          maximum: 100.0
+          minimum: 0.0
+          title: Progress
+          default: 0
+        steps:
+          items:
+            $ref: '#/components/schemas/ProcessingStepStatus'
+          type: array
+          title: Steps
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        estimated_completion:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Estimated Completion
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        queue_position:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Queue Position
+        queue_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Queue Length
+      type: object
+      required:
+      - state
+      title: ProcessingStatus
+      description: Complete processing status for a session.
+    ProcessingStepStatus:
+      properties:
+        step:
+          type: integer
+          maximum: 9.0
+          minimum: 1.0
+          title: Step
         name:
           type: string
-        template:
+          title: Name
+        status:
           type: string
-        pipeline:
-          type: string
-          enum: [msqrob2, msstats]
-          default: msqrob2
-
-    Session:
+          pattern: ^(pending|in_progress|completed|failed)$
+          title: Status
+        progress:
+          type: integer
+          maximum: 100.0
+          minimum: 0.0
+          title: Progress
+          default: 0
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
       type: object
+      required:
+      - step
+      - name
+      - status
+      title: ProcessingStepStatus
+      description: Status of a single processing step.
+    ProteinCorrelationRequest:
+      properties:
+        protein_id:
+          type: string
+          title: Protein Id
+        cluster_method:
+          type: string
+          enum:
+          - pca
+          - umap
+          - tsne
+          title: Cluster Method
+          default: pca
+        color_comparison:
+          type: string
+          title: Color Comparison
+      type: object
+      required:
+      - protein_id
+      - color_comparison
+      title: ProteinCorrelationRequest
+    ProteomicsFileInfo:
+      properties:
+        filename:
+          type: string
+          title: Filename
+          description: Canonical filename used on disk
+        original_filename:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Original Filename
+          description: Filename supplied by the user before sanitization
+        size:
+          type: integer
+          minimum: 0.0
+          title: Size
+          description: File size in bytes
+        uploaded_at:
+          type: string
+          format: date-time
+          title: Uploaded At
+        columns:
+          items:
+            type: string
+          type: array
+          title: Columns
+          description: CSV columns
+        experiment:
+          type: string
+          title: Experiment
+          description: Experiment name (user-provided)
+          default: ''
+        replicate:
+          type: integer
+          minimum: 0.0
+          title: Replicate
+          description: Replicate number (user-provided)
+          default: 0
+        batch:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Batch
+          description: Batch label for DIA batch correction
+        file_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File Type
+          description: 'Detected file type: ''tmt'' or ''dia'''
+        tmt_channels:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tmt Channels
+          description: Detected TMT reporter ion channels
+        has_quan_value:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Has Quan Value
+          description: Whether the file has a Quan Value column (DIA)
+      type: object
+      required:
+      - filename
+      - size
+      title: ProteomicsFileInfo
+      description: Proteomics file metadata — user-provided, not filename-parsed.
+    Session:
       properties:
         id:
           type: string
+          title: Id
+          description: Unique session ID (UUID)
         name:
           type: string
+          minLength: 1
+          title: Name
+          description: Session name
         template:
           type: string
+          title: Template
+          default: multi_condition_comparison
         pipeline:
           type: string
-          enum: [msqrob2, msstats]
+          title: Pipeline
+          default: ''
         state:
-          type: string
-          enum: [created, configuring, queued, processing, completed, error, cancelled]
+          $ref: '#/components/schemas/SessionState'
+          default: created
         config:
-          $ref: '#/components/schemas/SessionConfig'
+          anyOf:
+          - $ref: '#/components/schemas/SessionConfig'
+          - type: 'null'
+        files:
+          $ref: '#/components/schemas/SessionFiles'
         created_at:
           type: string
           format: date-time
+          title: Created At
         updated_at:
           type: string
           format: date-time
-
-    SessionConfig:
+          title: Updated At
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        markers:
+          additionalProperties:
+            items:
+              type: string
+            type: array
+          type: object
+          title: Markers
+          description: Marked protein accessions per comparison for volcano plot labels
+        volcano_filters:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Volcano Filters
+          description: Volcano plot filter settings (foldChange, pValue, adjPValue, s0)
       type: object
+      required:
+      - id
+      - name
+      title: Session
+      description: Session model representing a complete analysis session.
+      example:
+        created_at: '2026-03-16T10:00:00Z'
+        files:
+          proteomics: []
+        id: 550e8400-e29b-41d4-a716-446655440000
+        name: DMSO vs Treatment Analysis
+        pipeline: msqrob2
+        state: created
+        template: multi_condition_comparison
+        updated_at: '2026-03-16T10:00:00Z'
+    SessionConfig:
       properties:
         treatment:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Treatment
+          description: Treatment condition name
         control:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Control
+          description: Control condition name
         organism:
-          type: string
+          anyOf:
+          - type: string
+            pattern: ^(|[a-z]+)$
+          - type: 'null'
+          title: Organism
+          description: Organism identifier (e.g., 'human', 'mouse')
         remove_razor:
           type: boolean
+          title: Remove Razor
+          description: Whether to remove razor peptides
+          default: false
         strict_filtering:
           type: boolean
+          title: Strict Filtering
+          description: Use strict filtering criteria
+          default: false
         comparisons:
-          type: array
-          items:
+          anyOf:
+          - items:
+              additionalProperties:
+                additionalProperties:
+                  type: string
+                type: object
+              type: object
+            type: array
+          - type: 'null'
+          title: Comparisons
+          description: 'List of {group1: {col:val}, group2: {col:val}} comparison criteria'
+        metadata_columns:
+          anyOf:
+          - additionalProperties:
+              additionalProperties:
+                type: string
+              type: object
             type: object
-            properties:
-              group1:
-                type: object
-              group2:
-                type: object
-        msqrob2_normalization:
-          type: string
+          - type: 'null'
+          title: Metadata Columns
+          description: Custom metadata columns per sample file
         msstats_normalization:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msstats Normalization
+        msstats_feature_selection:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msstats Feature Selection
+        msstats_summary_method:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msstats Summary Method
+        msstats_impute:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Msstats Impute
+        msstats_log_base:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Msstats Log Base
+        msstats_censored_int:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msstats Censored Int
+        msstats_max_quantile:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Msstats Max Quantile
+        msstats_remove50missing:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Msstats Remove50Missing
+        pvalue_threshold:
+          anyOf:
+          - type: number
+            maximum: 0.5
+            minimum: 0.001
+          - type: 'null'
+          title: Pvalue Threshold
+        logfc_threshold:
+          anyOf:
+          - type: number
+            maximum: 5.0
+            minimum: 0.1
+          - type: 'null'
+          title: Logfc Threshold
+        min_peptides_per_protein:
+          anyOf:
+          - type: integer
+            maximum: 10.0
+            minimum: 1.0
+          - type: 'null'
+          title: Min Peptides Per Protein
+        msstats_n_top_feature:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Msstats N Top Feature
+        msstats_min_feature_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Msstats Min Feature Count
+        msstats_remove_uninformative_feature_outlier:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Msstats Remove Uninformative Feature Outlier
+        msstats_equal_feature_var:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Msstats Equal Feature Var
+        msstats_name_standards:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msstats Name Standards
+        msstats_save_fitted_models:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Msstats Save Fitted Models
+        msstats_n_cores:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Msstats N Cores
+        msqrob2_ridge:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Msqrob2 Ridge
+        msqrob2_normalization:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msqrob2 Normalization
+        msqrob2_imputation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msqrob2 Imputation
+        msqrob2_aggregation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msqrob2 Aggregation
+        msqrob2_adjust_method:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msqrob2 Adjust Method
+        msqrob2_n_cores:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Msqrob2 N Cores
+        msqrob2_batch_column:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msqrob2 Batch Column
+        covariate_columns:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Covariate Columns
+        file_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File Type
+          description: 'Analysis type: ''tmt'' or ''dia'''
+        tmt_channel_mapping:
+          anyOf:
+          - additionalProperties:
+              additionalProperties:
+                anyOf:
+                - type: string
+                - type: integer
+              type: object
+            type: object
+          - type: 'null'
+          title: Tmt Channel Mapping
+          description: 'TMT channel → {group1: val1, ..., replicate: N} mapping'
+      additionalProperties: false
+      type: object
+      title: SessionConfig
+      description: Session configuration model.
+    SessionCreate:
+      properties:
+        name:
           type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        template:
+          type: string
+          title: Template
+          default: multi_condition_comparison
+        pipeline:
+          type: string
+          title: Pipeline
+          default: msqrob2
+      type: object
+      required:
+      - name
+      title: SessionCreate
+      description: Session creation request.
+    SessionFiles:
+      properties:
+        proteomics:
+          items:
+            $ref: '#/components/schemas/ProteomicsFileInfo'
+          type: array
+          title: Proteomics
+        ptm_enrichment:
+          items:
+            $ref: '#/components/schemas/ProteomicsFileInfo'
+          type: array
+          title: Ptm Enrichment
+        global_proteome:
+          items:
+            $ref: '#/components/schemas/ProteomicsFileInfo'
+          type: array
+          title: Global Proteome
+        fasta:
+          items:
+            $ref: '#/components/schemas/FileInfo'
+          type: array
+          title: Fasta
+      type: object
+      title: SessionFiles
+      description: Session files collection.
+    SessionState:
+      type: string
+      enum:
+      - created
+      - configuring
+      - queued
+      - processing
+      - completed
+      - error
+      - cancelled
+      title: SessionState
+      description: Session state enumeration.
+    SessionSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        state:
+          $ref: '#/components/schemas/SessionState'
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        has_results:
+          type: boolean
+          title: Has Results
+          default: false
+      type: object
+      required:
+      - id
+      - name
+      - state
+      - created_at
+      - updated_at
+      title: SessionSummary
+      description: Session summary for list views.
+    SessionUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Name
+        config:
+          anyOf:
+          - $ref: '#/components/schemas/SessionConfig'
+          - type: 'null'
+      type: object
+      title: SessionUpdate
+      description: Session update request.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VennRequest:
+      properties:
+        comparisons:
+          items:
+            type: string
+          type: array
+          title: Comparisons
+        pvalue_threshold:
+          type: number
+          title: Pvalue Threshold
+          default: 0.05
+        logfc_threshold:
+          type: number
+          title: Logfc Threshold
+          default: 1.0
+      type: object
+      required:
+      - comparisons
+      title: VennRequest
+    VisualizationStateUpdate:
+      properties:
+        markers:
+          anyOf:
+          - additionalProperties:
+              items:
+                type: string
+              type: array
+            type: object
+          - type: 'null'
+          title: Markers
+        volcano_filters:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Volcano Filters
+      type: object
+      title: VisualizationStateUpdate
+      description: Partial update for visualization state (markers + volcano filters).

@@ -135,14 +135,6 @@ class AnalysisConfig(BaseModel):
         default="robustSummary",
         description="Protein aggregation method: robustSummary, medianPolish, sum, mean",
     )
-    msqrob2_model: str = Field(
-        default="msqrobLm",
-        description="[DEPRECATED in v1.16] msqrob() replaces msqrobLm; no msqrobGlm. Value ignored.",
-    )
-    msqrob2_robust: bool = Field(
-        default=True,
-        description="[DEPRECATED in v1.16] msqrob() always uses robust regression. Value ignored.",
-    )
     msqrob2_ridge: bool = Field(
         default=False,  # ridge requires 5+ replicates; 3 reps causes boundary singular fits
         description="Apply ridge penalty for high-dimensional/collinear designs (requires 5+ replicates)",
@@ -150,12 +142,6 @@ class AnalysisConfig(BaseModel):
     msqrob2_adjust_method: str = Field(
         default="BH",
         description="Multiple testing correction: BH, bonferroni, holm, BY, fdr",
-    )
-    msqrob2_min_peptides: int = Field(
-        default=1,
-        ge=1,
-        le=10,
-        description="Minimum peptides per protein for aggregation",
     )
     msqrob2_n_cores: int | None = Field(
         default=None,
