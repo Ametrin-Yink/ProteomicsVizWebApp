@@ -6,7 +6,6 @@ All computation is synchronous (called via asyncio.to_thread from routes).
 
 import json
 import logging
-import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -20,6 +19,11 @@ from sklearn.preprocessing import StandardScaler
 from app.core.config import settings
 
 logger = logging.getLogger("proteomics")
+
+
+def accession_matches(value: object, protein_id: str) -> bool:
+    """Return whether a possibly multi-accession value contains an exact ID."""
+    return protein_id in {part.strip() for part in str(value).split(";")}
 
 
 def _load_de_file(session_dir: str, comparison: str) -> pd.DataFrame | None:
@@ -92,7 +96,7 @@ def _write_result(session_id: str, compute_type: str, data: dict):
 
 
 def load_pvalues_for_protein(
-    session_dir: str, comparisons: list[str], protein_id: str, accessions: list[str]
+    session_dir: str, comparisons: list[str], protein_id: str
 ) -> dict[str, dict[str, float]]:
     """
     Load pval and adj_pval for a specific protein across all comparisons.
@@ -103,9 +107,10 @@ def load_pvalues_for_protein(
         df = _load_de_file(session_dir, comp)
         if df is None:
             continue
-        # Match protein_id against accessions (handles multi-ID like "P00367; P49448")
+        # Match a complete accession, including within multi-ID values such as
+        # "P00367; P49448". Prefix matching would confuse IDs like P1 and P10.
         match = df[
-            df["accession"].str.contains(re.escape(protein_id), na=False, regex=True)
+            df["accession"].map(lambda value: accession_matches(value, protein_id))
         ]
         if len(match) > 0:
             result[comp] = {

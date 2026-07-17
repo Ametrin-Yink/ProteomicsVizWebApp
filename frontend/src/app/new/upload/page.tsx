@@ -14,7 +14,7 @@ import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
 import { useAnalysisStore, getValidation } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
-import { sessionsApi, mapBackendFiles } from '@/lib/api-client';
+import { sessionsApi, mapBackendFiles, uploadApi } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import { useAutoSave } from '@/hooks/use-auto-save';
@@ -27,14 +27,14 @@ function UploadContentInner() {
 
   const analysisType = useAnalysisStore((s) => s.analysisType);
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
+  const selectedFiles = useAnalysisStore((s) => s.selectedFiles);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const validation = useMemo(
-    () => getValidation(useAnalysisStore.getState()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [analysisType, uploadedFiles, config]
+    () => getValidation({ analysisType, uploadedFiles, selectedFiles, config }),
+    [analysisType, uploadedFiles, selectedFiles, config]
   );
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
   const resetAnalysis = useAnalysisStore((s) => s.reset);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -45,8 +45,7 @@ function UploadContentInner() {
   // Reset analysis store when session changes — prevents stale file/config leakage
   useEffect(() => {
     resetAnalysis();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, resetAnalysis]);
 
   useSessionValidation(sessionId || null);
 
@@ -86,30 +85,20 @@ function UploadContentInner() {
     if (files.length === 0) return;
     setPtmEnrichmentUploading(true);
     try {
-      const formData = new FormData();
-      for (const file of files) formData.append('files', file);
-      const res = await fetch(`/api/sessions/${sessionId}/upload/ptm-enrichment`, {
-        method: 'POST', body: formData,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        addToast('error', `PTM upload failed: ${text}`);
-        return;
-      }
-      const data = await res.json();
-      if (data.files?.length > 0) {
+      const uploaded = await uploadApi.uploadPTMEnrichment(sessionId, files);
+      if (uploaded.length > 0) {
         const store = useAnalysisStore.getState();
-        const parsedFiles: UploadedFileInfo[] = data.files.map((f: Record<string, unknown>) => ({
-          filename: f.filename as string,
-          experiment: (f.experiment as string) || '',
-          replicate: (f.replicate as number) || 0,
-          batch: (f.batch as string) || '',
-          file_type: (f.file_type as 'tmt' | 'dia' | null) || null,
-          size: (f.size as number) || 0,
+        const parsedFiles: UploadedFileInfo[] = uploaded.map((file) => ({
+          filename: file.filename,
+          experiment: '',
+          replicate: 0,
+          batch: '',
+          file_type: null,
+          size: file.size,
         }));
         for (const pf of parsedFiles) store.addUploadedFile(pf);
         setPtmEnrichmentFiles((prev) => [...prev, ...parsedFiles]);
-        addToast('success', `Uploaded ${data.files.length} PTM enrichment file(s)`);
+        addToast('success', `Uploaded ${uploaded.length} PTM enrichment file(s)`);
         // Modifications detection requires a backend endpoint (not yet available)
         // When ready, call: const result = await api.detectPTMModifications(sessionId);
       }
@@ -125,26 +114,16 @@ function UploadContentInner() {
     if (files.length === 0) return;
     setPtmGlobalUploading(true);
     try {
-      const formData = new FormData();
-      for (const file of files) formData.append('files', file);
-      const res = await fetch(`/api/sessions/${sessionId}/upload/global-proteome`, {
-        method: 'POST', body: formData,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        addToast('error', `Global proteome upload failed: ${text}`);
-        return;
-      }
-      const data = await res.json();
-      if (data.files?.length > 0) {
+      const uploaded = await uploadApi.uploadGlobalProteome(sessionId, files);
+      if (uploaded.length > 0) {
         setPtmGlobalFiles((prev) => [
           ...prev,
-          ...data.files.map((f: Record<string, unknown>) => ({
-            filename: f.filename as string,
-            size: (f.size as number) || 0,
+          ...uploaded.map((file) => ({
+            filename: file.filename,
+            size: file.size,
           })),
         ]);
-        addToast('success', `Uploaded ${data.files.length} global proteome file(s)`);
+        addToast('success', `Uploaded ${uploaded.length} global proteome file(s)`);
       }
     } catch (err) {
       addToast('error', `Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -156,17 +135,8 @@ function UploadContentInner() {
   const uploadFasta = useCallback(async (file: File) => {
     setPtmFastaUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch(`/api/sessions/${sessionId}/upload/fasta`, {
-        method: 'POST', body: formData,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        addToast('error', `FASTA upload failed: ${text}`);
-        return;
-      }
-      setPtmFastaFile({ name: file.name, size: file.size });
+      const uploaded = await uploadApi.uploadFASTA(sessionId, file);
+      setPtmFastaFile({ name: uploaded.filename, size: uploaded.size });
       addToast('success', 'FASTA file uploaded');
     } catch (err) {
       addToast('error', `FASTA upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -223,7 +193,10 @@ function UploadContentInner() {
 
   // Restore session state on page load
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setIsRestoring(false);
+      return;
+    }
 
     const restoreSession = async () => {
       try {
@@ -287,8 +260,7 @@ function UploadContentInner() {
     };
 
     restoreSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, setConfig]);
+  }, [sessionId, setConfig, router, addToast]);
 
   // Auto-save config to backend on changes (debounced) so edits survive refresh
   const { saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });

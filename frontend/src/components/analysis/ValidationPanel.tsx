@@ -8,6 +8,7 @@
 import React from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle, ChevronDown, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useShallow } from 'zustand/react/shallow';
 import { useAnalysisStore, getValidation, canStartAnalysis } from '@/stores/analysis-store';
 import type { ValidationWarning } from '@/types';
 
@@ -57,9 +58,22 @@ const WarningItem: React.FC<{ warning: ValidationWarning }> = ({ warning }) => {
 
 export const ValidationPanel: React.FC = () => {
   const router = useRouter();
-  const state = useAnalysisStore();
-  const validation = getValidation(state);
-  const canStart = canStartAnalysis(state);
+  const { config, analysisType, uploadedFiles, selectedFileNames } = useAnalysisStore(useShallow((state) => ({
+    config: state.config,
+    analysisType: state.analysisType,
+    uploadedFiles: state.uploadedFiles,
+    selectedFileNames: state.selectedFiles,
+  })));
+  const validation = React.useMemo(
+    () => getValidation({
+      analysisType,
+      config,
+      selectedFiles: selectedFileNames,
+      uploadedFiles,
+    }),
+    [analysisType, config, selectedFileNames, uploadedFiles]
+  );
+  const canStart = useAnalysisStore(canStartAnalysis);
   const [replicatesExpanded, setReplicatesExpanded] = React.useState(true);
 
   const { warnings, selectedFiles, experiments, replicatesByCondition } = validation;

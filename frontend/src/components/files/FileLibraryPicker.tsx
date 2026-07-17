@@ -22,7 +22,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   onSelect,
   onClose,
 }) => {
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
   const [loading, setLoading] = useState(true);
   const [currentPath, setCurrentPath] = useState('');
   const [entries, setEntries] = useState<FileLibraryEntry[]>([]);

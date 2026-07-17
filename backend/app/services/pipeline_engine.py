@@ -102,13 +102,17 @@ class PipelineState:
         return logs
 
     def mark_started(self) -> None:
+        """Start a fresh pipeline attempt and clear prior run state."""
         self.data["started_at"] = datetime.now(UTC).isoformat()
-        # Reset run-scoped fields for clean retry tracking
         self.data["completed_steps"] = []
         self.data["outputs"] = {}
         self.data["failed_step"] = None
         self.data["error"] = None
         self.data["current_step"] = 0
+        self.data["completed_at"] = None
+        self.data.pop("step_timings", None)
+        self.data.pop("step_memory", None)
+        self.data.pop("result", None)
         self.save()
 
     def mark_step_started(self, step: int, message: str | None = None) -> None:
@@ -153,17 +157,6 @@ class PipelineState:
         self.data["completed_at"] = datetime.now(UTC).isoformat()
         self.save()
 
-    def can_resume(self) -> bool:
-        return (
-            self.data["failed_step"] is not None
-            and self.data["current_step"] == self.data["failed_step"]
-        )
-
-    def get_last_completed_step(self) -> int:
-        if self.data["completed_steps"]:
-            return max(self.data["completed_steps"])
-        return 0
-
 
 @dataclass
 class StepContext:
@@ -176,7 +169,7 @@ class StepContext:
     uploads_dir: Path
     df: pd.DataFrame | None = None
     psm_file_path: Path | None = None
-    step_outputs: dict[int, Path] = field(default_factory=dict)
+    step_outputs: dict[int | str, object] = field(default_factory=dict)
     state: PipelineState | None = None
     result: AnalysisResult | None = None
     current_step_number: int = 0  # Set by engine before each step handler call
@@ -204,15 +197,9 @@ class PipelineStep:
 class PipelineDefinition:
     """Defines the steps for one analysis template."""
 
-    def __init__(
-        self,
-        template: str,
-        steps: list[PipelineStep],
-        config_validator: Callable | None = None,
-    ):
+    def __init__(self, template: str, steps: list[PipelineStep]):
         self.template = template
         self.steps = steps
-        self.config_validator = config_validator
 
 
 class PipelineEngine:
@@ -306,10 +293,11 @@ class PipelineEngine:
                     "end_mb": mem1,
                 }
 
-            if step.number in ctx.step_outputs:
+            output_path = ctx.step_outputs.get(step.number)
+            if isinstance(output_path, Path):
                 ctx.state.mark_step_completed(
                     step.number,
-                    ctx.step_outputs[step.number],
+                    output_path,
                     f"{step.display_name} complete",
                 )
             else:

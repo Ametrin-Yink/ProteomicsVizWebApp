@@ -135,3 +135,25 @@ class TestNCoreResolution:
             )
             assert n == 8
             mock_cal.assert_not_called()
+
+
+class TestMemoryHeadroom:
+    @pytest.mark.asyncio
+    async def test_falls_back_above_50b_cells_and_logs_actual_threshold(
+        self, wrapper, caplog
+    ):
+        """The large-RAM safeguard uses and reports its 50B-cell threshold."""
+        with (
+            patch.object(
+                wrapper,
+                "_get_file_dimensions",
+                return_value=(1_200_000_000, 10),
+            ),
+            caplog.at_level("WARNING", logger="proteomics"),
+        ):
+            n_cores = await wrapper._check_memory_headroom(
+                Path("input.parquet"), n_cores=4
+            )
+
+        assert n_cores == 1
+        assert "> 50000M" in caplog.text

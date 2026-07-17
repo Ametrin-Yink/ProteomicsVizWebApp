@@ -29,6 +29,8 @@ from app.services.r_process_registry import (
 
 logger = logging.getLogger("proteomics")
 
+MEMORY_CELL_THRESHOLD = 50_000_000_000  # ~400 GB at 8 bytes per cell
+
 
 async def _safe_log(callback, level: str, message: str) -> None:
     """Call a log callback safely, supporting both sync and async callbacks."""
@@ -612,7 +614,7 @@ class BaseRWrapper(ABC):
     ) -> int:
         """Estimate memory footprint; fall back to serial if excessive.
 
-        If n_rows * n_cols * (n_cores + 1) exceeds 500M cells, the
+        If n_rows * n_cols * (n_cores + 1) exceeds 50B cells, the
         parallel run risks exhausting memory — fall back to single-core.
         """
         if n_cores <= 1:
@@ -627,8 +629,6 @@ class BaseRWrapper(ABC):
         worker_multiplier = n_cores + 1  # main proc + workers
         estimated_cells = n_rows * n_cols * worker_multiplier
 
-        cell_threshold = 50_000_000_000  # 50B cells (~400GB for float64)
-
         logger.info(
             "Memory estimate: %d rows x %d cols x %d workers = %.0fM cells",
             n_rows,
@@ -637,11 +637,12 @@ class BaseRWrapper(ABC):
             estimated_cells / 1e6,
         )
 
-        if estimated_cells > cell_threshold:
+        if estimated_cells > MEMORY_CELL_THRESHOLD:
             logger.warning(
-                "Estimated memory footprint exceeds threshold (%.0fM > 500M). "
+                "Estimated memory footprint exceeds threshold (%.0fM > %.0fM). "
                 "Falling back to serial processing.",
                 estimated_cells / 1e6,
+                MEMORY_CELL_THRESHOLD / 1e6,
             )
             await _safe_log(
                 log_callback,

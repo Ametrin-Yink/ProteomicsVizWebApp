@@ -8,6 +8,7 @@ import pytest
 def index_service(tmp_path):
     """Create a FileIndexService pointed at a temp directory."""
     from app.services.file_index_service import FileIndexService
+
     return FileIndexService(tmp_path)
 
 
@@ -105,6 +106,26 @@ class TestFileIndexServiceCRUD:
         # Old path is gone
         assert index_service.get_entry("old/file.txt") is None
 
+    def test_update_folder_changes_root_metadata_and_descendant_paths(
+        self, index_service
+    ):
+        """Moving a folder keeps its index entry visible under the new parent."""
+        now = datetime.now()
+        index_service.insert_entry("old", 0, "folder", now)
+        index_service.insert_entry("old/child.txt", 100, "txt", now)
+
+        index_service.update_entry("old", "target/renamed", "target", 0, now)
+
+        folder = index_service.get_entry("target/renamed")
+        assert folder is not None
+        assert folder["name"] == "renamed"
+        assert folder["parent_path"] == "target"
+        child = index_service.get_entry("target/renamed/child.txt")
+        assert child is not None
+        assert child["parent_path"] == "target/renamed"
+        listing = index_service.list_directory("target")
+        assert [entry["name"] for entry in listing] == ["renamed"]
+
     def test_delete_entry_file(self, index_service):
         """delete_entry removes a file entry."""
         now = datetime.now()
@@ -199,7 +220,9 @@ class TestFileIndexServicePaths:
 
         entry = index_service.get_entry("sub/file.txt")
         assert entry is not None
-        assert "\\" not in entry["parent_path"], f"parent_path has backslash: {entry['parent_path']}"
+        assert (
+            "\\" not in entry["parent_path"]
+        ), f"parent_path has backslash: {entry['parent_path']}"
         assert entry["parent_path"] == "sub"
 
     def test_insert_entry_parent_path(self, index_service):

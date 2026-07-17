@@ -12,7 +12,7 @@ import { FileList } from './FileList';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
 
 export const FileLibraryPage: React.FC = () => {
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   // ---- State ----
   const [loading, setLoading] = useState(true);

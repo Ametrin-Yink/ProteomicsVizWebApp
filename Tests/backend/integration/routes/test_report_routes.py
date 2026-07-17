@@ -7,6 +7,7 @@ import shutil
 import uuid
 from pathlib import Path
 
+import numpy as np
 import pytest
 from app.main import app
 
@@ -214,3 +215,49 @@ def test_report_not_found(client):
 def test_delete_nonexistent_report(client):
     response = client.delete("/api/reports/rpt_nonexistent")
     assert response.status_code == 404
+
+
+def test_report_protein_correlation_uses_exact_accession_matching(
+    tmp_path, monkeypatch
+):
+    """Report correlation must not select P10 when the query is P1."""
+    from app.api.routes.reports import _run_report_protein_correlation
+    from app.services import compare_service
+
+    report_dir = tmp_path / "report"
+    (report_dir / "results" / "compare").mkdir(parents=True)
+    for comparison in ("A_vs_B", "C_vs_D"):
+        (report_dir / "results" / f"Diff_Expression_{comparison}.tsv").touch()
+
+    matrix = np.array([[10.0, 11.0], [1.0, 2.0]])
+    monkeypatch.setattr(
+        compare_service,
+        "build_fold_change_matrix",
+        lambda *_args: (matrix, ["P10", "P2; P1"], ["Wrong", "Right"]),
+    )
+    monkeypatch.setattr(
+        compare_service,
+        "load_pvalues_for_protein",
+        lambda _directory, comparisons, protein_id: {
+            comparison: {"pval": 0.01, "adj_pval": 0.02}
+            for comparison in comparisons
+            if protein_id == "P1"
+        },
+    )
+    monkeypatch.setattr(
+        compare_service, "compute_protein_similarities", lambda *_args: []
+    )
+    monkeypatch.setattr(
+        compare_service,
+        "run_cluster",
+        lambda *_args: (np.array([[0.0, 0.0], [1.0, 1.0]]), [0.6, 0.4]),
+    )
+
+    _run_report_protein_correlation(report_dir, {"protein_id": "P1"})
+
+    result = json.loads(
+        (
+            report_dir / "results" / "compare" / "protein-correlation_result.json"
+        ).read_text()
+    )
+    assert [point["log_fc"] for point in result["selected_protein_fc"]] == [1.0, 2.0]

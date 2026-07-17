@@ -1,11 +1,17 @@
 """Pipeline registry — maps pipeline tools to step lists.
 
-Uses plain list composition for pipeline definitions.
+Each step is declared once as its name, display name, and handler.
 Step numbering is positional — PipelineDefinition assigns step.number = index + 1.
 """
 
+from collections.abc import Awaitable, Callable
+
 from app.models.analysis import PipelineTool
-from app.services.pipeline_engine import PipelineDefinition, PipelineStep
+from app.services.pipeline_engine import (
+    PipelineDefinition,
+    PipelineStep,
+    StepContext,
+)
 
 # ── PTM step handlers (preserved) ───────────────────────────────────────
 from app.services.steps import (
@@ -38,110 +44,86 @@ from app.services.steps.shared.step_remove_low_quality import (
 from app.services.steps.shared.step_remove_razor import step_remove_razor
 from app.services.steps.shared.step_unique_psm import step_unique_psm
 
-TMT_PROTEIN_HANDLERS = [
-    step_input_tmt,
-    step_unique_psm,
-    step_remove_razor,
-    step_remove_low_quality_default,
-    step_filter_criteria_default,
-    step_msstats_protein_abundance,
-    step_msstats_group_comparison,
-    step_qc_metrics,
-]
-TMT_PROTEIN_NAMES = [
-    "input_tmt",
-    "unique_psm",
-    "remove_razor",
-    "remove_low_quality",
-    "filter_criteria",
-    "protein_abundance_msstats",
-    "de_msstats",
-    "qc_metrics",
-]
-TMT_PROTEIN_DISPLAY = [
-    "Combine Replicates",
-    "Generate Unique PSM",
-    "Remove Razor Peptides",
-    "Remove Low Quality",
-    "Filter by Criteria",
-    "Protein Abundance (MSstats)",
-    "Differential Expression (MSstats)",
-    "QC Metrics",
+PipelineStepSpec = tuple[
+    str,
+    str,
+    Callable[[StepContext], Awaitable[None]],
 ]
 
-DIA_PROTEIN_HANDLERS = [
-    step_input_dia,
-    step_unique_psm,
-    step_remove_razor,
-    step_remove_low_quality_default,
-    step_filter_criteria_default,
-    step_protein_abundance_msqrob2,
-    step_multi_condition_de,
-    step_qc_metrics,
-]
-DIA_PROTEIN_NAMES = [
-    "input_dia",
-    "unique_psm",
-    "remove_razor",
-    "remove_low_quality",
-    "filter_criteria",
-    "protein_abundance_msqrob2",
-    "de_msqrob2",
-    "qc_metrics",
-]
-DIA_PROTEIN_DISPLAY = [
-    "Combine Replicates",
-    "Generate Unique PSM",
-    "Remove Razor Peptides",
-    "Remove Low Quality",
-    "Filter by Criteria",
-    "Protein Abundance (msqrob2/QFeatures)",
-    "Differential Expression (msqrob2)",
-    "QC Metrics",
+TMT_PROTEIN_STEPS: list[PipelineStepSpec] = [
+    ("input_tmt", "Combine Replicates", step_input_tmt),
+    ("unique_psm", "Generate Unique PSM", step_unique_psm),
+    ("remove_razor", "Remove Razor Peptides", step_remove_razor),
+    ("remove_low_quality", "Remove Low Quality", step_remove_low_quality_default),
+    ("filter_criteria", "Filter by Criteria", step_filter_criteria_default),
+    (
+        "protein_abundance_msstats",
+        "Protein Abundance (MSstats)",
+        step_msstats_protein_abundance,
+    ),
+    (
+        "de_msstats",
+        "Differential Expression (MSstats)",
+        step_msstats_group_comparison,
+    ),
+    ("qc_metrics", "QC Metrics", step_qc_metrics),
 ]
 
-PTM_HANDLERS = [
-    step_ptm_prepare_data,
-    step_ptm_summarization,
-    step_ptm_group_comparison,
-    step_ptm_qc_metrics,
+DIA_PROTEIN_STEPS: list[PipelineStepSpec] = [
+    ("input_dia", "Combine Replicates", step_input_dia),
+    ("unique_psm", "Generate Unique PSM", step_unique_psm),
+    ("remove_razor", "Remove Razor Peptides", step_remove_razor),
+    ("remove_low_quality", "Remove Low Quality", step_remove_low_quality_default),
+    ("filter_criteria", "Filter by Criteria", step_filter_criteria_default),
+    (
+        "protein_abundance_msqrob2",
+        "Protein Abundance (msqrob2/QFeatures)",
+        step_protein_abundance_msqrob2,
+    ),
+    (
+        "de_msqrob2",
+        "Differential Expression (msqrob2)",
+        step_multi_condition_de,
+    ),
+    ("qc_metrics", "QC Metrics", step_qc_metrics),
 ]
-PTM_NAMES = [
-    "prepare_ptm_data",
-    "ptm_summarization",
-    "ptm_group_comparison",
-    "ptm_qc_metrics",
-]
-PTM_DISPLAY = [
-    "Prepare PTM Data",
-    "PTM Summarization (MSstatsPTM)",
-    "PTM Group Comparison (MSstatsPTM)",
-    "PTM QC Metrics",
+
+PTM_STEPS: list[PipelineStepSpec] = [
+    ("prepare_ptm_data", "Prepare PTM Data", step_ptm_prepare_data),
+    (
+        "ptm_summarization",
+        "PTM Summarization (MSstatsPTM)",
+        step_ptm_summarization,
+    ),
+    (
+        "ptm_group_comparison",
+        "PTM Group Comparison (MSstatsPTM)",
+        step_ptm_group_comparison,
+    ),
+    ("ptm_qc_metrics", "PTM QC Metrics", step_ptm_qc_metrics),
 ]
 
 
-def _build_pipeline(
-    handlers: list, names: list[str], display_names: list[str]
-) -> list[PipelineStep]:
+def _build_pipeline(step_specs: list[PipelineStepSpec]) -> list[PipelineStep]:
     """Build list of PipelineStep with positional numbering."""
     return [
-        PipelineStep(i + 1, names[i], display_names[i], handlers[i])
-        for i in range(len(handlers))
+        PipelineStep(number, name, display_name, handler)
+        for number, (name, display_name, handler) in enumerate(step_specs, start=1)
     ]
 
 
 PIPELINES: dict[str, PipelineDefinition] = {
     PipelineTool.MSSTATS: PipelineDefinition(
         PipelineTool.MSSTATS,
-        _build_pipeline(TMT_PROTEIN_HANDLERS, TMT_PROTEIN_NAMES, TMT_PROTEIN_DISPLAY),
+        _build_pipeline(TMT_PROTEIN_STEPS),
     ),
     PipelineTool.MSQROB2: PipelineDefinition(
         PipelineTool.MSQROB2,
-        _build_pipeline(DIA_PROTEIN_HANDLERS, DIA_PROTEIN_NAMES, DIA_PROTEIN_DISPLAY),
+        _build_pipeline(DIA_PROTEIN_STEPS),
     ),
     PipelineTool.PTM: PipelineDefinition(
         PipelineTool.PTM,
-        _build_pipeline(PTM_HANDLERS, PTM_NAMES, PTM_DISPLAY),
+        _build_pipeline(PTM_STEPS),
     ),
 }
 

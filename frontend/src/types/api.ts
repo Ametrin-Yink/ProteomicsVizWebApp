@@ -448,7 +448,8 @@ export type IndraSource = (typeof INDRA_SOURCES)[number];
 export interface PTMUploadResponse {
   filename: string;
   size: number;
-  type: 'ptm_enrichment' | 'global_proteome' | 'fasta';
+  type?: 'ptm_enrichment' | 'global_proteome' | 'fasta';
+  columns?: string[];
 }
 
 export type PTMModelType = 'ptm' | 'protein' | 'adjusted';

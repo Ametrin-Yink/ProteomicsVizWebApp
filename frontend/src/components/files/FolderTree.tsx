@@ -20,6 +20,18 @@ interface TreeNode {
   loaded: boolean;
 }
 
+function updateTreeNode(
+  nodes: TreeNode[],
+  path: string,
+  update: (node: TreeNode) => TreeNode
+): TreeNode[] {
+  return nodes.map((node) => {
+    if (node.path === path) return update(node);
+    if (node.children.length === 0) return node;
+    return { ...node, children: updateTreeNode(node.children, path, update) };
+  });
+}
+
 export const FolderTree: React.FC<FolderTreeProps> = ({
   currentPath,
   onNavigate,
@@ -65,31 +77,6 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     });
   }, [refreshKey, loadAttempt]);
 
-  // F-022: Auto-expand ancestor folders when navigating to a nested path
-  useEffect(() => {
-    if (!currentPath || currentPath === lastAutoExpandedPath.current) return;
-    lastAutoExpandedPath.current = currentPath;
-
-    const expandAncestors = async () => {
-      const parts = currentPath.split('/');
-      let accumulatedPath = '';
-
-      for (let i = 0; i < parts.length; i++) {
-        accumulatedPath = accumulatedPath ? accumulatedPath + '/' + parts[i] : parts[i];
-
-        // Root-level folders need to be found in rootNodes directly
-        // Deeper folders are found via findNodeByPath which traverses children
-        const node = findNodeByPath(accumulatedPath, rootNodes);
-        if (node && !expandedPaths.has(accumulatedPath)) {
-          await toggleExpandNode(node);
-        }
-      }
-    };
-
-    expandAncestors();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPath]);
-
   const toggleExpandNode = useCallback(async (node: TreeNode) => {
     const newExpanded = new Set(expandedPaths);
     if (newExpanded.has(node.path)) {
@@ -114,9 +101,11 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
             children: [],
             loaded: false,
           }));
-        node.children = children;
-        node.loaded = true;
-        setRootNodes([...rootNodes]);
+        setRootNodes((nodes) => updateTreeNode(nodes, node.path, (current) => ({
+          ...current,
+          children,
+          loaded: true,
+        })));
       } catch (err) {
         console.error('Failed to load children:', err);
         // Keep node collapsed so user can retry
@@ -125,7 +114,68 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         setLoadingPaths(prev => { const next = new Set(prev); next.delete(node.path); return next; });
       }
     }
-  }, [expandedPaths, rootNodes]);
+  }, [expandedPaths]);
+
+  // F-022: Auto-expand ancestor folders when navigating to a nested path
+  useEffect(() => {
+    if (
+      !currentPath ||
+      rootNodes.length === 0 ||
+      currentPath === lastAutoExpandedPath.current
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const expandAncestors = async () => {
+      const parts = currentPath.split('/').filter(Boolean);
+      let accumulatedPath = '';
+      let nodes = rootNodes;
+
+      for (const part of parts) {
+        accumulatedPath = accumulatedPath ? `${accumulatedPath}/${part}` : part;
+        const node = findNodeByPath(accumulatedPath, nodes);
+        if (!node) return;
+
+        setExpandedPaths((paths) => new Set(paths).add(node.path));
+        if (node.loaded) continue;
+
+        setLoadingPaths((paths) => new Set(paths).add(node.path));
+        try {
+          const data = await fileLibraryApi.listDirectory(node.path);
+          if (cancelled) return;
+          const children = data.entries
+            .filter((entry) => entry.type === 'folder')
+            .map((entry) => ({
+              name: entry.name,
+              path: entry.path,
+              children: [],
+              loaded: false,
+            }));
+          nodes = updateTreeNode(nodes, node.path, (current) => ({
+            ...current,
+            children,
+            loaded: true,
+          }));
+          setRootNodes(nodes);
+        } catch (error) {
+          console.error('Failed to auto-expand folder:', error);
+          return;
+        } finally {
+          setLoadingPaths((paths) => {
+            const next = new Set(paths);
+            next.delete(node.path);
+            return next;
+          });
+        }
+      }
+
+      lastAutoExpandedPath.current = currentPath;
+    };
+
+    void expandAncestors();
+    return () => { cancelled = true; };
+  }, [currentPath, rootNodes, findNodeByPath]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const items = treeRef.current?.querySelectorAll('[role="treeitem"]');

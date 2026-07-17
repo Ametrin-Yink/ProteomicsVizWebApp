@@ -31,6 +31,7 @@ from app.services.report_store import (
     list_reports,
     patch_report_state,
 )
+from app.utils.json_io import read_json_file, write_json_file
 
 logger = logging.getLogger("proteomics")
 
@@ -110,10 +111,12 @@ async def generate_report_endpoint(session_id: str, request: Request):
     if report_dir is not None:
         session_json_path = report_dir / "session.json"
         if session_json_path.exists():
-            session_data = json.loads(session_json_path.read_text(encoding="utf-8"))
+            session_data = await read_json_file(session_json_path)
             metadata["session_name"] = session_data.get("name", "")
-            (report_dir / "report.json").write_text(
-                json.dumps(metadata, indent=2), encoding="utf-8"
+            await write_json_file(
+                report_dir / "report.json",
+                metadata,
+                indent=2,
             )
 
     return {
@@ -140,8 +143,12 @@ async def get_report_meta(report_id: str):
     """Return report metadata and session data in a shape compatible with
     getDataSource on the frontend (config, markers, etc. at top level)."""
     _get_report_dir_or_404(report_id)
-    meta = get_report_metadata(report_id) or {}
-    session = get_report_session(report_id) or {}
+    meta, session = await asyncio.gather(
+        asyncio.to_thread(get_report_metadata, report_id),
+        asyncio.to_thread(get_report_session, report_id),
+    )
+    meta = meta or {}
+    session = session or {}
     return {
         "_report": meta,
         "id": report_id,
@@ -161,11 +168,9 @@ async def rename_report(report_id: str, request: Request):
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
     report_dir = _get_report_dir_or_404(report_id)
-    meta = get_report_metadata(report_id) or {}
+    meta = await asyncio.to_thread(get_report_metadata, report_id) or {}
     meta["name"] = name
-    (report_dir / "report.json").write_text(
-        json.dumps(meta, indent=2), encoding="utf-8"
-    )
+    await write_json_file(report_dir / "report.json", meta, indent=2)
     return {"message": "Renamed", "name": name}
 
 
@@ -277,7 +282,7 @@ async def get_report_gsea_status(report_id: str):
     p = report_dir / "gsea_run_status.json"
     if not p.exists():
         return {"status": "idle"}
-    return json.loads(p.read_text(encoding="utf-8"))
+    return await read_json_file(p)
 
 
 # Per-report locks for preventing concurrent compute runs
@@ -294,9 +299,7 @@ def _report_gsea_status_file(report_dir: Path) -> Path:
 async def _report_write_gsea_status(report_dir: Path, data: dict) -> None:
     p = _report_gsea_status_file(report_dir)
     p.parent.mkdir(parents=True, exist_ok=True)
-    await asyncio.to_thread(
-        lambda: p.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-    )
+    await write_json_file(p, data, indent=2, default=str)
 
 
 async def _report_background_gsea_run(
@@ -621,11 +624,7 @@ async def _report_background_bionet_run(
         "error": None,
     }
     status_file = bionet_dir / "bionet_status.json"
-    await asyncio.to_thread(
-        lambda: status_file.write_text(
-            json.dumps(status_data, indent=2, default=str), encoding="utf-8"
-        )
-    )
+    await write_json_file(status_file, status_data, indent=2, default=str)
 
     try:
         nodes_csv = bionet_dir / "nodes.csv"
@@ -641,37 +640,27 @@ async def _report_background_bionet_run(
 
         import pandas as pd
 
-        nodes_df = pd.read_csv(nodes_csv)
-        edges_df = pd.read_csv(edges_csv)
+        nodes_df, edges_df = await asyncio.gather(
+            asyncio.to_thread(pd.read_csv, nodes_csv),
+            asyncio.to_thread(pd.read_csv, edges_csv),
+        )
         subnetwork = {
             "nodes": nodes_df.to_dict(orient="records"),
             "edges": edges_df.to_dict(orient="records"),
         }
         subnetwork_path = bionet_dir / "bionet_subnetwork.json"
-        await asyncio.to_thread(
-            lambda: subnetwork_path.write_text(
-                json.dumps(subnetwork, indent=2, default=str), encoding="utf-8"
-            )
-        )
+        await write_json_file(subnetwork_path, subnetwork, indent=2, default=str)
 
         status_data["status"] = "completed"
         status_data["node_count"] = node_count
         status_data["edge_count"] = edge_count
         status_data["completed_at"] = datetime.now(UTC).isoformat()
-        await asyncio.to_thread(
-            lambda: status_file.write_text(
-                json.dumps(status_data, indent=2, default=str), encoding="utf-8"
-            )
-        )
+        await write_json_file(status_file, status_data, indent=2, default=str)
     except Exception as e:
         logger.error(f"Report BioNet background run failed: {e}")
         status_data["status"] = "error"
         status_data["error"] = str(e)
-        await asyncio.to_thread(
-            lambda: status_file.write_text(
-                json.dumps(status_data, indent=2, default=str), encoding="utf-8"
-            )
-        )
+        await write_json_file(status_file, status_data, indent=2, default=str)
     finally:
         lock.release()
         _report_bionet_locks.pop(str(report_dir), None)
@@ -729,7 +718,7 @@ async def get_report_bionet_status(report_id: str):
     p = report_dir / "bionet" / "bionet_status.json"
     if not p.exists():
         return {"status": "idle"}
-    return json.loads(p.read_text(encoding="utf-8"))
+    return await read_json_file(p)
 
 
 @global_router.get("/reports/{report_id}/bionet/subnetwork")
@@ -739,7 +728,7 @@ async def get_report_bionet_subnetwork(report_id: str):
     p = report_dir / "bionet" / "bionet_subnetwork.json"
     if not p.exists():
         raise HTTPException(status_code=404, detail="No BioNet subnetwork available")
-    return json.loads(p.read_text(encoding="utf-8"))
+    return await read_json_file(p)
 
 
 # ---------------------------------------------------------------------------
@@ -756,7 +745,7 @@ async def get_report_protein_abundance(
     """Get protein abundance data, optionally filtered by comparison."""
     report_dir = _get_report_dir_or_404(report_id)
     results_dir = report_dir / "results"
-    session_data = get_report_session(report_id)
+    session_data = await asyncio.to_thread(get_report_session, report_id)
     sample_filter = _build_sample_filter_from_session(session_data, comparison)
 
     from app.api.routes.visualization import create_response, load_protein_abundance
@@ -779,7 +768,7 @@ async def get_report_protein_peptide(
     """Get peptide abundance data for a protein."""
     report_dir = _get_report_dir_or_404(report_id)
     results_dir = report_dir / "results"
-    session_data = get_report_session(report_id)
+    session_data = await asyncio.to_thread(get_report_session, report_id)
     sample_filter = _build_sample_filter_from_session(session_data, comparison)
 
     from app.api.routes.visualization import create_response, load_peptide_abundance
@@ -850,6 +839,7 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
     import numpy as np
 
     from app.services.compare_service import (
+        accession_matches,
         build_fold_change_matrix,
         compute_protein_similarities,
         load_pvalues_for_protein,
@@ -867,15 +857,13 @@ def _run_report_protein_correlation(report_dir: Path, body: dict) -> None:
         protein_id = body.get("protein_id", "")
         query_idx = None
         for i, acc in enumerate(accessions):
-            if protein_id in acc or acc in protein_id:
+            if accession_matches(acc, protein_id):
                 query_idx = i
                 break
         if query_idx is None:
             raise ValueError(f"Protein {protein_id} not found in any comparison")
 
-        pvals = load_pvalues_for_protein(
-            report_dir_str, comparisons, protein_id, accessions
-        )
+        pvals = load_pvalues_for_protein(report_dir_str, comparisons, protein_id)
         selected_fc = []
         for j, comp in enumerate(comparisons):
             val = matrix[query_idx, j]
@@ -1115,7 +1103,7 @@ async def run_report_protein_correlation(report_id: str, request: Request):
     body = await request.json()
 
     compare_dir = report_dir / "results" / "compare"
-    compare_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(compare_dir.mkdir, parents=True, exist_ok=True)
 
     lock_key = str(report_dir) + ":protein-correlation"
     if lock_key not in _report_compare_locks:
@@ -1123,12 +1111,15 @@ async def run_report_protein_correlation(report_id: str, request: Request):
 
     lock = _report_compare_locks[lock_key]
     async with lock:
-        status = _report_compare_read_status(report_dir, "protein-correlation")
+        status = await asyncio.to_thread(
+            _report_compare_read_status, report_dir, "protein-correlation"
+        )
         if status.get("status") == "running":
             raise HTTPException(
                 status_code=409, detail="Computation already in progress"
             )
-        _report_compare_write_status(
+        await asyncio.to_thread(
+            _report_compare_write_status,
             report_dir,
             "protein-correlation",
             {
@@ -1147,7 +1138,9 @@ async def run_report_protein_correlation(report_id: str, request: Request):
 async def get_report_protein_correlation_status(report_id: str):
     """Read protein-correlation run status."""
     report_dir = _get_report_dir_or_404(report_id)
-    return _report_compare_read_status(report_dir, "protein-correlation")
+    return await asyncio.to_thread(
+        _report_compare_read_status, report_dir, "protein-correlation"
+    )
 
 
 @global_router.get("/reports/{report_id}/compare/protein-correlation")
@@ -1159,7 +1152,7 @@ async def get_report_protein_correlation_results(report_id: str):
         raise HTTPException(
             status_code=404, detail="No protein correlation results available"
         )
-    return json.loads(rp.read_text(encoding="utf-8"))
+    return await read_json_file(rp)
 
 
 @global_router.post("/reports/{report_id}/compare/comparison-correlation")
@@ -1169,7 +1162,7 @@ async def run_report_comparison_correlation(report_id: str, request: Request):
     body = await request.json()
 
     compare_dir = report_dir / "results" / "compare"
-    compare_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(compare_dir.mkdir, parents=True, exist_ok=True)
 
     lock_key = str(report_dir) + ":comparison-correlation"
     if lock_key not in _report_compare_locks:
@@ -1177,12 +1170,15 @@ async def run_report_comparison_correlation(report_id: str, request: Request):
 
     lock = _report_compare_locks[lock_key]
     async with lock:
-        status = _report_compare_read_status(report_dir, "comparison-correlation")
+        status = await asyncio.to_thread(
+            _report_compare_read_status, report_dir, "comparison-correlation"
+        )
         if status.get("status") == "running":
             raise HTTPException(
                 status_code=409, detail="Computation already in progress"
             )
-        _report_compare_write_status(
+        await asyncio.to_thread(
+            _report_compare_write_status,
             report_dir,
             "comparison-correlation",
             {
@@ -1201,7 +1197,9 @@ async def run_report_comparison_correlation(report_id: str, request: Request):
 async def get_report_comparison_correlation_status(report_id: str):
     """Read comparison-correlation run status."""
     report_dir = _get_report_dir_or_404(report_id)
-    return _report_compare_read_status(report_dir, "comparison-correlation")
+    return await asyncio.to_thread(
+        _report_compare_read_status, report_dir, "comparison-correlation"
+    )
 
 
 @global_router.get("/reports/{report_id}/compare/comparison-correlation")
@@ -1213,7 +1211,7 @@ async def get_report_comparison_correlation_results(report_id: str):
         raise HTTPException(
             status_code=404, detail="No comparison correlation results available"
         )
-    return json.loads(rp.read_text(encoding="utf-8"))
+    return await read_json_file(rp)
 
 
 @global_router.post("/reports/{report_id}/compare/venn")
@@ -1275,9 +1273,13 @@ async def patch_report_visualization_state(report_id: str, request: Request):
     markers = body.get("markers")
     volcano_filters = body.get("volcano_filters")
 
-    if not patch_report_state(
-        report_id, markers=markers, volcano_filters=volcano_filters
-    ):
+    updated = await asyncio.to_thread(
+        patch_report_state,
+        report_id,
+        markers=markers,
+        volcano_filters=volcano_filters,
+    )
+    if not updated:
         raise HTTPException(status_code=404, detail="Report not found")
 
     return {"message": "Visualization state updated"}

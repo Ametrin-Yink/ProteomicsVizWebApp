@@ -11,7 +11,10 @@ import pandas as pd
 
 from app.services.pipeline_engine import StepContext
 from app.services.ptm_wrapper import ptm_wrapper
-from app.services.steps._helpers import build_comparison_label, create_log_callback
+from app.services.steps._helpers import (
+    build_comparison_pair_label,
+    create_log_callback,
+)
 
 logger = logging.getLogger("proteomics")
 
@@ -71,7 +74,7 @@ async def step_ptm_group_comparison(ctx: StepContext) -> None:
     de_paths: list = []
     total_sig = 0
     for comp in comparisons:
-        label = f"{build_comparison_label(comp['group1'])}_vs_{build_comparison_label(comp['group2'])}"
+        label = build_comparison_pair_label(comp)
         de_file = output_dir / f"Diff_Expression_{label}.tsv"
         if de_file.exists():
             de_paths.append(de_file)
@@ -84,4 +87,4 @@ async def step_ptm_group_comparison(ctx: StepContext) -> None:
     ctx.step_outputs["de_paths"] = de_paths
     ctx.result.significant_proteins = total_sig
 
-    ctx.state.add_log("PTM group comparison complete")
+    ctx.state.add_log("info", "PTM group comparison complete", step=3)

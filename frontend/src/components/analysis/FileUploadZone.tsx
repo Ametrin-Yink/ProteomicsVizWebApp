@@ -7,6 +7,7 @@
 
 import React, { useCallback, useState, useRef } from 'react';
 import { Upload, File, X, ChevronDown } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAnalysisStore } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { uploadApi } from '@/lib/api-client';
@@ -113,9 +114,17 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({ sessionId, onDet
     setUploadProgress,
     setIsUploading,
     setUploadError,
-  } = useAnalysisStore();
+  } = useAnalysisStore(useShallow((state) => ({
+    uploadedFiles: state.uploadedFiles,
+    uploadProgress: state.uploadProgress,
+    addUploadedFile: state.addUploadedFile,
+    removeUploadedFile: state.removeUploadedFile,
+    setUploadProgress: state.setUploadProgress,
+    setIsUploading: state.setIsUploading,
+    setUploadError: state.setUploadError,
+  })));
 
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   const validateFile = (file: File): string | null => {
     if (file.size > MAX_FILE_SIZE) {

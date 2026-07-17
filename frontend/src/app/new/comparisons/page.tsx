@@ -12,6 +12,11 @@ import { useUIStore } from '@/stores/ui-store';
 import { useAutoSave } from '@/hooks/use-auto-save';
 import { useBeforeUnload } from '@/hooks/use-beforeunload';
 import { sessionsApi } from '@/lib/api-client';
+import {
+  conditionGroupKey,
+  generateReferenceComparisons,
+  getConditionOptions,
+} from '@/lib/comparison-options';
 import { cn, formatGroup } from '@/lib/utils';
 
 function ComparisonsContent() {
@@ -24,7 +29,7 @@ function ComparisonsContent() {
   const analysisType = useAnalysisStore((s) => s.analysisType);
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const selectedPipeline = getPipelineFromType(analysisType);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   // NEW-D-057: Restoring guard
   const [isRestoring, setIsRestoring] = React.useState(true);
@@ -45,7 +50,7 @@ function ComparisonsContent() {
   // Sync comparisons to Zustand store whenever they change
   React.useEffect(() => {
     setConfig({ comparisons });
-  }, [comparisons]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [comparisons, setConfig]);
 
   // --- Covariate state ---
   const [covariateSelections, setCovariateSelections] = React.useState<Set<string>>(
@@ -142,35 +147,18 @@ function ComparisonsContent() {
     return cards.sort((a, b) => a.col.localeCompare(b.col) || a.val.localeCompare(b.val));
   }, [analysisType, config.tmt_channel_mapping, config.metadata_columns]);
 
-  // --- Derive unique condition strings for auto-generate ---
-  const conditionStrings = React.useMemo(() => {
-    const uniqueConditions = new Set<string>();
-    if (analysisType === 'tmt') {
-      const mapping = config.tmt_channel_mapping || {};
-      const groupCols = new Set<string>();
-      Object.values(mapping).forEach((entry) => {
-        Object.keys(entry).forEach((k) => {
-          if (k.toLowerCase() !== 'replicate') groupCols.add(k);
-        });
-      });
-      Object.values(mapping).forEach((entry) => {
-        const combined = Array.from(groupCols)
-          .map((col) => String(entry[col] ?? '').trim())
-          .filter(Boolean)
-          .join('+');
-        if (combined) uniqueConditions.add(combined);
-      });
-    } else {
-      Object.values(config.metadata_columns || {}).forEach((row) => {
-        const vals = Object.entries(row)
-          .filter(([k]) => k !== 'experiment' && k.toLowerCase() !== 'replicate' && k !== 'batch')
-          .map(([, v]) => v?.trim())
-          .filter(Boolean);
-        if (vals.length > 0) uniqueConditions.add(vals.join('+'));
-      });
+  const conditionOptions = React.useMemo(() => {
+    return getConditionOptions(analysisType, config);
+  }, [analysisType, config]);
+
+  React.useEffect(() => {
+    if (
+      selectedReference &&
+      !conditionOptions.some((option) => option.key === selectedReference)
+    ) {
+      setSelectedReference('');
     }
-    return Array.from(uniqueConditions).sort();
-  }, [analysisType, config.tmt_channel_mapping, config.metadata_columns]);
+  }, [conditionOptions, selectedReference]);
 
   // --- Auto-generate comparisons ---
   const handleAutoGenerate = () => {
@@ -178,56 +166,19 @@ function ComparisonsContent() {
       addToast('warning', 'Select a reference condition');
       return;
     }
-    if (conditionStrings.length < 2) {
+    if (conditionOptions.length < 2) {
       addToast('warning', 'Need at least 2 conditions to generate comparisons');
       return;
     }
 
-    const generated: Array<{ group1: Record<string, string>; group2: Record<string, string> }> = [];
-    const refParts = selectedReference.split('+');
-
-    conditionStrings.forEach((cond) => {
-      if (cond === selectedReference) return;
-
-      // Build group objects from condition string
-      const condParts = cond.split('+');
-      const group1: Record<string, string> = {};
-      const group2: Record<string, string> = {};
-
-      if (analysisType === 'tmt') {
-        // For TMT, derive from mapping
-        const mapping = config.tmt_channel_mapping || {};
-        const allKeys = new Set<string>();
-        for (const entry of Object.values(mapping)) {
-          for (const key of Object.keys(entry)) {
-            if (key.toLowerCase() !== 'replicate') allKeys.add(key);
-          }
-        }
-        const groupCols = Array.from(allKeys).sort();
-        groupCols.forEach((col, idx) => {
-          group1[col] = condParts[idx] || '';
-          group2[col] = refParts[idx] || '';
-        });
-      } else {
-        // For DIA, derive from metadata columns
-        const sampleEntry = Object.values(config.metadata_columns || {})[0] || {};
-        const groupCols = Object.keys(sampleEntry).filter(k => k !== 'experiment' && k.toLowerCase() !== 'replicate' && k !== 'batch');
-        groupCols.forEach((col, idx) => {
-          group1[col] = condParts[idx] || '';
-          group2[col] = refParts[idx] || '';
-        });
-      }
-
-      // T-023: Validate Group A != Group B
-      if (JSON.stringify(group1) !== JSON.stringify(group2)) {
-        generated.push({ group1, group2 });
-      }
-    });
+    const generated = generateReferenceComparisons(conditionOptions, selectedReference);
 
     setComparisons((prev) => {
       // Merge with existing, avoid duplicates
-      const existing = new Set(prev.map((c) => JSON.stringify(c)));
-      const newComps = generated.filter((c) => !existing.has(JSON.stringify(c)));
+      const comparisonKey = (comparison: typeof generated[number]) =>
+        `${conditionGroupKey(comparison.group1)}|${conditionGroupKey(comparison.group2)}`;
+      const existing = new Set(prev.map(comparisonKey));
+      const newComps = generated.filter((comparison) => !existing.has(comparisonKey(comparison)));
       return [...prev, ...newComps];
     });
 
@@ -393,7 +344,7 @@ function ComparisonsContent() {
       </div>
 
       {/* ===== SECTION 1: Auto-Generate Comparisons ===== */}
-      {conditionStrings.length >= 2 && (
+      {conditionOptions.length >= 2 && (
         <section className="bg-background border border-border rounded-lg">
           <div className="px-5 py-3 border-b border-border">
             <h2 className="font-semibold text-text-primary">Auto-Generate Comparisons</h2>
@@ -413,8 +364,8 @@ function ComparisonsContent() {
                   className="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-background"
                 >
                   <option value="">-- Select reference condition --</option>
-                  {conditionStrings.map((cond) => (
-                    <option key={cond} value={cond}>{cond}</option>
+                  {conditionOptions.map((option) => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
                   ))}
                 </select>
               </div>

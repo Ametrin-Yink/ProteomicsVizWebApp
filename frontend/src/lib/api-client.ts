@@ -64,11 +64,41 @@ export interface SelectedFileInfo {
   has_quan_value?: boolean;
 }
 
+interface DataSource {
+  id: string;
+  name: string;
+  config?: {
+    treatment?: string;
+    control?: string;
+    comparisons?: Array<{
+      group1: Record<string, string>;
+      group2: Record<string, string>;
+    }>;
+  };
+  files?: { proteomics: Array<{ experiment: string }> };
+  markers?: string[] | Record<string, string[]>;
+  volcano_filters?: {
+    foldChange: number;
+    pValue: number;
+    adjPValue: number;
+    s0: number;
+  };
+}
+
 // Use empty base URL to go through Next.js proxy (avoids CORS)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const API_PREFIX = '/api';  // Backend routes are at /api
 // Large file uploads bypass Next.js proxy (which drops >200MB multipart requests)
 const UPLOAD_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+const getDefaultOrganisms = (): Organism[] => [
+  { id: 'human', name: 'Human', display_name: 'Human (Homo sapiens)', available: true },
+  { id: 'mouse', name: 'Mouse', display_name: 'Mouse (Mus musculus)', available: true },
+  { id: 'rat', name: 'Rat', display_name: 'Rat (Rattus norvegicus)', available: true },
+  { id: 'zebrafish', name: 'Zebrafish', display_name: 'Zebrafish (Danio rerio)', available: true },
+  { id: 'fly', name: 'Fruit Fly', display_name: 'Fruit Fly (Drosophila melanogaster)', available: true },
+  { id: 'yeast', name: 'Yeast', display_name: 'Yeast (Saccharomyces cerevisiae)', available: true },
+];
 
 // Helper to build API URLs
 const apiUrl = (path: string) => `${API_BASE_URL}${API_PREFIX}${path}`;
@@ -302,6 +332,32 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+async function throwResponseError(
+  response: Response,
+  fallbackCode: string,
+  fallbackMessage: string
+): Promise<never> {
+  let code = fallbackCode;
+  let message = fallbackMessage;
+
+  try {
+    const data = await response.json() as {
+      error?: { code?: unknown; message?: unknown };
+      detail?: unknown;
+    };
+    if (typeof data.error?.code === 'string') code = data.error.code;
+    if (typeof data.error?.message === 'string') {
+      message = data.error.message;
+    } else if (typeof data.detail === 'string') {
+      message = data.detail;
+    }
+  } catch {
+    // Keep the operation-specific fallback when the response is not JSON.
+  }
+
+  throw new APIError(message, code, response.status);
+}
+
 /**
  * Lightweight JSON fetch for endpoints that don't go through /api sessions.
  * Used by visualizationApi functions that receive an apiPrefix from context.
@@ -316,19 +372,42 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      error: { message: 'Unknown error occurred', code: 'UNKNOWN_ERROR' },
-    }));
-    throw new APIError(
-      error.error?.message || `HTTP ${response.status}`,
-      'FETCH_ERROR',
-      response.status
-    );
+    await throwResponseError(response, 'FETCH_ERROR', `HTTP ${response.status}`);
   }
 
   const data: ApiResponse<T> = await response.json();
   // Handle both wrapped ({ data: T }) and unwrapped (T) responses
   return 'data' in data ? data.data : data as T;
+}
+
+async function uploadMultipart<T>(
+  sessionId: string,
+  endpoint: string,
+  files: File[],
+  fieldName: 'file' | 'files',
+  errorLabel: string,
+  onProgress?: (filename: string, progress: number) => void
+): Promise<T> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append(fieldName, file);
+    onProgress?.(file.name, 0);
+  }
+
+  const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/${endpoint}`), {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    await throwResponseError(
+      response,
+      'UPLOAD_FAILED',
+      `${errorLabel} (${response.status})`
+    );
+  }
+
+  for (const file of files) onProgress?.(file.name, 100);
+  return response.json() as Promise<T>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -468,14 +547,11 @@ export const sessionsApi = {
       method: 'DELETE',
     });
     if (!response.ok) {
-      // 204 No Content on success, so error responses may not have JSON body
-      try {
-        const data = await response.json();
-        const message = data?.error?.message || data?.detail || `Delete failed (${response.status})`;
-        throw new APIError(message, 'DELETE_FAILED', response.status);
-      } catch {
-        throw new APIError(`Delete failed (${response.status})`, 'DELETE_FAILED', response.status);
-      }
+      await throwResponseError(
+        response,
+        'DELETE_FAILED',
+        `Delete failed (${response.status})`
+      );
     }
   },
 
@@ -489,13 +565,11 @@ export const sessionsApi = {
       body: JSON.stringify({ name: newName }),
     });
     if (!response.ok) {
-      try {
-        const data = await response.json();
-        const message = data?.error?.message || data?.detail || `Rename failed (${response.status})`;
-        throw new APIError(message, 'RENAME_FAILED', response.status);
-      } catch {
-        throw new APIError(`Rename failed (${response.status})`, 'RENAME_FAILED', response.status);
-      }
+      await throwResponseError(
+        response,
+        'RENAME_FAILED',
+        `Rename failed (${response.status})`
+      );
     }
   },
 
@@ -539,36 +613,14 @@ export const uploadApi = {
     // Process files in batches
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
-      const formData = new FormData();
-
-      // Add batch files to FormData
-      for (const file of batch) {
-        formData.append('files', file);
-        onProgress?.(file.name, 0);
-      }
-
-      // Upload batch
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/proteomics`), {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new APIError(
-          `Upload failed: ${response.status} ${errorText}`,
-          'UPLOAD_FAILED',
-          response.status
-        );
-      }
-
-      // Mark batch files as complete
-      for (const file of batch) {
-        onProgress?.(file.name, 100);
-      }
-
-      // Parse response
-      const responseData = await response.json();
+      const responseData = await uploadMultipart<{ files?: UploadedFileInfo[] }>(
+        sessionId,
+        'proteomics',
+        batch,
+        'files',
+        'Upload failed',
+        onProgress
+      );
       if (responseData.files && responseData.files.length > 0) {
         allResults.push(...responseData.files);
       }
@@ -585,31 +637,14 @@ export const uploadApi = {
       files: File[],
       onProgress?: (filename: string, progress: number) => void
     ): Promise<PTMUploadResponse[]> => {
-      const formData = new FormData();
-      for (const file of files) {
-        formData.append('files', file);
-        onProgress?.(file.name, 0);
-      }
-
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/ptm-enrichment`), {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new APIError(
-          `PTM enrichment upload failed: ${response.status} ${errorText}`,
-          'UPLOAD_FAILED',
-          response.status
-        );
-      }
-
-      for (const file of files) {
-        onProgress?.(file.name, 100);
-      }
-
-      const responseData = await response.json();
+      const responseData = await uploadMultipart<{ files?: PTMUploadResponse[] }>(
+        sessionId,
+        'ptm-enrichment',
+        files,
+        'files',
+        'PTM enrichment upload failed',
+        onProgress
+      );
       return responseData.files || [];
     },
 
@@ -621,31 +656,14 @@ export const uploadApi = {
       files: File[],
       onProgress?: (filename: string, progress: number) => void
     ): Promise<PTMUploadResponse[]> => {
-      const formData = new FormData();
-      for (const file of files) {
-        formData.append('files', file);
-        onProgress?.(file.name, 0);
-      }
-
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/global-proteome`), {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new APIError(
-          `Global proteome upload failed: ${response.status} ${errorText}`,
-          'UPLOAD_FAILED',
-          response.status
-        );
-      }
-
-      for (const file of files) {
-        onProgress?.(file.name, 100);
-      }
-
-      const responseData = await response.json();
+      const responseData = await uploadMultipart<{ files?: PTMUploadResponse[] }>(
+        sessionId,
+        'global-proteome',
+        files,
+        'files',
+        'Global proteome upload failed',
+        onProgress
+      );
       return responseData.files || [];
     },
 
@@ -657,28 +675,25 @@ export const uploadApi = {
       file: File,
       onProgress?: (filename: string, progress: number) => void
     ): Promise<PTMUploadResponse> => {
-      const formData = new FormData();
-      formData.append('file', file);
-      onProgress?.(file.name, 0);
-
-      const response = await fetch(apiUrl(`/sessions/${sessionId}/upload/fasta`), {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new APIError(
-          `FASTA upload failed: ${response.status} ${errorText}`,
-          'UPLOAD_FAILED',
-          response.status
-        );
+      const responseData = await uploadMultipart<
+        PTMUploadResponse | {
+          file?: PTMUploadResponse;
+          files?: PTMUploadResponse[];
+        }
+      >(
+        sessionId,
+        'fasta',
+        [file],
+        'file',
+        'FASTA upload failed',
+        onProgress
+      );
+      if ('filename' in responseData) return responseData;
+      const uploadedFile = responseData.file ?? responseData.files?.[0];
+      if (!uploadedFile) {
+        throw new APIError('FASTA upload returned no file', 'INVALID_RESPONSE', 200);
       }
-
-      onProgress?.(file.name, 100);
-
-      const responseData = await response.json();
-      return responseData.file || responseData;
+      return uploadedFile;
     },
 
   };
@@ -1001,36 +1016,12 @@ export const visualizationApi = {
 export async function getDataSource(
   apiPrefix: string,
   signal?: AbortSignal
-): Promise<{
-  id: string;
-  name: string;
-  config?: {
-    treatment?: string;
-    control?: string;
-    comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
-  };
-  files?: { proteomics: Array<{ experiment: string }> };
-  markers?: string[];
-  volcano_filters?: {
-    foldChange: number;
-    pValue: number;
-    adjPValue: number;
-    s0: number;
-  };
-}> {
+): Promise<DataSource> {
   const response = await fetch(`${API_BASE_URL}${apiPrefix}`, {
     headers: { 'Content-Type': 'application/json' },
     signal,
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      error: { message: 'Failed to fetch session', code: 'UNKNOWN_ERROR' },
-    }));
-    throw new Error(error.error?.message || `HTTP ${response.status}`);
-  }
-  const wrapper = await response.json();
-  // Backend wraps session responses in { data, meta }
-  return wrapper.data || wrapper;
+  return handleResponse<DataSource>(response);
 }
 
 /**
@@ -1082,14 +1073,7 @@ export const organismsApi = {
       const response = await fetch(apiUrl('/organisms'));
       if (!response.ok) {
         // Fallback to default organisms if endpoint not available
-        return [
-          { id: 'human', name: 'Human', display_name: 'Human (Homo sapiens)', available: true },
-          { id: 'mouse', name: 'Mouse', display_name: 'Mouse (Mus musculus)', available: true },
-          { id: 'rat', name: 'Rat', display_name: 'Rat (Rattus norvegicus)', available: true },
-          { id: 'zebrafish', name: 'Zebrafish', display_name: 'Zebrafish (Danio rerio)', available: true },
-          { id: 'fly', name: 'Fruit Fly', display_name: 'Fruit Fly (Drosophila melanogaster)', available: true },
-          { id: 'yeast', name: 'Yeast', display_name: 'Yeast (Saccharomyces cerevisiae)', available: true },
-        ];
+        return getDefaultOrganisms();
       }
       const data = await response.json();
       // Map backend organisms to include 'available' property
@@ -1101,14 +1085,7 @@ export const organismsApi = {
       }));
     } catch {
       // Fallback to default organisms on error
-      return [
-        { id: 'human', name: 'Human', display_name: 'Human (Homo sapiens)', available: true },
-        { id: 'mouse', name: 'Mouse', display_name: 'Mouse (Mus musculus)', available: true },
-        { id: 'rat', name: 'Rat', display_name: 'Rat (Rattus norvegicus)', available: true },
-        { id: 'zebrafish', name: 'Zebrafish', display_name: 'Zebrafish (Danio rerio)', available: true },
-        { id: 'fly', name: 'Fruit Fly', display_name: 'Fruit Fly (Drosophila melanogaster)', available: true },
-        { id: 'yeast', name: 'Yeast', display_name: 'Yeast (Saccharomyces cerevisiae)', available: true },
-      ];
+      return getDefaultOrganisms();
     }
   },
 };

@@ -68,7 +68,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
       }
 
       let markedList: string[] = [];
-      const m = (s as Record<string, unknown>).markers;
+      const m = s.markers;
       if (Array.isArray(m)) markedList = m as string[];
       else if (m && typeof m === 'object') markedList = (m as Record<string, string[]>)[comp.key] || [];
 
@@ -149,7 +149,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
       if (!subnetwork || !subnetwork.nodes?.length) return null;
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       let keyTargets: string[] = [];
-      const m = (s as Record<string, unknown>).markers;
+      const m = s.markers;
       if (Array.isArray(m)) keyTargets = m as string[];
       else if (m && typeof m === 'object') { const perComp = m as Record<string, string[]>; keyTargets = perComp[Object.keys(perComp)[0] || ''] || []; }
       const exportData = buildBioNetExport(subnetwork.nodes, subnetwork.edges, keyTargets, 0.05, 0.5, undefined);

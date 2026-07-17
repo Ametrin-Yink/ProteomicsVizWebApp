@@ -90,7 +90,7 @@ export const ExperimentTable: React.FC = () => {
   const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [newColName, setNewColName] = useState('');
@@ -127,7 +127,7 @@ export const ExperimentTable: React.FC = () => {
     if (hasChanges) {
       setConfig({ metadata_columns: current });
     }
-  }, [uploadedFiles]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [uploadedFiles, config.metadata_columns, setConfig]);
 
   // Derived values from raw state (useMemo to avoid infinite re-render loop in React 19)
   const selected = useMemo(

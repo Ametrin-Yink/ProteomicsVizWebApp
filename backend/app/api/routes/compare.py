@@ -4,7 +4,6 @@ Follows the same async polling pattern as GSEA routes.
 """
 
 import asyncio
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Literal
@@ -21,6 +20,7 @@ from app.services.compare_service import (
     _result_path,
     _write_result,
     _write_status,
+    accession_matches,
     build_fold_change_matrix,
     compute_hierarchical_order,
     compute_protein_similarities,
@@ -30,6 +30,7 @@ from app.services.compare_service import (
     run_cluster,
 )
 from app.services.task_manager import TaskCancelledError, TaskKind, task_manager
+from app.utils.json_io import read_json_file
 
 logger = logging.getLogger("proteomics")
 
@@ -98,16 +99,14 @@ def _run_protein_correlation(session_id: str, req: ProteinCorrelationRequest):
 
         query_idx = None
         for i, acc in enumerate(accessions):
-            if req.protein_id in acc or acc in req.protein_id:
+            if accession_matches(acc, req.protein_id):
                 query_idx = i
                 break
         if query_idx is None:
             raise ValueError(f"Protein {req.protein_id} not found in any comparison")
 
         # Selected protein fold changes across comparisons (with real p-values)
-        pvals = load_pvalues_for_protein(
-            session_dir, comparisons, req.protein_id, accessions
-        )
+        pvals = load_pvalues_for_protein(session_dir, comparisons, req.protein_id)
         selected_fc = []
         for j, comp in enumerate(comparisons):
             val = matrix[query_idx, j]
@@ -348,7 +347,8 @@ async def trigger_protein_correlation(
     # Write "running" status before spawning so the TaskStatusBar sees it
     # immediately (same pattern as GSEA).  The task function will overwrite
     # this with "completed" or "error" when it finishes.
-    _write_status(
+    await asyncio.to_thread(
+        _write_status,
         session_id,
         "protein-correlation",
         {
@@ -390,7 +390,7 @@ async def get_protein_correlation_status(
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return _read_status(session_id, "protein-correlation")
+    return await asyncio.to_thread(_read_status, session_id, "protein-correlation")
 
 
 @router.get("/{session_id}/compare/protein-correlation")
@@ -406,8 +406,7 @@ async def get_protein_correlation_data(
         raise HTTPException(
             status_code=404, detail="No results found — run protein correlation first"
         )
-    with open(rp) as f:
-        return json.load(f)
+    return await read_json_file(rp)
 
 
 # ── Comparison Correlation Endpoints ──
@@ -430,7 +429,8 @@ async def trigger_comparison_correlation(
     # Write "running" status before spawning so the TaskStatusBar sees it
     # immediately (same pattern as GSEA).  The task function will overwrite
     # this with "completed" or "error" when it finishes.
-    _write_status(
+    await asyncio.to_thread(
+        _write_status,
         session_id,
         "comparison-correlation",
         {
@@ -471,7 +471,7 @@ async def get_comparison_correlation_status(
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return _read_status(session_id, "comparison-correlation")
+    return await asyncio.to_thread(_read_status, session_id, "comparison-correlation")
 
 
 @router.get("/{session_id}/compare/comparison-correlation")
@@ -488,8 +488,7 @@ async def get_comparison_correlation_data(
             status_code=404,
             detail="No results found — run comparison correlation first",
         )
-    with open(rp) as f:
-        return json.load(f)
+    return await read_json_file(rp)
 
 
 # ── Protein List Endpoint ──

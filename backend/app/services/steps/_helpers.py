@@ -38,6 +38,18 @@ def build_comparison_label(group: dict) -> str:
     return "+".join(str(v) for v in group.values())
 
 
+def build_comparison_pair_label(comparison: dict) -> str:
+    """Build a filename label for current and legacy comparison formats."""
+    if "group1" in comparison and "group2" in comparison:
+        return (
+            f"{build_comparison_label(comparison['group1'])}_vs_"
+            f"{build_comparison_label(comparison['group2'])}"
+        )
+    if "treatment" in comparison and "control" in comparison:
+        return f"{comparison['treatment']}_vs_{comparison['control']}"
+    raise ValueError("Comparison must define group1/group2 or treatment/control")
+
+
 def create_log_callback(ctx, step: int) -> Callable:
     """Create a log callback for R script stdout/stderr streaming.
 

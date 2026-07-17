@@ -54,15 +54,9 @@ class FileIndexService:
                 indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_parent ON files(parent_path)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_name ON files(name)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_type ON files(file_type)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_parent ON files(parent_path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_name ON files(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_type ON files(file_type)")
 
     def _ensure_schema(self):
         """Create library directory and schema on first init."""
@@ -94,7 +88,9 @@ class FileIndexService:
                     "name": root_path.name,
                     "size": 0,
                     "file_type": "folder",
-                    "parent_path": Path(rel).parent.as_posix() if str(Path(rel).parent) != "." else "",
+                    "parent_path": Path(rel).parent.as_posix()
+                    if str(Path(rel).parent) != "."
+                    else "",
                     "modified_at": datetime.fromtimestamp(st.st_mtime),
                 }
             # Add files
@@ -142,8 +138,14 @@ class FileIndexService:
                         conn.execute(
                             """INSERT INTO files (path, name, size, file_type, parent_path, modified_at)
                                VALUES (?, ?, ?, ?, ?, ?)""",
-                            [path, info["name"], info["size"], info["file_type"],
-                             info["parent_path"], info["modified_at"]],
+                            [
+                                path,
+                                info["name"],
+                                info["size"],
+                                info["file_type"],
+                                info["parent_path"],
+                                info["modified_at"],
+                            ],
                         )
                         added += 1
                     else:
@@ -290,8 +292,12 @@ class FileIndexService:
                 conn.close()
 
     def update_entry(
-        self, old_path: str, new_path: str, new_parent: str,
-        size: int, modified_at: datetime,
+        self,
+        old_path: str,
+        new_path: str,
+        new_parent: str,
+        size: int,
+        modified_at: datetime,
     ):
         """Update path, parent, size, modified_at for an entry. For folders, cascades to children."""
         name = Path(new_path).name
@@ -303,14 +309,43 @@ class FileIndexService:
                     "SELECT file_type FROM files WHERE path = ?", [old_path]
                 ).fetchone()
                 if is_folder and is_folder[0] == "folder":
-                    # LIKE 'prefix/%' ensures only children are matched (not prefix siblings like 'prefix_extra')
+                    # Update the root metadata and descendant paths in one statement.
+                    # LIKE 'prefix/%' avoids touching prefix siblings such as
+                    # "prefix_extra".
                     conn.execute(
                         """UPDATE files
-                           SET path = REPLACE(path, ?, ?),
-                               parent_path = REPLACE(parent_path, ?, ?)
+                           SET path = CASE
+                                   WHEN path = ? THEN ?
+                                   ELSE REPLACE(path, ?, ?)
+                               END,
+                               name = CASE WHEN path = ? THEN ? ELSE name END,
+                               parent_path = CASE
+                                   WHEN path = ? THEN ?
+                                   ELSE REPLACE(parent_path, ?, ?)
+                               END,
+                               size = CASE WHEN path = ? THEN ? ELSE size END,
+                               modified_at = CASE
+                                   WHEN path = ? THEN ? ELSE modified_at
+                               END
                            WHERE path = ? OR path LIKE ?""",
-                        [old_path, new_path, old_path, new_path,
-                         old_path, old_path + "/%"],
+                        [
+                            old_path,
+                            new_path,
+                            old_path,
+                            new_path,
+                            old_path,
+                            name,
+                            old_path,
+                            new_parent,
+                            old_path,
+                            new_path,
+                            old_path,
+                            size,
+                            old_path,
+                            modified_at,
+                            old_path,
+                            old_path + "/%",
+                        ],
                     )
                 else:
                     conn.execute(

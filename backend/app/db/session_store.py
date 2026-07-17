@@ -7,6 +7,7 @@ Provides CRUD operations for session data stored as JSON files.
 import asyncio
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -275,11 +276,7 @@ class SessionStore:
             async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
                 await f.write(session.model_dump_json(indent=2))
                 await f.flush()
-            # On Windows, os.replace requires the target not to exist in some cases.
-            # Remove the old file first, then do the atomic replace.
-            if session_file.exists():
-                session_file.unlink()
-            tmp_path.rename(session_file)
+            await asyncio.to_thread(os.replace, tmp_path, session_file)
 
     def get_session_data_dir(self, session_id: str) -> Path:
         """

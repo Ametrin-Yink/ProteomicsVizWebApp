@@ -4,6 +4,7 @@ import {
   organismsApi,
   processingApi,
   sessionsApi,
+  uploadApi,
   visualizationApi,
 } from '@/lib/api-client';
 
@@ -66,6 +67,25 @@ describe('frontend/backend API contract', () => {
     }
   });
 
+  it.each([
+    ['delete', () => sessionsApi.delete('session-1')],
+    ['rename', () => sessionsApi.rename('session-1', 'Existing name')],
+  ])('preserves backend error details when %s fails', async (_operation, request) => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'A session with that name already exists',
+        },
+      }, 409)
+    );
+
+    await expect(request()).rejects.toMatchObject({
+      message: 'A session with that name already exists',
+      status: 409,
+    });
+  });
+
   it('builds results and QC queries using backend parameter names', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ results: [] }));
     await visualizationApi.getDEResults('/api/sessions/session-1', {
@@ -81,6 +101,25 @@ describe('frontend/backend API contract', () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({}));
     await visualizationApi.getQCData('/api/sessions/session-1');
     expect(mockFetch.mock.calls[1][0]).toBe('/api/sessions/session-1/qc/plots');
+  });
+
+  it('preserves structured backend error codes for visualization requests', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        error: {
+          code: 'PROCESSING_ERROR',
+          message: 'QC results are not ready',
+        },
+      }, 409)
+    );
+
+    await expect(
+      visualizationApi.getQCData('/api/sessions/session-1')
+    ).rejects.toMatchObject({
+      code: 'PROCESSING_ERROR',
+      message: 'QC results are not ready',
+      status: 409,
+    });
   });
 
   it('uses the on-demand analysis endpoints', async () => {
@@ -121,6 +160,35 @@ describe('frontend/backend API contract', () => {
       expect(url).toBe(expectedUrl);
       expect(init?.method).toBe(expectedMethod);
     }
+  });
+
+  it('uses the shared multipart client for PTM and FASTA uploads', async () => {
+    const file = new File(['protein'], 'sample.csv', { type: 'text/csv' });
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      files: [{ filename: 'sample.csv', size: file.size, type: 'ptm_enrichment' }],
+    }));
+
+    await uploadApi.uploadPTMEnrichment('session-1', [file]);
+
+    const [ptmUrl, ptmInit] = mockFetch.mock.calls[0];
+    expect(ptmUrl).toBe('/api/sessions/session-1/upload/ptm-enrichment');
+    expect(ptmInit.method).toBe('POST');
+    expect(ptmInit.body).toBeInstanceOf(FormData);
+    expect((ptmInit.body as FormData).getAll('files')).toEqual([file]);
+
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      files: [{ filename: 'proteome.fasta', size: 10 }],
+    }));
+    const fasta = new File(['>protein'], 'proteome.fasta');
+
+    await expect(uploadApi.uploadFASTA('session-1', fasta)).resolves.toEqual({
+      filename: 'proteome.fasta',
+      size: 10,
+    });
+
+    const [fastaUrl, fastaInit] = mockFetch.mock.calls[1];
+    expect(fastaUrl).toBe('/api/sessions/session-1/upload/fasta');
+    expect((fastaInit.body as FormData).get('file')).toBe(fasta);
   });
 
   it('adapts organism responses to the frontend availability contract', async () => {

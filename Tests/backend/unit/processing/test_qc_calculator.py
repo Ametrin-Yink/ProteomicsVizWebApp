@@ -246,6 +246,20 @@ class TestCalculateDataCompleteness:
         assert "PSM_Count" not in samples
         assert "Protein" not in samples
 
+    def test_excludes_spaced_psm_count_metadata_column(self, calculator):
+        """A spaced PSM count column is metadata, not an abundance sample."""
+        df = pd.DataFrame(
+            {
+                "Master Protein Accessions": ["Prot1", "Prot2"],
+                "PSM Count": [10, 20],
+                "DMSO_1": [25.0, 26.0],
+            }
+        )
+
+        results = calculator._calculate_data_completeness(df)
+
+        assert [result.sample for result in results] == ["DMSO_1"]
+
 
 class TestCalculatePValueDistribution:
     """Tests for _calculate_pvalue_distribution."""

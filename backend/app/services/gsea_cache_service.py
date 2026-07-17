@@ -25,8 +25,12 @@ class GSEACacheKey:
         cls,
         protein_ids: list[str],
         gene_names: list[str],
-        conditions: tuple[str, str],
+        conditions: tuple[str, ...],
         database: str,
+        ranking: list[tuple[str, float]] | None = None,
+        min_size: int = 15,
+        max_size: int = 500,
+        permutations: int = 1000,
     ) -> "GSEACacheKey":
         """Create a cache key from input parameters.
 
@@ -43,6 +47,10 @@ class GSEACacheKey:
             "genes": sorted_genes,
             "conditions": conditions,
             "database": database,
+            "ranking": ranking,
+            "min_size": min_size,
+            "max_size": max_size,
+            "permutations": permutations,
         }
         key_string = json.dumps(key_data, sort_keys=True)
 

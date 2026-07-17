@@ -109,6 +109,29 @@ class TestFoldChangeMatrix:
             assert accessions == ["P1", "P2"]
             assert gene_names == ["Gene1", "Gene2"]
 
+    def test_pvalue_lookup_does_not_match_accession_prefix(self, tmp_path):
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["P10", "P2; P1"],
+                "Gene_Name": ["Wrong", "Right"],
+                "logFC": [9.0, 1.0],
+                "pval": [0.9, 0.01],
+                "adjPval": [0.99, 0.02],
+            }
+        ).to_csv(
+            results_dir / "Diff_Expression_A_vs_B.tsv",
+            sep="\t",
+            index=False,
+        )
+
+        from app.services.compare_service import load_pvalues_for_protein
+
+        result = load_pvalues_for_protein(str(tmp_path), ["A_vs_B"], "P1")
+
+        assert result["A_vs_B"] == {"pval": 0.01, "adj_pval": 0.02}
+
 
 class TestPCA:
     def test_pca_2d_output(self):

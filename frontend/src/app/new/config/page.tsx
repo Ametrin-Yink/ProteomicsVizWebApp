@@ -37,7 +37,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
   const selectedFilesSize = useAnalysisStore((s) => s.selectedFiles.size);
   const canStart = useAnalysisStore(canStartAnalysis);
   const selectedPipeline = getPipelineFromType(analysisType);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   const [isStarting, setIsStarting] = React.useState(false);
   const [isLoadingOrganisms, setIsLoadingOrganisms] = React.useState(true);

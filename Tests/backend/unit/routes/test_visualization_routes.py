@@ -153,3 +153,38 @@ class TestGetQCPlots:
         data = response.json()["data"]
         assert "pca" in data
         assert "pvalue_distribution" in data
+
+
+@pytest.mark.asyncio
+async def test_protein_abundance_uses_exact_accession_match(tmp_path):
+    from app.api.routes.visualization import load_protein_abundance
+
+    pd.DataFrame(
+        {
+            "Master_Protein_Accessions": ["P10", "P2; P1"],
+            "Gene_Name": ["Wrong", "Right"],
+            "Sample1": [9.0, 3.0],
+        }
+    ).to_csv(tmp_path / "Protein_Abundances.tsv", sep="\t", index=False)
+
+    result = await load_protein_abundance(tmp_path, "P1", session_id=str(tmp_path))
+
+    assert result["abundances"] == [8.0]
+
+
+@pytest.mark.asyncio
+async def test_peptide_abundance_uses_exact_accession_match(tmp_path):
+    from app.api.routes.visualization import load_peptide_abundance
+
+    pd.DataFrame(
+        {
+            "Master_Protein_Accessions": ["P10", "P2; P1"],
+            "Sequence": ["WRONG", "RIGHT"],
+            "Sample_Origination": ["Sample1", "Sample1"],
+            "Abundance": [100.0, 5.0],
+        }
+    ).to_csv(tmp_path / "PSM_Abundances.tsv", sep="\t", index=False)
+
+    result = await load_peptide_abundance(tmp_path, "P1", session_id=str(tmp_path))
+
+    assert [peptide["sequence"] for peptide in result["peptides"]] == ["RIGHT"]

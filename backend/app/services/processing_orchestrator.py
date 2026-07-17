@@ -52,6 +52,7 @@ class ProcessingOrchestrator:
             uploads_dir=uploads_dir,
         )
 
+        ctx._progress_callbacks.extend(self.progress_callbacks)
         if websocket_callback:
             ctx._progress_callbacks.append(websocket_callback)
         if self._cancel_event:

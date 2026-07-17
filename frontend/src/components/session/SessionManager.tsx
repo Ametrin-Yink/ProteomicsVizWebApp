@@ -9,6 +9,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import {
   Loader2,
@@ -53,7 +54,19 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const sessionsList = React.useMemo(() => sessions || [], [sessions]);
   const currentSession = useCurrentSession();
   const sessionError = useSessionStore((state) => state.error);
-  const { setCurrentSession, loadSessions, deleteSession, deleteSessions, updateSession } = useSessionStore();
+  const {
+    setCurrentSession,
+    loadSessions,
+    deleteSession,
+    deleteSessions,
+    updateSession,
+  } = useSessionStore(useShallow((state) => ({
+    setCurrentSession: state.setCurrentSession,
+    loadSessions: state.loadSessions,
+    deleteSession: state.deleteSession,
+    deleteSessions: state.deleteSessions,
+    updateSession: state.updateSession,
+  })));
   const { isExpanded: sidebarExpanded } = useSidebar();
 
   const [activeTab, setActiveTab] = React.useState<'active' | 'completed'>('active');
@@ -61,16 +74,16 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const [isSelectMode, setIsSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState('');
+  const currentSessionStatus = currentSession?.status;
   // Sync active tab to the current session's status
   React.useEffect(() => {
-    if (!currentSession) return;
-    if (currentSession.status === 'completed') {
+    if (!currentSessionStatus) return;
+    if (currentSessionStatus === 'completed') {
       setActiveTab('completed');
     } else {
       setActiveTab('active');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSession?.id, currentSession?.status]);
+  }, [currentSessionStatus]);
 
   // Load sessions on mount + poll every 30 seconds
   React.useEffect(() => {

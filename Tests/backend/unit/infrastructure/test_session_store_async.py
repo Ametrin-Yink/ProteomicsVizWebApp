@@ -3,9 +3,11 @@
 import asyncio
 import shutil
 import time
+from pathlib import Path
 
 import pytest
 from app.db.session_store import SessionStore
+from app.models.session import Session
 
 
 @pytest.mark.asyncio
@@ -30,3 +32,25 @@ async def test_delete_runs_recursive_removal_off_event_loop(tmp_path, monkeypatc
     assert not deletion.done()
     await deletion
     assert not session_dir.exists()
+
+
+@pytest.mark.asyncio
+async def test_update_atomically_replaces_existing_session_file(tmp_path, monkeypatch):
+    store = SessionStore(tmp_path)
+    session = Session(
+        id="550e8400-e29b-41d4-a716-446655440001",
+        name="Before",
+    )
+    await store.create(session)
+
+    def fail_if_unlinked(_path):
+        raise AssertionError(
+            "the live session file must not be unlinked before replacement"
+        )
+
+    monkeypatch.setattr(Path, "unlink", fail_if_unlinked)
+    session.name = "After"
+
+    await store.update(session)
+
+    assert (await store.get(session.id)).name == "After"

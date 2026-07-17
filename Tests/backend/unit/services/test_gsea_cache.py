@@ -17,6 +17,39 @@ class TestGSEACacheService:
 
         assert key1.key_hash == key2.key_hash
 
+    def test_cache_key_changes_with_ranked_signal(self):
+        common = {
+            "protein_ids": ["P1", "P2"],
+            "gene_names": ["G1", "G2"],
+            "conditions": ("Treatment", "Control"),
+            "database": "GO_BP",
+        }
+
+        positive = GSEACacheKey.create(
+            **common,
+            ranking=[("G1", 3.0), ("G2", -1.0)],
+        )
+        negative = GSEACacheKey.create(
+            **common,
+            ranking=[("G1", -3.0), ("G2", 1.0)],
+        )
+
+        assert positive.key_hash != negative.key_hash
+
+    def test_cache_key_changes_with_gsea_parameters(self):
+        common = {
+            "protein_ids": ["P1"],
+            "gene_names": ["G1"],
+            "conditions": ("Treatment", "Control"),
+            "database": "GO_BP",
+            "ranking": [("G1", 2.0)],
+        }
+
+        default = GSEACacheKey.create(**common, permutations=1000)
+        customized = GSEACacheKey.create(**common, permutations=100)
+
+        assert default.key_hash != customized.key_hash
+
     def test_cache_store_and_retrieve(self):
         """Test storing and retrieving cached results."""
         from app.models.data import GSEAResult, GSEAResults

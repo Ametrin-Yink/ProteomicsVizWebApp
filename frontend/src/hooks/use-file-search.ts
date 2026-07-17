@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 
 type BaseEntry = { name: string; type?: string; path: string };
 
@@ -17,6 +17,10 @@ export function useFileSearch<T extends BaseEntry>({ entries, fileType = 'all' }
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setSearchQuery = useCallback((q: string) => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setSearchQueryState(q);
     setDebouncedQuery(q);
   }, []);
@@ -25,7 +29,14 @@ export function useFileSearch<T extends BaseEntry>({ entries, fileType = 'all' }
     const value = e.target.value;
     setSearchQueryState(value);
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setDebouncedQuery(value), 300);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      setDebouncedQuery(value);
+    }, 300);
+  }, []);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
   const isSearching = searchQuery !== debouncedQuery;

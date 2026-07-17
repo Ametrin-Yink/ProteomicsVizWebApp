@@ -88,4 +88,4 @@ async def step_ptm_qc_metrics(ctx: StepContext) -> None:
     await asyncio.to_thread(_write_qc)
 
     ctx.step_outputs["qc_path"] = qc_output
-    ctx.state.add_log("PTM QC metrics complete")
+    ctx.state.add_log("info", "PTM QC metrics complete", step=4)

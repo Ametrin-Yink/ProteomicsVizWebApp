@@ -164,6 +164,44 @@ class TestOrchestratorProcessSession:
                 "test-orch-id", SessionState.COMPLETED
             )
 
+    def test_registered_progress_callback_is_forwarded(
+        self, mock_session, orch_config, mock_engine_result, tmp_path
+    ):
+        """Callbacks registered on the orchestrator receive engine progress."""
+        from app.services.processing_orchestrator import ProcessingOrchestrator
+
+        uploads_dir = tmp_path / "uploads"
+        results_dir = tmp_path / "results"
+        uploads_dir.mkdir()
+        results_dir.mkdir()
+
+        callback = AsyncMock()
+        orch = ProcessingOrchestrator(session_id="test-orch-id")
+        orch.register_progress_callback(callback)
+
+        async def run_with_progress(ctx):
+            for registered_callback in ctx._progress_callbacks:
+                await registered_callback("progress")
+            return mock_engine_result
+
+        with (
+            patch(
+                "app.services.processing_orchestrator.PipelineEngine.run",
+                new=AsyncMock(side_effect=run_with_progress),
+            ),
+            patch("app.services.processing_orchestrator.session_manager") as mock_sm,
+        ):
+            mock_sm.get_uploads_dir = AsyncMock(return_value=uploads_dir)
+            mock_sm.get_results_dir = AsyncMock(return_value=results_dir)
+            mock_sm.get_session = AsyncMock(return_value=mock_session)
+            mock_sm.update_session_state = AsyncMock()
+
+            import asyncio
+
+            asyncio.run(orch.process_session(orch_config))
+
+        callback.assert_awaited_once_with("progress")
+
     def test_failure_transitions_to_error(self, mock_session, orch_config, tmp_path):
         """On engine failure: PROCESSING → ERROR with error message."""
         from app.services.processing_orchestrator import ProcessingOrchestrator

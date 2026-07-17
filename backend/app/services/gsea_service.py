@@ -122,6 +122,9 @@ class GSEAService:
         gene_names = (
             diff_df["Gene_Name"].tolist() if "Gene_Name" in diff_df.columns else []
         )
+        ranking = [
+            (str(row.gene), float(row.metric)) for row in rnk.itertuples(index=False)
+        ]
 
         # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -149,7 +152,11 @@ class GSEAService:
 
             # Check cache first
             cache_key = GSEACacheKey.create(
-                protein_ids, gene_names, ("Treatment", "Control"), db_type.value
+                protein_ids,
+                gene_names,
+                ("Treatment", "Control"),
+                db_type.value,
+                ranking=ranking,
             )
             cached_result = gsea_cache_service.get(cache_key)
 
@@ -161,7 +168,7 @@ class GSEAService:
             try:
                 logger.info(f"Running GSEA for {db_name}")
 
-                result = await self._run_single_gsea(
+                result = await self._run_single_gsea_with_params(
                     rnk=rnk,
                     gene_set=db_name,
                     output_dir=output_dir / db_type.value,
@@ -262,127 +269,6 @@ class GSEAService:
 
         # Return only gene and metric columns
         return df[["gene", "metric"]]
-
-    async def _run_single_gsea(
-        self,
-        rnk: pd.DataFrame,
-        gene_set: str,
-        output_dir: Path,
-        protein_df: pd.DataFrame | None = None,
-        threads: int = 4,
-    ) -> GSEAResults:
-        """
-        Run GSEA for a single database.
-
-        Args:
-            rnk: Ranked gene list
-            gene_set: Gene set database name
-            output_dir: Output directory
-            protein_df: Optional protein abundance data for heatmap
-            threads: Number of threads for gseapy
-
-        Returns:
-            GSEAResults object
-        """
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            # Run prerank GSEA (CPU-intensive, offload to thread)
-            def _run_prerank():
-                return gp.prerank(
-                    rnk=rnk,
-                    gene_sets=gene_set,
-                    outdir=str(output_dir),
-                    permutation_num=1000,
-                    min_size=15,
-                    max_size=500,
-                    threads=threads,
-                    seed=123,
-                    verbose=False,
-                )
-
-            pre_res = await asyncio.to_thread(_run_prerank)
-
-            # Parse results
-            results_df = pre_res.res2d
-
-            if results_df is None or len(results_df) == 0:
-                return GSEAResults(
-                    database=gene_set,
-                    total_pathways=0,
-                    significant_pathways=0,
-                    overrepresented=0,
-                    underrepresented=0,
-                    results=[],
-                )
-
-            # Convert to GSEAResult objects
-            gsea_results = []
-            overrepresented = 0
-            underrepresented = 0
-            significant = 0
-
-            for _, row in results_df.iterrows():
-                # Handle different column name formats
-                term = str(row.get("Term", row.get("term", "")))
-                nes = float(row.get("NES", row.get("nes", 0)))
-                pval = float(row.get("NOM p-val", row.get("pval", 1)))
-                fdr = float(row.get("FDR q-val", row.get("fdr", 1)))
-                es = float(row.get("ES", row.get("es", 0)))
-
-                # Get lead genes if available
-                lead_genes = []
-                if "Lead_genes" in row:
-                    lead_genes_str = str(row["Lead_genes"])
-                    # gseapy output uses semicolons to separate genes
-                    lead_genes = [
-                        g.strip() for g in lead_genes_str.split(";") if g.strip()
-                    ]
-
-                # Count matched genes
-                matched_genes = (
-                    int(row.get("Tag %", "0").split("/")[0]) if "Tag %" in row else 0
-                )
-
-                result = GSEAResult(
-                    term=term,
-                    name=term,
-                    es=es,
-                    nes=nes,
-                    pval=pval,
-                    fdr=fdr,
-                    lead_genes=lead_genes,
-                    matched_genes=matched_genes,
-                )
-
-                gsea_results.append(result)
-
-                if result.significant:
-                    significant += 1
-                    if nes > 0:
-                        overrepresented += 1
-                    else:
-                        underrepresented += 1
-
-            return GSEAResults(
-                database=gene_set,
-                total_pathways=len(gsea_results),
-                significant_pathways=significant,
-                overrepresented=overrepresented,
-                underrepresented=underrepresented,
-                results=gsea_results,
-            )
-
-        except Exception as e:
-            logger.error(f"GSEA analysis failed for {gene_set}: {e}")
-            return GSEAResults(
-                database=gene_set,
-                total_pathways=0,
-                significant_pathways=0,
-                overrepresented=0,
-                underrepresented=0,
-                results=[],
-            )
 
     def generate_running_es_curve(
         self,
@@ -658,6 +544,9 @@ class GSEAService:
         gene_names = (
             diff_df["Gene_Name"].tolist() if "Gene_Name" in diff_df.columns else []
         )
+        ranking = [
+            (str(row.gene), float(row.metric)) for row in rnk.itertuples(index=False)
+        ]
 
         # Map database names to enum values
         db_types = []
@@ -671,7 +560,14 @@ class GSEAService:
         async def run_single_db(db_type: DatabaseType) -> tuple[str, GSEAResults]:
             full_db_name = DATABASE_NAMES.get(db_type, db_type.value)
             cache_key = GSEACacheKey.create(
-                protein_ids, gene_names, (comparison_name,), db_type.value
+                protein_ids,
+                gene_names,
+                (comparison_name,),
+                db_type.value,
+                ranking=ranking,
+                min_size=min_size,
+                max_size=max_size,
+                permutations=permutations,
             )
             cached_result = gsea_cache_service.get(cache_key)
 

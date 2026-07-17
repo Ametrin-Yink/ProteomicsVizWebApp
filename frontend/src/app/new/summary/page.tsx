@@ -52,7 +52,7 @@ function SummaryContent() {
   const uploadedFiles = useAnalysisStore((s) => s.uploadedFiles);
   const availableOrganisms = useAnalysisStore((s) => s.availableOrganisms);
   const selectedPipeline = getPipelineFromType(analysisType);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   const { dismiss: dismissBeforeUnload } = useBeforeUnload();
 

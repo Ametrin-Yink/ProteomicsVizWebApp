@@ -1,6 +1,8 @@
 """Unit tests for file library API routes (mocked index service)."""
 
+import asyncio
 import io
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -73,6 +75,22 @@ class TestTreeEndpoint:
         resp = client_with_files.get("/api/files/tree?path=proj")
         assert resp.status_code == 200
         mock_index.list_directory.assert_called_with("proj")
+
+    @pytest.mark.asyncio
+    async def test_list_directory_does_not_block_event_loop(self, mock_index):
+        from app.api.routes.files import list_directory
+
+        def slow_list_directory(path):
+            time.sleep(0.1)
+            return [{"name": path}]
+
+        mock_index.list_directory.side_effect = slow_list_directory
+
+        listing_task = asyncio.create_task(list_directory("proj", mock_index))
+        await asyncio.sleep(0.02)
+
+        assert not listing_task.done()
+        assert await listing_task == {"path": "proj", "entries": [{"name": "proj"}]}
 
 
 class TestCreateFolder:

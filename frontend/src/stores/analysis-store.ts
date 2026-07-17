@@ -86,6 +86,11 @@ export interface AnalysisState {
   reset: () => void;
 }
 
+export type AnalysisData = Pick<
+  AnalysisState,
+  'uploadedFiles' | 'selectedFiles' | 'analysisType' | 'config'
+>;
+
 const defaultConfig: SessionConfig = {
   treatment: '',
   control: '',
@@ -400,16 +405,16 @@ export const useAnalysisStore = create<AnalysisState>()(
 /**
  * Validation selectors
  */
-export const getSelectedFiles = (state: AnalysisState): UploadedFileInfo[] => {
+export const getSelectedFiles = (state: AnalysisData): UploadedFileInfo[] => {
   return state.uploadedFiles.filter((file) => state.selectedFiles.has(file.filename));
 };
 
-export const getExperiments = (state: AnalysisState): string[] => {
+export const getExperiments = (state: AnalysisData): string[] => {
   const selected = getSelectedFiles(state);
   return Array.from(new Set(selected.map((f) => f.experiment)));
 };
 
-function getConditionColumnNames(state: AnalysisState): string[] {
+function getConditionColumnNames(state: AnalysisData): string[] {
   // Derive condition columns from metadata_columns (exclude core fields)
   if (!state.config.metadata_columns) return [];
   const cols = new Set<string>();
@@ -423,7 +428,7 @@ function getConditionColumnNames(state: AnalysisState): string[] {
   return Array.from(cols);
 }
 
-export const getConditions = (state: AnalysisState): string[] => {
+export const getConditions = (state: AnalysisData): string[] => {
   // TMT: derive conditions from tmt_channel_mapping
   if (state.analysisType === 'tmt') {
     const mapping = state.config.tmt_channel_mapping || {};
@@ -448,7 +453,7 @@ export const getConditions = (state: AnalysisState): string[] => {
 };
 
 /** Get condition column names from TMT channel mapping */
-function getTmtConditionColumns(state: AnalysisState): string[] {
+function getTmtConditionColumns(state: AnalysisData): string[] {
   const mapping = state.config.tmt_channel_mapping || {};
   const cols = new Set<string>();
   Object.values(mapping).forEach((entry) => {
@@ -463,7 +468,7 @@ function getTmtConditionColumns(state: AnalysisState): string[] {
  * Generate all pairwise comparisons from conditions.
  * Returns array of { group1: {Condition: ...}, group2: {Condition: ...} } pairs.
  */
-export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ group1: Record<string, string>; group2: Record<string, string> }> => {
+export const getAllPairwiseComparisons = (state: AnalysisData): Array<{ group1: Record<string, string>; group2: Record<string, string> }> => {
   const selected = getSelectedFiles(state);
   const metadataColumns = state.config.metadata_columns || {};
   const condCols = getConditionColumnNames(state);
@@ -487,7 +492,7 @@ export const getAllPairwiseComparisons = (state: AnalysisState): Array<{ group1:
   return comparisons;
 };
 
-export const getReplicatesByCondition = (state: AnalysisState): Record<string, number> => {
+export const getReplicatesByCondition = (state: AnalysisData): Record<string, number> => {
   // TMT: count replicates from tmt_channel_mapping
   if (state.analysisType === 'tmt') {
     const mapping = state.config.tmt_channel_mapping || {};
@@ -517,7 +522,7 @@ export const getReplicatesByCondition = (state: AnalysisState): Record<string, n
  * Get validation state for the current analysis configuration.
  * NOTE: Callers should memoize with useMemo() to avoid unnecessary recalculations on every render.
  */
-export const getValidation = (state: AnalysisState): ExperimentValidation => {
+export const getValidation = (state: AnalysisData): ExperimentValidation => {
   const selected = getSelectedFiles(state);
   const experiments = getExperiments(state);
   const conditions = getConditions(state);
@@ -584,7 +589,7 @@ export const getValidation = (state: AnalysisState): ExperimentValidation => {
   };
 };
 
-export const canStartAnalysis = (state: AnalysisState): boolean => {
+export const canStartAnalysis = (state: AnalysisData): boolean => {
   const baseValid = state.selectedFiles.size > 0 && (state.config.comparisons?.length ?? 0) > 0;
   if (!baseValid) return false;
 

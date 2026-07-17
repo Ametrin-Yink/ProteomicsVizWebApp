@@ -19,16 +19,14 @@ export const DiaMetadataTable: React.FC = () => {
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
   const importMetadataColumns = useAnalysisStore((s) => s.importMetadataColumns);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   // Expose store action for E2E testing (React controlled inputs don't work with Playwright)
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__setDiaMetadata = (data: Record<string, Record<string, string>>) => {
+    window.__setDiaMetadata = (data: Record<string, Record<string, string>>) => {
       setConfig({ metadata_columns: data });
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return () => { delete (window as any).__setDiaMetadata; };
+    return () => { delete window.__setDiaMetadata; };
   }, [setConfig]);
 
   const [newColName, setNewColName] = useState('');
@@ -70,7 +68,7 @@ export const DiaMetadataTable: React.FC = () => {
     if (hasChanges) {
       setConfig({ metadata_columns: current });
     }
-  }, [uploadedFiles]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [uploadedFiles, config.metadata_columns, setConfig]);
 
   const totalPages = Math.ceil(uploadedFiles.length / pageSize);
 

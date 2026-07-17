@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useProcessingStore } from '@/stores/processing-store';
 import { useUIStore } from '@/stores/ui-store';
 import {
@@ -29,7 +30,7 @@ export const useWebSocket = (sessionId: string | null) => {
   const isManualClose = useRef(false);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   const {
     updateStepProgress,
@@ -37,7 +38,13 @@ export const useWebSocket = (sessionId: string | null) => {
     setError,
     setComplete,
     setConnected,
-  } = useProcessingStore();
+  } = useProcessingStore(useShallow((state) => ({
+    updateStepProgress: state.updateStepProgress,
+    addLog: state.addLog,
+    setError: state.setError,
+    setComplete: state.setComplete,
+    setConnected: state.setConnected,
+  })));
 
   const getReconnectDelay = useCallback((): number => {
     // Exponential backoff with jitter

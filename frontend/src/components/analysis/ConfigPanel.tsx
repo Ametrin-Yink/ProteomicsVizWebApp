@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, BarChart3, Info, Loader2 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAnalysisStore, getConditions, getAllPairwiseComparisons } from '@/stores/analysis-store';
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
 import { useUIStore } from '@/stores/ui-store';
@@ -20,11 +21,30 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
   const [isLoadingOrganisms, setIsLoadingOrganisms] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const state = useAnalysisStore();
-  const { config, setConfig, setAvailableOrganisms } = state;
-  const conditions = getConditions(state);
-  const allComparisons = getAllPairwiseComparisons(state);
-  const { addToast } = useUIStore();
+  const {
+    config,
+    analysisType,
+    uploadedFiles,
+    selectedFiles,
+    setConfig,
+    setAvailableOrganisms,
+  } = useAnalysisStore(useShallow((state) => ({
+    config: state.config,
+    analysisType: state.analysisType,
+    uploadedFiles: state.uploadedFiles,
+    selectedFiles: state.selectedFiles,
+    setConfig: state.setConfig,
+    setAvailableOrganisms: state.setAvailableOrganisms,
+  })));
+  const conditions = React.useMemo(
+    () => getConditions({ analysisType, config, selectedFiles, uploadedFiles }),
+    [analysisType, config, selectedFiles, uploadedFiles]
+  );
+  const allComparisons = React.useMemo(
+    () => getAllPairwiseComparisons({ analysisType, config, selectedFiles, uploadedFiles }),
+    [analysisType, config, selectedFiles, uploadedFiles]
+  );
+  const addToast = useUIStore((state) => state.addToast);
 
   // Sync comparisons from config when conditions change
   useEffect(() => {
@@ -40,7 +60,7 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
         setConfig({ comparisons: [...toKeep, ...toAdd] });
       }
     }
-  }, [conditions, template]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allComparisons, config.comparisons, setConfig, template]);
 
   // Load organisms on mount
   useEffect(() => {

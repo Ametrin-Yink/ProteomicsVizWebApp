@@ -122,9 +122,47 @@ class TestStep3DuckDB:
 
             result = pd.read_parquet(output_path, engine="pyarrow")
             for _, row in result.iterrows():
-                assert ";" not in str(row["Master_Protein_Accessions"]), (
-                    f"Razor not resolved for {row['Unique_PSM']}"
+                assert ";" not in str(
+                    row["Master_Protein_Accessions"]
+                ), f"Razor not resolved for {row['Unique_PSM']}"
+
+    def test_final_tie_break_uses_first_highest_count_protein(self):
+        """A count tie must not fall back to a lower-count first accession."""
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.parquet"
+            output_path = Path(tmp) / "output.parquet"
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Master_Protein_Accessions": "LOW; HIGH1; HIGH2",
+                        "Unique_PSM": "AMBIGUOUS||2",
+                    },
+                    {
+                        "Master_Protein_Accessions": "HIGH1",
+                        "Unique_PSM": "HIGH1_ONLY||2",
+                    },
+                    {
+                        "Master_Protein_Accessions": "HIGH2",
+                        "Unique_PSM": "HIGH2_ONLY||2",
+                    },
+                ],
+            )
+
+            processor = DataProcessor(
+                ProcessingConfig(
+                    remove_razor=True,
+                    fasta_db={"LOW": "A", "HIGH1": "AA", "HIGH2": "AA"},
                 )
+            )
+            processor.step3_remove_razor_duckdb(input_path, output_path)
+
+            result = pd.read_parquet(output_path, engine="pyarrow")
+            ambiguous = result.loc[
+                result["Unique_PSM"] == "AMBIGUOUS||2",
+                "Master_Protein_Accessions",
+            ].item()
+            assert ambiguous == "HIGH1"
 
     def test_single_protein_unchanged(self):
         """PSMs with single-protein mappings are not modified."""
@@ -196,6 +234,6 @@ class TestStep3DuckDB:
                 "Replicate",
                 "Abundance",
             }
-            assert expected_cols.issubset(set(result.columns)), (
-                f"Missing columns: {expected_cols - set(result.columns)}"
-            )
+            assert expected_cols.issubset(
+                set(result.columns)
+            ), f"Missing columns: {expected_cols - set(result.columns)}"

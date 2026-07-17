@@ -8,6 +8,7 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Play, ArrowLeft, Loader2 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import FileUploadZone from '@/components/analysis/FileUploadZone';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
@@ -25,13 +26,16 @@ function AnalysisContent() {
   const [isCreatingSession, setIsCreatingSession] = useState(true);
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
 
-  const state = useAnalysisStore();
-  const { config, setConfig } = state;
-  const canStart = canStartAnalysis(state);
-  const { addToast } = useUIStore();
+  const { config, analysisType, setConfig, resetAnalysis } = useAnalysisStore(useShallow((state) => ({
+    config: state.config,
+    analysisType: state.analysisType,
+    setConfig: state.setConfig,
+    resetAnalysis: state.reset,
+  })));
+  const canStart = useAnalysisStore(canStartAnalysis);
+  const addToast = useUIStore((state) => state.addToast);
 
   // Reset analysis store when session ID changes
-  const { reset: resetAnalysis } = useAnalysisStore();
   useEffect(() => {
     if (sessionId) {
       resetAnalysis();
@@ -160,14 +164,7 @@ function AnalysisContent() {
     };
 
     initSession();
-
-    // Cleanup on unmount
-    return () => {
-      // Don't reset store on unmount to allow session persistence
-    };
-    // Only run on mount and when searchParams changes (URL query params)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, router, setConfig, addToast]);
 
   const handleStartAnalysis = async () => {
     if (!canStart || !sessionId) return;
@@ -193,7 +190,7 @@ function AnalysisContent() {
       }
 
       // Navigate to processing page - WebSocket will connect and receive updates
-      const pipeline = getPipelineFromType(state.analysisType) || 'msqrob2';
+      const pipeline = getPipelineFromType(analysisType) || 'msqrob2';
       router.push(`/analysis/processing?session_id=${sessionId}&pipeline=${pipeline}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis';

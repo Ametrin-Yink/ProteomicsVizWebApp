@@ -36,7 +36,7 @@ function MetadataContentInner() {
   const config = useAnalysisStore((s) => s.config);
   const setConfig = useAnalysisStore((s) => s.setConfig);
   const tmtChannelMapping = useAnalysisStore((s) => s.config.tmt_channel_mapping);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
@@ -51,8 +51,7 @@ function MetadataContentInner() {
   // Reset analysis store when session changes — prevents stale file/config leakage
   useEffect(() => {
     resetAnalysis();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, resetAnalysis]);
 
   useSessionValidation(sessionId || null);
 
@@ -90,7 +89,10 @@ function MetadataContentInner() {
 
   // Restore session state on mount
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setIsRestoring(false);
+      return;
+    }
 
     const restore = async () => {
       try {
@@ -144,8 +146,7 @@ function MetadataContentInner() {
     };
 
     restore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, setConfig]);
+  }, [sessionId, setConfig, router, addToast]);
 
   // Auto-save config to backend on changes (debounced) so edits survive refresh
   const { saveError } = useAutoSave(sessionId!, config, { enabled: !isRestoring });

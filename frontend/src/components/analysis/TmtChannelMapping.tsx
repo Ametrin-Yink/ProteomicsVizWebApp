@@ -82,7 +82,7 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
   const updateChannelMapping = useAnalysisStore((s) => s.updateChannelMapping);
   const importChannelMapping = useAnalysisStore((s) => s.importChannelMapping);
   const updateFileMetadata = useAnalysisStore((s) => s.updateFileMetadata);
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
 
   const [newColName, setNewColName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -91,12 +91,10 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
 
   // Expose store action for E2E testing (React controlled inputs don't work with Playwright)
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__updateTmtMapping = (filename: string, channel: string, groups: Record<string, string | number>) => {
+    window.__updateTmtMapping = (filename: string, channel: string, groups: Record<string, string | number>) => {
       updateChannelMapping(filename, channel, groups);
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return () => { delete (window as any).__updateTmtMapping; };
+    return () => { delete window.__updateTmtMapping; };
   }, [updateChannelMapping]);
 
   // T-040: Presets state

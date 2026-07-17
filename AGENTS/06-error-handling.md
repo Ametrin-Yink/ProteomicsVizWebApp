@@ -110,7 +110,7 @@ export const handleApiError = (error: unknown): never => {
       case 'PROCESSING_ERROR':
         addToast({
           type: 'error',
-          message: 'Processing failed. You can retry from the failed step.',
+          message: 'Processing failed. You can retry the analysis.',
           duration: 10000,
         });
         break;
@@ -331,28 +331,13 @@ class ProcessingPipeline:
 ## Recovery Procedures
 
 ### Processing Recovery
-```python
-# services/data_processor.py
 
-async def retry_step(session_id: str, step: int):
-    """Retry a failed processing step."""
-    pipeline = ProcessingPipeline(session_id)
-
-    # Check if step is recoverable
-    state = pipeline.load_state()
-    if not state.step_failed(step):
-        raise ValueError(f"Step {step} did not fail")
-
-    # Retry from failed step
-    try:
-        await pipeline.run(start_from_step=step)
-    except ProcessingError as e:
-        if not e.recoverable:
-            # Mark session as failed
-            state.mark_unrecoverable()
-            raise
-        raise
-```
+Retries are clean full replays, not step-level resumes. The retry route accepts
+only errored sessions, revalidates their configuration and uploaded files, then
+schedules the normal pipeline from step 1. `PipelineState.mark_started()` clears
+the prior attempt's state summary before execution. On-disk inputs and result
+artifacts remain in place, so configuration changes before retry require explicit
+artifact reconciliation and are not currently supported.
 
 ### Session Recovery
 ```python
@@ -396,7 +381,7 @@ const errorMessages: Record<string, (details?: any) => string> = {
     `Invalid file format: ${details.reason}. Required columns: ${details.required.join(', ')}`,
 
   PROCESSING_ERROR: (details) =>
-    `Processing failed at Step ${details.step} (${details.stepName}). ${details.recoverable ? 'You can retry this step.' : 'Please contact support.'}`,
+    `Processing failed at Step ${details.step} (${details.stepName}). ${details.recoverable ? 'You can retry the analysis.' : 'Please contact support.'}`,
 
   SESSION_NOT_FOUND: () =>
     'Session not found. It may have been deleted or expired.',

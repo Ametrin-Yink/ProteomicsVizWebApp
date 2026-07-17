@@ -104,12 +104,45 @@ describe('useAutoSave', () => {
     await act(async () => {
       const first = latest!.saveNow();
       const second = latest!.saveNow();
+      await Promise.resolve();
       resolveSave!();
       await Promise.all([first, second]);
     });
 
     expect(mockUpdateConfig).toHaveBeenCalledTimes(1);
     expect(latest?.isSaving).toBe(false);
+  });
+
+  it('saves a newer configuration after an in-flight save finishes', async () => {
+    let resolveFirstSave: (() => void) | undefined;
+    mockUpdateConfig
+      .mockImplementationOnce(
+        () => new Promise<void>((resolve) => { resolveFirstSave = resolve; })
+      )
+      .mockResolvedValue(undefined);
+    render({ ...baseConfig, logfc_threshold: 1 }, false);
+
+    let firstSave!: Promise<void>;
+    await act(async () => {
+      firstSave = latest!.saveNow();
+      await Promise.resolve();
+    });
+
+    render({ ...baseConfig, logfc_threshold: 2 }, false);
+    const secondSave = latest!.saveNow();
+
+    expect(mockUpdateConfig).toHaveBeenCalledTimes(1);
+
+    resolveFirstSave!();
+    await act(async () => {
+      await Promise.all([firstSave, secondSave]);
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledTimes(2);
+    expect(mockUpdateConfig).toHaveBeenLastCalledWith(
+      'session-1',
+      expect.objectContaining({ logfc_threshold: 2 })
+    );
   });
 
   it('reports an error only after three consecutive failures', async () => {

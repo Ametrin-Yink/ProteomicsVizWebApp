@@ -126,7 +126,7 @@ function BioNetContent() {
       setLoading(false);
     }).catch(() => { setLoading(false); });
     return () => { cancelled = true; };
-  }, [apiPrefix]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiPrefix, startPolling]);
 
   // Cleanup polling
   useEffect(() => {

@@ -8,7 +8,6 @@ import asyncio
 import json
 import logging
 import math
-import re
 import threading
 import uuid
 from datetime import UTC, datetime
@@ -23,6 +22,7 @@ from pydantic import BaseModel
 from app.api.deps import get_session_store
 from app.core.config import settings
 from app.db.session_store import SessionStore
+from app.services.compare_service import accession_matches
 from app.services.gsea_service import gsea_service
 from app.services.task_manager import (
     TaskCancelledError,
@@ -30,6 +30,7 @@ from app.services.task_manager import (
     TaskTimeoutError,
     task_manager,
 )
+from app.utils.json_io import read_json_file
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
 
@@ -1052,9 +1053,7 @@ async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
     gsea_file = session_dir / "gsea_run_status.json"
     if gsea_file.exists():
         try:
-            data = await asyncio.to_thread(
-                lambda: json.loads(gsea_file.read_text(encoding="utf-8"))
-            )
+            data = await read_json_file(gsea_file)
         except Exception:
             data = None
         if (
@@ -1079,9 +1078,7 @@ async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
     bionet_file = session_dir / "bionet_run_status.json"
     if bionet_file.exists():
         try:
-            data = await asyncio.to_thread(
-                lambda: json.loads(bionet_file.read_text(encoding="utf-8"))
-            )
+            data = await read_json_file(bionet_file)
         except Exception:
             data = None
         if (
@@ -1113,9 +1110,7 @@ async def _read_on_demand_task_status(session_id: str) -> list[dict[str, Any]]:
         if not status_file.exists():
             continue
         try:
-            data = await asyncio.to_thread(
-                lambda f=status_file: json.loads(f.read_text(encoding="utf-8"))
-            )
+            data = await read_json_file(status_file)
         except Exception:
             continue
         if (
@@ -1174,9 +1169,7 @@ async def get_gsea_run_status(
     # File is authoritative for terminal states (survives task removal from _active_tasks).
     if status_file.exists():
         try:
-            data = await asyncio.to_thread(
-                lambda: json.loads(status_file.read_text(encoding="utf-8"))
-            )
+            data = await read_json_file(status_file)
         except Exception:
             data = None
 
@@ -1657,9 +1650,7 @@ async def get_bionet_run_status(
     # File is authoritative for terminal states.
     if status_file.exists():
         try:
-            data = await asyncio.to_thread(
-                lambda: json.loads(status_file.read_text(encoding="utf-8"))
-            )
+            data = await read_json_file(status_file)
         except Exception:
             data = None
 
@@ -1723,8 +1714,7 @@ async def get_bionet_subnetwork(
             detail="No BioNet subnetwork computed yet. Run the analysis first.",
         )
 
-    with open(subnetwork_path, encoding="utf-8") as f:
-        subnetwork = json.load(f)
+    subnetwork = await read_json_file(subnetwork_path)
 
     return create_response(subnetwork)
 
@@ -1767,8 +1757,8 @@ async def load_protein_abundance(
 
         # Find the protein row (handle multiple accessions separated by ;)
         protein_row = df[
-            df["Master_Protein_Accessions"].str.contains(
-                re.escape(protein_id), regex=True, na=False
+            df["Master_Protein_Accessions"].map(
+                lambda value: accession_matches(value, protein_id)
             )
         ]
 
@@ -1934,8 +1924,8 @@ async def load_peptide_abundance(
     try:
         # Filter rows for this protein
         protein_rows = df[
-            df["Master_Protein_Accessions"].str.contains(
-                protein_id, na=False, regex=False
+            df["Master_Protein_Accessions"].map(
+                lambda value: accession_matches(value, protein_id)
             )
         ]
 

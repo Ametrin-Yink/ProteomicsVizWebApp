@@ -162,6 +162,10 @@ class TestPipelineStateLifecycle:
         state.data["failed_step"] = 2
         state.data["error"] = "oops"
         state.data["current_step"] = 2
+        state.data["completed_at"] = "2026-01-01T00:00:00+00:00"
+        state.data["step_timings"] = {"step_1": 12.3}
+        state.data["step_memory"] = {"step_1": {"start_mb": 1, "end_mb": 2}}
+        state.data["result"] = {"session_id": state.session_id}
 
         state.mark_started()
 
@@ -171,6 +175,10 @@ class TestPipelineStateLifecycle:
         assert state.data["failed_step"] is None
         assert state.data["error"] is None
         assert state.data["current_step"] == 0
+        assert state.data["completed_at"] is None
+        assert "step_timings" not in state.data
+        assert "step_memory" not in state.data
+        assert "result" not in state.data
 
     def test_mark_started_persists(self, state):
         """After mark_started the file on disk reflects the reset state."""
@@ -216,31 +224,6 @@ class TestPipelineStateLifecycle:
         """mark_completed sets completed_at."""
         state.mark_completed()
         assert state.data["completed_at"] is not None
-
-    def test_can_resume_when_failed(self, state):
-        """can_resume returns True when failed at current step."""
-        state.data["failed_step"] = 2
-        state.data["current_step"] = 2
-        assert state.can_resume() is True
-
-    def test_can_resume_false_when_not_failed(self, state):
-        """can_resume returns False when no failure."""
-        assert state.can_resume() is False
-
-    def test_can_resume_false_step_mismatch(self, state):
-        """can_resume returns False when failed_step differs from current_step."""
-        state.data["failed_step"] = 2
-        state.data["current_step"] = 3
-        assert state.can_resume() is False
-
-    def test_get_last_completed_step(self, state):
-        """get_last_completed_step returns max completed step."""
-        state.data["completed_steps"] = [1, 3, 2]
-        assert state.get_last_completed_step() == 3
-
-    def test_get_last_completed_step_empty(self, state):
-        """get_last_completed_step returns 0 when no steps completed."""
-        assert state.get_last_completed_step() == 0
 
     def test_mark_step_started_default_message(self, state):
         """mark_step_started uses default message when none provided."""
@@ -394,6 +377,38 @@ class TestPipelineEngineRun:
         assert (
             result.processing_time_seconds >= 0
         )  # may be 0.0 with mocked instant handlers
+
+    def test_run_replays_all_steps_after_a_failed_attempt(self, tmp_path):
+        """Retry is a clean replay because step context is rebuilt in memory."""
+        ctx = _make_run_ctx(tmp_path)
+        prior_state = PipelineState(ctx.session_id)
+        prior_state.data.update(
+            {
+                "current_step": 2,
+                "completed_steps": [1],
+                "failed_step": 2,
+                "error": "previous failure",
+                "outputs": {"step_1": "old-output.parquet"},
+            }
+        )
+        prior_state.save()
+
+        handler1 = AsyncMock()
+        handler2 = AsyncMock()
+        pipeline = PipelineDefinition(
+            _TEST_PIPELINE,
+            [
+                PipelineStep(1, "s1", "Step 1", handler1),
+                PipelineStep(2, "s2", "Step 2", handler2),
+            ],
+        )
+
+        result = asyncio.run(PipelineEngine({_TEST_PIPELINE: pipeline}).run(ctx))
+
+        handler1.assert_awaited_once_with(ctx)
+        handler2.assert_awaited_once_with(ctx)
+        assert result.steps_completed == [1, 2]
+        assert ctx.state.data["outputs"] == {}
 
     def test_run_stops_on_error(self, tmp_path):
         """Engine stops at failing step, marks state, and re-raises."""

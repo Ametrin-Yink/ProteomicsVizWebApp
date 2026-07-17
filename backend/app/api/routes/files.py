@@ -82,7 +82,7 @@ async def list_directory(
     index: FileIndexService = Depends(get_index_service),
 ):
     """List directory contents -- folders first, then files."""
-    entries = index.list_directory(path)
+    entries = await _run_in_thread(index.list_directory, path)
     return {"path": path, "entries": entries}
 
 
@@ -106,7 +106,7 @@ async def create_folder(
 
     folder_abs.mkdir(parents=True, exist_ok=False)
     rel = str(Path(folder_rel).as_posix())
-    index.insert_entry(rel, 0, "folder", datetime.now())
+    await _run_in_thread(index.insert_entry, rel, 0, "folder", datetime.now())
     return {"path": rel, "name": name}
 
 
@@ -183,7 +183,8 @@ async def upload_files(
     indexed_paths = []
     try:
         for safe_name, file_type, dest, rel, size in saved_uploads:
-            index.insert_entry(
+            await _run_in_thread(
+                index.insert_entry,
                 rel,
                 size,
                 file_type,
@@ -199,7 +200,7 @@ async def upload_files(
             )
     except BaseException:
         for rel in indexed_paths:
-            index.delete_entry(rel)
+            await _run_in_thread(index.delete_entry, rel)
         for _, _, dest, _, _ in saved_uploads:
             await asyncio.to_thread(dest.unlink, missing_ok=True)
         raise
@@ -242,7 +243,8 @@ async def rename_entry(
 
     await _run_in_thread(shutil.move, str(old_abs), str(new_abs))
 
-    index.update_entry(
+    await _run_in_thread(
+        index.update_entry,
         old_rel,
         new_rel,
         new_parent,
@@ -309,7 +311,8 @@ async def move_entry(
     new_parent = target_parent
 
     is_folder = dest_abs.is_dir()
-    index.update_entry(
+    await _run_in_thread(
+        index.update_entry,
         old_rel,
         new_rel,
         new_parent,
@@ -344,7 +347,7 @@ async def delete_entry(
         await _run_in_thread(os.unlink, str(abs_path))
 
     rel = str(Path(path).as_posix())
-    index.delete_entry(rel)
+    await _run_in_thread(index.delete_entry, rel)
     return {"deleted": rel}
 
 
@@ -363,7 +366,7 @@ async def search_files(
     index: FileIndexService = Depends(get_index_service),
 ):
     """Search files by name substring."""
-    results = index.search(q)
+    results = await _run_in_thread(index.search, q)
     return {"results": results}
 
 

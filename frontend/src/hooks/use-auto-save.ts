@@ -22,7 +22,13 @@ export function useAutoSave(
 ): UseAutoSaveResult {
   const { debounceMs = 800, enabled = true } = opts;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savingRef = useRef(false);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastRequestRef = useRef<{
+    sessionId: string;
+    config: SessionConfig;
+    promise: Promise<void>;
+  } | null>(null);
+  const pendingSavesRef = useRef(0);
   const consecutiveFailuresRef = useRef(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -30,22 +36,47 @@ export function useAutoSave(
   const configRef = useRef(config);
   configRef.current = config;
 
-  const saveNow = useCallback(async () => {
-    if (!sessionId || savingRef.current) return;
-    savingRef.current = true;
-    setIsSaving(true);
-    try {
-      await sessionsApi.updateConfig(sessionId, configRef.current);
-      consecutiveFailuresRef.current = 0;
-      setSaveError(null);
-    } catch (err) {
-      consecutiveFailuresRef.current++;
-      const msg = err instanceof Error ? err.message : 'Save failed';
-      setSaveError(consecutiveFailuresRef.current >= 3 ? `Save failed repeatedly: ${msg}` : null);
-    } finally {
-      savingRef.current = false;
-      setIsSaving(false);
+  const saveNow = useCallback((): Promise<void> => {
+    if (!sessionId) return Promise.resolve();
+
+    const configToSave = configRef.current;
+    const lastRequest = lastRequestRef.current;
+    if (
+      lastRequest?.sessionId === sessionId &&
+      lastRequest.config === configToSave
+    ) {
+      return lastRequest.promise;
     }
+
+    pendingSavesRef.current += 1;
+    setIsSaving(true);
+
+    const performSave = async () => {
+      try {
+        await sessionsApi.updateConfig(sessionId, configToSave);
+        consecutiveFailuresRef.current = 0;
+        setSaveError(null);
+      } catch (err) {
+        consecutiveFailuresRef.current += 1;
+        const msg = err instanceof Error ? err.message : 'Save failed';
+        setSaveError(consecutiveFailuresRef.current >= 3 ? `Save failed repeatedly: ${msg}` : null);
+      } finally {
+        pendingSavesRef.current -= 1;
+        if (pendingSavesRef.current === 0) {
+          setIsSaving(false);
+        }
+      }
+    };
+
+    const promise = saveQueueRef.current.then(performSave);
+    saveQueueRef.current = promise;
+    lastRequestRef.current = { sessionId, config: configToSave, promise };
+    void promise.finally(() => {
+      if (lastRequestRef.current?.promise === promise) {
+        lastRequestRef.current = null;
+      }
+    });
+    return promise;
   }, [sessionId]);
 
   // Debounced auto-save when config changes

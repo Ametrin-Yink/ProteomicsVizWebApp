@@ -79,4 +79,8 @@ SessionConfig (API) → `config_forward_fields` + metadata mapping → AnalysisC
 
 ## Recovery
 
-Failed steps can be retried from the point of failure. Pipeline state is saved after each completed step, allowing resume after server restart. The retry endpoint clears error state and re-runs the pipeline.
+Retry is a clean full replay from step 1. The retry endpoint accepts an errored
+session, revalidates its configuration and uploaded files, and schedules the same
+pipeline path used by a new run. Starting the attempt clears prior completed-step,
+timing, memory, error, and result-summary state. On-disk inputs and result artifacts
+are preserved; true mid-pipeline context reconstruction and resume are not supported.

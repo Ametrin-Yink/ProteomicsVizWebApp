@@ -104,8 +104,8 @@ class DataProcessor:
             if len(candidates) == 1:
                 return candidates[0]
 
-        # Final tie-breaker: first in original list
-        return proteins[0]
+        # Final tie-breaker: first of the remaining top-ranked candidates
+        return candidates[0]
 
     def step4_remove_low_quality_duckdb(
         self, input_path: Path, output_path: Path

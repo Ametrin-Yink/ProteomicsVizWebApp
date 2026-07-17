@@ -16,7 +16,7 @@ const RETRY_DELAY = 1000;
  */
 export function useSessionValidation(sessionId: string | null | undefined) {
   const router = useRouter();
-  const { addToast } = useUIStore();
+  const addToast = useUIStore((state) => state.addToast);
   const attemptsRef = useRef(0);
 
   useEffect(() => {

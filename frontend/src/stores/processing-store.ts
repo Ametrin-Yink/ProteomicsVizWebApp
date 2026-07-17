@@ -62,7 +62,7 @@ const createInitialSteps = (
       const patched = { ...step };
       if (step.id === 6) {
         patched.moduleName = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2+QFeatures';
-        patched.method = pipeline === 'msstats' ? 'dataProcess()' : 'dataProcess()';
+        patched.method = 'dataProcess()';
       }
       if (step.id === 7) {
         patched.moduleName = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2';

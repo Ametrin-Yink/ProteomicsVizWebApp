@@ -108,13 +108,16 @@ function GSEAAnalysisContent() {
     }).catch(() => {});
   }, [apiPrefix]);
 
+  const comparisons = sessionConfig?.comparisons;
+
   // Discover which databases have GSEA results per comparison
   useEffect(() => {
-    if (!apiPrefix || !sessionConfig?.comparisons) return;
+    if (!apiPrefix || !comparisons) return;
+    const activeComparisons = comparisons;
     let cancelled = false;
     const availability: Record<string, GSEADatabase[]> = {};
     async function checkAvailability() {
-      const checks = sessionConfig!.comparisons!.flatMap((c) => {
+      const checks = activeComparisons.flatMap((c) => {
         const comp = formatGroup(c.group1) + '_vs_' + formatGroup(c.group2);
         return DATABASES.map(async (db) => {
           try {
@@ -135,7 +138,7 @@ function GSEAAnalysisContent() {
     }
     checkAvailability();
     return () => { cancelled = true; };
-  }, [apiPrefix, sessionConfig?.comparisons]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiPrefix, comparisons]);
 
   // Poll GSEA run status — only depends on sessionId to avoid stale closures.
   // Uses a ref to always access the latest filter params for the completion data fetch.
@@ -207,7 +210,7 @@ function GSEAAnalysisContent() {
     if (available && available.length > 0 && !available.includes(selectedDatabase)) {
       setSelectedDatabase(available[0]);
     }
-  }, [selectedComparison, gseaAvailability]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedComparison, selectedDatabase, gseaAvailability]);
 
   // Check GSEA status on mount — resume polling if run in progress, load if completed
   useEffect(() => {
@@ -233,9 +236,7 @@ function GSEAAnalysisContent() {
       }
     }).catch(() => {});
     return () => { cancelled = true; };
-    // Only run on mount / session change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiPrefix]);
+  }, [apiPrefix, startPolling]);
 
   // Cleanup polling on unmount
   useEffect(() => {

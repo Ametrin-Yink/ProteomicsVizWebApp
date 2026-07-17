@@ -8,6 +8,7 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useShallow } from 'zustand/react/shallow';
 import { useProcessingStore } from '@/stores/processing-store';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { processingApi } from '@/lib/api-client';
@@ -236,7 +237,30 @@ export function ProcessingContent() {
     syncStepProgress,
     retry,
     reset: resetStore,
-  } = useProcessingStore();
+  } = useProcessingStore(useShallow((state) => ({
+    logs: state.logs,
+    isConnected: state.isConnected,
+    isComplete: state.isComplete,
+    isCancelled: state.isCancelled,
+    isQueued: state.isQueued,
+    queuePosition: state.queuePosition,
+    queueLength: state.queueLength,
+    error: state.error,
+    processingDuration: state.processingDuration,
+    sessionId: state.sessionId,
+    steps: state.steps,
+    initializeSteps: state.initializeSteps,
+    setSessionId: state.setSessionId,
+    setFirstStepProcessing: state.setFirstStepProcessing,
+    setCancelled: state.setCancelled,
+    setLogs: state.setLogs,
+    setComplete: state.setComplete,
+    setQueued: state.setQueued,
+    clearQueued: state.clearQueued,
+    syncStepProgress: state.syncStepProgress,
+    retry: state.retry,
+    reset: state.reset,
+  })));
 
   const stepCount = steps.length;
   const [redirectCountdown, setRedirectCountdown] = useState(3);
@@ -245,8 +269,7 @@ export function ProcessingContent() {
   useEffect(() => {
     if (!sessionId) return;
     resetStore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, resetStore]);
 
   // Initialize WebSocket connection
   useWebSocket(storeSessionId);

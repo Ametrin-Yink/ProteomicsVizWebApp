@@ -24,10 +24,10 @@ Base URL: `http://localhost:8000/api/sessions`
 | PUT | `/api/sessions/{id}/config` | Update config |
 | DELETE | `/api/sessions/{id}` | Delete session |
 | POST | `/api/sessions/{id}/upload/proteomics` | Upload PSM files |
-| GET | `/api/sessions/{id}/processing/status` | Get processing status + queue position |
+| GET | `/api/sessions/{id}/status` | Get processing status + queue position |
 | POST | `/api/sessions/{id}/process` | Start pipeline |
-| GET | `/api/sessions/{id}/processing/logs` | Get processing logs |
-| POST | `/api/sessions/{id}/processing/retry` | Retry failed step |
+| GET | `/api/sessions/{id}/logs` | Get processing logs |
+| POST | `/api/sessions/{id}/retry` | Replay a failed analysis from step 1 |
 | GET | `/api/sessions/{id}/results` | Get DE results |
 | GET | `/api/sessions/{id}/qc/plots` | Get QC data |
 | GET | `/api/sessions/{id}/gsea/{database}` | Get GSEA results |
