@@ -1,11 +1,10 @@
-"""Tests for DuckDB Step 5: Filter by Criteria.
+"""Tests for DuckDB Step 3: Filter Coverage and Protein Eligibility.
 
 Spec ref: Section 5.3 — CTE-based SQL with cond_reps, psm_detected,
-psm_pass, and optional passing_protein_counts (strict mode).
+psm_pass, and passing-protein distinct PSM counts.
 
-Covers: lenient (40%) / strict (20%) thresholds, sparse PSM rejection
-regression (Q9NYC9/ATADKLK case), multi-condition PSMs must pass all,
-strict single-PSM protein removal.
+Covers independent missingness and minimum-PSM settings, sparse PSM rejection,
+multi-condition PSMs that must pass all conditions, and protein eligibility.
 """
 
 import tempfile
@@ -24,7 +23,17 @@ def _write_test_parquet(path: Path, rows: list[dict]) -> None:
 
 
 class TestStep5DuckDB:
-    """Tests for step5_filter_by_criteria_duckdb()."""
+    """Tests for step3_filter_by_criteria_duckdb()."""
+
+    @pytest.mark.parametrize("minimum", [0, 11])
+    def test_minimum_psm_setting_must_be_between_one_and_ten(self, minimum):
+        with pytest.raises(ValueError, match="between 1 and 10"):
+            ProcessingConfig(min_psms_per_protein=minimum)
+
+    @pytest.mark.parametrize("fraction", [-0.01, 1.01])
+    def test_missing_fraction_setting_must_be_between_zero_and_one(self, fraction):
+        with pytest.raises(ValueError, match="between 0 and 1"):
+            ProcessingConfig(max_missing_fraction_per_condition=fraction)
 
     def test_lenient_filtering(self):
         """Lenient (40% threshold): PSM with 1/5 missing passes, 4/5 missing fails.
@@ -162,16 +171,22 @@ class TestStep5DuckDB:
                 ],
             )
 
-            processor = DataProcessor(ProcessingConfig(strict_filtering=False))
-            processor.step5_filter_by_criteria_duckdb(input_path, output_path)
+            processor = DataProcessor(
+                ProcessingConfig(
+                    max_missing_fraction_per_condition=0.40,
+                    min_psms_per_protein=1,
+                    expected_replicates_by_condition={"DMSO": 5},
+                )
+            )
+            processor.step3_filter_by_criteria_duckdb(input_path, output_path)
 
             result = pd.read_parquet(output_path, engine="pyarrow")
             result_psms = set(result["Unique_PSM"].unique())
             assert "PEP1||2" in result_psms, "PEP1 should pass lenient filter"
             assert "PEP2||2" not in result_psms, "PEP2 should fail lenient filter"
 
-    def test_strict_filtering(self):
-        """Strict (20%): only PSMs with 0/5 missing pass, remove single-PSM proteins.
+    def test_independent_missingness_and_minimum_psm_filters(self):
+        """20% missingness and a two-PSM minimum can be enabled independently.
 
         5 replicates: max_missing = int(5*0.2) = 1.
         PEP1+PEP2: 0 missing each, both pass, protein has 2 PSMs -> stays.
@@ -367,8 +382,14 @@ class TestStep5DuckDB:
                 ],
             )
 
-            processor = DataProcessor(ProcessingConfig(strict_filtering=True))
-            processor.step5_filter_by_criteria_duckdb(input_path, output_path)
+            processor = DataProcessor(
+                ProcessingConfig(
+                    max_missing_fraction_per_condition=0.20,
+                    min_psms_per_protein=2,
+                    expected_replicates_by_condition={"DMSO": 5},
+                )
+            )
+            processor.step3_filter_by_criteria_duckdb(input_path, output_path)
 
             result = pd.read_parquet(output_path, engine="pyarrow")
             result_psms = set(result["Unique_PSM"].unique())
@@ -451,13 +472,22 @@ class TestStep5DuckDB:
 
             _write_test_parquet(input_path, rows)
 
-            processor = DataProcessor(ProcessingConfig(strict_filtering=False))
-            processor.step5_filter_by_criteria_duckdb(input_path, output_path)
+            processor = DataProcessor(
+                ProcessingConfig(
+                    max_missing_fraction_per_condition=0.40,
+                    min_psms_per_protein=1,
+                    expected_replicates_by_condition={
+                        "DMSO_24h": 4,
+                        "INCB231845_24h": 3,
+                    },
+                )
+            )
+            processor.step3_filter_by_criteria_duckdb(input_path, output_path)
 
             result = pd.read_parquet(output_path, engine="pyarrow")
-            assert "SPARSE||3" not in result["Unique_PSM"].values, (
-                "Sparse PSM should be rejected (regression test)"
-            )
+            assert (
+                "SPARSE||3" not in result["Unique_PSM"].values
+            ), "Sparse PSM should be rejected (regression test)"
 
     def test_multi_condition_psm_must_pass_all(self):
         """PSM must pass threshold in ALL conditions to be kept.
@@ -570,11 +600,90 @@ class TestStep5DuckDB:
                 ],
             )
 
-            processor = DataProcessor(ProcessingConfig(strict_filtering=False))
-            processor.step5_filter_by_criteria_duckdb(input_path, output_path)
+            processor = DataProcessor(
+                ProcessingConfig(
+                    max_missing_fraction_per_condition=0.40,
+                    min_psms_per_protein=1,
+                    expected_replicates_by_condition={"DMSO": 4, "Drug": 4},
+                )
+            )
+            processor.step3_filter_by_criteria_duckdb(input_path, output_path)
 
             result = pd.read_parquet(output_path, engine="pyarrow")
             result_psms = set(result["Unique_PSM"].unique())
-            assert "PEP1||2" not in result_psms, (
-                "PEP1 fails Drug condition (2 missing > 1 threshold)"
+            assert (
+                "PEP1||2" not in result_psms
+            ), "PEP1 fails Drug condition (2 missing > 1 threshold)"
+
+    def test_expected_design_includes_conditions_absent_from_filtered_data(self):
+        """A PSM missing an entire designed condition fails coverage."""
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.parquet"
+            output_path = Path(tmp) / "output.parquet"
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Master_Protein_Accessions": "P1",
+                        "Unique_PSM": "PEP1||2",
+                        "Condition": "Control",
+                        "Replicate": replicate,
+                        "Abundance": 100.0,
+                    }
+                    for replicate in [1, 2]
+                ],
             )
+            processor = DataProcessor(
+                ProcessingConfig(
+                    max_missing_fraction_per_condition=0.40,
+                    min_psms_per_protein=1,
+                    expected_replicates_by_condition={
+                        "Control": 2,
+                        "Treatment": 2,
+                    },
+                )
+            )
+
+            processor.step3_filter_by_criteria_duckdb(input_path, output_path)
+
+            assert pd.read_parquet(output_path, engine="pyarrow").empty
+
+    def test_minimum_protein_support_counts_distinct_surviving_psms(self):
+        """Expanded replicate rows do not satisfy a multi-PSM protein minimum."""
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.parquet"
+            output_path = Path(tmp) / "output.parquet"
+            rows = []
+            for replicate in [1, 2, 3]:
+                rows.append(
+                    {
+                        "Master_Protein_Accessions": "P1",
+                        "Unique_PSM": "P1_ONLY||2",
+                        "Condition": "Control",
+                        "Replicate": replicate,
+                        "Abundance": 100.0,
+                    }
+                )
+                for psm in ["P2_FIRST||2", "P2_SECOND||2"]:
+                    rows.append(
+                        {
+                            "Master_Protein_Accessions": "P2",
+                            "Unique_PSM": psm,
+                            "Condition": "Control",
+                            "Replicate": replicate,
+                            "Abundance": 100.0,
+                        }
+                    )
+            _write_test_parquet(input_path, rows)
+            processor = DataProcessor(
+                ProcessingConfig(
+                    max_missing_fraction_per_condition=0.40,
+                    min_psms_per_protein=2,
+                    expected_replicates_by_condition={"Control": 3},
+                )
+            )
+
+            processor.step3_filter_by_criteria_duckdb(input_path, output_path)
+
+            result = pd.read_parquet(output_path, engine="pyarrow")
+            assert set(result["Master_Protein_Accessions"]) == {"P2"}

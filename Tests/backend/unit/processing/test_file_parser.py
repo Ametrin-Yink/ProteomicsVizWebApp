@@ -100,6 +100,8 @@ class TestValidateTmtColumns:
                 "Contaminant": [False, False, False],
                 "Master Protein Accessions": ["P12345", "P67890", "P11111"],
                 "Quan Info": ["Valid", "Valid", "Valid"],
+                "Average Reporter SN": [10.0, 5.0, 8.0],
+                "Normalized CHIMERYS Coefficient": [1.0, 0.8, 0.9],
                 "Abundance 126": [100.0, 200.0, None],
                 "Abundance 127N": [150.0, None, 250.0],
                 "Abundance 127C": [175.0, 225.0, 275.0],
@@ -117,6 +119,17 @@ class TestValidateTmtColumns:
             validate_tmt_columns(df, "test_tmt.txt")
         assert "Missing" in str(exc_info.value.message)
 
+    @pytest.mark.parametrize(
+        "column",
+        ["Average Reporter SN", "Normalized CHIMERYS Coefficient"],
+    )
+    def test_validate_tmt_columns_missing_quality_metric(self, valid_tmt_df, column):
+        """Both TMT quality columns are structurally required."""
+        df = valid_tmt_df.drop(columns=[column])
+        with pytest.raises(InvalidFileFormatError) as exc_info:
+            validate_tmt_columns(df, "test_tmt.txt")
+        assert column in exc_info.value.details["missing_columns"]
+
     def test_validate_tmt_columns_no_abundance(self):
         """No abundance columns matching TMT pattern raises error."""
         df = pd.DataFrame(
@@ -127,6 +140,8 @@ class TestValidateTmtColumns:
                 "Contaminant": [False],
                 "Master Protein Accessions": ["P12345"],
                 "Quan Info": ["Valid"],
+                "Average Reporter SN": [10.0],
+                "Normalized CHIMERYS Coefficient": [1.0],
             }
         )
         with pytest.raises(InvalidFileFormatError) as exc_info:
@@ -143,6 +158,8 @@ class TestValidateTmtColumns:
                 "Contaminant": [False, False],
                 "Master Protein Accessions": ["P12345", "P67890"],
                 "Quan Info": ["Valid", "Valid"],
+                "Average Reporter SN": [10.0, 10.0],
+                "Normalized CHIMERYS Coefficient": [1.0, 1.0],
                 "Abundance 126": [100.0, "NOT_A_NUMBER"],
                 "Abundance 127N": [150.0, 250.0],
             }

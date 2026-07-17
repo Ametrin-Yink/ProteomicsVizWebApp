@@ -204,7 +204,6 @@ export function ProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
-  const removeRazor = searchParams.get('remove_razor') !== 'false'; // Default true
 
   useSessionValidation(sessionId);
 
@@ -403,7 +402,7 @@ export function ProcessingContent() {
         const logData = await processingApi.getLogs(sessionId);
 
         // Initialize steps based on server state
-        initializeSteps(removeRazor, pipeline);
+        initializeSteps(pipeline);
 
         // Sync step progress from API (recovers missed WebSocket messages)
         if (logData.completed_steps && logData.current_step) {
@@ -455,7 +454,7 @@ export function ProcessingContent() {
       } catch (err) {
         console.error('Failed to fetch initial state:', err);
         // Fallback: initialize fresh steps
-        initializeSteps(removeRazor, pipeline);
+        initializeSteps(pipeline);
         setFirstStepProcessing();
       }
 
@@ -465,7 +464,7 @@ export function ProcessingContent() {
     };
 
     initFromServer();
-  }, [sessionId, removeRazor, pipeline, initializeSteps, syncStepProgress, setLogs, setSessionId, setComplete, setFirstStepProcessing, setQueued, clearQueued]);
+  }, [sessionId, pipeline, initializeSteps, syncStepProgress, setLogs, setSessionId, setComplete, setFirstStepProcessing, setQueued, clearQueued]);
 
   // Note: Processing is started by the analysis page before navigation
   // This page only connects to WebSocket and displays progress

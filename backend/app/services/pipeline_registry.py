@@ -38,11 +38,9 @@ from app.services.steps.inputs.step_input_tmt import step_input_tmt
 # ── Shared step handlers ────────────────────────────────────────────────
 from app.services.steps.shared.step_filter_criteria import step_filter_criteria_default
 from app.services.steps.shared.step_qc_metrics import step_qc_metrics
-from app.services.steps.shared.step_remove_low_quality import (
-    step_remove_low_quality_default,
+from app.services.steps.shared.step_resolve_shared_peptides import (
+    step_resolve_shared_peptides,
 )
-from app.services.steps.shared.step_remove_razor import step_remove_razor
-from app.services.steps.shared.step_unique_psm import step_unique_psm
 
 PipelineStepSpec = tuple[
     str,
@@ -51,11 +49,17 @@ PipelineStepSpec = tuple[
 ]
 
 TMT_PROTEIN_STEPS: list[PipelineStepSpec] = [
-    ("input_tmt", "Combine Replicates", step_input_tmt),
-    ("unique_psm", "Generate Unique PSM", step_unique_psm),
-    ("remove_razor", "Remove Razor Peptides", step_remove_razor),
-    ("remove_low_quality", "Remove Low Quality", step_remove_low_quality_default),
-    ("filter_criteria", "Filter by Criteria", step_filter_criteria_default),
+    ("input_tmt", "Prepare and Filter PSMs", step_input_tmt),
+    (
+        "resolve_shared_peptides",
+        "Resolve Shared Peptides",
+        step_resolve_shared_peptides,
+    ),
+    (
+        "filter_criteria",
+        "Filter Coverage and Protein Eligibility",
+        step_filter_criteria_default,
+    ),
     (
         "protein_abundance_msstats",
         "Protein Abundance (MSstats)",
@@ -70,11 +74,17 @@ TMT_PROTEIN_STEPS: list[PipelineStepSpec] = [
 ]
 
 DIA_PROTEIN_STEPS: list[PipelineStepSpec] = [
-    ("input_dia", "Combine Replicates", step_input_dia),
-    ("unique_psm", "Generate Unique PSM", step_unique_psm),
-    ("remove_razor", "Remove Razor Peptides", step_remove_razor),
-    ("remove_low_quality", "Remove Low Quality", step_remove_low_quality_default),
-    ("filter_criteria", "Filter by Criteria", step_filter_criteria_default),
+    ("input_dia", "Prepare and Filter PSMs", step_input_dia),
+    (
+        "resolve_shared_peptides",
+        "Resolve Shared Peptides",
+        step_resolve_shared_peptides,
+    ),
+    (
+        "filter_criteria",
+        "Filter Coverage and Protein Eligibility",
+        step_filter_criteria_default,
+    ),
     (
         "protein_abundance_msqrob2",
         "Protein Abundance (msqrob2/QFeatures)",

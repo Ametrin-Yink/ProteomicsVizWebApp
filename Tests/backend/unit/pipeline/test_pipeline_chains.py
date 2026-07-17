@@ -102,9 +102,18 @@ def _make_ctx(
         template=AnalysisTemplate.MULTI_CONDITION,
         pipeline=pipeline,
         organism="human",
-        remove_razor=True,
-        strict_filtering=False,
+        resolve_shared_peptides=True,
+        max_missing_fraction_per_condition=0.40,
+        min_psms_per_protein=1,
         comparisons=_COMPARISONS if with_comparisons else [],
+        metadata={
+            f"{condition}_{replicate}.txt": {
+                "condition": condition,
+                "replicate": replicate,
+            }
+            for condition in ["DMSO", "DrugA"]
+            for replicate in [1, 2, 3]
+        },
     )
     results_dir = tmp_path / "results"
     uploads_dir = tmp_path / "uploads"
@@ -160,21 +169,21 @@ def _make_preseeded_ctx(tmp_path: Path) -> StepContext:
 
 
 class TestColumnContractTMT:
-    """TMT pipeline Step 1+2 output has all required columns (Section 8.1)."""
+    """TMT preparation output has all required columns (Section 8.1)."""
 
     @pytest.mark.asyncio
     async def test_column_contract_tmt(self, tmt_fixture_path, tmp_path):
-        """Run TMT step 1 (input) + step 2 (unique_psm) and check columns."""
+        """Run the combined TMT preparation/filter stage and check columns."""
         from app.services.steps.inputs.step_input_tmt import step_input_tmt
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         channel_mapping = _make_tmt_channel_mapping()
         config = AnalysisConfig(
             template=AnalysisTemplate.MULTI_CONDITION,
             pipeline=PipelineTool.MSSTATS,
             organism="human",
-            remove_razor=True,
-            strict_filtering=False,
+            resolve_shared_peptides=True,
+            max_missing_fraction_per_condition=0.40,
+            min_psms_per_protein=1,
             file_type="tmt",
             tmt_channel_mapping=channel_mapping,
         )
@@ -194,19 +203,12 @@ class TestColumnContractTMT:
         ctx.result = AnalysisResult(session_id="contract-test-tmt")
 
         await step_input_tmt(ctx)
-        # In DuckDB mode, ctx.df is None (Steps 1-2 merged into streaming)
-        # Load from parquet for column verification
+        # Preparation creates Unique_PSM and applies quality filters in DuckDB.
         if ctx.df is None:
-            assert ctx.psm_file_path and ctx.psm_file_path.exists(), (
-                "Step 1 must save parquet when DuckDB streaming"
-            )
-
-        await step_unique_psm(ctx)
-        if ctx.df is None:
-            # DuckDB mode: load parquet for verification
+            assert (
+                ctx.psm_file_path and ctx.psm_file_path.exists()
+            ), "Step 1 must save parquet when DuckDB streaming"
             ctx.df = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
-        else:
-            assert ctx.df is not None, "Step 2 must keep ctx.df alive"
 
         # Check core pipeline-produced columns exist
         for col in CORE_CONTRACT_COLUMNS:
@@ -221,45 +223,45 @@ class TestColumnContractTMT:
         assert "time" in ctx.df.columns, "Missing condition group column: time"
 
         # Verify Sample_Origination format
-        assert ctx.df["Sample_Origination"].str.match(r".+_\d+").all(), (
-            "Sample_Origination should end with _<replicate>"
-        )
+        assert (
+            ctx.df["Sample_Origination"].str.match(r".+_\d+").all()
+        ), "Sample_Origination should end with _<replicate>"
 
         # Verify Abundance is numeric
-        assert pd.api.types.is_numeric_dtype(ctx.df["Abundance"]), (
-            "Abundance must be numeric"
-        )
+        assert pd.api.types.is_numeric_dtype(
+            ctx.df["Abundance"]
+        ), "Abundance must be numeric"
 
         # Verify Replicate is integer
-        assert pd.api.types.is_integer_dtype(ctx.df["Replicate"]), (
-            "Replicate must be integer"
-        )
+        assert pd.api.types.is_integer_dtype(
+            ctx.df["Replicate"]
+        ), "Replicate must be integer"
 
         # Verify no zero abundances
         assert (ctx.df["Abundance"] > 0).all(), "No zero abundances allowed"
 
         # Verify Unique_PSM format
-        assert ctx.df["Unique_PSM"].str.contains("|", regex=False).all(), (
-            "Unique_PSM must contain pipe separators"
-        )
+        assert (
+            ctx.df["Unique_PSM"].str.contains("|", regex=False).all()
+        ), "Unique_PSM must contain pipe separators"
 
 
 class TestColumnContractDIA:
-    """DIA pipeline Step 1+2 output has all required columns (Section 8.1)."""
+    """DIA preparation output has all required columns (Section 8.1)."""
 
     @pytest.mark.asyncio
     async def test_column_contract_dia(self, dia_fixture_path, tmp_path):
-        """Run DIA step 1 (input) + step 2 (unique_psm) and check columns."""
+        """Run the combined DIA preparation/filter stage and check columns."""
         from app.services.steps.inputs.step_input_dia import step_input_dia
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         metadata = _make_dia_metadata(dia_fixture_path)
         config = AnalysisConfig(
             template=AnalysisTemplate.MULTI_CONDITION,
             pipeline=PipelineTool.MSQROB2,
             organism="human",
-            remove_razor=True,
-            strict_filtering=False,
+            resolve_shared_peptides=True,
+            max_missing_fraction_per_condition=0.40,
+            min_psms_per_protein=1,
             file_type="dia",
             metadata=metadata,
         )
@@ -279,16 +281,12 @@ class TestColumnContractDIA:
         ctx.result = AnalysisResult(session_id="contract-test-dia")
 
         await step_input_dia(ctx)
-        assert ctx.psm_file_path and ctx.psm_file_path.exists(), (
-            "Step 1 must save parquet"
-        )
+        assert (
+            ctx.psm_file_path and ctx.psm_file_path.exists()
+        ), "Step 1 must save parquet"
         assert ctx.df is None, "Step 1 must set ctx.df=None (DuckDB mode)"
 
-        await step_unique_psm(ctx)
-        assert ctx.df is None, (
-            "Step 2 must keep ctx.df=None (downstream steps 3-5 use DuckDB SQL)"
-        )
-        # Load parquet for column contract verification
+        # Load the DuckDB preparation output for column contract verification.
         ctx.df = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
 
         # Check core pipeline-produced columns exist
@@ -304,70 +302,55 @@ class TestColumnContractDIA:
         assert "condition_2" in ctx.df.columns, "Missing group column: condition_2"
 
         # Verify Abundance and Replicate types
-        assert pd.api.types.is_numeric_dtype(ctx.df["Abundance"]), (
-            "Abundance must be numeric"
-        )
-        assert pd.api.types.is_integer_dtype(ctx.df["Replicate"]), (
-            "Replicate must be integer"
-        )
+        assert pd.api.types.is_numeric_dtype(
+            ctx.df["Abundance"]
+        ), "Abundance must be numeric"
+        assert pd.api.types.is_integer_dtype(
+            ctx.df["Replicate"]
+        ), "Replicate must be integer"
 
         # Verify Unique_PSM format
-        assert ctx.df["Unique_PSM"].str.contains("|", regex=False).all(), (
-            "Unique_PSM must contain pipe separators"
-        )
+        assert (
+            ctx.df["Unique_PSM"].str.contains("|", regex=False).all()
+        ), "Unique_PSM must contain pipe separators"
 
 
 # ── Python-only chain tests (shared steps 2-5) ─────────────────────────
 
 
 class TestSharedChainSteps:
-    """Shared pipeline steps 2-5 (unique_psm, razor, quality, filter)."""
+    """Shared protein-resolution and coverage stages compose via Parquet."""
 
     @pytest.mark.asyncio
-    async def test_step2_keeps_dataframe(self, tmp_path):
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
-
-        ctx = _make_preseeded_ctx(tmp_path)
-        assert ctx.df is not None
-
-        await step_unique_psm(ctx)
-        assert ctx.df is not None, "Unified step 2 must keep ctx.df alive"
-        assert "Unique_PSM" in ctx.df.columns
-
-    @pytest.mark.asyncio
-    async def test_full_chain_2_to_5(self, tmp_path):
-        """Shared steps 2-5: ctx.df stays alive until step 5 frees it."""
+    async def test_shared_stage_chain(self, tmp_path):
         from app.services.steps.shared.step_filter_criteria import (
             step_filter_criteria_default,
         )
-        from app.services.steps.shared.step_remove_low_quality import (
-            step_remove_low_quality_default,
+        from app.services.steps.shared.step_resolve_shared_peptides import (
+            step_resolve_shared_peptides,
         )
-        from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         ctx = _make_preseeded_ctx(tmp_path)
-        assert ctx.df is not None
-
-        await step_unique_psm(ctx)
-        assert ctx.df is not None, "Step 2 must keep ctx.df"
-        await step_remove_razor(ctx)
-        assert ctx.df is not None, "Step 3 must keep ctx.df"
-        await step_remove_low_quality_default(ctx)
-        assert ctx.df is not None, "Step 4 must keep ctx.df"
+        await step_resolve_shared_peptides(ctx)
         await step_filter_criteria_default(ctx)
-        assert ctx.psm_file_path.exists(), "Step 5 must write PSM_Abundances.parquet"
+        assert ctx.psm_file_path.exists()
+        assert ctx.psm_file_path.name == "PSM_Abundances.parquet"
 
     @pytest.mark.asyncio
-    async def test_step_razor_removes_multi_protein(self, tmp_path):
-        from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
+    async def test_resolver_assigns_shared_psm_to_one_protein(self, tmp_path):
+        from app.services.steps.shared.step_resolve_shared_peptides import (
+            step_resolve_shared_peptides,
+        )
 
         ctx = _make_preseeded_ctx(tmp_path)
-        await step_unique_psm(ctx)
-        await step_remove_razor(ctx)
-        assert ctx.df is not None
-        multi = ctx.df["Master_Protein_Accessions"].str.contains(";").sum()
+        shared = pd.read_parquet(ctx.psm_file_path, engine="pyarrow").iloc[[0]].copy()
+        shared["Master_Protein_Accessions"] = "P00000; P99999"
+        shared.to_parquet(ctx.psm_file_path, engine="pyarrow", index=False)
+
+        await step_resolve_shared_peptides(ctx)
+
+        result = pd.read_parquet(ctx.psm_file_path, engine="pyarrow")
+        multi = result["Master_Protein_Accessions"].str.contains(";").sum()
         assert multi == 0, f"Expected 0 multi-protein accessions, got {multi}"
 
 
@@ -375,10 +358,10 @@ class TestSharedChainSteps:
 
 
 class TestMSstatsFullPipeline:
-    """MSstats (TMT): ALL 8 steps with mocked R steps 6-7."""
+    """MSstats (TMT): six-stage pipeline with mocked R stages 4-5."""
 
     @pytest.mark.asyncio
-    async def test_all_8_steps(self, tmp_path):
+    async def test_all_6_steps(self, tmp_path):
         from app.services.steps.engines.step_msstats_abundance import (
             step_msstats_protein_abundance,
         )
@@ -389,11 +372,9 @@ class TestMSstatsFullPipeline:
             step_filter_criteria_default,
         )
         from app.services.steps.shared.step_qc_metrics import step_qc_metrics
-        from app.services.steps.shared.step_remove_low_quality import (
-            step_remove_low_quality_default,
+        from app.services.steps.shared.step_resolve_shared_peptides import (
+            step_resolve_shared_peptides,
         )
-        from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         # Use pre-seeded DataFrame (bypasses input step 1)
         ctx = _make_preseeded_ctx(tmp_path)
@@ -401,17 +382,12 @@ class TestMSstatsFullPipeline:
         ctx.config.pipeline = PipelineTool.MSSTATS
         results = ctx.results_dir
 
-        # ── Steps 2-5: Python (real) ──
-        await step_unique_psm(ctx)
-        assert ctx.df is not None
-        await step_remove_razor(ctx)
-        assert ctx.df is not None
-        await step_remove_low_quality_default(ctx)
-        assert ctx.df is not None
+        # ── Stages 2-3: shared DuckDB filters (real) ──
+        await step_resolve_shared_peptides(ctx)
         await step_filter_criteria_default(ctx)
-        assert ctx.psm_file_path.exists(), "Step 5 must write output parquet"
+        assert ctx.psm_file_path.exists(), "Stage 3 must write output parquet"
 
-        # ── Step 6: Protein abundance (mocked MSstats R) ──
+        # ── Stage 4: Protein abundance (mocked MSstats R) ──
         rds = results / "MSstats_Processed.rds"
         protein_df = _write_protein_abundance_tsv(results)
 
@@ -428,7 +404,7 @@ class TestMSstatsFullPipeline:
         assert ctx.result.total_proteins == 5
         assert rds.exists()
 
-        # ── Step 7: Differential expression (mocked MSstats R) ──
+        # ── Stage 5: Differential expression (mocked MSstats R) ──
         with patch(
             "app.services.steps.engines.step_msstats_de.msstats_wrapper.group_comparison_multi",
             new=AsyncMock(
@@ -442,7 +418,7 @@ class TestMSstatsFullPipeline:
         assert ctx.result.significant_proteins > 0
         assert (results / f"Diff_Expression_{_COMPARISON_LABEL}.tsv").exists()
 
-        # ── Step 8: QC metrics (real Python) ──
+        # ── Stage 6: QC metrics (real Python) ──
         await step_qc_metrics(ctx)
 
         qc_file = results / "QC_Results.json"
@@ -451,10 +427,10 @@ class TestMSstatsFullPipeline:
 
 
 class TestMsqrob2FullPipeline:
-    """msqrob2 (DIA): ALL 8 steps with mocked R steps 6-7."""
+    """msqrob2 (DIA): six-stage pipeline with mocked R stages 4-5."""
 
     @pytest.mark.asyncio
-    async def test_all_8_steps(self, tmp_path):
+    async def test_all_6_steps(self, tmp_path):
         from app.services.steps.engines.step_msqrob2_abundance import (
             step_protein_abundance_msqrob2,
         )
@@ -463,11 +439,9 @@ class TestMsqrob2FullPipeline:
             step_filter_criteria_default,
         )
         from app.services.steps.shared.step_qc_metrics import step_qc_metrics
-        from app.services.steps.shared.step_remove_low_quality import (
-            step_remove_low_quality_default,
+        from app.services.steps.shared.step_resolve_shared_peptides import (
+            step_resolve_shared_peptides,
         )
-        from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         # Use pre-seeded DataFrame (bypasses input step 1)
         ctx = _make_preseeded_ctx(tmp_path)
@@ -475,17 +449,12 @@ class TestMsqrob2FullPipeline:
         ctx.config.pipeline = PipelineTool.MSQROB2
         results = ctx.results_dir
 
-        # ── Steps 2-5: Python (real) ──
-        await step_unique_psm(ctx)
-        assert ctx.df is not None
-        await step_remove_razor(ctx)
-        assert ctx.df is not None
-        await step_remove_low_quality_default(ctx)
-        assert ctx.df is not None
+        # ── Stages 2-3: shared DuckDB filters (real) ──
+        await step_resolve_shared_peptides(ctx)
         await step_filter_criteria_default(ctx)
-        assert ctx.psm_file_path.exists(), "Step 5 must write output parquet"
+        assert ctx.psm_file_path.exists(), "Stage 3 must write output parquet"
 
-        # ── Step 6: Protein abundance (mocked msqrob2 R) ──
+        # ── Stage 4: Protein abundance (mocked msqrob2 R) ──
         rds = results / "MSqRob2_Processed.rds"
         protein_df = _write_protein_abundance_tsv(results)
 
@@ -502,7 +471,7 @@ class TestMsqrob2FullPipeline:
         assert ctx.result.total_proteins == 5
         assert rds.exists()
 
-        # ── Step 7: Differential expression (mocked msqrob2 R) ──
+        # ── Stage 5: Differential expression (mocked msqrob2 R) ──
         with patch(
             "app.services.steps.engines.step_msqrob2_de.msqrob2_wrapper.group_comparison_multi",
             new=AsyncMock(
@@ -516,7 +485,7 @@ class TestMsqrob2FullPipeline:
         assert ctx.result.significant_proteins > 0
         assert (results / f"Diff_Expression_{_COMPARISON_LABEL}.tsv").exists()
 
-        # ── Step 8: QC metrics (real Python) ──
+        # ── Stage 6: QC metrics (real Python) ──
         await step_qc_metrics(ctx)
 
         qc_file = results / "QC_Results.json"

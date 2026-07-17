@@ -130,7 +130,6 @@ function SummaryContent() {
     const params = new URLSearchParams({
       session_id: sessionId,
       pipeline: selectedPipeline ?? 'msqrob2',
-      remove_razor: String(config.remove_razor ?? true),
     });
     router.replace(`/analysis/processing?${params}`);
   };
@@ -301,15 +300,15 @@ function SummaryContent() {
               <span className="text-text-primary font-medium">{organismLabel}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Remove Razor Peptides</span>
-              <span className={cn('font-medium', config.remove_razor ? 'text-success' : 'text-text-muted')}>
-                {config.remove_razor ? 'Yes' : 'No'}
+              <span className="text-text-muted block text-xs">Resolve Shared Peptides</span>
+              <span className={cn('font-medium', config.resolve_shared_peptides ? 'text-success' : 'text-text-muted')}>
+                {config.resolve_shared_peptides ? 'Yes' : 'No'}
               </span>
             </div>
             <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Strict Filtering</span>
-              <span className={cn('font-medium', config.strict_filtering ? 'text-success' : 'text-text-muted')}>
-                {config.strict_filtering ? 'Yes' : 'No'}
+              <span className="text-text-muted block text-xs">Max Missing per Condition</span>
+              <span className="text-text-primary font-medium">
+                {Math.round(config.max_missing_fraction_per_condition * 100)}%
               </span>
             </div>
             <div className="bg-surface rounded-lg p-3">
@@ -321,8 +320,8 @@ function SummaryContent() {
               <span className="text-text-primary font-medium">{config.logfc_threshold ?? 1.0}</span>
             </div>
             <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Min Peptides per Protein</span>
-              <span className="text-text-primary font-medium">{config.min_peptides_per_protein ?? 1}</span>
+              <span className="text-text-muted block text-xs">Min PSMs per Protein</span>
+              <span className="text-text-primary font-medium">{config.min_psms_per_protein}</span>
             </div>
           </div>
 
@@ -393,21 +392,19 @@ function SummaryContent() {
                   <span className="text-text-primary font-medium">{config.msstats_censored_int ?? 'NA'}</span>
                 </div>
                 <div className="bg-surface rounded-lg p-3">
-                  <span className="text-text-muted block text-xs">Max Quantile</span>
+                  <span className="text-text-muted block text-xs">Censored-Value Max Quantile</span>
                   <span className="text-text-primary font-medium">{config.msstats_max_quantile ?? 0.999}</span>
                 </div>
-                <div className="bg-surface rounded-lg p-3">
-                  <span className="text-text-muted block text-xs">Remove 50% Missing</span>
-                  <span className={cn('font-medium', config.msstats_remove50missing ? 'text-success' : 'text-text-muted')}>
-                    {config.msstats_remove50missing ? 'Yes' : 'No'}
-                  </span>
-                </div>
+                {config.msstats_feature_selection === 'topN' && (
                 <div className="bg-surface rounded-lg p-3">
                   <span className="text-text-muted block text-xs">N Top Feature</span>
                   <span className="text-text-primary font-medium">{config.msstats_n_top_feature ?? 3}</span>
                 </div>
+                )}
+                {config.msstats_feature_selection === 'highQuality' && (
+                  <>
                 <div className="bg-surface rounded-lg p-3">
-                  <span className="text-text-muted block text-xs">Min Feature Count</span>
+                  <span className="text-text-muted block text-xs">High-Quality Min Features</span>
                   <span className="text-text-primary font-medium">{config.msstats_min_feature_count ?? 2}</span>
                 </div>
                 <div className="bg-surface rounded-lg p-3">
@@ -416,6 +413,8 @@ function SummaryContent() {
                     {config.msstats_remove_uninformative_feature_outlier ? 'Yes' : 'No'}
                   </span>
                 </div>
+                  </>
+                )}
                 <div className="bg-surface rounded-lg p-3">
                   <span className="text-text-muted block text-xs">Equal Feature Var</span>
                   <span className={cn('font-medium', config.msstats_equal_feature_var !== false ? 'text-success' : 'text-text-muted')}>

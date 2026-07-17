@@ -29,9 +29,7 @@ from .ptm_step4_qc import step_ptm_qc_metrics
 # ── Shared step handlers ────────────────────────────────────────────────
 from .shared.step_filter_criteria import step_filter_criteria_default
 from .shared.step_qc_metrics import step_qc_metrics
-from .shared.step_remove_low_quality import step_remove_low_quality_default
-from .shared.step_remove_razor import step_remove_razor
-from .shared.step_unique_psm import step_unique_psm
+from .shared.step_resolve_shared_peptides import step_resolve_shared_peptides
 
 __all__ = [
     "create_log_callback",
@@ -49,7 +47,5 @@ __all__ = [
     "step_ptm_qc_metrics",
     "step_ptm_summarization",
     "step_qc_metrics",
-    "step_remove_low_quality_default",
-    "step_remove_razor",
-    "step_unique_psm",
+    "step_resolve_shared_peptides",
 ]

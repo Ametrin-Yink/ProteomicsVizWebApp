@@ -171,18 +171,18 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
             <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
               <div>
                 <span className="text-sm font-medium text-text-primary">
-                  Remove Razor Peptides
-                  <HelpTooltip text="Razor peptides are peptides that can be assigned to multiple protein groups. When enabled, only peptides uniquely mapping to a single protein group are used for quantification. This improves specificity and is recommended for most analyses." />
+                  Resolve Shared Peptides
+                  <HelpTooltip text="Assign each peptide-spectrum match with multiple candidate proteins to the candidate supported by the most distinct PSMs. Ties use the original accession order. When disabled, the original protein group is preserved." />
                 </span>
                 <p className="text-xs text-text-muted mt-0.5">
-                  Exclude peptides matching multiple protein groups
+                  Assign shared PSMs to the best-supported protein
                 </p>
               </div>
               <input
-                data-testid="remove-razor-checkbox"
+                data-testid="resolve-shared-peptides-checkbox"
                 type="checkbox"
-                checked={config.remove_razor}
-                onChange={(e) => setConfig({ remove_razor: e.target.checked })}
+                checked={config.resolve_shared_peptides}
+                onChange={(e) => setConfig({ resolve_shared_peptides: e.target.checked })}
                 className="sr-only peer"
               />
               <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
@@ -191,29 +191,34 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
                 peer-checked:after:translate-x-4 flex-shrink-0"
               />
             </label>
-            <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
+            <div className="p-3 bg-surface rounded-lg border border-border">
               <div>
                 <span className="text-sm font-medium text-text-primary">
-                  Strict Filtering
-                  <HelpTooltip text="Applies a 20% missing value threshold (removes proteins with >20% missing values across samples). Also removes proteins identified by only a single peptide. This improves statistical reliability at the cost of reduced coverage." />
+                  Maximum Missing Values per Condition
+                  <HelpTooltip text="A PSM must meet this missing-replicate limit in every condition. The percentage is applied to the expected replicate count from the experimental design; lower values are more stringent." />
                 </span>
                 <p className="text-xs text-text-muted mt-0.5">
-                  20% missing value threshold, remove single-peptide proteins
+                  Allowed missing replicate percentage in every condition
                 </p>
               </div>
               <input
-                data-testid="strict-filtering-checkbox"
-                type="checkbox"
-                checked={config.strict_filtering}
-                onChange={(e) => setConfig({ strict_filtering: e.target.checked })}
-                className="sr-only peer"
+                data-testid="missing-value-threshold-input"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(config.max_missing_fraction_per_condition * 100)}
+                onChange={(e) => {
+                  const percent = Number(e.target.value);
+                  if (Number.isFinite(percent)) {
+                    setConfig({ max_missing_fraction_per_condition: Math.min(100, Math.max(0, percent)) / 100 });
+                  }
+                }}
+                className="mt-3 w-24 px-3 py-2 bg-background border border-border rounded-lg text-text-primary text-sm
+                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
-              <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-                after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-                after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-                peer-checked:after:translate-x-4 flex-shrink-0"
-              />
-            </label>
+              <span className="ml-2 text-sm text-text-muted">%</span>
+            </div>
           </div>
         </div>
       </section>
@@ -290,30 +295,32 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
             </p>
           </div>
 
-          {/* Exclude single-peptide proteins */}
-          <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
-            <div>
-              <span className="text-sm font-medium text-text-primary">
-                Exclude Single-Peptide Proteins
-                <HelpTooltip text="Proteins identified by only a single peptide are less reliable. Enabling this removes them from the analysis, improving confidence at the cost of reduced coverage. Proteins with multiple peptides provide more robust quantification." />
-              </span>
-              <p className="text-xs text-text-muted mt-0.5">
-                Remove proteins with only one identified peptide from the analysis
-              </p>
-            </div>
+          {/* Minimum PSMs per protein */}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Minimum PSMs per Protein
+              <HelpTooltip text="After missing-value filtering and shared-peptide resolution, retain only proteins supported by at least this many distinct Unique_PSM identifiers. Reporter channels and replicate rows are not counted more than once." />
+            </label>
             <input
-              type="checkbox"
-              data-testid="exclude-single-peptide-checkbox"
-              checked={(config.min_peptides_per_protein ?? 1) > 1}
-              onChange={(e) => setConfig({ min_peptides_per_protein: e.target.checked ? 2 : 1 })}
-              className="sr-only peer"
+              type="number"
+              min={1}
+              max={10}
+              step={1}
+              data-testid="min-psms-per-protein-input"
+              value={config.min_psms_per_protein}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                if (Number.isFinite(value)) {
+                  setConfig({ min_psms_per_protein: Math.min(10, Math.max(1, Math.round(value))) });
+                }
+              }}
+              className="w-24 px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
-            <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-              after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-              after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-              peer-checked:after:translate-x-5"
-            />
-          </label>
+            <p className="text-xs text-text-muted mt-1">
+              Counts distinct surviving PSMs after the per-condition missing-value filter
+            </p>
+          </div>
         </div>
       </section>
 

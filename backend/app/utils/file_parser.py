@@ -23,6 +23,8 @@ TMT_REQUIRED_COLUMNS = [
     "Contaminant",
     "Master Protein Accessions",
     "Quan Info",
+    "Average Reporter SN",
+    "Normalized CHIMERYS Coefficient",
 ]
 
 # Required columns for DIA files (Quan Info NOT required — DIA PD exports lack it)
@@ -253,7 +255,9 @@ def parse_proteomics_file(file_path: Path, file_type: str) -> dict:
         InvalidFileFormatError: On validation failure or unknown file_type.
     """
     delimiter = detect_delimiter(file_path)
-    df = pd.read_csv(file_path, delimiter=delimiter, low_memory=False)
+    # Structural validation and numeric spot checks need only a small sample.
+    # Full row-level coercion/filtering is streamed by DuckDB during processing.
+    df = pd.read_csv(file_path, delimiter=delimiter, nrows=100, low_memory=False)
     columns = list(df.columns)
 
     if file_type == "tmt":

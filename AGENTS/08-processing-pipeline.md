@@ -1,86 +1,94 @@
 # 08 - Processing Pipeline
 
-The pipeline uses a **plugin-based engine** (`pipeline_engine.py`) with step handlers registered in `pipeline_registry.py`. Both pipelines are 8-step symmetric:
+The plugin-based engine in `pipeline_engine.py` runs step handlers registered in
+`pipeline_registry.py`. DIA/msqrob2 and TMT/MSstats use the same six-stage shape:
 
-- **msqrob2** (DIA): QFeatures-native pipeline using msqrob2 v1.16 API. Steps 1-5 Python, steps 6-7 R, step 8 Python.
-- **MSstats** (TMT): R/MSstats for protein abundance and DE. Steps 1-5 Python, steps 6-7 R, step 8 Python.
+1. Prepare and filter PSMs.
+2. Resolve shared peptides, when enabled.
+3. Filter per-condition coverage and protein eligibility.
+4. Calculate protein abundance with the selected R engine.
+5. Run differential expression with the selected R engine.
+6. Calculate QC metrics in Python.
 
-GSEA, BioNet, and Compare are on-demand — triggered from visualization/compare routes, not pipeline steps.
+GSEA, BioNet, and Compare are on-demand analyses triggered from visualization or
+comparison routes; they are not pipeline stages.
 
-## DIA Optimized Path (msqrob2, DuckDB-only)
+## Shared DuckDB preprocessing
 
-Steps 1-5 use pure DuckDB SQL reading/writing Parquet on disk. `ctx.df = None` after DuckDB signals disk-based path. No pandas in preprocessing.
+Stages 1-3 use DuckDB SQL over Parquet. `ctx.df = None` after preparation signals
+the disk-based path; pandas is not used in preprocessing.
 
-- **Steps 1-2:** Single streaming DuckDB COPY query: `read_csv(all files) → JOIN metadata → Unique_PSM → filter contaminants/Quan_Info/Abundance<1 → COPY TO parquet`. Peak memory <500MB.
-- **Step 3:** Two-phase DuckDB + Python: (1) DuckDB SQL aggregates protein-peptide counts, (2) Python applies best-protein selection per peptide.
-- **Step 4:** Single DuckDB COPY ... SELECT with WHERE clause for row-level filters.
-- **Step 5:** DuckDB SQL with CTE chain: computes per-condition missing-value thresholds, then applies filter in a single query.
+- Stage 1 creates `Unique_PSM` and removes contaminant/reverse hits,
+  `Quan Info=No Value`, and abundance values below 1. TMT also requires
+  `Average Reporter SN >= 5` and `Normalized CHIMERYS Coefficient >= 0.8`
+  before UNPIVOT, so rejected PSMs never expand into reporter-channel rows.
+- Stage 2 assigns each shared `Unique_PSM` to the candidate protein with the
+  greatest distinct-PSM support. Original accession order breaks ties. When the
+  option is disabled, the original protein group is preserved without copying.
+- Stage 3 requires every PSM to pass the configured missing-value fraction in
+  every designed condition, then requires the configured number of distinct
+  surviving PSMs per protein. Expected replicate counts come from experiment
+  design metadata, not the already-filtered Parquet file.
 
-### Key details (msqrob2)
+The canonical methods are:
 
-- **Step 6 R script** (`msqrob2_data_process.R`): Reads `PSM_Abundances.parquet`, runs full QFeatures preprocessing. After aggregation, removes peptide-level assays (`removeAssay()`) to free ~50% R memory. Controlled by `keep_intermediate_assays` config (default false).
-- **Step 7 R script** (`msqrob2_group_comparison_multi.R`): Uses msqrob2 v1.16 API. When comparisons exceed `msqrob2_batch_size` (default 10), splits across parallel R subprocesses. Each batch loads a pre-fitted QFeatures RDS, skips `msqrob()` model fitting, and runs only `makeContrast()` + `hypothesisTest()`. Supports optional `label` field per comparison for custom file naming.
-- **Ridge regression**: `msqrob2_ridge` defaults to `False`. Ridge requires 5+ replicates — with 3 replicates it causes `lme4` boundary singular fits and returns all-NA.
-- **PCA edge case**: QC calculator handles n_features < 2 after NaN removal (returns empty PCA result instead of crashing).
+- `step1_2_duckdb_dia()` - join DIA files to sample metadata and write Parquet.
+- `step1_2_duckdb_tmt()` - filter raw PSMs, expand channels, map the TMT design,
+  and write long-format Parquet.
+- `step2_resolve_shared_peptides_duckdb()` - resolve shared protein assignments.
+- `step3_filter_by_criteria_duckdb()` - apply coverage and protein eligibility.
 
-## MSstats Pipeline (8 steps)
+## R engine ownership
 
-```
-Steps 1-2: Python (combine_replicates, unique_psm) — keeps ctx.df alive for steps 3-5
-Steps 3-5: Python preprocessing (remove_razor, remove_low_quality, filter_criteria)
-Step 6:    R (MSstats dataProcess) → Protein_Abundances.tsv
-Step 7:    R (MSstats groupComparison) → Diff_Expression_*.tsv — supports batched execution
-Step 8:    Python (QC metrics) → QC_Results.json
-```
+DuckDB owns contaminant/reverse filtering, shared-peptide assignment,
+missingness, and minimum-PSM protein eligibility. The R stages must not repeat
+those filters.
 
-## Architecture
+- `msstats_data_process.R` retains MSstats conversion, feature selection,
+  normalization, imputation, and summarization. It preserves the authoritative
+  protein/group identifier, sets `useUniquePeptide=FALSE`, and disables the
+  converter's hidden few-measurement removal.
+- `msqrob2_data_process.R` retains QFeatures normalization, optional imputation,
+  and aggregation. It no longer applies razor, contaminant/reverse,
+  observation-count, or minimum-peptide filters.
+- Both R engines report `PSM_Count` as distinct `Unique_PSM` support for the
+  exact authoritative protein/group identifier.
+- Group-comparison stages support batched execution for large comparison sets.
 
-**Pipeline Engine** (`pipeline_engine.py`):
-- `PipelineDefinition` — ordered list of `PipelineStep` objects keyed by `PipelineTool`
-- `StepContext` — mutable context passed through all steps. After DuckDB streaming, `ctx.df = None` signals disk-based (DuckDB SQL) path for Steps 3-5.
-- `PipelineEngine.run()` — iterates steps, handles cancellation, saves state after each step. Records `step_timings` and `step_memory` in `pipeline_state.json` for profiling.
+## Configuration
 
-**Step Handlers** (`services/steps/`):
-- Steps 1-2 for DIA: DuckDB path calls `DataProcessor.step1_2_duckdb_dia()` then sets `ctx.df = None`.
-- Steps 3-5: Each handler checks `ctx.df is None` → uses DuckDB SQL from `ctx.psm_file_path`. When `ctx.df` is populated → uses existing pandas in-memory path (backward compat for TMT).
-- Steps 6-7: R scripts via `Msqrob2Wrapper`. Step 7 supports batched mode via `group_comparison_batched()`.
+Shared filtering uses three independent fields in both `SessionConfig` and
+`AnalysisConfig`:
 
-**DuckDB DataProcessor** (`data_processor.py`):
-- `step1_2_duckdb_dia()` — streaming CSV→Parquet via DuckDB SQL. Builds in-memory metadata table, JOINs on filename basename, applies filters, writes Parquet with zstd.
-- `step3_remove_razor_duckdb()` — two-phase DuckDB + Python: (1) DuckDB SQL aggregates protein-peptide counts, (2) Python applies best-protein selection per peptide
-- `step4_remove_low_quality_duckdb()` — single DuckDB COPY ... SELECT with WHERE clause for row-level filters
-- `step5_filter_by_criteria_duckdb()` — DuckDB SQL with CTE chain: computes per-condition missing-value thresholds, then applies filter in a single query
+- `resolve_shared_peptides` (boolean)
+- `max_missing_fraction_per_condition` (0 through 1; default 0.40)
+- `min_psms_per_protein` (1 through 10; default 1)
 
-**Task Manager** (`task_manager.py`):
-- Isolates long-running computations into dedicated thread pools per `TaskKind` (PIPELINE, GSEA, BIONET, COMPUTE, LIGHT)
-- Prevents pipeline steps from starving the default asyncio executor
-- Handles queuing: sessions wait in queue when all pipeline workers are busy
+Persisted legacy fields are migrated on load: `remove_razor` maps to shared
+resolution, `strict_filtering=true` maps to 0.20 missingness and at least two
+PSMs per protein, and `min_peptides_per_protein` maps to the new PSM minimum.
+Explicit new fields always take precedence.
 
-## State Management
+Session configuration flows from the API model through
+`_build_analysis_config()` to the pipeline context. Any new field must exist in
+both API and analysis models and must be covered by the configuration-forwarding
+contract test.
 
-Pipeline state persisted to `sessions/{session_id}/pipeline_state.json`:
-```json
-{
-  "current_step": 0,
-  "completed_steps": [],
-  "failed_step": null,
-  "error": null,
-  "outputs": {},
-  "step_timings": {},
-  "step_memory": {}
-}
-```
+## Architecture and state
 
-## Config Flow
+- `PipelineDefinition` is the ordered list of `PipelineStep` objects for a
+  `PipelineTool`.
+- `StepContext` carries file paths, configuration, results, and stage outputs.
+- `PipelineEngine.run()` handles cancellation, saves state after every stage,
+  and records timing and memory in `pipeline_state.json`.
+- `task_manager.py` isolates long computations in task-specific thread pools and
+  queues sessions when pipeline workers are occupied.
 
-SessionConfig (API) → `config_forward_fields` + metadata mapping → AnalysisConfig (pipeline).
+Pipeline state is stored at `sessions/{session_id}/pipeline_state.json` with the
+current stage, completed stages, failure information, output paths, timings, and
+memory measurements.
 
-**Critical:** New msqrob2 fields must be added to BOTH `SessionConfig` (API model) AND `config_forward_fields` (processing.py). If a field exists in `AnalysisConfig` but not in `SessionConfig`, `hasattr(sc, field)` returns `False` and the field is silently dropped — the API ignores the user's setting and uses the AnalysisConfig default. This caused the "0 proteins" bug: `msqrob2_ridge` was changed to default `True` but `SessionConfig` lacked the field, so every run used ridge regardless of the user's config.
-
-## Recovery
-
-Retry is a clean full replay from step 1. The retry endpoint accepts an errored
-session, revalidates its configuration and uploaded files, and schedules the same
-pipeline path used by a new run. Starting the attempt clears prior completed-step,
-timing, memory, error, and result-summary state. On-disk inputs and result artifacts
-are preserved; true mid-pipeline context reconstruction and resume are not supported.
+Retry performs a clean replay from stage 1. It revalidates configuration and
+inputs and clears prior stage/result state while preserving uploaded inputs and
+existing result artifacts. True mid-pipeline context reconstruction is not
+supported.

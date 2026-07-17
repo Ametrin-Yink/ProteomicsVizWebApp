@@ -2,7 +2,7 @@
 E2E integration test: Full DIA protein analysis pipeline via File Library.
 
 Uses 12 DIA sample files (10K rows each) with 4 conditions across 3 drugs.
-Verifies all 8 msqrob2 pipeline steps complete via file library selection.
+Verifies all six msqrob2 pipeline stages complete via file library selection.
 """
 
 import os
@@ -174,8 +174,9 @@ def dia_session(live_server):
         "file_type": "dia",
         "organism": "human",
         "pipeline": "msqrob2",
-        "remove_razor": True,
-        "strict_filtering": False,
+        "resolve_shared_peptides": True,
+        "max_missing_fraction_per_condition": 0.40,
+        "min_psms_per_protein": 1,
         "comparisons": COMPARISONS,
         "metadata_columns": {fname: meta for fname, meta in DIA_FILES},
         "msqrob2_normalization": "center.median",
@@ -185,7 +186,6 @@ def dia_session(live_server):
         "msqrob2_adjust_method": "BH",
         "pvalue_threshold": 0.05,
         "logfc_threshold": 1.0,
-        "min_peptides_per_protein": 1,
     }
     r = requests.post(f"{api_url}/{sid}/config", json=config)
     assert r.status_code == 200, f"Config failed: {r.text[:300]}"
@@ -227,7 +227,7 @@ class TestDIAPipelineE2E:
     def test_session_state_completed(self, dia_session):
         assert dia_session["state"] == "completed"
 
-    def test_all_eight_steps_completed(self, dia_session):
+    def test_all_six_stages_completed(self, dia_session):
         sid = dia_session["id"]
         r = requests.get(f"{dia_session['_api_url']}/{sid}/logs")
         logs = r.json()
@@ -239,9 +239,7 @@ class TestDIAPipelineE2E:
             4,
             5,
             6,
-            7,
-            8,
-        ], f"Expected all 8 steps completed, got {completed}"
+        ], f"Expected all 6 stages completed, got {completed}"
 
     def test_three_comparison_files_exist(self, dia_session):
         """All 3 DE comparison files are generated on disk."""
@@ -272,19 +270,20 @@ class TestDIAPipelineE2E:
         qc = r.json()
         assert "pca" in qc or "data" in qc, "QC data missing PCA"
 
-    def test_remove_razor_applied(self, dia_session):
-        """Remove razor step was executed (step 3 in completed_steps)."""
+    def test_shared_peptide_resolution_applied(self, dia_session):
+        """Shared-peptide resolution was executed as stage 2."""
         sid = dia_session["id"]
         r = requests.get(f"{dia_session['_api_url']}/{sid}/logs")
         logs = r.json()
         completed = logs.get("completed_steps", [])
-        assert 3 in completed, "Step 3 (Remove Razor) not completed"
+        assert 2 in completed, "Stage 2 (Resolve Shared Peptides) not completed"
 
-    def test_strict_filtering_applied(self, dia_session):
-        """Strict filtering config matches session."""
+    def test_explicit_filter_settings_applied(self, dia_session):
+        """Independent coverage and protein settings match the session."""
         config = dia_session.get("config", {})
-        assert config.get("strict_filtering") is False
-        assert config.get("remove_razor") is True
+        assert config.get("resolve_shared_peptides") is True
+        assert config.get("max_missing_fraction_per_condition") == 0.40
+        assert config.get("min_psms_per_protein") == 1
 
     def test_pipeline_uses_msqrob2(self, dia_session):
         """Pipeline logs reference msqrob2."""

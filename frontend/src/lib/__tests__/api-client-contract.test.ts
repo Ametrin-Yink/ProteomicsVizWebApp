@@ -32,8 +32,9 @@ describe('frontend/backend API contract', () => {
 
     await sessionsApi.updateConfig('session-1', {
       organism: 'mouse',
-      remove_razor: true,
-      strict_filtering: true,
+      resolve_shared_peptides: true,
+      max_missing_fraction_per_condition: 0.2,
+      min_psms_per_protein: 2,
       msqrob2_ridge: false,
       logfc_threshold: 1.5,
     });
@@ -43,8 +44,9 @@ describe('frontend/backend API contract', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({
       organism: 'mouse',
-      remove_razor: true,
-      strict_filtering: true,
+      resolve_shared_peptides: true,
+      max_missing_fraction_per_condition: 0.2,
+      min_psms_per_protein: 2,
       msqrob2_ridge: false,
       logfc_threshold: 1.5,
     });

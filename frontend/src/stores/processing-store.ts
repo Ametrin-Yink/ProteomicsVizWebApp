@@ -34,7 +34,7 @@ interface ProcessingStore {
   queueLength: number;
 
   // Actions
-  initializeSteps: (removeRazor: boolean, pipeline?: 'msqrob2' | 'msstats') => void;
+  initializeSteps: (pipeline?: 'msqrob2' | 'msstats') => void;
   setSessionId: (sessionId: string) => void;
   setFirstStepProcessing: () => void;
   updateStepProgress: (message: ProgressMessage['payload']) => void;
@@ -53,18 +53,22 @@ interface ProcessingStore {
 
 
 const createInitialSteps = (
-  removeRazor: boolean = true,
   pipeline: 'msqrob2' | 'msstats' = 'msqrob2'
 ): ProcessingStepDef[] => {
   return PROCESSING_STEPS
-    .filter((step) => removeRazor || step.id !== 3)
     .map((step) => {
       const patched = { ...step };
-      if (step.id === 6) {
+      if (step.id === 4) {
+        patched.name = pipeline === 'msstats'
+          ? 'Protein Abundance (MSstats)'
+          : 'Protein Abundance (msqrob2/QFeatures)';
         patched.moduleName = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2+QFeatures';
         patched.method = 'dataProcess()';
       }
-      if (step.id === 7) {
+      if (step.id === 5) {
+        patched.name = pipeline === 'msstats'
+          ? 'Differential Expression (MSstats)'
+          : 'Differential Expression (msqrob2)';
         patched.moduleName = pipeline === 'msstats' ? 'R/MSstats' : 'R/msqrob2';
         patched.method = pipeline === 'msstats' ? 'groupComparison()' : 'msqrobLm()';
       }
@@ -89,9 +93,9 @@ export const useProcessingStore = create<ProcessingStore>()(
     queueLength: 0,
 
     // Initialize steps based on configuration
-    initializeSteps: (removeRazor: boolean, pipeline?: 'msqrob2' | 'msstats') => {
+    initializeSteps: (pipeline?: 'msqrob2' | 'msstats') => {
       set((state) => {
-        state.steps = createInitialSteps(removeRazor, pipeline);
+        state.steps = createInitialSteps(pipeline);
         state.logs = [];
         state.isComplete = false;
         state.isCancelled = false;

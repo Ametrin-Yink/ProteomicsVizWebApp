@@ -151,9 +151,9 @@ class TestSessionConfigAPI:
                 "treatment": "INCZ123456",
                 "control": "DMSO",
                 "organism": "human",
-                "remove_razor": True,
-                "strict_filtering": False,
-                "min_peptides_per_protein": 4,
+                "resolve_shared_peptides": True,
+                "max_missing_fraction_per_condition": 0.30,
+                "min_psms_per_protein": 4,
             },
         )
 
@@ -162,9 +162,9 @@ class TestSessionConfigAPI:
         assert data["config"]["treatment"] == "INCZ123456"
         assert data["config"]["control"] == "DMSO"
         assert data["config"]["organism"] == "human"
-        assert data["config"]["remove_razor"] is True
-        assert data["config"]["strict_filtering"] is False
-        assert data["config"]["min_peptides_per_protein"] == 4
+        assert data["config"]["resolve_shared_peptides"] is True
+        assert data["config"]["max_missing_fraction_per_condition"] == 0.30
+        assert data["config"]["min_psms_per_protein"] == 4
         assert data["state"] == "configuring"
 
     def test_update_config_rejects_unknown_fields(self, client):

@@ -3053,16 +3053,35 @@ components:
           - type: 'null'
           title: Organism
           description: Organism identifier (e.g., 'human', 'mouse')
+        resolve_shared_peptides:
+          type: boolean
+          title: Resolve Shared Peptides
+          description: Assign each shared PSM to its best-supported protein
+          default: false
+        max_missing_fraction_per_condition:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Max Missing Fraction Per Condition
+          description: Maximum missing replicate fraction allowed in every condition
+          default: 0.4
+        min_psms_per_protein:
+          type: integer
+          maximum: 10.0
+          minimum: 1.0
+          title: Min Psms Per Protein
+          description: Minimum distinct surviving PSMs required per protein
+          default: 1
         remove_razor:
           type: boolean
           title: Remove Razor
-          description: Whether to remove razor peptides
           default: false
+          deprecated: true
         strict_filtering:
           type: boolean
           title: Strict Filtering
-          description: Use strict filtering criteria
           default: false
+          deprecated: true
         comparisons:
           anyOf:
           - items:
@@ -3079,7 +3098,9 @@ components:
           anyOf:
           - additionalProperties:
               additionalProperties:
-                type: string
+                anyOf:
+                - type: string
+                - type: integer
               type: object
             type: object
           - type: 'null'

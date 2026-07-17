@@ -98,11 +98,11 @@ const defaultConfig: SessionConfig = {
   pipeline: undefined,
   file_type: undefined,
   tmt_channel_mapping: undefined,
-  remove_razor: false,
-  strict_filtering: false,
+  resolve_shared_peptides: false,
+  max_missing_fraction_per_condition: 0.40,
+  min_psms_per_protein: 1,
   pvalue_threshold: 0.05,
   logfc_threshold: 1.0,
-  min_peptides_per_protein: 1,
   comparisons: [],
   metadata_columns: {},
   msstats_normalization: 'equalizeMedians',
@@ -112,7 +112,6 @@ const defaultConfig: SessionConfig = {
   msstats_log_base: 2,
   msstats_censored_int: 'NA',
   msstats_max_quantile: 0.999,
-  msstats_remove50missing: false,
   msstats_n_top_feature: 3,
   msstats_min_feature_count: 2,
   msstats_remove_uninformative_feature_outlier: false,
@@ -123,6 +122,46 @@ const defaultConfig: SessionConfig = {
   covariate_columns: [],
   msqrob2_batch_column: 'batch',
 };
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+/** Convert legacy filter flags to the explicit filter controls used by new sessions. */
+export function migrateLegacyFilterConfig(configUpdate: Partial<SessionConfig>): Partial<SessionConfig> {
+  const migrated = { ...configUpdate };
+
+  if (migrated.resolve_shared_peptides === undefined && typeof migrated.remove_razor === 'boolean') {
+    migrated.resolve_shared_peptides = migrated.remove_razor;
+  }
+
+  if (migrated.max_missing_fraction_per_condition === undefined && typeof migrated.strict_filtering === 'boolean') {
+    migrated.max_missing_fraction_per_condition = migrated.strict_filtering ? 0.20 : 0.40;
+  }
+
+  if (
+    migrated.min_psms_per_protein === undefined &&
+    (typeof migrated.min_peptides_per_protein === 'number' || typeof migrated.strict_filtering === 'boolean')
+  ) {
+    const legacyMinimum = typeof migrated.min_peptides_per_protein === 'number'
+      ? migrated.min_peptides_per_protein
+      : 1;
+    migrated.min_psms_per_protein = migrated.strict_filtering
+      ? Math.max(2, legacyMinimum)
+      : legacyMinimum;
+  }
+
+  if (typeof migrated.max_missing_fraction_per_condition === 'number') {
+    migrated.max_missing_fraction_per_condition = clamp(migrated.max_missing_fraction_per_condition, 0, 1);
+  }
+  if (typeof migrated.min_psms_per_protein === 'number') {
+    migrated.min_psms_per_protein = clamp(Math.round(migrated.min_psms_per_protein), 1, 10);
+  }
+
+  delete migrated.remove_razor;
+  delete migrated.strict_filtering;
+  delete migrated.min_peptides_per_protein;
+  delete migrated.msstats_remove50missing;
+  return migrated;
+}
 
 export const useAnalysisStore = create<AnalysisState>()(
   immer((set) => ({
@@ -260,9 +299,10 @@ export const useAnalysisStore = create<AnalysisState>()(
 
     setConfig: (configUpdate) => {
       set((state) => {
-        const keys = Object.keys(configUpdate) as (keyof SessionConfig)[];
+        const migratedUpdate = migrateLegacyFilterConfig(configUpdate);
+        const keys = Object.keys(migratedUpdate) as (keyof SessionConfig)[];
         for (const key of keys) {
-          (state.config as Record<string, unknown>)[key] = (configUpdate as Record<string, unknown>)[key];
+          (state.config as Record<string, unknown>)[key] = (migratedUpdate as Record<string, unknown>)[key];
         }
       });
     },

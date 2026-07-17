@@ -57,8 +57,9 @@ interface SessionConfig {
   treatment?: string;
   control?: string;
   organism?: string;
-  remove_razor: boolean;
-  strict_filtering: boolean;
+  resolve_shared_peptides: boolean;
+  max_missing_fraction_per_condition: number; // 0..1
+  min_psms_per_protein: number; // 1..10 distinct surviving PSMs
   comparisons?: Array<{ group1: Record<string, string>; group2: Record<string, string> }>;
   // MSstats and msqrob2 parameters (normalization, imputation, aggregation, etc.)
   msstats_normalization?: string;

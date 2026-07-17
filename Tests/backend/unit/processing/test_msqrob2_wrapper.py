@@ -15,9 +15,9 @@ def test_data_process_config_maps_scientific_parameters(wrapper):
         msqrob2_normalization="quantiles",
         msqrob2_imputation="knn",
         msqrob2_aggregation="medianPolish",
-        min_peptides_per_protein=3,
-        remove_razor=True,
-        strict_filtering=True,
+        resolve_shared_peptides=True,
+        max_missing_fraction_per_condition=0.2,
+        min_psms_per_protein=3,
         msqrob2_batch_column="batch",
         metadata={
             "sample.txt": {
@@ -33,9 +33,6 @@ def test_data_process_config_maps_scientific_parameters(wrapper):
         "normalization": "quantiles",
         "imputation": "knn",
         "aggregation": "medianPolish",
-        "min_peptides": 3,
-        "remove_razor": True,
-        "strict_filtering": True,
         "numberOfCores": 5,
         "batch_column": "batch",
         "metadata": {
@@ -47,6 +44,11 @@ def test_data_process_config_maps_scientific_parameters(wrapper):
         },
         "keep_intermediate_assays": False,
     }
+
+
+def test_data_process_script_counts_distinct_psms(wrapper):
+    script = (wrapper.scripts_dir / "msqrob2_data_process.R").read_text()
+    assert ".(PSM_Count = uniqueN(Unique_PSM))" in script
 
 
 def test_group_comparison_config_maps_model_options(wrapper):

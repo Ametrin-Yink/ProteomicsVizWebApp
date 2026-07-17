@@ -1,4 +1,4 @@
-"""Full TMT pipeline chain test with DuckDB streaming (Steps 1-5, R mocked)."""
+"""Full six-stage TMT pipeline chain with DuckDB streaming and mocked R."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -61,11 +61,11 @@ _COMPARISON_LABEL = "DrugA_24h_vs_DMSO_24h"
     r"ignore:Degrees of freedom <= 0 for slice\.:RuntimeWarning"
 )
 class TestTMTFullChainDuckDB:
-    """Full TMT pipeline (Steps 1-8) with DuckDB streaming and mocked R."""
+    """Full six-stage TMT pipeline with DuckDB streaming and mocked R."""
 
     @pytest.mark.asyncio
     async def test_full_chain_duckdb(self, tmp_path):
-        """All 8 steps complete with DuckDB streaming for Steps 1-2."""
+        """All six stages complete with DuckDB preprocessing."""
 
         from app.services.steps.engines.step_msstats_abundance import (
             step_msstats_protein_abundance,
@@ -78,11 +78,9 @@ class TestTMTFullChainDuckDB:
             step_filter_criteria_default,
         )
         from app.services.steps.shared.step_qc_metrics import step_qc_metrics
-        from app.services.steps.shared.step_remove_low_quality import (
-            step_remove_low_quality_default,
+        from app.services.steps.shared.step_resolve_shared_peptides import (
+            step_resolve_shared_peptides,
         )
-        from app.services.steps.shared.step_remove_razor import step_remove_razor
-        from app.services.steps.shared.step_unique_psm import step_unique_psm
 
         # Create test input
         csv_path = tmp_path / "test_tmt.txt"
@@ -100,8 +98,9 @@ class TestTMTFullChainDuckDB:
             template=AnalysisTemplate.MULTI_CONDITION,
             pipeline=PipelineTool.MSSTATS,
             organism="human",
-            remove_razor=True,
-            strict_filtering=False,
+            resolve_shared_peptides=True,
+            max_missing_fraction_per_condition=0.40,
+            min_psms_per_protein=1,
             file_type="tmt",
             tmt_channel_mapping=mapping,
             comparisons=_COMPARISONS,
@@ -117,32 +116,23 @@ class TestTMTFullChainDuckDB:
         ctx.psm_file_path = psm_path
         ctx.result = AnalysisResult(session_id="full-chain-duckdb")
 
-        # Step 1: TMT input (DuckDB streaming)
+        # Stage 1: TMT preparation and quality filtering
         await step_input_tmt(ctx)
-        assert ctx.df is None, "DuckDB mode: df loaded from parquet for Steps 2-5"
+        assert ctx.df is None, "DuckDB mode keeps the PSM table on disk"
         assert psm_path.exists(), "PSM_Combined.parquet must exist"
-        assert 2 in ctx.step_outputs, "Step 2 must be pre-marked as done"
         psms_after_step1 = ctx.result.total_psms
         assert psms_after_step1 > 0, "Must have PSMs after Step 1"
 
-        # Step 2: Unique PSM (re-generates on parquet-loaded df)
-        await step_unique_psm(ctx)
-        assert ctx.df is None, "Step 2 must keep df alive"
-
-        # Step 3: Remove razor (in-memory)
-        await step_remove_razor(ctx)
-        assert ctx.df is None, "Step 3 keeps df alive for in-memory processing"
+        # Stage 2: Resolve shared peptides
+        await step_resolve_shared_peptides(ctx)
+        assert ctx.df is None
         assert psm_path.exists()
 
-        # Step 4: Remove low quality (in-memory)
-        await step_remove_low_quality_default(ctx)
-        assert ctx.df is None, "Step 4 keeps df alive for in-memory processing"
-
-        # Step 5: Filter criteria (in-memory, frees df)
+        # Stage 3: Coverage and protein eligibility
         await step_filter_criteria_default(ctx)
-        assert ctx.df is None, "Step 5 frees ctx.df before R steps"
+        assert ctx.df is None
 
-        # Step 6: Protein abundance (mocked MSstats R)
+        # Stage 4: Protein abundance (mocked MSstats R)
         rds = results_dir / "MSstats_Processed.rds"
         protein_df = _write_protein_abundance_tsv(results_dir)
 
@@ -161,7 +151,7 @@ class TestTMTFullChainDuckDB:
         assert ctx.result.total_proteins == 2
         assert rds.exists()
 
-        # Step 7: Differential expression (mocked MSstats R)
+        # Stage 5: Differential expression (mocked MSstats R)
         with patch(
             "app.services.steps.engines.step_msstats_de.msstats_wrapper.group_comparison_multi",
             new=AsyncMock(
@@ -175,7 +165,7 @@ class TestTMTFullChainDuckDB:
         assert ctx.result.significant_proteins > 0
         assert (results_dir / f"Diff_Expression_{_COMPARISON_LABEL}.tsv").exists()
 
-        # Step 8: QC metrics
+        # Stage 6: QC metrics
         await step_qc_metrics(ctx)
         assert (results_dir / "QC_Results.json").exists()
         assert ctx.result.qc_results_path is not None

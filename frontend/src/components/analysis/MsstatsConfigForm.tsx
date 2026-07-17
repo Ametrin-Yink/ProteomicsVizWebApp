@@ -166,8 +166,8 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
         {/* Max Quantile */}
         <div className="mb-4">
           <label className="block text-sm font-medium text-text mb-2">
-            Max Quantile for Normalization: {config.msstats_max_quantile ?? 0.999}
-            <HelpTooltip text="The maximum quantile used during normalization. Values close to 1.0 use nearly all data for normalization. Lower values truncate the highest intensities, which can help when the highest-intensity features are unreliable or saturate the detector." />
+            Maximum Quantile for Censored Intensities: {config.msstats_max_quantile ?? 0.999}
+            <HelpTooltip text="MSstats uses this quantile threshold during censored-value handling and model-based imputation. It does not control normalization." />
           </label>
           <input
             type="range"
@@ -181,30 +181,6 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
           />
         </div>
 
-        {/* Remove >50% Missing */}
-        <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
-          <div>
-            <span className="text-sm font-medium text-text">
-              Remove Proteins &gt;50% Missing
-              <HelpTooltip text="Removes proteins where more than 50% of the measurements across all runs are missing. This is a quality control filter that eliminates proteins with excessive missing data, which can cause problems in statistical modeling." />
-            </span>
-            <p className="text-xs text-text-muted mt-0.5">
-              Remove proteins with more than 50% missing values across runs
-            </p>
-          </div>
-          <input
-            type="checkbox"
-            data-testid="msstats-remove50-checkbox"
-            checked={config.msstats_remove50missing ?? false}
-            onChange={(e) => setConfig({ msstats_remove50missing: e.target.checked })}
-            className="sr-only peer"
-          />
-          <div className="relative w-10 h-5 bg-border rounded-full peer-checked:bg-primary transition-colors
-            after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white
-            after:w-4 after:h-4 after:rounded-full after:transition-transform after:duration-200
-            peer-checked:after:translate-x-5"
-          />
-        </label>
       </div>
 
       {/* Advanced Section Toggle */}
@@ -224,27 +200,26 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
 
       {showAdvanced && (
         <div className="space-y-4 ml-2 pl-4 border-l-2 border-border">
+          {config.msstats_feature_selection === 'highQuality' && (
+            <>
           {/* Minimum Feature Count */}
           <div>
             <label className="block text-sm font-medium text-text mb-2">
-              Minimum Feature Count
+              Minimum Features for High-Quality Selection
+              <HelpTooltip text="Used only by MSstats highQuality feature selection. It controls the minimum feature evidence considered by that selection algorithm; protein eligibility is controlled separately by Minimum PSMs per Protein." />
             </label>
             <input
               type="number"
               min={1}
               max={10}
               data-testid="msstats-min-feature-input"
-              value={(config.min_peptides_per_protein ?? 1) > 1 ? (config.msstats_min_feature_count ?? 2) : 1}
-              disabled={(config.min_peptides_per_protein ?? 1) <= 1}
+              value={config.msstats_min_feature_count ?? 2}
               onChange={(e) => setConfig({ msstats_min_feature_count: parseInt(e.target.value, 10) || 2 })}
               className="w-24 px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary
-                disabled:opacity-40 disabled:cursor-not-allowed"
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
             <p className="text-xs text-text-muted mt-1">
-              {(config.min_peptides_per_protein ?? 1) > 1
-                ? 'Minimum features (peptides) required per protein for summarization'
-                : 'Locked to 1 while "Exclude Single-Peptide Proteins" is off'}
+              Applies only to the high-quality feature-selection algorithm
             </p>
           </div>
 
@@ -269,6 +244,8 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
               peer-checked:after:translate-x-5"
             />
           </label>
+            </>
+          )}
 
           {/* Equal Feature Variance (conditional on linear) */}
           {(config.msstats_summary_method === 'linear') && (
@@ -352,7 +329,7 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
             <p className="text-xs text-text-muted mt-1">
               {config.msstats_n_cores == null
                 ? 'The system will benchmark and select the optimal core count for your machine.'
-                : 'CPU cores for parallel R processing (Steps 6-7). Higher values speed up large datasets.'}
+                : 'CPU cores for parallel R processing (Stages 4-5). Higher values speed up large datasets.'}
             </p>
           </div>
 

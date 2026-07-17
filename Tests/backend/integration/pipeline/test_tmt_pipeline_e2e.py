@@ -4,7 +4,7 @@ E2E integration test: Full TMT protein analysis pipeline via File Library.
 Validated against DOCK5 16-plex TMTpro workflow (2026-07-14).
 Uses 10k-row extract from real PD TMT file with file library selection,
 channel mapping import, and 4 DMSO-control comparisons.
-Verifies all 8 pipeline steps complete and produce expected DE results.
+Verifies all six pipeline stages complete and produce expected DE results.
 """
 
 import csv
@@ -212,8 +212,9 @@ def tmt_session(live_server, channel_mapping, file_library_dir):
         "file_type": "tmt",
         "organism": "human",
         "pipeline": "msstats",
-        "remove_razor": True,
-        "strict_filtering": True,
+        "resolve_shared_peptides": True,
+        "max_missing_fraction_per_condition": 0.20,
+        "min_psms_per_protein": 2,
         "tmt_channel_mapping": channel_mapping,
         "comparisons": comparisons,
         "msstats_normalization": "equalizeMedians",
@@ -223,7 +224,6 @@ def tmt_session(live_server, channel_mapping, file_library_dir):
         "msstats_log_base": 2,
         "pvalue_threshold": 0.05,
         "logfc_threshold": 1.0,
-        "min_peptides_per_protein": 1,
     }
     r = requests.post(f"{api_url}/{sid}/config", json=config)
     assert r.status_code == 200, f"Config failed: {r.text[:300]}"
@@ -260,8 +260,8 @@ class TestTMTPipelineE2E:
         """Pipeline finishes in 'completed' state."""
         assert tmt_session["state"] == "completed"
 
-    def test_all_eight_steps_completed(self, tmt_session):
-        """All 8 pipeline steps executed successfully."""
+    def test_all_six_stages_completed(self, tmt_session):
+        """All six pipeline stages executed successfully."""
         sid = tmt_session["id"]
         r = requests.get(f"{tmt_session['_api_url']}/{sid}/logs")
         logs = r.json()
@@ -273,9 +273,7 @@ class TestTMTPipelineE2E:
             4,
             5,
             6,
-            7,
-            8,
-        ], f"Expected all 8 steps completed, got {completed}"
+        ], f"Expected all 6 stages completed, got {completed}"
 
     def test_pipeline_uses_msstats(self, tmt_session):
         """Pipeline derivation yields MSstats for TMT."""

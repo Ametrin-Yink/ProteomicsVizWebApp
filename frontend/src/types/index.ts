@@ -35,8 +35,13 @@ export interface SessionConfig {
   treatment?: string;
   control?: string;
   organism: string;
-  remove_razor: boolean;
-  strict_filtering: boolean;
+  resolve_shared_peptides: boolean;
+  max_missing_fraction_per_condition: number;
+  min_psms_per_protein: number;
+  /** @deprecated Read only when migrating sessions created before the explicit filter controls. */
+  remove_razor?: boolean;
+  /** @deprecated Read only when migrating sessions created before the explicit filter controls. */
+  strict_filtering?: boolean;
   // Pipeline derivation (deprecated — use file_type)
   pipeline?: 'msqrob2' | 'msstats' | 'ptm';
   // Analysis type
@@ -52,6 +57,7 @@ export interface SessionConfig {
   // Shared advanced params
   pvalue_threshold?: number;
   logfc_threshold?: number;
+  /** @deprecated Use min_psms_per_protein. */
   min_peptides_per_protein?: number;
   // MSstats
   msstats_normalization?: string;
@@ -61,6 +67,7 @@ export interface SessionConfig {
   msstats_log_base?: number;
   msstats_censored_int?: string;
   msstats_max_quantile?: number;
+  /** @deprecated Missingness is controlled by max_missing_fraction_per_condition. */
   msstats_remove50missing?: boolean;
   // MSstats advanced
   msstats_n_top_feature?: number;
@@ -234,8 +241,9 @@ export interface AnalysisConfig {
   treatment: string;
   control: string;
   organism: string;
-  remove_razor: boolean;
-  strict_filtering: boolean;
+  resolve_shared_peptides: boolean;
+  max_missing_fraction_per_condition: number;
+  min_psms_per_protein: number;
 }
 
 export interface ExperimentValidation {

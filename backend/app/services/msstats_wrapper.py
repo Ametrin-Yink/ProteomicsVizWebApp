@@ -101,14 +101,10 @@ class MsstatsWrapper(BaseRWrapper):
             "n_top_feature": config.msstats_n_top_feature,
             "censoredInt": config.msstats_censored_int,
             "maxQuantileforCensored": config.msstats_max_quantile,
-            "remove50missing": config.msstats_remove50missing,
             "min_feature_count": config.msstats_min_feature_count,
             "remove_uninformative_feature_outlier": config.msstats_remove_uninformative_feature_outlier,
             "equalFeatureVar": config.msstats_equal_feature_var,
             "nameStandards": config.msstats_name_standards,
-            "min_peptides": config.min_peptides_per_protein
-            if config.min_peptides_per_protein
-            else 1,
             "numberOfCores": n_cores,
         }
 

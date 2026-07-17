@@ -1,19 +1,17 @@
-"""Data processing pipeline - Steps 1-5 (DuckDB-only).
+"""PSM preprocessing pipeline (DuckDB-only).
 
 Pipeline stages:
-  Steps 1-2: DuckDB streaming CSV -> Parquet
+  Prepare PSMs: DuckDB streaming CSV -> Parquet
     - TMT: UNPIVOT wide-format channels -> long, join channel mapping
     - DIA: read_csv with filename, join metadata on basename
-    Both: inline Unique_PSM + contaminant/Quan_Info/Abundance<1 filters.
-  Step 3: DuckDB SQL + Python protein selection (razor peptides)
-  Step 4: DuckDB SQL WHERE filter (low quality)
-  Step 5: DuckDB SQL CTE filter (missing-value criteria)
+    Both: inline Unique_PSM + contaminant/Quan_Info/Abundance filters.
+  Resolve shared peptides: distinct-PSM protein support in DuckDB.
+  Coverage/protein eligibility: explicit missingness and minimum-PSM filters.
 """
 
 import csv
 import logging
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +36,13 @@ def _detect_tmt_abundance_columns(columns: list[str]) -> list[str]:
     return [col for col in columns if pattern.match(col)]
 
 
+def _read_columns(file_path: Path, delimiter: str | None = None) -> list[str]:
+    """Read one delimited-file header without loading data rows."""
+    delimiter = delimiter or _detect_delimiter(file_path)
+    with open(file_path, encoding="utf-8", errors="replace") as f:
+        return next(csv.reader(f, delimiter=delimiter))
+
+
 def _sqlesc(s: str) -> str:
     """Escape single quotes for SQL string literals."""
     return str(s).replace("'", "''")
@@ -47,13 +52,44 @@ def _sqlesc(s: str) -> str:
 class ProcessingConfig:
     """Configuration for data processing."""
 
-    remove_razor: bool = False
-    strict_filtering: bool = False
-    fasta_db: dict[str, str] | None = None
+    resolve_shared_peptides: bool | None = None
+    max_missing_fraction_per_condition: float | None = None
+    min_psms_per_protein: int | None = None
+    expected_replicates_by_condition: dict[str, int] | None = None
+
+    # Deprecated direct-construction compatibility. API/session migration is
+    # handled by the Pydantic models; these aliases support older internal calls.
+    remove_razor: bool | None = None
+    strict_filtering: bool | None = None
+    min_peptides_per_protein: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.resolve_shared_peptides is None:
+            self.resolve_shared_peptides = bool(self.remove_razor)
+        if self.max_missing_fraction_per_condition is None:
+            self.max_missing_fraction_per_condition = (
+                0.20 if self.strict_filtering else 0.40
+            )
+        if self.min_psms_per_protein is None:
+            migrated_min = self.min_peptides_per_protein or 1
+            self.min_psms_per_protein = max(
+                migrated_min, 2 if self.strict_filtering else 1
+            )
+
+        if not 0 <= self.max_missing_fraction_per_condition <= 1:
+            raise ValueError(
+                "max_missing_fraction_per_condition must be between 0 and 1"
+            )
+        if not 1 <= self.min_psms_per_protein <= 10:
+            raise ValueError("min_psms_per_protein must be between 1 and 10")
+        if self.expected_replicates_by_condition and any(
+            int(count) < 1 for count in self.expected_replicates_by_condition.values()
+        ):
+            raise ValueError("Expected replicate counts must be at least 1")
 
 
 class DataProcessor:
-    """Processor for PSM data - Steps 1-5 of pipeline."""
+    """Processor for PSM preparation and shared scientific filters."""
 
     def __init__(self, config: ProcessingConfig):
         """Initialize processor with configuration.
@@ -62,50 +98,6 @@ class DataProcessor:
             config: Processing configuration
         """
         self.config = config
-
-    def _select_best_protein(
-        self,
-        proteins: list[str],
-        peptide_counts: dict[str, int],
-        fasta_db: dict[str, str] | None,
-    ) -> str:
-        """Select best protein from list of candidates.
-
-        Selection criteria:
-        1. Most peptides matched
-        2. Longest sequence (tie-breaker)
-        3. First in list (final tie-breaker)
-
-        Args:
-            proteins: List of protein accessions
-            peptide_counts: Dictionary of peptide counts per protein
-            fasta_db: Optional FASTA database for sequence lengths
-
-        Returns:
-            Best protein accession
-        """
-        if len(proteins) == 1:
-            return proteins[0]
-
-        # Get peptide counts for candidates
-        candidate_counts = {p: peptide_counts.get(p, 0) for p in proteins}
-        max_count = max(candidate_counts.values())
-        candidates = [p for p, c in candidate_counts.items() if c == max_count]
-
-        if len(candidates) == 1:
-            return candidates[0]
-
-        # Tie-breaker: longest sequence from FASTA
-        if fasta_db:
-            lengths = {p: len(fasta_db.get(p, "")) for p in candidates}
-            max_length = max(lengths.values())
-            candidates = [p for p, length in lengths.items() if length == max_length]
-
-            if len(candidates) == 1:
-                return candidates[0]
-
-        # Final tie-breaker: first of the remaining top-ranked candidates
-        return candidates[0]
 
     def step4_remove_low_quality_duckdb(
         self, input_path: Path, output_path: Path
@@ -171,178 +163,138 @@ class DataProcessor:
             remaining_count,
         )
 
-    def step3_remove_razor_duckdb(self, input_path: Path, output_path: Path) -> None:
-        """DuckDB SQL + Python: remove razor peptides via protein-peptide counts.
+    def step2_resolve_shared_peptides_duckdb(
+        self, input_path: Path, output_path: Path
+    ) -> bool:
+        """Assign each shared PSM to the candidate with most distinct PSM support.
 
-        Two-phase approach per Spec Section 5.2:
-        Phase 1 (DuckDB): Build protein->peptide_count map and
-            first-occurrence PSM->protein-list map from input parquet.
-        Python: Compute best_protein for each PSM using _select_best_protein()
-            (handles FASTA tie-breaking per Spec Section 8.4).
-        Phase 2 (DuckDB): Apply best_protein mapping via JOIN and COPY TO.
+        Candidate order in the original semicolon-separated accession string is
+        the deterministic tie-breaker. The operation is entirely in DuckDB so it
+        does not materialize a large PSM-to-protein mapping in Python.
 
-        If config.remove_razor is False, copies the file unchanged
-        (shutil.copy2 -- same behavior as removed chunked method).
-
-        Args:
-            input_path: Source Parquet file
-            output_path: Destination Parquet file
+        Returns ``False`` without writing when resolution is disabled, allowing
+        callers to preserve the original Parquet file without a redundant copy.
         """
-        if not self.config.remove_razor:
-            shutil.copy2(input_path, output_path)
-            logger.info(
-                "Step 3 (DuckDB): Skipping razor removal (disabled), copied file"
-            )
-            return
+        if not self.config.resolve_shared_peptides:
+            logger.info("Shared-peptide resolution disabled; preserving protein groups")
+            return False
 
-        logger.info("Step 3 (DuckDB): Two-phase razor removal")
-
+        logger.info("Resolving shared peptides by distinct PSM support")
         input_path_fwd = str(input_path).replace(chr(92), "/")
         output_path_fwd = str(output_path).replace(chr(92), "/")
 
+        sql = f"""
+            COPY (
+                WITH psm_groups AS (
+                    SELECT "Unique_PSM",
+                           FIRST("Master_Protein_Accessions") AS protein_group
+                    FROM read_parquet('{input_path_fwd}')
+                    GROUP BY "Unique_PSM"
+                ),
+                candidates AS (
+                    SELECT p."Unique_PSM",
+                           TRIM(u.protein) AS protein,
+                           u.protein_order
+                    FROM psm_groups p,
+                    UNNEST(STRING_SPLIT(p.protein_group, ';'))
+                        WITH ORDINALITY AS u(protein, protein_order)
+                    WHERE TRIM(u.protein) != ''
+                ),
+                protein_support AS (
+                    SELECT protein, COUNT(DISTINCT "Unique_PSM") AS psm_count
+                    FROM candidates
+                    GROUP BY protein
+                ),
+                ranked AS (
+                    SELECT c."Unique_PSM", c.protein,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY c."Unique_PSM"
+                               ORDER BY s.psm_count DESC, c.protein_order ASC
+                           ) AS protein_rank
+                    FROM candidates c
+                    JOIN protein_support s USING (protein)
+                ),
+                best_protein AS (
+                    SELECT "Unique_PSM", protein
+                    FROM ranked
+                    WHERE protein_rank = 1
+                )
+                SELECT r.* EXCLUDE ("Master_Protein_Accessions"),
+                       COALESCE(
+                           b.protein, r."Master_Protein_Accessions"
+                       ) AS "Master_Protein_Accessions"
+                FROM read_parquet('{input_path_fwd}') r
+                LEFT JOIN best_protein b USING ("Unique_PSM")
+            ) TO '{output_path_fwd}'
+            (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
+        """
+
         con = duckdb.connect()
         try:
-            # Phase 1: Build protein->peptide count and PSM->protein maps
-            con.execute(f"""
-                CREATE TABLE _peptide_counts AS
-                SELECT TRIM(protein) AS protein, COUNT(*) AS cnt
-                FROM (
-                    SELECT UNNEST(
-                        STRING_SPLIT("Master_Protein_Accessions", ';')
-                    ) AS protein
-                    FROM read_parquet('{input_path_fwd}')
-                ) sub
-                WHERE TRIM(protein) != ''
-                GROUP BY protein
-            """)
-
-            con.execute(f"""
-                CREATE TABLE _psm_proteins AS
-                SELECT "Unique_PSM",
-                       FIRST("Master_Protein_Accessions") AS proteins
-                FROM read_parquet('{input_path_fwd}')
-                GROUP BY "Unique_PSM"
-            """)
-
-            # Python: Compute best protein for each PSM
-            # Uses _select_best_protein() for FASTA tie-breaking (Spec Section 8.4)
-            peptide_counts = {
-                row[0]: row[1]
-                for row in con.sql(
-                    "SELECT protein, cnt FROM _peptide_counts"
-                ).fetchall()
-            }
-
-            best_protein_map: dict[str, str] = {}
-            for psm, proteins_str in con.sql(
-                'SELECT "Unique_PSM", proteins FROM _psm_proteins'
-            ).fetchall():
-                if not proteins_str or not str(proteins_str).strip():
-                    best_protein_map[psm] = ""
-                    continue
-                proteins = [
-                    p.strip() for p in str(proteins_str).split(";") if p.strip()
-                ]
-                if len(proteins) <= 1:
-                    best_protein_map[psm] = proteins[0] if proteins else ""
-                else:
-                    best_protein_map[psm] = self._select_best_protein(
-                        proteins,
-                        peptide_counts,
-                        self.config.fasta_db,
-                    )
-
-            # Build mapping table
-            values_parts = [
-                f"('{_sqlesc(psm)}', '{_sqlesc(best)}')"
-                for psm, best in best_protein_map.items()
-            ]
-            values_clause = ",\n".join(values_parts)
-
-            con.execute(f"""
-                CREATE TABLE _best_protein_map AS
-                SELECT * FROM (VALUES {values_clause})
-                AS t("Unique_PSM", best_protein)
-            """)
-
-            # Phase 2: Apply mapping via JOIN + COPY
-            con.execute(f"""
-                COPY (
-                    SELECT r.* EXCLUDE ("Master_Protein_Accessions"),
-                           COALESCE(
-                               m.best_protein, r."Master_Protein_Accessions"
-                           ) AS "Master_Protein_Accessions"
-                    FROM read_parquet('{input_path_fwd}') r
-                    LEFT JOIN _best_protein_map m
-                        ON r."Unique_PSM" = m."Unique_PSM"
-                ) TO '{output_path_fwd}'
-                (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
-            """)
+            con.execute(sql)
         finally:
             con.close()
 
         if not output_path.exists():
-            raise RuntimeError(f"DuckDB Step 3 failed: {output_path} not created")
+            raise RuntimeError(
+                f"DuckDB shared-peptide resolution failed: {output_path} not created"
+            )
 
-        logger.info("Step 3 (DuckDB) complete: Razor peptides resolved")
+        logger.info("Shared-peptide resolution complete")
+        return True
 
-    def step5_filter_by_criteria_duckdb(
+    def resolve_shared_peptides_duckdb(
+        self, input_path: Path, output_path: Path
+    ) -> bool:
+        """Compatibility alias for :meth:`step2_resolve_shared_peptides_duckdb`."""
+        return self.step2_resolve_shared_peptides_duckdb(input_path, output_path)
+
+    def step3_remove_razor_duckdb(self, input_path: Path, output_path: Path) -> bool:
+        """Deprecated alias for :meth:`step2_resolve_shared_peptides_duckdb`."""
+        return self.step2_resolve_shared_peptides_duckdb(input_path, output_path)
+
+    def step3_filter_by_criteria_duckdb(
         self, input_path: Path, output_path: Path
     ) -> None:
-        """DuckDB SQL: filter PSMs by missing-value criteria using CTEs.
+        """Apply explicit per-condition coverage and protein eligibility filters.
 
-        Per Spec Section 5.3:
-        CTE chain: cond_reps -> psm_detected -> psm_pass -> COPY filtered output.
-        Lenient (40% threshold, self.config.strict_filtering=False):
-            removes PSMs with missing replicates exceeding
-            CAST(total_reps * 0.4 AS INTEGER) in ANY condition.
-        Strict (20% threshold, self.config.strict_filtering=True):
-            additionally removes proteins with only 1 PSM among passing
-            candidates via passing_protein_counts CTE.
-
-        PSM must pass threshold in ALL conditions (HAVING COUNT(*) = n_conditions).
-
-        Args:
-            input_path: Source Parquet file
-            output_path: Destination Parquet file
+        Expected replicate counts come from experiment design metadata supplied
+        in ``ProcessingConfig``. Falling back to observed counts is retained only
+        for compatibility with direct callers that do not have design metadata.
         """
-        threshold = 0.2 if self.config.strict_filtering else 0.4
+        threshold = self.config.max_missing_fraction_per_condition
+        min_psms = self.config.min_psms_per_protein
         logger.info(
-            "Step 5 (DuckDB): Filtering by criteria (%s, threshold=%.1f)",
-            "strict" if self.config.strict_filtering else "lenient",
+            "Filtering PSMs (max missing fraction=%.2f, min PSMs/protein=%d)",
             threshold,
+            min_psms,
         )
-
-        # Build strict-mode CTE + WHERE extension (Spec Section 5.3 strict variant)
-        strict_cte = ""
-        strict_where = ""
-        if self.config.strict_filtering:
-            strict_cte = """,
-        passing_protein_counts AS (
-            SELECT "Master_Protein_Accessions", COUNT(*) AS psm_count
-            FROM read_parquet('__INPUT__')
-            WHERE "Unique_PSM" IN (SELECT "Unique_PSM" FROM psm_pass)
-            GROUP BY "Master_Protein_Accessions"
-            HAVING COUNT(*) > 1
-        )"""
-            strict_where = """
-          AND p."Master_Protein_Accessions" IN (
-              SELECT "Master_Protein_Accessions" FROM passing_protein_counts
-          )"""
 
         input_path_fwd = str(input_path).replace(chr(92), "/")
         output_path_fwd = str(output_path).replace(chr(92), "/")
 
-        # Replace placeholder with actual path for strict CTE subquery
-        strict_cte = strict_cte.replace("__INPUT__", input_path_fwd)
-
-        sql = f"""
-            COPY (
-                WITH cond_reps AS (
+        expected_reps = self.config.expected_replicates_by_condition
+        if expected_reps:
+            design_rows = ", ".join(
+                f"('{_sqlesc(condition)}', {int(count)})"
+                for condition, count in expected_reps.items()
+            )
+            condition_cte = f"""design_reps("Condition", total_reps) AS (
+                    VALUES {design_rows}
+                )"""
+        else:
+            logger.warning(
+                "Expected replicate design not provided; falling back to observed counts"
+            )
+            condition_cte = f"""design_reps AS (
                     SELECT "Condition", COUNT(DISTINCT "Replicate") AS total_reps
                     FROM read_parquet('{input_path_fwd}')
                     GROUP BY "Condition"
-                ),
+                )"""
+
+        sql = f"""
+            COPY (
+                WITH {condition_cte},
                 psm_detected AS (
                     SELECT "Unique_PSM", "Condition",
                            COUNT(DISTINCT "Replicate") AS detected_reps
@@ -350,18 +302,40 @@ class DataProcessor:
                     WHERE "Abundance" IS NOT NULL
                     GROUP BY "Unique_PSM", "Condition"
                 ),
+                all_psm_conditions AS (
+                    SELECT p."Unique_PSM", d."Condition", d.total_reps,
+                           COALESCE(x.detected_reps, 0) AS detected_reps
+                    FROM (
+                        SELECT DISTINCT "Unique_PSM"
+                        FROM read_parquet('{input_path_fwd}')
+                    ) p
+                    CROSS JOIN design_reps d
+                    LEFT JOIN psm_detected x
+                        ON p."Unique_PSM" = x."Unique_PSM"
+                       AND d."Condition" = x."Condition"
+                ),
                 psm_pass AS (
-                    SELECT d."Unique_PSM"
-                    FROM psm_detected d
-                    JOIN cond_reps c ON d."Condition" = c."Condition"
-                    WHERE (c.total_reps - d.detected_reps)
-                          <= CAST(FLOOR(c.total_reps * {threshold}) AS INTEGER)
-                    GROUP BY d."Unique_PSM"
-                    HAVING COUNT(*) = (SELECT COUNT(*) FROM cond_reps)
-                ){strict_cte}
+                    SELECT "Unique_PSM"
+                    FROM all_psm_conditions
+                    GROUP BY "Unique_PSM"
+                    HAVING BOOL_AND(
+                        (total_reps - detected_reps)
+                        <= CAST(FLOOR(total_reps * {threshold}) AS INTEGER)
+                    )
+                ),
+                passing_proteins AS (
+                    SELECT "Master_Protein_Accessions"
+                    FROM read_parquet('{input_path_fwd}')
+                    WHERE "Unique_PSM" IN (SELECT "Unique_PSM" FROM psm_pass)
+                    GROUP BY "Master_Protein_Accessions"
+                    HAVING COUNT(DISTINCT "Unique_PSM") >= {min_psms}
+                )
                 SELECT p.*
                 FROM read_parquet('{input_path_fwd}') p
-                WHERE p."Unique_PSM" IN (SELECT "Unique_PSM" FROM psm_pass){strict_where}
+                WHERE p."Unique_PSM" IN (SELECT "Unique_PSM" FROM psm_pass)
+                  AND p."Master_Protein_Accessions" IN (
+                      SELECT "Master_Protein_Accessions" FROM passing_proteins
+                  )
             ) TO '{output_path_fwd}'
             (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
         """
@@ -381,14 +355,22 @@ class DataProcessor:
             con.close()
 
         if not output_path.exists():
-            raise RuntimeError(f"DuckDB Step 5 failed: {output_path} not created")
+            raise RuntimeError(
+                f"DuckDB criteria filter failed: {output_path} not created"
+            )
 
         logger.info(
-            "Step 5 (DuckDB) complete: %d -> %d rows (%.0f%% kept)",
+            "Criteria filtering complete: %d -> %d rows (%.0f%% kept)",
             input_count,
             output_count,
             100.0 * output_count / input_count if input_count else 0,
         )
+
+    def step5_filter_by_criteria_duckdb(
+        self, input_path: Path, output_path: Path
+    ) -> None:
+        """Deprecated alias for :meth:`step3_filter_by_criteria_duckdb`."""
+        self.step3_filter_by_criteria_duckdb(input_path, output_path)
 
     def step1_2_duckdb_dia(
         self,
@@ -396,11 +378,10 @@ class DataProcessor:
         metadata_columns: dict[str, dict],
         output_path: Path,
     ) -> None:
-        """Steps 1-2 (DIA): Streaming CSV -> Parquet via DuckDB.
+        """Prepare DIA PSMs with a streaming DuckDB CSV-to-Parquet query.
 
-        Performs Steps 1 (read + metadata join), 2 (Unique_PSM), and
-        low-quality filters (contaminants, Quan_Info, Abundance<1)
-        as a single streaming DuckDB query.
+        Reads and joins metadata, generates Unique_PSM, and applies shared
+        input-quality filters in one pass.
 
         Args:
             file_paths: List of DIA file paths
@@ -408,7 +389,7 @@ class DataProcessor:
             output_path: Path for output Parquet file
         """
         logger.info(
-            "Steps 1-2 (DuckDB): Streaming %d files -> %s",
+            "Preparing DIA PSMs (DuckDB): Streaming %d files -> %s",
             len(file_paths),
             output_path,
         )
@@ -416,9 +397,7 @@ class DataProcessor:
         # Detect delimiter and get column names from first file
         delimiter = _detect_delimiter(file_paths[0])
         delim_sql = "'\\t'" if delimiter == "\t" else "','"
-        with open(file_paths[0], encoding="utf-8", errors="replace") as f:
-            reader = csv.reader(f, delimiter=delimiter)
-            first_cols = next(reader)
+        first_cols = _read_columns(file_paths[0], delimiter)
 
         # Validate at least one abundance column exists
         has_quan_value = "Quan Value" in first_cols
@@ -518,11 +497,19 @@ class DataProcessor:
         # Build WHERE clause — "Quan Info" column is optional
         has_quan_info = "Quan Info" in first_cols
         filter_parts = [
-            "(Contaminant IS NULL OR LOWER(Contaminant) != 'true')",
+            "(Contaminant IS NULL OR UPPER(TRIM(Contaminant)) NOT IN ('TRUE', '+'))",
+            '("Master Protein Accessions" IS NOT NULL '
+            "AND TRIM(\"Master Protein Accessions\") != '')",
             f"{abund_expr_typed} >= 1",
         ]
+        if "Reverse" in first_cols:
+            filter_parts.append(
+                "(Reverse IS NULL OR UPPER(TRIM(Reverse)) NOT IN ('TRUE', '+'))"
+            )
         if has_quan_info:
-            filter_parts.append('("Quan Info" IS NULL OR "Quan Info" != \'No Value\')')
+            filter_parts.append(
+                '("Quan Info" IS NULL OR UPPER(TRIM("Quan Info")) != \'NO VALUE\')'
+            )
         where_clause = " AND ".join(filter_parts)
 
         con = duckdb.connect()
@@ -586,7 +573,7 @@ class DataProcessor:
         finally:
             con.close()
         logger.info(
-            "Steps 1-2 (DuckDB) complete: %d rows, %d conditions",
+            "DIA PSM preparation complete: %d rows, %d conditions",
             num_rows,
             num_conditions,
         )
@@ -597,11 +584,10 @@ class DataProcessor:
         tmt_channel_mapping: dict[str, dict],
         output_path: Path,
     ) -> None:
-        """Steps 1-2 (TMT): Streaming CSV -> Parquet via DuckDB UNPIVOT.
+        """Prepare TMT PSMs with streaming DuckDB QC and UNPIVOT.
 
-        Performs Steps 1 (read + melt channels + map conditions),
-        2 (Unique_PSM), and low-quality filters (contaminants,
-        Quan_Info, Abundance<1) as a single streaming DuckDB query.
+        Filters raw PSM quality before reporter-channel expansion, then maps
+        channels, generates Unique_PSM, and filters channel abundance.
 
         TMT files are wide-format with 16+ Abundance <N> columns.
         DuckDB UNPIVOT melts them into long format, then joins with
@@ -613,7 +599,7 @@ class DataProcessor:
             output_path: Path for output Parquet file
         """
         logger.info(
-            "Steps 1-2 (DuckDB TMT): Streaming %d file(s) -> %s",
+            "Preparing TMT PSMs (DuckDB): Streaming %d file(s) -> %s",
             len(file_paths),
             output_path,
         )
@@ -625,9 +611,20 @@ class DataProcessor:
         # Detect delimiter and column names from first file
         delimiter = _detect_delimiter(file_paths[0])
         delim_sql = "'\\t'" if delimiter == "\t" else "','"
-        with open(file_paths[0], encoding="utf-8", errors="replace") as f:
-            reader = csv.reader(f, delimiter=delimiter)
-            first_cols = next(reader)
+        first_cols = _read_columns(file_paths[0], delimiter)
+
+        required_quality_cols = {
+            "Average Reporter SN",
+            "Normalized CHIMERYS Coefficient",
+        }
+        for file_path in file_paths:
+            file_cols = set(_read_columns(file_path))
+            missing_quality = sorted(required_quality_cols - file_cols)
+            if missing_quality:
+                raise ValueError(
+                    f"Missing required TMT quality columns in {file_path.name}: "
+                    f"{missing_quality}"
+                )
 
         # Validate TMT abundance columns exist
         abundance_cols = _detect_tmt_abundance_columns(first_cols)
@@ -674,15 +671,25 @@ class DataProcessor:
 
         orig_cols_sql = ",\n            ".join(select_parts)
 
-        # Build WHERE clause
+        # PSM-level filters run before UNPIVOT so failed PSMs never expand into
+        # one row per reporter channel. Abundance remains a channel-level filter.
         has_quan_info = "Quan Info" in first_cols
-        filter_parts = [
-            "(Contaminant IS NULL OR LOWER(Contaminant) != 'true')",
-            "TRY_CAST(Abundance AS DOUBLE) >= 1",
+        psm_filter_parts = [
+            "(Contaminant IS NULL OR UPPER(TRIM(Contaminant)) NOT IN ('TRUE', '+'))",
+            '("Master Protein Accessions" IS NOT NULL '
+            "AND TRIM(\"Master Protein Accessions\") != '')",
+            'TRY_CAST("Average Reporter SN" AS DOUBLE) >= 5',
+            'TRY_CAST("Normalized CHIMERYS Coefficient" AS DOUBLE) >= 0.8',
         ]
+        if "Reverse" in first_cols:
+            psm_filter_parts.append(
+                "(Reverse IS NULL OR UPPER(TRIM(Reverse)) NOT IN ('TRUE', '+'))"
+            )
         if has_quan_info:
-            filter_parts.append('("Quan Info" IS NULL OR "Quan Info" != \'No Value\')')
-        where_clause = " AND ".join(filter_parts)
+            psm_filter_parts.append(
+                '("Quan Info" IS NULL OR UPPER(TRIM("Quan Info")) != \'NO VALUE\')'
+            )
+        psm_where_clause = " AND ".join(psm_filter_parts)
 
         # Build condition expression (group cols joined with _)
         condition_expr = " || '_' || ".join(f"m.{c}" for c in group_cols)
@@ -708,8 +715,13 @@ class DataProcessor:
                         delim={delim_sql}, auto_detect=true,
                         all_varchar=true, header=true)
                 ),
+                filtered_raw AS (
+                    SELECT *
+                    FROM raw
+                    WHERE {psm_where_clause}
+                ),
                 unpivoted AS (
-                    UNPIVOT raw
+                    UNPIVOT filtered_raw
                     ON COLUMNS('{abundance_regex}')
                     INTO NAME Channel VALUE Abundance
                 ),
@@ -738,7 +750,7 @@ class DataProcessor:
                 JOIN _channel_map m
                     ON r._channel_label = m.channel
                 WHERE
-                    {where_clause}
+                    TRY_CAST(Abundance AS DOUBLE) >= 1
             ) TO '{str(output_path).replace(chr(92), "/")}'
             (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
         """
@@ -771,7 +783,7 @@ class DataProcessor:
         finally:
             con.close()
         logger.info(
-            "Steps 1-2 (DuckDB TMT) complete: %d rows, %d conditions",
+            "TMT PSM preparation complete: %d rows, %d conditions",
             num_rows,
             num_conditions,
         )

@@ -7,8 +7,9 @@ and various analysis results.
 
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AnalysisTemplate(str, Enum):
@@ -37,24 +38,20 @@ class Organism(str, Enum):
 
 STEP_DISPLAY_NAMES: dict[str, dict[int, str]] = {
     PipelineTool.MSQROB2: {
-        1: "Combine Replicates",
-        2: "Generate Unique PSM",
-        3: "Remove Razor Peptides",
-        4: "Remove Low Quality",
-        5: "Filter by Criteria",
-        6: "Protein Abundance (msqrob2/QFeatures)",
-        7: "Differential Expression (msqrob2)",
-        8: "QC Metrics",
+        1: "Prepare and Filter PSMs",
+        2: "Resolve Shared Peptides",
+        3: "Filter Coverage and Protein Eligibility",
+        4: "Protein Abundance (msqrob2/QFeatures)",
+        5: "Differential Expression (msqrob2)",
+        6: "QC Metrics",
     },
     PipelineTool.MSSTATS: {
-        1: "Combine Replicates",
-        2: "Generate Unique PSM",
-        3: "Remove Razor Peptides",
-        4: "Remove Low Quality",
-        5: "Filter by Criteria",
-        6: "Protein Abundance (MSstats)",
-        7: "Differential Expression (MSstats)",
-        8: "QC Metrics",
+        1: "Prepare and Filter PSMs",
+        2: "Resolve Shared Peptides",
+        3: "Filter Coverage and Protein Eligibility",
+        4: "Protein Abundance (MSstats)",
+        5: "Differential Expression (MSstats)",
+        6: "QC Metrics",
     },
     PipelineTool.PTM: {
         1: "Prepare PTM Data",
@@ -73,18 +70,45 @@ class AnalysisConfig(BaseModel):
     treatment: str | None = Field(default="")
     control: str | None = Field(default="")
     organism: Organism = Field(default=Organism.HUMAN)
-    remove_razor: bool = Field(default=False)
-    strict_filtering: bool = Field(default=False)
+    resolve_shared_peptides: bool = Field(default=False)
+    max_missing_fraction_per_condition: float = Field(default=0.40, ge=0, le=1)
+    min_psms_per_protein: int = Field(default=1, ge=1, le=10)
+
+    # Deprecated compatibility fields. New callers should use the explicit
+    # settings above; the pre-validator migrates old persisted configurations.
+    remove_razor: bool = Field(default=False, deprecated=True)
+    strict_filtering: bool = Field(default=False, deprecated=True)
 
     # Multi-condition: explicit list of comparison pairs
     comparisons: list[dict[str, dict[str, str]]] = Field(default_factory=list)
     # Multi-condition: per-sample metadata (filename -> {column -> value})
-    metadata: dict[str, dict[str, str]] | None = Field(default=None)
+    metadata: dict[str, dict[str, str | int]] | None = Field(default=None)
 
     # Advanced parameters
     pvalue_threshold: float = Field(default=0.05, ge=0.001, le=0.5)
     logfc_threshold: float = Field(default=1.0, ge=0.1, le=5.0)
     min_peptides_per_protein: int = Field(default=1, ge=1, le=10)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_filter_settings(cls, value: Any) -> Any:
+        """Translate legacy coupled filter flags without overriding new fields."""
+        if not isinstance(value, dict):
+            return value
+
+        data = dict(value)
+        if "resolve_shared_peptides" not in data and "remove_razor" in data:
+            data["resolve_shared_peptides"] = bool(data["remove_razor"])
+
+        strict = bool(data.get("strict_filtering", False))
+        if "max_missing_fraction_per_condition" not in data and strict:
+            data["max_missing_fraction_per_condition"] = 0.20
+
+        if "min_psms_per_protein" not in data:
+            legacy_min = data.get("min_peptides_per_protein", 1)
+            migrated_min = int(legacy_min) if legacy_min is not None else 1
+            data["min_psms_per_protein"] = max(migrated_min, 2 if strict else 1)
+        return data
 
     # MSstats-specific parameters
     msstats_normalization: str = Field(default="equalizeMedians")

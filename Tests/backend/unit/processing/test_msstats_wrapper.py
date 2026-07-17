@@ -27,7 +27,9 @@ def test_data_process_config_maps_scientific_parameters(wrapper):
         msstats_remove_uninformative_feature_outlier=True,
         msstats_equal_feature_var=False,
         msstats_name_standards="P1,P2",
-        min_peptides_per_protein=3,
+        resolve_shared_peptides=True,
+        max_missing_fraction_per_condition=0.2,
+        min_psms_per_protein=3,
     )
 
     assert wrapper._build_data_process_config(source, n_cores=6) == {
@@ -39,14 +41,17 @@ def test_data_process_config_maps_scientific_parameters(wrapper):
         "n_top_feature": 5,
         "censoredInt": "0",
         "maxQuantileforCensored": 0.95,
-        "remove50missing": True,
         "min_feature_count": 4,
         "remove_uninformative_feature_outlier": True,
         "equalFeatureVar": False,
         "nameStandards": "P1,P2",
-        "min_peptides": 3,
         "numberOfCores": 6,
     }
+
+
+def test_data_process_script_counts_distinct_psms(wrapper):
+    script = (wrapper.scripts_dir / "msstats_data_process.R").read_text()
+    assert ".(PSM_Count = uniqueN(Unique_PSM))" in script
 
 
 def test_group_comparison_config_maps_runtime_options(wrapper):

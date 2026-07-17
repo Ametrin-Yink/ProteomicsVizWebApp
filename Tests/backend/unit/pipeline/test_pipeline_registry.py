@@ -1,6 +1,6 @@
 """Unit tests for pipeline registry — step definitions, ordering, and composition.
 
-Tests the new composable step library architecture with 8-step symmetric
+Tests the composable step library architecture with 6-step symmetric
 pipelines. Validates step ordering, positional numbering, and PTM preservation.
 """
 
@@ -12,15 +12,13 @@ class TestPipelineComposition:
     """Verify pipeline compositions have correct step count and order."""
 
     def test_pipeline_composition_tmt(self):
-        """TMT_PROTEIN (MSstats) has 8 steps in correct order."""
+        """TMT_PROTEIN (MSstats) has 6 steps in correct order."""
         pipeline = PIPELINES[PipelineTool.MSSTATS]
-        assert len(pipeline.steps) == 8
+        assert len(pipeline.steps) == 6
 
         expected_names = [
             "input_tmt",
-            "unique_psm",
-            "remove_razor",
-            "remove_low_quality",
+            "resolve_shared_peptides",
             "filter_criteria",
             "protein_abundance_msstats",
             "de_msstats",
@@ -32,15 +30,13 @@ class TestPipelineComposition:
         ), f"Expected {expected_names}, got {actual_names}"
 
     def test_pipeline_composition_dia(self):
-        """DIA_PROTEIN (msqrob2) has 8 steps in correct order."""
+        """DIA_PROTEIN (msqrob2) has 6 steps in correct order."""
         pipeline = PIPELINES[PipelineTool.MSQROB2]
-        assert len(pipeline.steps) == 8
+        assert len(pipeline.steps) == 6
 
         expected_names = [
             "input_dia",
-            "unique_psm",
-            "remove_razor",
-            "remove_low_quality",
+            "resolve_shared_peptides",
             "filter_criteria",
             "protein_abundance_msqrob2",
             "de_msqrob2",

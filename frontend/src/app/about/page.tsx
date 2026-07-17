@@ -10,16 +10,18 @@ import { MassSpecIcon } from '@/components/ui/MassSpecIcon';
 const steps = [
   { icon: '1', title: 'Create a Session', desc: 'From the welcome page, create a new analysis session and give it a name.' },
   { icon: '2', title: 'Upload Data', desc: 'Upload PSM CSV files named as PSM_ExperimentName_Condition_ReplicateNumber.csv. Minimum 3 replicates per condition.' },
-  { icon: '3', title: 'Configure & Process', desc: 'Set analysis parameters and start the 8-step pipeline. Progress is shown in real time.' },
+  { icon: '3', title: 'Configure & Process', desc: 'Set analysis parameters and start the six-stage pipeline. Progress is shown in real time.' },
   { icon: '4', title: 'View Results', desc: 'Explore interactive volcano plots, QC plots, and GSEA enrichment analysis.' },
   { icon: '5', title: 'Export', desc: 'Download results as CSV or export interactive HTML reports.' },
 ];
 
 const pipelineSteps = [
-  { range: '1-5', desc: 'Combine, filter, and clean PSM data', tech: 'Python/Pandas' },
-  { range: '6', desc: 'Protein abundance aggregation', tech: 'R/msqrob2' },
-  { range: '7', desc: 'Differential expression analysis', tech: 'R/msqrob2' },
-  { range: '8', desc: 'QC metrics (PCA, CV, distributions)', tech: 'Python/sklearn' },
+  { range: '1', desc: 'Prepare and filter PSM data', tech: 'Python/DuckDB' },
+  { range: '2', desc: 'Resolve shared peptide assignments', tech: 'Python/DuckDB' },
+  { range: '3', desc: 'Filter coverage and protein eligibility', tech: 'Python/DuckDB' },
+  { range: '4', desc: 'Protein abundance aggregation', tech: 'R/MSstats or msqrob2' },
+  { range: '5', desc: 'Differential expression analysis', tech: 'R/MSstats or msqrob2' },
+  { range: '6', desc: 'QC metrics (PCA, CV, distributions)', tech: 'Python/sklearn' },
 ];
 
 export default function AboutPage() {
@@ -42,7 +44,7 @@ export default function AboutPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           {[
             { title: 'Data Input', desc: 'Upload proteomics CSV files with automatic validation', icon: Upload },
-            { title: 'Processing Pipeline', desc: '9-step analysis pipeline with real-time progress tracking', icon: Settings },
+            { title: 'Processing Pipeline', desc: 'Six-stage analysis pipeline with real-time progress tracking', icon: Settings },
             { title: 'Visualization', desc: 'Interactive volcano plots, QC plots, and GSEA enrichment plots', icon: BarChart3 },
             { title: 'Session Management', desc: 'Persistent sessions that survive server restarts', icon: Layers },
             { title: 'HTML Reports', desc: 'Export interactive HTML reports with all visualizations', icon: FileDown },

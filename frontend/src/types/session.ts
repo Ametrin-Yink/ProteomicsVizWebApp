@@ -16,13 +16,11 @@ export type SessionStatus =
   | 'error'
   | 'cancelled';
 
-// Processing step in the 8-step pipeline
+// Processing step in the 6-stage pipeline
 export type ProcessingStep =
-  | 'combine_replicates'
-  | 'generate_unique_psm'
-  | 'remove_razor'
-  | 'remove_low_quality'
-  | 'filter_criteria'
+  | 'prepare_psms'
+  | 'resolve_shared_peptides'
+  | 'filter_coverage'
   | 'protein_abundance'
   | 'differential_expression'
   | 'qc_metrics'

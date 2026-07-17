@@ -54,7 +54,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
           Missing Value Imputation
-          <HelpTooltip text="Imputation fills in missing peptide intensities before protein aggregation. 'None' filters out peptides with missing values. KNN uses k-nearest neighbors to estimate missing values. BPCA and MLE use model-based approaches. MinDet/MinProb use distribution-based methods. Choose based on the missing data pattern in your dataset." />
+          <HelpTooltip text="Imputation fills in missing peptide intensities before protein aggregation. 'None' retains missing measurements as NA. KNN uses k-nearest neighbors to estimate missing values. BPCA and MLE use model-based approaches. MinDet/MinProb use distribution-based methods. Choose based on the missing data pattern in your dataset." />
         </label>
         <select
           data-testid="msqrob2-imputation-select"
@@ -63,7 +63,7 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
           className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm
             focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
         >
-          <option value="none">None (Filter only)</option>
+          <option value="none">None (Retain missing as NA)</option>
           <option value="knn">KNN (k-Nearest Neighbors)</option>
           <option value="bpca">BPCA (Bayesian PCA)</option>
           <option value="MinDet">MinDet (Deterministic Minimum)</option>
@@ -72,7 +72,9 @@ export default function Msqrob2ConfigForm({ config, setConfig, metadataColumns }
           <option value="MLE">MLE (Maximum Likelihood)</option>
         </select>
         <p className="text-xs text-text-muted mt-1">
-          Impute missing peptide intensities before protein aggregation
+          {config.msqrob2_imputation === 'none' || config.msqrob2_imputation == null
+            ? 'Missing peptide intensities remain NA'
+            : 'Impute missing peptide intensities before protein aggregation'}
         </p>
       </div>
 

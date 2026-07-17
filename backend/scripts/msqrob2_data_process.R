@@ -9,8 +9,7 @@
 #        <gene_mapping_file> <config_json>
 #
 # Config fields:
-#   normalization, imputation, aggregation, min_peptides,
-#   remove_razor, strict_filtering, numberOfCores, batch_column, metadata
+#   normalization, imputation, aggregation, numberOfCores, batch_column, metadata
 
 cat("Step 3: msqrob2 data process (QFeatures pipeline)\n")
 cat("Loading R packages...\n")
@@ -45,10 +44,7 @@ config <- fromJSON(config_json, simplifyVector = FALSE)
 if (is.null(config$normalization))  config$normalization  <- "center.median"
 if (is.null(config$imputation))     config$imputation     <- "none"
 if (is.null(config$aggregation))    config$aggregation    <- "robustSummary"
-if (is.null(config$min_peptides))   config$min_peptides   <- 1
 if (is.null(config$numberOfCores))  config$numberOfCores  <- 1
-if (is.null(config$remove_razor))   config$remove_razor   <- FALSE
-if (is.null(config$strict_filtering)) config$strict_filtering <- FALSE
 
 batch_column <- if (!is.null(config$batch_column) && nzchar(config$batch_column)) config$batch_column else NULL
 metadata     <- if (!is.null(config$metadata)) config$metadata else list()
@@ -57,9 +53,6 @@ cat("Configuration:\n")
 cat("  normalization:", config$normalization, "\n")
 cat("  imputation:", config$imputation, "\n")
 cat("  aggregation:", config$aggregation, "\n")
-cat("  min_peptides:", config$min_peptides, "\n")
-cat("  remove_razor:", config$remove_razor, "\n")
-cat("  strict_filtering:", config$strict_filtering, "\n")
 cat("  numberOfCores:", config$numberOfCores, "\n")
 cat("  batch_column:", ifelse(is.null(batch_column), "(none)", batch_column), "\n")
 cat("Input file:", input_file, "\n")
@@ -82,26 +75,30 @@ if (grepl("\\.parquet$", input_file, ignore.case = TRUE)) {
     cat("Loaded", nrow(psm_data), "PSMs from TSV\n")
 }
 
-# Filter empty accessions
-cat("Filtering empty accessions...\n")
-psm_data <- psm_data[Master_Protein_Accessions != "" & !is.na(Master_Protein_Accessions)]
-cat("Filtered to", nrow(psm_data), "PSMs with valid accessions\n")
-if (nrow(psm_data) == 0) stop("No PSMs with valid protein accessions")
-
-# Remove contaminants and reverse sequences (unconditional — always filter)
-if ("Contaminant" %in% names(psm_data)) {
-    before <- nrow(psm_data)
-    # Accept both "+" and "TRUE" (case-insensitive) as contaminant markers
-    psm_data <- psm_data[is.na(Contaminant) |
-                         (!toupper(as.character(Contaminant)) %in% c("+", "TRUE"))]
-    cat("After contaminant filter:", nrow(psm_data), "PSMs (removed", before - nrow(psm_data), ")\n")
+# Validate preprocessing invariants without duplicating shared filters.
+invalid_accessions <- is.na(psm_data$Master_Protein_Accessions) |
+                      trimws(psm_data$Master_Protein_Accessions) == ""
+if (any(invalid_accessions)) {
+    stop("Preprocessing invariant violated: empty Master_Protein_Accessions reached msqrob2")
 }
-if ("Reverse" %in% names(psm_data)) {
-    before <- nrow(psm_data)
-    psm_data <- psm_data[is.na(Reverse) |
-                         (!toupper(as.character(Reverse)) %in% c("+", "TRUE"))]
-    cat("After reverse filter:", nrow(psm_data), "PSMs (removed", before - nrow(psm_data), ")\n")
+for (marker_col in c("Contaminant", "Reverse")) {
+    if (marker_col %in% names(psm_data)) {
+        marker_values <- toupper(trimws(as.character(psm_data[[marker_col]])))
+        if (any(!is.na(marker_values) & marker_values %in% c("+", "TRUE"))) {
+            stop(paste("Preprocessing invariant violated:", marker_col,
+                       "rows reached msqrob2"))
+        }
+    }
 }
+if (!"Unique_PSM" %in% names(psm_data)) {
+    stop("Preprocessing invariant violated: Unique_PSM is required by msqrob2")
+}
+protein_psm_count_dt <- psm_data[, .(PSM_Count = uniqueN(Unique_PSM)),
+                                 by = Master_Protein_Accessions]
+protein_psm_counts <- setNames(
+    protein_psm_count_dt$PSM_Count,
+    protein_psm_count_dt$Master_Protein_Accessions
+)
 cat(sprintf("[TIMING] data_load_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
@@ -160,14 +157,8 @@ cat("Created QFeatures object:", nrow(pe[["peptide"]]), "peptides,",
     ncol(pe[["peptide"]]), "samples\n")
 flush.console()
 
-# Count PSMs per protein
-peptide_proteins <- rowData(pe[["peptide"]])$Proteins
-protein_psm_counts <- table(peptide_proteins)
 cat("PSM counts calculated for", length(protein_psm_counts), "proteins\n")
 flush.console()
-
-# Calculate nNonZero per peptide
-rowData(pe[["peptide"]])$nNonZero <- rowSums(assay(pe[["peptide"]]) > 0, na.rm = TRUE)
 
 # ==========================================================================
 # Log2 transform
@@ -221,12 +212,6 @@ if (tolower(config$imputation) != "none") {
     cat("Imputation: none (skipping)\n")
 }
 cat(sprintf("[TIMING] impute_done %s", Sys.time()), "\n", file=stderr())
-flush.console()
-
-# Filter by observation count
-min_obs <- if (isTRUE(config$strict_filtering)) 2L else 1L
-pe <- filterFeatures(pe, ~ nNonZero >= min_obs)
-cat("After nNonZero filter (>=", min_obs, "):", nrow(pe[[agg_input]]), "peptides\n")
 flush.console()
 
 # ==========================================================================
@@ -328,24 +313,12 @@ na_mask <- is.na(gene_names)
 if (any(na_mask)) gene_names[na_mask] <- sub("-[0-9]+$", "", protein_ids[na_mask])
 cat(sprintf("[TIMING] gene_map_done %s", Sys.time()), "\n", file=stderr())
 
-# PSM counts
-first_accessions <- vapply(strsplit(protein_ids, ";", fixed = TRUE), function(x) x[1], character(1))
-psm_counts <- as.integer(protein_psm_counts[first_accessions])
+# PSM counts for the authoritative protein/group identifier.
+psm_counts <- as.integer(protein_psm_counts[protein_ids])
 psm_counts[is.na(psm_counts)] <- 0L
 
 rowData(pe[["protein"]])$Gene_Name <- gene_names
 rowData(pe[["protein"]])$PSM_Count <- psm_counts
-
-# Min peptides filter
-if (config$min_peptides > 1) {
-    keep_mask <- psm_counts >= config$min_peptides
-    keep_mask[is.na(keep_mask)] <- FALSE
-    pe <- pe[keep_mask, , ]
-    protein_ids <- rownames(pe[["protein"]])
-    gene_names <- gene_names[keep_mask]
-    psm_counts <- psm_counts[keep_mask]
-    cat("Filtered to", sum(keep_mask), "proteins with >=", config$min_peptides, "peptides\n")
-}
 
 # ==========================================================================
 # Set colData — REQUIRED for step 4 msqrob formula validation

@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, BarChart3, Info, Loader2 } from 'lucide-react';
+import { AlertCircle, BarChart3, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAnalysisStore, getConditions, getAllPairwiseComparisons } from '@/stores/analysis-store';
 import MsstatsConfigForm from '@/components/analysis/MsstatsConfigForm';
@@ -258,63 +258,75 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
         )}
       </div>
 
-      {/* Remove Razor Information */}
+      {/* Shared peptide and coverage filters */}
       <div data-testid="advanced-options-toggle">
         <div className="space-y-4">
             <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
             <span className="w-2 h-2 bg-primary rounded-full"></span>
-            Razor Peptide Handling
+            Shared Peptide Handling
           </h4>
-          <div data-testid="remove-razor-checkbox">
+          <div data-testid="resolve-shared-peptides-checkbox">
             <Toggle
-              checked={config.remove_razor}
-              onChange={(checked) => setConfig({ remove_razor: checked })}
+              checked={config.resolve_shared_peptides}
+              onChange={(checked) => setConfig({ resolve_shared_peptides: checked })}
               label={
                 <span>
-                  Remove Razor Peptides
-                  <HelpTooltip text="Razor peptides are peptides that match multiple protein groups. Removing them ensures each peptide is uniquely assigned to one protein group, improving specificity of identification and quantification. Recommended for most analyses." />
+                  Resolve Shared Peptides
+                  <HelpTooltip text="Assign each shared PSM to the candidate protein supported by the most distinct PSMs. Ties follow the original accession order. When disabled, the original protein group is preserved." />
                 </span>
               }
-              description="Remove peptides that map to multiple proteins (razor peptides). Recommended for most analyses."
+              description="Assign shared PSMs to the best-supported candidate protein."
             />
           </div>
-
-          {!config.remove_razor && (
-            <div className="flex items-start gap-3 p-3 bg-warning/5 border border-warning/20 rounded-lg text-sm text-warning">
-              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <span>
-                <strong>Warning:</strong> Bioinformatics analysis will be less accurate if razor information is not removed.
-              </span>
-            </div>
-          )}
         </div>
 
-        {/* Strict Filtering */}
         <div className="space-y-4 mt-4">
           <h4 className="text-sm font-medium text-text uppercase tracking-wider flex items-center gap-2">
             <span className="w-2 h-2 bg-primary rounded-full"></span>
             Data Quality Filtering
           </h4>
-          <div data-testid="strict-filtering-checkbox">
-            <Toggle
-              checked={config.strict_filtering}
-              onChange={(checked) => setConfig({ strict_filtering: checked })}
-              label={
-                <span>
-                  Strict Filtering
-                  <HelpTooltip text="Applies a 20% missing value threshold (removes proteins with >20% missing values across samples) and removes proteins identified by only a single peptide. This improves statistical reliability but reduces the total number of proteins analyzed." />
-                </span>
-              }
-              description="Apply stricter quality filters to the data. Improves reliability but may reduce coverage."
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Maximum Missing Values per Condition
+              <HelpTooltip text="A PSM must meet this missing-replicate percentage in every condition. Expected replicates come from the experimental design." />
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              data-testid="missing-value-threshold-input"
+              value={Math.round(config.max_missing_fraction_per_condition * 100)}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                if (Number.isFinite(value)) {
+                  setConfig({ max_missing_fraction_per_condition: Math.min(100, Math.max(0, value)) / 100 });
+                }
+              }}
+              className="w-24 rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
             />
+            <span className="ml-2 text-sm text-text-muted">%</span>
           </div>
-
-          <div className="flex items-start gap-3 p-3 bg-info/5 border-info/20 rounded-lg text-sm text-secondary">
-            <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <span>
-              <strong>Tip:</strong> Use strict filtering for high-confidence results.
-              Disable for exploratory analysis to maximize coverage.
-            </span>
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Minimum PSMs per Protein
+              <HelpTooltip text="Minimum number of distinct surviving Unique_PSM identifiers required after missing-value filtering and shared-peptide resolution." />
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              step={1}
+              data-testid="min-psms-per-protein-input"
+              value={config.min_psms_per_protein}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                if (Number.isFinite(value)) {
+                  setConfig({ min_psms_per_protein: Math.min(10, Math.max(1, Math.round(value))) });
+                }
+              }}
+              className="w-24 rounded-md border-border shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+            />
           </div>
         </div>
       </div>
@@ -431,16 +443,18 @@ export const ConfigPanel: React.FC<{ template?: string }> = ({ template }) => {
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-text-muted">Remove Razor:</span>
-            <span className={config.remove_razor ? 'text-success' : 'text-text-secondary'}>
-              {config.remove_razor ? 'Yes' : 'No'}
+            <span className="text-text-muted">Resolve Shared Peptides:</span>
+            <span className={config.resolve_shared_peptides ? 'text-success' : 'text-text-secondary'}>
+              {config.resolve_shared_peptides ? 'Yes' : 'No'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-text-muted">Strict Filtering:</span>
-            <span className={config.strict_filtering ? 'text-success' : 'text-text-secondary'}>
-              {config.strict_filtering ? 'Yes' : 'No'}
-            </span>
+            <span className="text-text-muted">Max Missing per Condition:</span>
+            <span className="text-text font-medium">{Math.round(config.max_missing_fraction_per_condition * 100)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-text-muted">Min PSMs per Protein:</span>
+            <span className="text-text font-medium">{config.min_psms_per_protein}</span>
           </div>
         </div>
       </div>

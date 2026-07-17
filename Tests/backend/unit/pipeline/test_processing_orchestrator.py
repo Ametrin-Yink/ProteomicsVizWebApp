@@ -19,8 +19,9 @@ def mock_session():
     session.config.treatment = "DrugA"
     session.config.control = "DMSO"
     session.config.organism = "human"
-    session.config.remove_razor = False
-    session.config.strict_filtering = False
+    session.config.resolve_shared_peptides = False
+    session.config.max_missing_fraction_per_condition = 0.40
+    session.config.min_psms_per_protein = 1
     session.config.comparisons = [{"group1": {"C": "DrugA"}, "group2": {"C": "DMSO"}}]
     session.files = MagicMock()
     session.files.proteomics = [

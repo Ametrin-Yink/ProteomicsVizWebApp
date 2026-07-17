@@ -13,10 +13,32 @@ def _write_tmt_csv(path: Path, extra_cols: dict | None = None) -> None:
     """Write a minimal TMT-style CSV with 2 abundance channels."""
     rows = [
         # Sequence, Mods, Charge, Contaminant, Master Protein Accessions,
-        # Quan Info, Abundance 126, Abundance 127N
-        ["PEP001", "Ox(M)", "2", "False", "P00001", "Valid", "1000.5", "500.2"],
-        ["PEP002", "", "3", "True", "P00002", "No Value", "200.0", "300.0"],
-        ["PEP003", "", "2", "False", "P00003", "Valid", "0.5", "800.0"],
+        # Quan Info, Reporter SN, CHIMERYS coefficient, abundances 126 and 127N
+        [
+            "PEP001",
+            "Ox(M)",
+            "2",
+            "False",
+            "P00001",
+            "Valid",
+            "10",
+            "1.0",
+            "1000.5",
+            "500.2",
+        ],
+        [
+            "PEP002",
+            "",
+            "3",
+            "True",
+            "P00002",
+            "No Value",
+            "10",
+            "1.0",
+            "200.0",
+            "300.0",
+        ],
+        ["PEP003", "", "2", "False", "P00003", "Valid", "10", "1.0", "0.5", "800.0"],
     ]
     cols = [
         "Sequence",
@@ -25,6 +47,8 @@ def _write_tmt_csv(path: Path, extra_cols: dict | None = None) -> None:
         "Contaminant",
         "Master Protein Accessions",
         "Quan Info",
+        "Average Reporter SN",
+        "Normalized CHIMERYS Coefficient",
         "Abundance 126",
         "Abundance 127N",
     ]
@@ -71,6 +95,54 @@ class TestTMTDuckDBStreaming:
         cols = ["Sequence", "Modifications", "Quan Value"]
         detected = _detect_tmt_abundance_columns(cols)
         assert detected == []
+
+    def test_quality_thresholds_are_inclusive_psm_filters(self):
+        """TMT quality filters run before channel expansion and include boundaries."""
+        from app.services.data_processor import DataProcessor, ProcessingConfig
+
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "quality_thresholds.txt"
+            parquet_path = Path(tmp) / "output.parquet"
+            columns = [
+                "Sequence",
+                "Modifications",
+                "Charge",
+                "Contaminant",
+                "Master Protein Accessions",
+                "Quan Info",
+                "Average Reporter SN",
+                "Normalized CHIMERYS Coefficient",
+                "Abundance 126",
+                "Abundance 127N",
+            ]
+            rows = [
+                ["EDGE", "", 2, "False", "P1", "Valid", "5", "0.8", 100, 200],
+                ["LOW_SN", "", 2, "False", "P1", "Valid", "4.999", "1", 100, 200],
+                [
+                    "LOW_CHIMERYS",
+                    "",
+                    2,
+                    "False",
+                    "P1",
+                    "Valid",
+                    "10",
+                    "0.799",
+                    100,
+                    200,
+                ],
+                ["MISSING_SN", "", 2, "False", "P1", "Valid", None, "1", 100, 200],
+                ["BAD_CHIMERYS", "", 2, "False", "P1", "Valid", "10", "bad", 100, 200],
+                ["PLUS_CONTAMINANT", "", 2, "+", "P1", "Valid", "10", "1", 100, 200],
+            ]
+            pd.DataFrame(rows, columns=columns).to_csv(csv_path, sep="\t", index=False)
+
+            processor = DataProcessor(ProcessingConfig())
+            processor.step1_2_duckdb_tmt(
+                [csv_path], _make_channel_mapping(), parquet_path
+            )
+
+            result = pd.read_parquet(parquet_path, engine="pyarrow")
+            assert result["Sequence"].tolist() == ["EDGE", "EDGE"]
 
     def test_output_parquet_created(self):
         """DuckDB streaming writes a parquet file to output_path."""
@@ -194,9 +266,9 @@ class TestTMTDuckDBStreaming:
             assert len(pep001_rows) > 0
             for _, row in pep001_rows.iterrows():
                 assert "|" in row["Unique_PSM"], "Unique_PSM must contain pipes"
-                assert row["Unique_PSM"] == "PEP001|Ox(M)|2", (
-                    f"Unexpected Unique_PSM: {row['Unique_PSM']}"
-                )
+                assert (
+                    row["Unique_PSM"] == "PEP001|Ox(M)|2"
+                ), f"Unexpected Unique_PSM: {row['Unique_PSM']}"
 
     def test_channel_unpivot(self):
         """Each input row with N channels produces N output rows."""
@@ -215,14 +287,14 @@ class TestTMTDuckDBStreaming:
             result = pd.read_parquet(parquet_path, engine="pyarrow")
             # PEP001: 2 channels, both valid → 2 rows
             pep001 = result[result["Sequence"].astype(str).str.contains("PEP001")]
-            assert len(pep001) == 2, (
-                f"PEP001 should have 2 rows (2 channels), got {len(pep001)}"
-            )
+            assert (
+                len(pep001) == 2
+            ), f"PEP001 should have 2 rows (2 channels), got {len(pep001)}"
             # PEP003: channel 126 filtered (Abundance<1), channel 127N valid → 1 row
             pep003 = result[result["Sequence"].astype(str).str.contains("PEP003")]
-            assert len(pep003) == 1, (
-                f"PEP003 should have 1 row (1 channel kept), got {len(pep003)}"
-            )
+            assert (
+                len(pep003) == 1
+            ), f"PEP003 should have 1 row (1 channel kept), got {len(pep003)}"
 
     def test_condition_assignment(self):
         """Conditions are correctly assigned from channel mapping."""

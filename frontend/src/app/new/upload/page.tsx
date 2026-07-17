@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useRef, useCallback, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Loader2, Upload, Database, CheckCircle, Dna, BarChart3, Tag, FlaskConical, AlertCircle, FileText, Plus, Minus, X, FolderOpen } from 'lucide-react';
-import type { UploadedFileInfo } from '@/types';
+import type { SessionConfig, UploadedFileInfo } from '@/types';
 import { FileLibraryPicker } from '@/components/files/FileLibraryPicker';
 import ExperimentTable from '@/components/analysis/ExperimentTable';
 import ValidationPanel from '@/components/analysis/ValidationPanel';
@@ -219,12 +219,20 @@ function UploadContentInner() {
           // Restore config from raw backend response
           const cfg = raw.config as Record<string, unknown> | null;
           if (cfg && typeof cfg === 'object') {
-            const updates: Record<string, unknown> = {};
+            const updates: Partial<SessionConfig> = {};
             if (typeof cfg.treatment === 'string') updates.treatment = cfg.treatment;
             if (typeof cfg.control === 'string') updates.control = cfg.control;
             if (typeof cfg.organism === 'string') updates.organism = cfg.organism;
+            if (typeof cfg.resolve_shared_peptides === 'boolean') updates.resolve_shared_peptides = cfg.resolve_shared_peptides;
+            if (typeof cfg.max_missing_fraction_per_condition === 'number') {
+              updates.max_missing_fraction_per_condition = cfg.max_missing_fraction_per_condition;
+            }
+            if (typeof cfg.min_psms_per_protein === 'number') updates.min_psms_per_protein = cfg.min_psms_per_protein;
             if (typeof cfg.remove_razor === 'boolean') updates.remove_razor = cfg.remove_razor;
             if (typeof cfg.strict_filtering === 'boolean') updates.strict_filtering = cfg.strict_filtering;
+            if (typeof cfg.min_peptides_per_protein === 'number') {
+              updates.min_peptides_per_protein = cfg.min_peptides_per_protein;
+            }
             if (cfg.pipeline === 'msqrob2' || cfg.pipeline === 'msstats') updates.pipeline = cfg.pipeline;
             if (cfg.metadata_columns && typeof cfg.metadata_columns === 'object') {
               updates.metadata_columns = cfg.metadata_columns as Record<string, Record<string, string>>;

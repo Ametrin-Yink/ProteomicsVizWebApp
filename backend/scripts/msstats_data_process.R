@@ -44,8 +44,6 @@ if (is.null(config$MBimpute)) config$MBimpute <- TRUE
 if (is.null(config$featureSubset)) config$featureSubset <- "all"
 if (is.null(config$censoredInt)) config$censoredInt <- "NA"
 if (is.null(config$maxQuantileforCensored)) config$maxQuantileforCensored <- 0.999
-if (is.null(config$remove50missing)) config$remove50missing <- FALSE
-if (is.null(config$min_peptides)) config$min_peptides <- 1
 
 cat("Step 6: Calculating protein abundance with MSstats\n")
 cat("Input file:", input_file, "\n")
@@ -71,19 +69,39 @@ if (grepl("\\.parquet$", input_file, ignore.case = TRUE)) {
     cat("Loaded", nrow(psm_data), "PSMs from TSV (fread)\n")
 }
 
-# Filter out rows with empty Master_Protein_Accessions
-psm_data <- psm_data[psm_data$Master_Protein_Accessions != "" & !is.na(psm_data$Master_Protein_Accessions), ]
-cat("Filtered to", nrow(psm_data), "PSMs with valid protein accessions\n")
+# Validate preprocessing invariants owned by the shared DuckDB pipeline.
+invalid_accessions <- is.na(psm_data$Master_Protein_Accessions) |
+                      trimws(psm_data$Master_Protein_Accessions) == ""
+if (any(invalid_accessions)) {
+    stop("Preprocessing invariant violated: empty Master_Protein_Accessions reached MSstats")
+}
+for (marker_col in c("Contaminant", "Reverse")) {
+    if (marker_col %in% names(psm_data)) {
+        marker_values <- toupper(trimws(as.character(psm_data[[marker_col]])))
+        if (any(!is.na(marker_values) & marker_values %in% c("+", "TRUE"))) {
+            stop(paste("Preprocessing invariant violated:", marker_col,
+                       "rows reached MSstats"))
+        }
+    }
+}
 
-# Count PSMs per protein before transformation
-protein_psm_counts <- table(psm_data$Master_Protein_Accessions)
+# Count distinct PSMs for each authoritative protein/group identifier.
+if (!"Unique_PSM" %in% names(psm_data)) {
+    stop("Preprocessing invariant violated: Unique_PSM is required by MSstats")
+}
+protein_psm_count_dt <- psm_data[, .(PSM_Count = uniqueN(Unique_PSM)),
+                                 by = Master_Protein_Accessions]
+protein_psm_counts <- setNames(
+    protein_psm_count_dt$PSM_Count,
+    protein_psm_count_dt$Master_Protein_Accessions
+)
 cat("Calculated PSM counts for", length(protein_psm_counts), "proteins\n")
 
 # Transform to MSstats DDARawData format (10 columns)
 cat("Transforming to MSstats DDARawData format...\n")
 
-# Use first accession if semicolon-separated
-psm_data[, ProteinName := sapply(strsplit(Master_Protein_Accessions, ";", fixed = TRUE), function(x) x[1])]
+# Protein assignment/grouping is authoritative from shared preprocessing.
+psm_data[, ProteinName := as.character(Master_Protein_Accessions)]
 # Append charge to peptide sequence (matches DDARawData format: "S.PVDIDTK_5")
 psm_data[, PeptideSequence := paste0(Sequence, "_", Charge)]
 psm_data[, PrecursorCharge := as.integer(Charge)]
@@ -126,19 +144,16 @@ print(unique(msstats_df[, c("Run", "Condition", "BioReplicate")]))
 flush.console()
 
 # Step 1: Convert raw data to MSstats internal format using OpenMStoMSstatsFormat
-# This handles all preprocessing: feature definition, shared peptide removal,
-# balanced design, etc. This is the recommended approach for DDA label-free data.
+# Protein assignment, coverage, and protein eligibility were handled upstream.
+# The converter is used only to construct MSstats' internal feature format.
 cat("\nConverting to MSstats format using OpenMStoMSstatsFormat (", format(Sys.time(), "%H:%M:%S"), ")...\n", sep = "")
 flush.console()
-
-remove_few <- identical(tolower(config$featureSubset), "topn")
 
 converted <- tryCatch({
     MSstatsConvert::OpenMStoMSstatsFormat(
         msstats_df,
-        useUniquePeptide = TRUE,
-        removeFewMeasurements = !remove_few,
-        removeProteins_with1Feature = (config$min_peptides > 1),
+        useUniquePeptide = FALSE,
+        removeFewMeasurements = FALSE,
         summaryforMultipleRows = max,
         use_log_file = FALSE,
         verbose = FALSE
@@ -176,7 +191,6 @@ dp_args <- list(
     featureSubset = config$featureSubset,
     censoredInt = config$censoredInt,
     maxQuantileforCensored = config$maxQuantileforCensored,
-    remove50missing = config$remove50missing,
     min_feature_count = effective_min_feature_count,
     use_log_file = FALSE,
     verbose = FALSE
@@ -301,9 +315,8 @@ if (!is.null(gene_mapping_file) && file.exists(gene_mapping_file)) {
 # Handle NA gene names
 gene_names[is.na(gene_names)] <- sub("-\\d+$", "", protein_ids[is.na(gene_names)])
 
-# Get PSM counts
-first_accessions <- sapply(strsplit(protein_ids, ";", fixed = TRUE), function(x) x[1])
-psm_counts_vec <- as.integer(protein_psm_counts[first_accessions])
+# Get PSM counts for the authoritative protein/group identifier.
+psm_counts_vec <- as.integer(protein_psm_counts[protein_ids])
 psm_counts_vec[is.na(psm_counts_vec)] <- 0
 
 # Insert Gene_Name and PSM_Count columns

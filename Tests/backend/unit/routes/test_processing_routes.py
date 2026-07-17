@@ -290,8 +290,9 @@ class TestBuildAnalysisConfig:
             treatment="DrugA",
             control="Vehicle",
             organism="mouse",
-            remove_razor=True,
-            strict_filtering=True,
+            resolve_shared_peptides=True,
+            max_missing_fraction_per_condition=0.25,
+            min_psms_per_protein=3,
             comparisons=[
                 {
                     "group1": {"condition": "DrugA"},
@@ -301,7 +302,6 @@ class TestBuildAnalysisConfig:
             metadata_columns=metadata,
             pvalue_threshold=0.02,
             logfc_threshold=1.5,
-            min_peptides_per_protein=3,
             msstats_normalization="quantile",
             msstats_feature_selection="topN",
             msstats_summary_method="linear",
@@ -342,12 +342,28 @@ class TestBuildAnalysisConfig:
         source_values = session_config.model_dump(exclude_none=True)
         source_values.pop("organism")
         source_values.pop("metadata_columns")
+        source_values.pop("remove_razor", None)
+        source_values.pop("strict_filtering", None)
+        source_values.pop("min_peptides_per_protein", None)
 
         for field, expected in source_values.items():
             assert getattr(analysis_config, field) == expected, field
         assert analysis_config.metadata == metadata
         assert analysis_config.organism == Organism.MOUSE
         assert analysis_config.pipeline == PipelineTool.MSSTATS
+
+    def test_legacy_filter_settings_migrate_to_explicit_options(self):
+        session_config = SessionConfig.model_validate(
+            {
+                "remove_razor": True,
+                "strict_filtering": True,
+                "min_peptides_per_protein": 3,
+            }
+        )
+
+        assert session_config.resolve_shared_peptides is True
+        assert session_config.max_missing_fraction_per_condition == 0.20
+        assert session_config.min_psms_per_protein == 3
 
 
 class TestDerivePipeline:

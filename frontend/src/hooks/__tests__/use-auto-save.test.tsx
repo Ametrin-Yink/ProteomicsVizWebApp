@@ -15,8 +15,9 @@ vi.mock('@/lib/api-client', () => ({
 
 const baseConfig: SessionConfig = {
   organism: 'human',
-  remove_razor: false,
-  strict_filtering: false,
+  resolve_shared_peptides: false,
+  max_missing_fraction_per_condition: 0.4,
+  min_psms_per_protein: 1,
 };
 
 function HookHarness({

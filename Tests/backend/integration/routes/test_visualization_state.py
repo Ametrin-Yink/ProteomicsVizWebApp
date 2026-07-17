@@ -35,8 +35,9 @@ def sample_session():
             treatment="DMSO",
             control="Vehicle",
             organism="human",
-            remove_razor=False,
-            strict_filtering=False,
+            resolve_shared_peptides=False,
+            max_missing_fraction_per_condition=0.40,
+            min_psms_per_protein=1,
         ),
         files=SessionFiles(),
     )

@@ -181,8 +181,9 @@ interface BackendSession {
     experiment_name?: string;
     conditions?: string[];
     replicates?: number;
-    keep_razor?: boolean;
-    strict_filtering?: boolean;
+    resolve_shared_peptides?: boolean;
+    max_missing_fraction_per_condition?: number;
+    min_psms_per_protein?: number;
   } | null;
   error_message: string | null;
   files?: {

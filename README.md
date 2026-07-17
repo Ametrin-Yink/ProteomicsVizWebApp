@@ -6,7 +6,7 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 
 - **File Library:** Centralized file management with DuckDB-backed indexing. Create folders, upload/manage `.txt` and `.csv` files, then select from the library when creating analyses — no re-uploading needed.
 - **Data Input:** Upload TMT or DIA proteomics data files (tab-delimited `.txt` or `.csv`), or select from the File Library
-- **Processing Pipeline:** 8-step analysis pipeline with TMT→MSstats or DIA→msqrob2 paths
+- **Processing Pipeline:** 6-stage analysis pipeline with TMT→MSstats or DIA→msqrob2 paths
 - **Visualization:** Interactive volcano plots, QC metrics, GSEA enrichment, BioNet networks
 - **Session Management:** Persistent sessions that survive server restarts
 - **Reports:** Export comprehensive HTML analysis reports
@@ -85,15 +85,16 @@ Download results as CSV or generate a comprehensive PDF report.
 
 ## Processing Pipeline
 
-8-step symmetric pipeline. TMT data uses MSstats; DIA data uses msqrob2.
+Six-stage symmetric pipeline. TMT data uses MSstats; DIA data uses msqrob2.
 
 | Step | TMT (MSstats) | DIA (msqrob2) |
 |------|--------------|----------------|
-| 1 | Melt TMT channels, map groups | Rename Quan Value, metadata |
-| 2-5 | Shared: unique PSM, remove razor, low-quality filter, criteria filter | Same |
-| 6 | MSstats protein abundance (R) | msqrob2 protein abundance (R) |
-| 7 | MSstats group comparison (R) | msqrob2 DE contrasts (R) |
-| 8 | QC metrics (PCA, CV, distributions) | Same |
+| 1 | Prepare/filter PSMs, apply TMT quality filters, melt and map channels | Prepare/filter PSMs, rename Quan Value, join metadata |
+| 2 | Resolve shared PSMs to the best-supported protein (optional) | Same |
+| 3 | Filter per-condition coverage and minimum distinct PSMs/protein | Same |
+| 4 | MSstats protein abundance (R) | msqrob2 protein abundance (R) |
+| 5 | MSstats group comparison (R) | msqrob2 DE contrasts (R) |
+| 6 | QC metrics (PCA, CV, distributions) | Same |
 
 On-demand analysis: GSEA (enrichment), BioNet (INDRA subnetworks), Compare (PCA/UMAP/t-SNE clustering).
 
