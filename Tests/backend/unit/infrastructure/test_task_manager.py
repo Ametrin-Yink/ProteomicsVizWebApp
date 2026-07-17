@@ -1,6 +1,7 @@
 """Tests for TaskManager — centralized background computation manager."""
 
 import asyncio
+import json
 import threading
 import time
 
@@ -35,6 +36,38 @@ def test_task_manager_semaphore_size():
     n_cores = os.cpu_count() or 4
     expected = max(1, n_cores // 2)
     assert tm._cpu_sem._value == expected
+
+
+def test_restart_marks_persisted_running_and_queued_tasks_as_errors(
+    tmp_path, monkeypatch
+):
+    from app.core.config import settings
+
+    session_id = "550e8400-e29b-41d4-a716-446655440001"
+    monkeypatch.setattr(settings, "sessions_dir", tmp_path)
+    status_file = tmp_path / session_id / "task_status.json"
+    status_file.parent.mkdir()
+    status_file.write_text(
+        json.dumps(
+            {
+                "tasks": [
+                    {"kind": "pipeline", "status": "running", "error": None},
+                    {"kind": "gsea", "status": "queued", "error": None},
+                    {"kind": "compute", "status": "completed", "error": None},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    TaskManager()
+
+    tasks = json.loads(status_file.read_text(encoding="utf-8"))["tasks"]
+    assert [(task["status"], task["error"]) for task in tasks] == [
+        ("error", "server_restarted"),
+        ("error", "server_restarted"),
+        ("completed", None),
+    ]
 
 
 @pytest.mark.asyncio

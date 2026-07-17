@@ -57,6 +57,9 @@ _COMPARISONS = [
 _COMPARISON_LABEL = "DrugA_24h_vs_DMSO_24h"
 
 
+@pytest.mark.filterwarnings(
+    r"ignore:Degrees of freedom <= 0 for slice\.:RuntimeWarning"
+)
 class TestTMTFullChainDuckDB:
     """Full TMT pipeline (Steps 1-8) with DuckDB streaming and mocked R."""
 

@@ -117,15 +117,23 @@ ProteomicsVizWebApp/
 ## Testing
 
 ```bash
-# Backend unit tests (from project root)
-backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -v
+# Hermetic backend PR suite (from project root)
+backend/.venv/Scripts/python.exe -m pytest
 
-# Specific test group
-backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit/pipeline -v
+# Frontend unit/component tests
+npm --prefix frontend test
 
-# Backend integration tests
-backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration -v
+# Browser critical journeys (starts an isolated backend)
+npm --prefix frontend run test:e2e
+
+# Mandatory TMT/DIA scientific release gate
+backend/.venv/Scripts/python.exe -m pytest -m r Tests/backend/integration/pipeline
 ```
+
+R-backed live scientific pipelines and representative-data performance checks are
+explicit opt-in lanes. TMT/DIA releases require the scientific gate above; PTM is
+outside the release-quality scope. See `AGENTS/07-testing.md` for the test quality
+standard, layer definitions, and commands.
 
 ## Tech Stack
 

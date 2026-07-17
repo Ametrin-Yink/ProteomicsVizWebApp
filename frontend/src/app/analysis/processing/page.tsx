@@ -199,7 +199,7 @@ function QueuedDisplay({ queuePosition, queueLength }: { queuePosition: number; 
   );
 }
 
-function ProcessingContent() {
+export function ProcessingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');

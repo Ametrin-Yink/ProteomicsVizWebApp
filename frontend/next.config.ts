@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+
 const nextConfig: NextConfig = {
   async redirects() {
     return [
@@ -14,11 +16,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://127.0.0.1:8000/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
       },
       {
         source: '/ws/:path*',
-        destination: 'http://127.0.0.1:8000/ws/:path*',
+        destination: `${backendUrl}/ws/:path*`,
       },
     ];
   },

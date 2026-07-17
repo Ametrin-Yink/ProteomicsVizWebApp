@@ -12,8 +12,7 @@
 ### Backend
 
 ```bash
-cd backend
-.venv/Scripts/python.exe -m pip install -r requirements.txt
+backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
 ```
 
 **Required R packages:**
@@ -24,38 +23,42 @@ Rscript -e "BiocManager::install(c('msqrob2', 'QFeatures', 'limma', 'MSstats'))"
 ### Frontend
 
 ```bash
-cd frontend && npm install
+npm --prefix frontend install
 ```
 
 ### Tests
 
 ```bash
-# Backend tests (from project root)
-backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -v
-backend/.venv/Scripts/python.exe -m pytest Tests/backend/integration -v
+# Hermetic backend PR suite (from project root)
+backend/.venv/Scripts/python.exe -m pytest
 
-# E2E tests (Playwright)
-cd Tests && npx playwright test
+# Required before a TMT/DIA release
+backend/.venv/Scripts/python.exe -m pytest -m r Tests/backend/integration/pipeline
+
+# Frontend unit/component and isolated browser tests
+npm --prefix frontend test
+npm --prefix frontend run test:e2e
 ```
 
 ## Development
 
 ```bash
 # Terminal 1 - Backend
-cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --reload-exclude "sessions" --port 8000
+backend/.venv/Scripts/python.exe -m uvicorn app.main:app --app-dir backend --reload --reload-exclude "sessions" --port 8000
 
 # Terminal 2 - Frontend
-cd frontend && npm run dev
+npm --prefix frontend run dev
 ```
 
 ## Code Quality
 
 ```bash
 # Frontend
-cd frontend && npm run lint && npm run lint:fix
+npm --prefix frontend run lint
+npm --prefix frontend run lint:fix
 
 # Backend
-cd backend && ruff check . && ruff format .
+backend/.venv/Scripts/python.exe -m ruff check backend Tests
 ```
 
 ## Commit Messages
@@ -81,7 +84,8 @@ refactor: simplify data transformation
 
 - **R integration**: Always via `subprocess.run(['Rscript', ...])`, never rpy2
 - **Session storage**: JSON files in `backend/sessions/{session_id}/`
-- **Test location**: ALL tests go in `Tests/`, never in `backend/tests/` or `frontend/tests/`
+- **Test location**: Backend tests use `Tests/`; browser tests use `frontend/e2e/`; frontend unit/component tests are colocated under `frontend/src/`
+- **Test quality**: Follow the risk-based standard in `AGENTS/07-testing.md`; test count alone is not a quality measure
 - **TypeScript**: strict mode required, no `as any` or `@ts-ignore`
 
 For full developer guides, see the [AGENTS/](../AGENTS/) directory.

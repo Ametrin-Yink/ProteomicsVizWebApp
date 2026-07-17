@@ -37,13 +37,8 @@ jobs:
           Tests/backend/integration/test_file_library_e2e.py
           -v --tb=short
 
-      - name: Tests (pytest - pipeline structure)
-        run: >-
-          pytest Tests/backend/integration/pipeline
-          -v --tb=short --ignore-glob="*e2e*"
-
   frontend:
-    name: Frontend (TypeScript)
+    name: Frontend and browser contract
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -54,6 +49,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies for real-stack browser test
+        run: pip install -r ../backend/requirements.txt
 
       - name: Install dependencies
         run: npm ci
@@ -69,3 +71,9 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Install browser for critical journeys
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser critical journeys
+        run: npm run test:e2e

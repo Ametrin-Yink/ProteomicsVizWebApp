@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pandas as pd
 import pytest
 from app.core.config import settings
-from app.core.exceptions import ProcessingError
+from app.core.exceptions import ProcessingError, RScriptError
 from app.models.analysis import AnalysisConfig, AnalysisTemplate, PipelineTool
 from app.services.pipeline_engine import (
     PipelineDefinition,
@@ -321,6 +321,17 @@ class TestPipelineEngine:
         """_is_timeout_error returns False for generic exceptions."""
         error = ValueError("something broke")
         assert PipelineEngine._is_timeout_error(error) is False
+
+    @pytest.mark.parametrize(
+        "message,expected",
+        [
+            ("R analysis timed out after 3600s", True),
+            ("R package 'MSstats' not installed", False),
+        ],
+    )
+    def test_is_timeout_error_from_rscript_message(self, message, expected):
+        error = RScriptError(message=message, details={})
+        assert PipelineEngine._is_timeout_error(error) is expected
 
     def test_get_pipeline_multiple_registered(self):
         """get_pipeline can retrieve any pipeline from multiple registrations."""

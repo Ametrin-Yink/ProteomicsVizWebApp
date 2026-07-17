@@ -35,6 +35,18 @@ _cancel_events: dict[str, asyncio.Event] = {}
 _background_tasks: set[asyncio.Task] = set()
 
 
+def _reserve_processing(session_id: str, session: Session) -> None:
+    """Atomically reserve one in-process pipeline start for a session."""
+    if session.state in (SessionState.QUEUED, SessionState.PROCESSING) or (
+        session_id in _cancel_events
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Session is already queued or processing",
+        )
+    _cancel_events[session_id] = asyncio.Event()
+
+
 def _derive_pipeline(session: Session) -> PipelineTool:
     """Derive pipeline tool from session, with backward compat for old sessions."""
     ft = getattr(session.config, "file_type", None) if session.config else None
@@ -57,6 +69,26 @@ def _derive_template(template: str) -> AnalysisTemplate:
         return AnalysisTemplate(template)
     except ValueError:
         return AnalysisTemplate.MULTI_CONDITION
+
+
+def _build_analysis_config(session: Session) -> AnalysisConfig:
+    """Translate persisted session configuration into pipeline configuration."""
+    if session.config is None:
+        raise ValueError("Session configuration is required")
+
+    config_kwargs = session.config.model_dump(exclude_none=True)
+    organism = config_kwargs.pop("organism", None)
+    metadata = config_kwargs.pop("metadata_columns", None)
+    config_kwargs.update(
+        {
+            "organism": Organism(organism) if organism else Organism.HUMAN,
+            "template": _derive_template(session.template),
+            "pipeline": _derive_pipeline(session),
+        }
+    )
+    if metadata:
+        config_kwargs["metadata"] = metadata
+    return AnalysisConfig(**config_kwargs)
 
 
 def _schedule_background_task(coro) -> asyncio.Task:
@@ -185,13 +217,16 @@ async def retry_processing(
             detail=f"At least {min_files} proteomics files required. Current: {len(session.files.proteomics)}",
         )
 
+    _reserve_processing(session_id, session)
+
     # Reset to PROCESSING state and clear error
     session.state = SessionState.PROCESSING
     session.error_message = None
-    await store.save(session)
-
-    # Create cancellation event
-    _cancel_events[session_id] = asyncio.Event()
+    try:
+        await store.save(session)
+    except Exception:
+        _cancel_events.pop(session_id, None)
+        raise
 
     _schedule_background_task(run_processing_pipeline_async(session_id, session))
     logger.info(f"Retry: Processing started for session {session_id}")
@@ -251,13 +286,16 @@ async def start_processing(
             detail=f"At least {min_files} proteomics files required. Current: {len(session.files.proteomics)}",
         )
 
+    _reserve_processing(session_id, session)
+
     # Update session state to processing
     session.state = SessionState.PROCESSING
     session.error_message = None
-    await store.save(session)
-
-    # Create cancellation event for this session
-    _cancel_events[session_id] = asyncio.Event()
+    try:
+        await store.save(session)
+    except Exception:
+        _cancel_events.pop(session_id, None)
+        raise
 
     # Start processing in background
     _schedule_background_task(run_processing_pipeline_async(session_id, session))
@@ -302,23 +340,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
         session.state = SessionState.PROCESSING
         await session_manager.update_session_state(session_id, SessionState.PROCESSING)
 
-        sc = session.config
-        pipeline = _derive_pipeline(session)
-        template = _derive_template(session.template)
-        config_kwargs = sc.model_dump(exclude_none=True)
-        organism = config_kwargs.pop("organism", None)
-        metadata = config_kwargs.pop("metadata_columns", None)
-        config_kwargs.update(
-            {
-                "organism": Organism(organism) if organism else Organism.HUMAN,
-                "template": template,
-                "pipeline": pipeline,
-            }
-        )
-        if metadata:
-            config_kwargs["metadata"] = metadata
-
-        config = AnalysisConfig(**config_kwargs)
+        config = _build_analysis_config(session)
         logger.info(
             f"Config created: treatment={config.treatment}, control={config.control}"
         )
@@ -357,7 +379,7 @@ async def run_processing_pipeline_async(session_id: str, session: Session):
             session_id,
             TaskKind.PIPELINE,
             _run_pipeline,
-            label=f"Pipeline ({pipeline.value})",
+            label=f"Pipeline ({config.pipeline.value})",
             cancel_event=cancel_event,
             timeout_seconds=12 * 60 * 60,
         )

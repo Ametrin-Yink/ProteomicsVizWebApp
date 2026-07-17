@@ -11,23 +11,29 @@ from pathlib import Path
 # the TemporaryDirectory object keeps this directory alive for the pytest run.
 _test_runtime = tempfile.TemporaryDirectory(prefix="proteomicsviz-tests-")
 os.environ["SESSIONS_DIR"] = str(Path(_test_runtime.name) / "sessions")
+os.environ["FILE_LIBRARY_DIR"] = str(Path(_test_runtime.name) / "file_library")
 
 # Add backend directory to Python path for imports
 backend_dir = Path(__file__).parent.parent / "backend"
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-import pandas as pd
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def test_sessions_dir(tmp_path_factory, monkeypatch) -> Path:
-    """Return an isolated session directory for a single test."""
-    sessions_dir = tmp_path_factory.mktemp("session-isolation")
+def test_sessions_dir(tmp_path_factory, monkeypatch, request) -> Path:
+    """Isolate runtime session and file-library data for a single test."""
     from app.core.config import settings
 
+    if request.node.get_closest_marker("live"):
+        return settings.sessions_dir
+
+    sessions_dir = tmp_path_factory.mktemp("session-isolation")
+    file_library_dir = tmp_path_factory.mktemp("file-library-isolation")
+
     monkeypatch.setattr(settings, "sessions_dir", sessions_dir)
+    monkeypatch.setattr(settings, "file_library_dir", file_library_dir)
     return sessions_dir
 
 
@@ -41,29 +47,10 @@ def client(test_sessions_dir: Path):
         yield c
 
 
-@pytest.fixture
-def sample_psm_data() -> pd.DataFrame:
-    """Create sample PSM data for testing."""
-    return pd.DataFrame(
-        {
-            "Sequence": ["PEPTIDE1", "PEPTIDE2", "PEPTIDE3"],
-            "Modifications": ["", "Oxidation", ""],
-            "Charge": [2, 3, 2],
-            "Contaminant": [False, False, False],
-            "Master Protein Accessions": ["P12345", "P67890", "P11111"],
-            "Quan Info": ["Valid", "Valid", "Valid"],
-            "Abundance F1 Sample": [1000.0, 2000.0, 1500.0],
-            "Abundance F2 Sample": [1100.0, 2100.0, 1600.0],
-        }
-    )
-
-
 @pytest.fixture(scope="session")
 def test_data_dir() -> Path:
     """Return path to test data directory."""
-    test_dir = Path(__file__).parent / "fixtures"
-    test_dir.mkdir(exist_ok=True)
-    return test_dir
+    return Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
@@ -76,29 +63,3 @@ def tmt_fixture_path() -> Path:
 def dia_fixture_path() -> Path:
     """Return path to the DIA sample fixture file."""
     return Path(__file__).parent / "fixtures" / "dia_sample_01_10000rows.txt"
-
-
-# Pytest hooks for custom reporting
-
-
-def pytest_configure(config):
-    """Configure pytest."""
-    config.addinivalue_line("markers", "slow: marks tests as slow")
-    config.addinivalue_line("markers", "integration: marks tests as integration tests")
-    config.addinivalue_line("markers", "unit: marks tests as unit tests")
-
-
-def pytest_collection_modifyitems(config, items):
-    """Modify test collection."""
-    for item in items:
-        if "integration" in item.nodeid:
-            item.add_marker(pytest.mark.integration)
-        elif "unit" in item.nodeid:
-            item.add_marker(pytest.mark.unit)
-
-
-def pytest_runtest_makereport(item, call):
-    """Custom test reporting."""
-    if call.when == "call" and call.excinfo is not None:
-        # Test failed - could add custom logging here
-        pass

@@ -1,12 +1,13 @@
 """Unit tests for processing API routes — /process, /cancel, /retry, /logs."""
 
+import asyncio
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.api.routes.processing import _derive_pipeline
+from app.api.routes.processing import _build_analysis_config, _derive_pipeline
 from app.main import app
-from app.models.analysis import PipelineTool
+from app.models.analysis import AnalysisConfig, Organism, PipelineTool
 from app.models.session import Session, SessionConfig, SessionFiles, SessionState
 from app.services.task_manager import TaskCancelledError
 from fastapi.testclient import TestClient
@@ -96,6 +97,46 @@ class TestStartProcessing:
         )
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_concurrent_requests_schedule_pipeline_once(self, mock_store):
+        """The state transition must reject a racing duplicate request."""
+        from app.api.routes import processing
+
+        session = mock_store.get.return_value.model_copy(
+            update={"id": "concurrent-process-session"}, deep=True
+        )
+
+        class RacingStore:
+            async def get(self, _session_id):
+                await asyncio.sleep(0)
+                return session.model_copy(deep=True)
+
+            async def save(self, _session):
+                await asyncio.sleep(0)
+
+        with (
+            patch.object(
+                processing,
+                "run_processing_pipeline_async",
+                new=MagicMock(return_value=None),
+            ),
+            patch.object(processing, "_schedule_background_task") as schedule,
+        ):
+            results = await asyncio.gather(
+                processing.start_processing(session.id, RacingStore()),
+                processing.start_processing(session.id, RacingStore()),
+                return_exceptions=True,
+            )
+
+        started = [result for result in results if isinstance(result, dict)]
+        conflicts = [
+            result for result in results if getattr(result, "status_code", None) == 409
+        ]
+        assert len(started) == 1
+        assert len(conflicts) == 1
+        schedule.assert_called_once()
+        processing._cancel_events.pop(session.id, None)
+
 
 class TestCancelProcessing:
     def test_cancel_non_processing_fails(self, client, mock_store):
@@ -119,6 +160,15 @@ class TestCancelProcessing:
             "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
         )
         assert response.status_code == 200
+
+    def test_cancel_error_state_succeeds(self, client, mock_store):
+        """Errored processing must retain an exit path for the user."""
+        mock_store.get.return_value.state = SessionState.ERROR
+        response = client.post(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["status"] == "cancelled"
 
     def test_cancel_session_not_found(self, client, mock_store):
         mock_store.get.return_value = None
@@ -218,6 +268,86 @@ class TestGetStatus:
             "/api/sessions/550e8400-e29b-41d4-a716-446655440000/status"
         )
         assert response.status_code == 404
+
+
+class TestBuildAnalysisConfig:
+    """Protect the API-session to scientific-pipeline configuration contract."""
+
+    def test_all_session_config_fields_have_pipeline_destinations(self):
+        renamed_fields = {"metadata_columns"}
+        direct_fields = set(SessionConfig.model_fields) - renamed_fields
+        assert direct_fields <= set(AnalysisConfig.model_fields)
+
+    def test_forwards_non_default_values(self):
+        metadata = {
+            "sample.txt": {
+                "condition": "DrugA",
+                "replicate": "1",
+                "batch": "Plate1",
+            }
+        }
+        session_config = SessionConfig(
+            treatment="DrugA",
+            control="Vehicle",
+            organism="mouse",
+            remove_razor=True,
+            strict_filtering=True,
+            comparisons=[
+                {
+                    "group1": {"condition": "DrugA"},
+                    "group2": {"condition": "Vehicle"},
+                }
+            ],
+            metadata_columns=metadata,
+            pvalue_threshold=0.02,
+            logfc_threshold=1.5,
+            min_peptides_per_protein=3,
+            msstats_normalization="quantile",
+            msstats_feature_selection="topN",
+            msstats_summary_method="linear",
+            msstats_impute=False,
+            msstats_log_base=10,
+            msstats_censored_int="0",
+            msstats_max_quantile=0.95,
+            msstats_remove50missing=True,
+            msstats_n_top_feature=5,
+            msstats_min_feature_count=4,
+            msstats_remove_uninformative_feature_outlier=True,
+            msstats_equal_feature_var=False,
+            msstats_name_standards="P1,P2",
+            msstats_save_fitted_models=False,
+            msstats_n_cores=2,
+            msqrob2_ridge=True,
+            msqrob2_normalization="quantiles",
+            msqrob2_imputation="knn",
+            msqrob2_aggregation="medianPolish",
+            msqrob2_adjust_method="holm",
+            msqrob2_n_cores=3,
+            msqrob2_batch_column="batch",
+            covariate_columns=["batch"],
+            file_type="tmt",
+            tmt_channel_mapping={
+                "sample.txt::126": {"condition": "DrugA", "replicate": 1}
+            },
+        )
+        session = Session(
+            id="config-contract",
+            name="Config contract",
+            template="multi_condition_comparison",
+            state=SessionState.CONFIGURING,
+            config=session_config,
+        )
+
+        analysis_config = _build_analysis_config(session)
+        source_values = session_config.model_dump(exclude_none=True)
+        source_values.pop("organism")
+        source_values.pop("metadata_columns")
+
+        for field, expected in source_values.items():
+            assert getattr(analysis_config, field) == expected, field
+        assert analysis_config.metadata == metadata
+        assert analysis_config.organism == Organism.MOUSE
+        assert analysis_config.pipeline == PipelineTool.MSSTATS
 
 
 class TestDerivePipeline:

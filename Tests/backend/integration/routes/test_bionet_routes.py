@@ -1,30 +1,63 @@
-"""Integration tests for BioNet API routes."""
+"""Integration tests for BioNet API state and persisted results."""
 
+import json
 import uuid
+
+from app.core.config import settings
 
 NONEXISTENT_SESSION = str(uuid.uuid4())
 
 
-def test_bionet_status_404_for_missing_session(client):
-    """GET /bionet/status should return 404 for nonexistent session."""
-    response = client.get(f"/api/sessions/{NONEXISTENT_SESSION}/bionet/status")
-    assert response.status_code == 404
-
-
-def test_bionet_run_404_for_missing_session(client):
-    """POST /bionet/run should 404 for non-existent session."""
+def _create_session(client) -> str:
     response = client.post(
-        f"/api/sessions/{NONEXISTENT_SESSION}/bionet/run",
-        json={"comparison": "test_vs_ctrl"},
+        "/api/sessions",
+        json={"name": "BioNet contract", "template": "multi_condition_comparison"},
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def test_missing_session_returns_404(client):
+    for method, path in [
+        ("get", "bionet/status"),
+        ("get", "bionet/subnetwork"),
+    ]:
+        response = getattr(client, method)(
+            f"/api/sessions/{NONEXISTENT_SESSION}/{path}"
+        )
+        assert response.status_code == 404, path
+
+
+def test_status_is_idle_before_a_run(client):
+    session_id = _create_session(client)
+    response = client.get(f"/api/sessions/{session_id}/bionet/status")
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "idle"
+
+
+def test_run_requires_differential_expression_results(client):
+    session_id = _create_session(client)
+    response = client.post(
+        f"/api/sessions/{session_id}/bionet/run",
+        json={"comparison": "Drug_vs_Control"},
     )
     assert response.status_code == 404
+    assert "Diff_Expression_Drug_vs_Control.tsv" in response.json()["detail"]
 
 
-def test_bionet_subnetwork_404_when_not_computed(client):
-    """GET /bionet/subnetwork should 404 when no subnetwork exists.
+def test_subnetwork_returns_persisted_result(client):
+    session_id = _create_session(client)
+    result = {
+        "comparison": "Drug_vs_Control",
+        "nodes": [{"id": "P1", "logFC": 2.0}],
+        "edges": [],
+    }
+    result_dir = settings.sessions_dir / session_id / "bionet"
+    result_dir.mkdir(parents=True)
+    (result_dir / "bionet_subnetwork.json").write_text(
+        json.dumps(result), encoding="utf-8"
+    )
 
-    Even with a valid session UUID format, no session data exists
-    so we get 404 (session not found).
-    """
-    response = client.get(f"/api/sessions/{NONEXISTENT_SESSION}/bionet/subnetwork")
-    assert response.status_code == 404
+    response = client.get(f"/api/sessions/{session_id}/bionet/subnetwork")
+    assert response.status_code == 200
+    assert response.json()["data"] == result

@@ -3,24 +3,29 @@ from unittest.mock import patch
 
 
 class TestFileLibraryConfig:
-    def test_file_library_dir_default(self):
+    def test_file_library_dir_default(self, monkeypatch):
         """file_library_dir defaults to backend/file_library/."""
         from app.core.config import Settings
 
+        monkeypatch.delenv("FILE_LIBRARY_DIR", raising=False)
         # Patch sessions_dir so ensure_directories doesn't create real dirs
-        with patch.object(Settings, 'ensure_directories', lambda self: None):
+        with patch.object(Settings, "ensure_directories", lambda self: None):
             s = Settings(
                 sessions_dir=Path("/tmp/sessions"),
                 protein_database_dir=Path("/tmp/proteins"),
             )
-        expected = Path(__file__).resolve().parent.parent.parent.parent.parent / "backend" / "file_library"
+        expected = (
+            Path(__file__).resolve().parent.parent.parent.parent.parent
+            / "backend"
+            / "file_library"
+        )
         assert s.file_library_dir == expected
 
     def test_file_library_dir_from_env(self):
         """file_library_dir reads from FILE_LIBRARY_DIR env var."""
         from app.core.config import Settings
 
-        with patch.object(Settings, 'ensure_directories', lambda self: None):
+        with patch.object(Settings, "ensure_directories", lambda self: None):
             s = Settings(
                 file_library_dir=Path("/custom/library"),
                 sessions_dir=Path("/tmp/sessions"),

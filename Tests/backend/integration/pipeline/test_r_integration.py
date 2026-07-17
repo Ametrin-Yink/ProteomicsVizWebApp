@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.r
+
 
 def _find_rscript() -> str:
     """Find Rscript from configuration, PATH, or standard Windows locations."""
@@ -52,9 +54,13 @@ def _rscript_available() -> bool:
         return False
 
 
-@pytest.mark.skipif(
-    not _rscript_available(), reason="Rscript not found on PATH or at known location"
-)
+@pytest.fixture(scope="module", autouse=True)
+def require_rscript():
+    """An explicitly selected R lane must fail rather than silently skip."""
+    if not _rscript_available():
+        pytest.fail("Rscript not found on PATH or at a known location")
+
+
 class TestMsstatsPackageAvailability:
     """Test MSstats package availability."""
 
@@ -95,10 +101,6 @@ class TestMsstatsScripts:
 
     """Test R package availability."""
 
-    @pytest.mark.skipif(
-        not _rscript_available(),
-        reason="Rscript not found on PATH or at known location",
-    )
     def test_rscript_available(self):
         """Verify Rscript is available."""
         result = subprocess.run(
@@ -107,10 +109,6 @@ class TestMsstatsScripts:
 
         assert result.returncode == 0
 
-    @pytest.mark.skipif(
-        not _rscript_available(),
-        reason="Rscript not found on PATH or at known location",
-    )
     @pytest.mark.parametrize("package", ["msqrob2", "QFeatures", "limma"])
     def test_r_package_available(self, package):
         """Verify R package is installed."""

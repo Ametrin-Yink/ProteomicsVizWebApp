@@ -29,10 +29,32 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.session_store import SessionStore
 from app.models.analysis import STEP_DISPLAY_NAMES
+from app.models.session import SessionState
 from app.services.pipeline_registry import get_pipeline as _get_pipeline_definition
 from app.services.session_manager import session_manager
 
 logger = logging.getLogger("proteomics")
+
+_RESTART_ERROR = "Processing interrupted by server restart. Retry the analysis."
+
+
+async def _recover_interrupted_sessions(store: SessionStore) -> int:
+    """Move orphaned processing sessions to a visible, retryable error state."""
+    recovered = 0
+    for session in await store.list_all():
+        if session.state in (SessionState.PROCESSING, SessionState.QUEUED):
+            try:
+                await store.update_session_state(
+                    session.id,
+                    SessionState.ERROR,
+                    _RESTART_ERROR,
+                )
+                recovered += 1
+            except Exception as exc:
+                logger.warning(
+                    "Could not recover interrupted session %s: %s", session.id, exc
+                )
+    return recovered
 
 
 @asynccontextmanager
@@ -86,13 +108,22 @@ async def lifespan(app: FastAPI):
             f"Session scanning failed: {e} - continuing with empty session list"
         )
 
-    # Clean up old sessions on startup
+    # Clean up old sessions before recovery so recovery does not refresh stale sessions.
     try:
         cleaned = await session_store.cleanup_old_sessions()
         if cleaned > 0:
             logger.info(f"Cleaned up {cleaned} old sessions on startup")
     except Exception as e:
         logger.warning(f"Session cleanup on startup failed: {e}")
+
+    try:
+        recovered = await _recover_interrupted_sessions(session_store)
+        if recovered:
+            logger.warning(
+                "Marked %s interrupted sessions as retryable after restart", recovered
+            )
+    except Exception as e:
+        logger.warning(f"Interrupted session recovery failed: {e}")
 
     yield
 
