@@ -43,6 +43,7 @@ import type {
   BioNetRunStatus,
   BioNetSubnetwork,
   PTMUploadResponse,
+  VisualizationManifest,
 } from '@/types/api';
 
 // ---- File Library Types ----
@@ -789,6 +790,13 @@ export const processingApi = {
 // ═══════════════════════════════════════════════════════════════════════
 
 export const visualizationApi = {
+  getManifest: (
+    apiPrefix: string,
+    signal?: AbortSignal
+  ): Promise<VisualizationManifest> => {
+    return fetchApi<VisualizationManifest>(`${apiPrefix}/visualization/manifest`, { signal });
+  },
+
   // ── DE Results ──
 
   getDEResults: (

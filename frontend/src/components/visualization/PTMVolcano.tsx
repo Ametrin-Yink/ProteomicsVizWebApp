@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Microscope } from 'lucide-react';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import PTMResultTable, { type PTMResultRow } from '@/components/visualization/PTMResultTable';
+import {
+  VolcanoSummaryBar,
+  VolcanoWorkspace,
+} from '@/components/visualization/VolcanoWorkspace';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SearchableSelect } from '@/components/ui/Select';
 import { getDataSource, updateVisualizationState } from '@/lib/api-client';
 import {
   formatNumber,
@@ -288,9 +291,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [batchMarkOpen, setBatchMarkOpen] = useState(false);
   const [batchComparisons, setBatchComparisons] = useState<Set<string>>(new Set());
-  const batchMarkRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     Promise.all([
@@ -312,15 +313,6 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
       setError(reason instanceof Error ? reason.message : 'Failed to load PTM results');
     }).finally(() => setLoading(false));
   }, [sessionId]);
-
-  useEffect(() => {
-    if (!batchMarkOpen) return;
-    const close = (event: MouseEvent) => {
-      if (batchMarkRef.current && !batchMarkRef.current.contains(event.target as Node)) setBatchMarkOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [batchMarkOpen]);
 
   const comparison = comparisons[comparisonIndex];
   const filters = comparison ? filtersByComparison[comparison.label] ?? DEFAULT_FILTERS : DEFAULT_FILTERS;
@@ -412,7 +404,6 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
           .map((row) => row.id));
       }
       setMarkedByKey(next);
-      setBatchMarkOpen(false);
     } catch {
       addToast('error', 'Failed to mark significant PTM entries across comparisons.');
     }
@@ -455,89 +446,26 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
 
   return (
     <div data-testid="ptm-volcano-container">
-      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-5 py-3 text-sm" data-testid="general-info-panel">
-        <span className="font-semibold text-text-primary">{sessionName}</span>
-        <div className="h-4 w-px bg-border" />
-        <SearchableSelect
-          options={comparisonOptions}
-          value={comparison.label}
-          onChange={(value) => {
-            const nextIndex = Math.max(0, comparisons.findIndex((item) => item.label === value));
-            const nextComparison = comparisons[nextIndex];
-            setComparisonIndex(nextIndex);
-            if (nextComparison && layer !== 'ptm' && rowsForLayer(nextComparison, layer).length === 0) {
-              setLayer('ptm');
-            }
-            clearSelection();
-          }}
-          placeholder="Select comparison..."
-          searchPlaceholder="Filter comparisons..."
-          className="min-w-[280px]"
-        />
-        <div className="h-4 w-px bg-border" />
-        <span className="text-text-secondary">
-          {layerRows.length.toLocaleString()} {layer === 'protein' ? 'proteins' : 'PTM sites'}
-        </span>
-        <div className="h-4 w-px bg-border" />
-        <span className="text-text-secondary">
-          {deCounts.total.toLocaleString()} DE (
-          <span className="font-semibold text-primary">{deCounts.up.toLocaleString()}↑</span>{' '}
-          <span className="font-semibold text-secondary">{deCounts.down.toLocaleString()}↓</span>)
-        </span>
-        <div className="h-4 w-px bg-border" />
-        <div className="relative" ref={batchMarkRef}>
-          <button
-            type="button"
-            onClick={() => setBatchMarkOpen((current) => !current)}
-            className="rounded-lg bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-border/30"
-          >
-            Mark Significant in Batch
-          </button>
-          {batchMarkOpen && (
-            <div className="absolute left-0 top-full z-50 mt-1 w-72 space-y-2 rounded-lg border border-border bg-background p-3 shadow-lg">
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={batchComparisons.size === comparisons.length}
-                  onChange={() => setBatchComparisons(
-                    batchComparisons.size === comparisons.length
-                      ? new Set()
-                      : new Set(comparisons.map((item) => item.label)),
-                  )}
-                  className="rounded border-border"
-                />
-                Select All
-              </label>
-              <div className="max-h-48 space-y-1 overflow-y-auto border-t border-border pt-2">
-                {comparisonOptions.map((item) => (
-                  <label key={item.value} className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary hover:text-text-primary">
-                    <input
-                      type="checkbox"
-                      checked={batchComparisons.has(item.value)}
-                      onChange={() => {
-                        const next = new Set(batchComparisons);
-                        if (next.has(item.value)) next.delete(item.value);
-                        else next.add(item.value);
-                        setBatchComparisons(next);
-                      }}
-                      className="rounded border-border"
-                    />
-                    {item.label}
-                  </label>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={handleBatchMark}
-                disabled={batchComparisons.size === 0}
-                className="w-full rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                Mark {batchComparisons.size || ''} comparison(s)
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <VolcanoSummaryBar
+        title={sessionName}
+        comparisonOptions={comparisonOptions}
+        selectedComparison={comparison.label}
+        onComparisonChange={(value) => {
+          const nextIndex = Math.max(0, comparisons.findIndex((item) => item.label === value));
+          const nextComparison = comparisons[nextIndex];
+          setComparisonIndex(nextIndex);
+          if (nextComparison && layer !== 'ptm' && rowsForLayer(nextComparison, layer).length === 0) {
+            setLayer('ptm');
+          }
+          clearSelection();
+        }}
+        entityCount={layerRows.length}
+        entityLabel={layer === 'protein' ? 'proteins' : 'PTM sites'}
+        differentialCounts={deCounts}
+        batchSelection={batchComparisons}
+        onBatchSelectionChange={setBatchComparisons}
+        onBatchMark={handleBatchMark}
+      />
 
       <div className="mb-6 flex flex-wrap gap-1 rounded-lg border border-border bg-background p-3">
         {LAYERS.map((item) => {
@@ -566,8 +494,31 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <VolcanoWorkspace
+        details={selectedIds.size > 1 ? (
+          <div className="rounded-lg border border-border bg-background p-6">
+            <div className="py-8 text-center text-text-secondary">
+              <p className="text-lg font-medium">Multiple Entries Selected</p>
+              <p className="mt-2 text-sm">{selectedIds.size} entries selected.</p>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="mt-4 rounded-lg bg-surface px-4 py-2 text-sm font-medium text-text-secondary hover:bg-border/30"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        ) : (
+          <PTMInfoPanel
+            key={`${layer}:${selectedId ?? ''}`}
+            sessionId={sessionId}
+            row={selectedRow}
+            layer={layer}
+            filters={filters}
+          />
+        )}
+      >
           <VolcanoPlot
             data={plotData}
             filters={debouncedFilters}
@@ -619,34 +570,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
             onMarkAllSignificant={markAllSignificant}
             onClearAllMarks={() => updateMarked(markerKey, new Set())}
           />
-        </div>
-
-        <div className="lg:col-span-1">
-          {selectedIds.size > 1 ? (
-            <div className="rounded-lg border border-border bg-background p-6">
-              <div className="py-8 text-center text-text-secondary">
-                <p className="text-lg font-medium">Multiple Entries Selected</p>
-                <p className="mt-2 text-sm">{selectedIds.size} entries selected.</p>
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  className="mt-4 rounded-lg bg-surface px-4 py-2 text-sm font-medium text-text-secondary hover:bg-border/30"
-                >
-                  Clear Selection
-                </button>
-              </div>
-            </div>
-          ) : (
-            <PTMInfoPanel
-              key={`${layer}:${selectedId ?? ''}`}
-              sessionId={sessionId}
-              row={selectedRow}
-              layer={layer}
-              filters={filters}
-            />
-          )}
-        </div>
-      </div>
+      </VolcanoWorkspace>
     </div>
   );
 }

@@ -219,6 +219,97 @@ class TestGetQCPlots:
         assert "pvalue_distribution" in data
 
 
+class TestVisualizationManifest:
+    def test_standard_pipeline_preserves_all_modules(self, client):
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/visualization/manifest"
+        )
+
+        assert response.status_code == 200
+        manifest = response.json()["data"]
+        assert manifest["pipeline"] == "msqrob2"
+        assert [module["id"] for module in manifest["modules"]] == [
+            "volcano",
+            "qc",
+            "gsea",
+            "compare",
+            "bionet",
+        ]
+        assert all(module["visible"] for module in manifest["modules"])
+        assert all(module["enabled"] for module in manifest["modules"])
+
+    def test_ptm_pipeline_reports_result_layers_and_compare_requirement(self, client):
+        from app.api.deps import get_session_store
+
+        ptm_session = Session(
+            id="550e8400-e29b-41d4-a716-446655440000",
+            name="PTM Test",
+            template="multi_condition_comparison",
+            pipeline="ptm",
+            state=SessionState.COMPLETED,
+            config=SessionConfig(
+                comparisons=[
+                    {"group1": {"Condition": "Drug"}, "group2": {"Condition": "DMSO"}}
+                ]
+            ),
+            files=SessionFiles(),
+        )
+        mock_store = AsyncMock()
+        mock_store.get = AsyncMock(return_value=ptm_session)
+        previous_override = app.dependency_overrides[get_session_store]
+        app.dependency_overrides[get_session_store] = lambda: mock_store
+
+        try:
+            response = client.get(
+                "/api/sessions/550e8400-e29b-41d4-a716-446655440000/visualization/manifest"
+            )
+        finally:
+            app.dependency_overrides[get_session_store] = previous_override
+
+        assert response.status_code == 200
+        modules = {
+            module["id"]: module for module in response.json()["data"]["modules"]
+        }
+        assert modules["volcano"]["data_scopes"] == [
+            "ptm",
+            "protein",
+            "adjusted_ptm",
+        ]
+        assert modules["compare"]["visible"] is True
+        assert modules["compare"]["enabled"] is False
+        assert modules["compare"]["disabled_reason"] == (
+            "At least two comparisons are required"
+        )
+        assert modules["gsea"]["visible"] is True
+        assert modules["bionet"]["visible"] is True
+
+    def test_ptm_pipeline_hides_protein_modules_without_protein_results(self, tmp_path):
+        from app.api.routes.visualization import _build_visualization_manifest
+
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        (results_dir / "ptm_site_results.tsv").touch()
+        session = Session(
+            id="ptm-without-protein",
+            name="PTM without protein",
+            pipeline="ptm",
+            config=SessionConfig(
+                comparisons=[
+                    {"group1": {"Condition": "Drug"}, "group2": {"Condition": "DMSO"}},
+                    {"group1": {"Condition": "Drug2"}, "group2": {"Condition": "DMSO"}},
+                ]
+            ),
+        )
+
+        manifest = _build_visualization_manifest(session, results_dir)
+        modules = {module["id"]: module for module in manifest["modules"]}
+
+        assert modules["compare"]["enabled"] is True
+        assert modules["gsea"]["visible"] is False
+        assert modules["bionet"]["visible"] is False
+        assert modules["qc"]["data_scopes"] == ["ptm"]
+
+
 class TestPTMVisualization:
     def test_stable_results_include_all_available_layers(self, client):
         response = client.get(

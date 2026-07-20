@@ -9,6 +9,22 @@ export interface SessionFiles {
   proteomics: string[];
 }
 
+export type VisualizationDataScope = 'ptm' | 'protein' | 'adjusted_ptm';
+
+export interface VisualizationModuleCapability {
+  id: string;
+  visible: boolean;
+  enabled: boolean;
+  disabled_reason: string | null;
+  data_scopes: VisualizationDataScope[];
+}
+
+export interface VisualizationManifest {
+  pipeline: string;
+  default_module: string;
+  modules: VisualizationModuleCapability[];
+}
+
 // Differential Expression Results
 export interface DEResult {
   master_protein_accessions: string;

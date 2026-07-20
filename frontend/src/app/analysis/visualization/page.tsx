@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react';
 import Link from 'next/link';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
@@ -10,8 +10,11 @@ import { visualizationApi, getDataSource, updateVisualizationState } from '@/lib
 import { useApi } from '@/lib/api-context';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
+import {
+  VolcanoSummaryBar,
+  VolcanoWorkspace,
+} from '@/components/visualization/VolcanoWorkspace';
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
-import { SearchableSelect } from '@/components/ui/Select';
 import { useUIStore } from '@/stores/ui-store';
 import { useDebounce } from '@/hooks/use-debounce';
 
@@ -219,43 +222,12 @@ function ResultsContent() {
   }, [data, selectedComparison, debouncedFilters, comparisonOptions]);
 
   // Batch mark: mark significant proteins across multiple comparisons
-  const [batchMarkOpen, setBatchMarkOpen] = useState(false);
   const [batchMarkComparisons, setBatchMarkComparisons] = useState<Set<string>>(new Set());
   const [batchMarkLoading, setBatchMarkLoading] = useState(false);
-  const batchMarkRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!batchMarkOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (batchMarkRef.current && !batchMarkRef.current.contains(e.target as Node)) {
-        setBatchMarkOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [batchMarkOpen]);
-
-  const toggleBatchComparison = (value: string) => {
-    setBatchMarkComparisons((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) { next.delete(value); } else { next.add(value); }
-      return next;
-    });
-  };
-
-  const toggleAllBatchComparisons = () => {
-    if (batchMarkComparisons.size === comparisonOptions.length) {
-      setBatchMarkComparisons(new Set());
-    } else {
-      setBatchMarkComparisons(new Set(comparisonOptions.map((c) => c.value)));
-    }
-  };
 
   const handleBatchMark = async () => {
     if (batchMarkComparisons.size === 0) return;
     setBatchMarkLoading(true);
-    setBatchMarkOpen(false);
     try {
       const newMarked = { ...markedProteins };
       for (const comp of batchMarkComparisons) {
@@ -403,86 +375,49 @@ function ResultsContent() {
           <h1 className="font-semibold text-text-primary">Differential Expression Results</h1>
         </div>
 
-        {/* General Info Panel */}
-        <div className="flex items-center gap-3 mb-6 text-sm bg-background border border-border rounded-lg px-5 py-3 flex-wrap" data-testid="general-info-panel">
-          <span className="font-semibold text-text-primary">{sessionConfig?.experiment || 'Results'}</span>
-          <div className="w-px h-4 bg-border" />
-          {comparisonOptions.length > 0 ? (
-            <SearchableSelect
-              options={comparisonOptions}
-              value={selectedComparison}
-              onChange={setSelectedComparison}
-              placeholder="Select comparison..."
-              searchPlaceholder="Filter comparisons..."
-              className="min-w-[280px]"
-            />
-          ) : (
-            <span className="text-text-secondary">
-              {sessionConfig
-                ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
-                : 'Treatment vs Control'}
-            </span>
-          )}
-          <div className="w-px h-4 bg-border" />
-          <span className="text-text-secondary">{data.total_proteins.toLocaleString()} proteins</span>
-          <div className="w-px h-4 bg-border" />
-          <span className="text-text-secondary">
-            {deCounts.total} DE (
-            <span className="text-primary font-semibold">{deCounts.up}↑</span>
-            {' '}
-            <span className="text-secondary font-semibold">{deCounts.down}↓</span>
-            )
-          </span>
-          <div className="w-px h-4 bg-border" />
-          {/* Batch Mark */}
-          <div className="relative" ref={batchMarkRef}>
-            <button
-              onClick={() => setBatchMarkOpen((v) => !v)}
-              disabled={batchMarkLoading}
-              className="px-3 py-1.5 text-xs font-medium bg-surface hover:bg-border/30 text-text-secondary rounded-lg transition-colors disabled:opacity-50"
-            >
-              {batchMarkLoading ? 'Marking...' : 'Mark Significant in Batch'}
-            </button>
-            {batchMarkOpen && (
-              <div className="absolute top-full mt-1 left-0 w-72 bg-background border border-border rounded-lg shadow-lg z-50 p-3 space-y-2">
-                <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={batchMarkComparisons.size === comparisonOptions.length}
-                    onChange={toggleAllBatchComparisons}
-                    className="rounded border-border"
-                  />
-                  Select All
-                </label>
-                <div className="max-h-48 overflow-y-auto space-y-1 border-t border-border pt-2">
-                  {comparisonOptions.map((comp) => (
-                    <label key={comp.value} className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer hover:text-text-primary">
-                      <input
-                        type="checkbox"
-                        checked={batchMarkComparisons.has(comp.value)}
-                        onChange={() => toggleBatchComparison(comp.value)}
-                        className="rounded border-border"
-                      />
-                      {comp.label}
-                    </label>
-                  ))}
-                </div>
-                <button
-                  onClick={handleBatchMark}
-                  disabled={batchMarkComparisons.size === 0}
-                  className="w-full px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                >
-                  Mark {batchMarkComparisons.size > 0 ? `${batchMarkComparisons.size} comparison(s)` : ''}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <VolcanoSummaryBar
+          title={sessionConfig?.experiment || 'Results'}
+          comparisonOptions={comparisonOptions}
+          selectedComparison={selectedComparison}
+          onComparisonChange={setSelectedComparison}
+          fallbackComparison={sessionConfig
+            ? `${sessionConfig.experiment}: ${sessionConfig.treatment} vs ${sessionConfig.control}`
+            : 'Treatment vs Control'}
+          entityCount={data.total_proteins}
+          entityLabel="proteins"
+          differentialCounts={deCounts}
+          batchSelection={batchMarkComparisons}
+          onBatchSelectionChange={setBatchMarkComparisons}
+          onBatchMark={handleBatchMark}
+          batchLoading={batchMarkLoading}
+        />
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Volcano Plot */}
-          <div className="lg:col-span-2 space-y-6">
+        <VolcanoWorkspace
+          details={selectedProteins.size > 1 ? (
+            <div className="bg-background rounded-lg border border-border p-6">
+              <div className="text-center text-text-secondary py-8">
+                <p className="text-lg font-medium">Multiple Proteins Selected</p>
+                <p className="text-sm mt-2">{selectedProteins.size} proteins selected.</p>
+                <p className="text-sm text-text-muted mt-1">
+                  Select a single protein to view detailed information.
+                </p>
+                <button
+                  onClick={clearSelection}
+                  className="mt-4 px-4 py-2 bg-surface hover:bg-border/30 text-text-secondary rounded-lg text-sm font-medium transition-colors"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ProteinInfo
+              protein={selectedProteins.size === 1 ? selectedProteinData : null}
+              filters={filters}
+              comparison={selectedComparison || undefined}
+            />
+          )}
+        >
             {/* Volcano Plot */}
             <VolcanoPlot
               data={data.results}
@@ -517,35 +452,7 @@ function ResultsContent() {
               onMarkAllSignificant={handleMarkAllSignificant}
               comparisonLabel={comparisonLabel}
             />
-          </div>
-
-          {/* Right Column - Protein Info */}
-          <div className="lg:col-span-1">
-            {selectedProteins.size > 1 ? (
-              <div className="bg-background rounded-lg border border-border p-6">
-                <div className="text-center text-text-secondary py-8">
-                  <p className="text-lg font-medium">Multiple Proteins Selected</p>
-                  <p className="text-sm mt-2">{selectedProteins.size} proteins selected.</p>
-                  <p className="text-sm text-text-muted mt-1">
-                    Select a single protein to view detailed information.
-                  </p>
-                  <button
-                    onClick={clearSelection}
-                    className="mt-4 px-4 py-2 bg-surface hover:bg-border/30 text-text-secondary rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Clear Selection
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <ProteinInfo
-                protein={selectedProteins.size === 1 ? selectedProteinData : null}
-                filters={filters}
-                comparison={selectedComparison || undefined}
-              />
-            )}
-          </div>
-        </div>
+        </VolcanoWorkspace>
       </div>
     </div>
   );

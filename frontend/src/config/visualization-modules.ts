@@ -1,5 +1,11 @@
 import type { ComponentType } from 'react';
-import type { VolcanoFilters, GSEADatabase, GSEAData } from '@/types/api';
+import type {
+  GSEAData,
+  GSEADatabase,
+  VisualizationManifest,
+  VisualizationModuleCapability,
+  VolcanoFilters,
+} from '@/types/api';
 import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
 import { visualizationApi, getDataSource, sessionApiPrefix } from '@/lib/api-client';
 import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
@@ -28,6 +34,9 @@ export interface VisualizationModule {
   /** Capture current visualization state for HTML export. null = skip this tab. */
   getExportState?: (sessionId: string, session?: Awaited<ReturnType<typeof getDataSource>>) => Promise<ExportState | null>;
 }
+
+export type ManifestVisualizationModule = VisualizationModule &
+  VisualizationModuleCapability;
 
 /** Cast any object to Record<string, unknown> for the serialized export data. */
 function toRecord<T>(obj: T): Record<string, unknown> {
@@ -212,23 +221,21 @@ export const PTM_VISUALIZATION_MODULES: VisualizationModule[] = [
   },
 ];
 
-/**
- * Return the set of visualization modules appropriate for the given pipeline.
- * - 'ptm': shows only PTM-relevant tabs
- * - 'msqrob2' or 'msstats' or undefined/null: shows all existing tabs
- */
-export function getModulesForPipeline(
-  pipeline?: string | null,
-  hasProteinLayer = true
-): VisualizationModule[] {
-  if (pipeline === 'ptm') {
-    return hasProteinLayer
-      ? PTM_VISUALIZATION_MODULES
-      : PTM_VISUALIZATION_MODULES.filter(
-          (module) => module.id !== 'gsea' && module.id !== 'bionet'
-        );
-  }
-  return VISUALIZATION_MODULES;
+/** Combine backend capabilities with the frontend module presentation registry. */
+export function getModulesForManifest(
+  manifest: VisualizationManifest
+): ManifestVisualizationModule[] {
+  const registry = manifest.pipeline === 'ptm'
+    ? PTM_VISUALIZATION_MODULES
+    : VISUALIZATION_MODULES;
+  const capabilities = new Map(
+    manifest.modules.map((capability) => [capability.id, capability])
+  );
+
+  return registry.flatMap((module) => {
+    const capability = capabilities.get(module.id);
+    return capability?.visible ? [{ ...module, ...capability }] : [];
+  });
 }
 
 export function getVisualizationUrl(sessionId: string, pipeline?: string | null): string {
