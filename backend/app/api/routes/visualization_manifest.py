@@ -1,5 +1,6 @@
 """Session visualization capability manifest routes."""
 
+import csv
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,18 @@ from app.db.session_store import SessionStore
 from app.models.session import Session
 
 router = APIRouter()
+
+
+def _result_comparison_count(path: Path) -> int:
+    """Count produced comparisons without loading result rows into memory."""
+    if not path.exists():
+        return 0
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        column = "Comparison" if "Comparison" in (reader.fieldnames or []) else "Label"
+        if column not in (reader.fieldnames or []):
+            return 0
+        return len({row[column] for row in reader if row.get(column)})
 
 
 def build_visualization_manifest(session: Session, results_dir: Path) -> dict[str, Any]:
@@ -35,7 +48,7 @@ def build_visualization_manifest(session: Session, results_dir: Path) -> dict[st
     has_ptm = (results_dir / "ptm_site_results.tsv").exists()
     has_protein = (results_dir / "protein_results.tsv").exists()
     has_adjusted_ptm = (results_dir / "adjusted_ptm_results.tsv").exists()
-    comparison_count = len(session.config.comparisons or []) if session.config else 0
+    comparison_count = _result_comparison_count(results_dir / "ptm_site_results.tsv")
 
     ptm_scopes = ["ptm"] if has_ptm else []
     protein_scopes = ["protein"] if has_protein else []

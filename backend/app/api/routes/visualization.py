@@ -938,12 +938,6 @@ async def _resolve_protein_analysis_file(
     if session.pipeline != "ptm":
         return results_dir / f"Diff_Expression_{comparison}.tsv"
 
-    if not session.files.global_proteome:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Protein analysis requires an optional protein PSM file",
-        )
-
     protein_results = results_dir / "protein_results.tsv"
     if not protein_results.exists():
         raise HTTPException(

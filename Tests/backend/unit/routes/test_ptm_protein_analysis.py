@@ -60,7 +60,7 @@ def test_builds_protein_analysis_table_for_requested_comparison(tmp_path, monkey
 
     output_path = asyncio.run(
         _resolve_protein_analysis_file(
-            _ptm_session(with_protein=True),
+            _ptm_session(with_protein=False),
             "550e8400-e29b-41d4-a716-446655440000",
             results_dir,
             "Drug_vs_DMSO",
@@ -75,7 +75,7 @@ def test_builds_protein_analysis_table_for_requested_comparison(tmp_path, monkey
     assert output["adjPval"].tolist() == [0.02]
 
 
-def test_rejects_ptm_protein_analysis_without_optional_protein(tmp_path):
+def test_rejects_ptm_protein_analysis_without_result_artifact(tmp_path):
     with pytest.raises(HTTPException) as error:
         asyncio.run(
             _resolve_protein_analysis_file(
@@ -86,7 +86,7 @@ def test_rejects_ptm_protein_analysis_without_optional_protein(tmp_path):
             )
         )
 
-    assert error.value.status_code == 400
+    assert error.value.status_code == 404
 
 
 def test_builds_ptm_protein_abundance_matrix_for_gsea_heatmaps(tmp_path):

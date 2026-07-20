@@ -3,11 +3,12 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 
 from app.api.deps import get_session_store
 from app.api.routes.visualization_shared import create_response
@@ -20,7 +21,34 @@ logger = logging.getLogger("proteomics")
 
 # ---- PTM-specific endpoints ----
 
-_PTM_COMPARISONS_DIR = "ptm_comparisons"
+PTMResultLayer = Literal["ptm", "protein", "adjusted"]
+_LAYER_MODELS = {
+    "ptm": "ptm_model",
+    "protein": "protein_model",
+    "adjusted": "adjusted_model",
+}
+_RESULT_FILENAMES = {
+    "ptm_model": "ptm_site_results.tsv",
+    "protein_model": "protein_results.tsv",
+    "adjusted_model": "adjusted_ptm_results.tsv",
+}
+_VISUALIZATION_RESULT_COLUMNS = {
+    "Comparison",
+    "Protein",
+    "ProteinName",
+    "SiteLabel",
+    "ProteinAccession",
+    "GlobalProtein",
+    "Gene",
+    "Gene_Name",
+    "LocalizationStatus",
+    "MappingStatus",
+    "log2FC",
+    "pvalue",
+    "adj.pvalue",
+    "Status",
+    "issue",
+}
 
 
 def _json_safe_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
@@ -31,108 +59,165 @@ def _json_safe_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
 
 async def load_ptm_results(
     results_dir: Path,
+    *,
+    comparison: str | None = None,
+    layer: PTMResultLayer | None = None,
 ) -> list[dict[str, Any]]:
-    """Load PTM differential expression results from the ptm_comparisons directory.
-
-    Reads PTM_Model_{label}.tsv, PROTEIN_Model_{label}.tsv, and ADJUSTED_Model_{label}.tsv
-    files and groups them by comparison label.
-
-    Mode A comparisons only have the PTM model file; Mode B has all three.
-
-    Args:
-        results_dir: Path to session results directory
-
-    Returns:
-        List of comparison dicts with ptm_model, protein_model, adjusted_model entries
-    """
+    """Load requested PTM result rows, preserving the existing grouped response."""
     stable_paths = {
-        "ptm_model": results_dir / "ptm_site_results.tsv",
-        "protein_model": results_dir / "protein_results.tsv",
-        "adjusted_model": results_dir / "adjusted_ptm_results.tsv",
+        model: results_dir / filename for model, filename in _RESULT_FILENAMES.items()
     }
+    requested_models = [_LAYER_MODELS[layer]] if layer else list(stable_paths)
     if stable_paths["ptm_model"].exists():
         frames: dict[str, pd.DataFrame] = {}
-        for layer, path in stable_paths.items():
+        for model in requested_models:
+            path = stable_paths[model]
             if path.exists():
-                frames[layer] = await asyncio.to_thread(pd.read_csv, path, sep="\t")
-        ptm_frame = frames["ptm_model"]
-        if "Comparison" not in ptm_frame.columns:
-            ptm_frame["Comparison"] = (
-                ptm_frame["Label"].astype(str)
-                if "Label" in ptm_frame.columns
+                read_options: dict[str, Any] = {"sep": "\t"}
+                if layer is not None:
+                    read_options["usecols"] = lambda column: (
+                        column in _VISUALIZATION_RESULT_COLUMNS
+                    )
+                frames[model] = await asyncio.to_thread(
+                    pd.read_csv,
+                    path,
+                    **read_options,
+                )
+        discovery = frames.get("ptm_model")
+        if discovery is None and frames:
+            discovery = next(iter(frames.values()))
+        if discovery is None:
+            return []
+        if "Comparison" not in discovery.columns:
+            discovery = discovery.copy()
+            discovery["Comparison"] = (
+                discovery["Label"].astype(str)
+                if "Label" in discovery.columns
                 else "comparison"
             )
-        comparisons = []
-        for label in ptm_frame["Comparison"].dropna().astype(str).unique():
-            comparison: dict[str, Any] = {"label": label}
-            for layer in stable_paths:
-                frame = frames.get(layer)
+        labels = (
+            [comparison]
+            if comparison is not None
+            else discovery["Comparison"].dropna().astype(str).unique().tolist()
+        )
+        comparisons: list[dict[str, Any]] = []
+        for label in labels:
+            item: dict[str, Any] = {
+                "label": label,
+                "ptm_model": [],
+                "protein_model": [],
+                "adjusted_model": [],
+            }
+            for model in requested_models:
+                frame = frames.get(model)
                 if frame is None:
-                    comparison[layer] = []
                     continue
                 if "Comparison" in frame.columns:
                     subset = frame[frame["Comparison"].astype(str) == label]
                 else:
                     subset = frame
-                comparison[layer] = _json_safe_records(subset)
-            comparisons.append(comparison)
+                if comparison is not None and "Comparison" in subset.columns:
+                    subset = subset.drop(columns="Comparison")
+                item[model] = _json_safe_records(subset)
+            if any(item[model] for model in requested_models):
+                comparisons.append(item)
         return comparisons
 
-    ptm_dir = results_dir / _PTM_COMPARISONS_DIR
-    if not ptm_dir.exists() or not ptm_dir.is_dir():
-        return []
+    return []
 
-    # Find all PTM_Model_*.tsv files to discover available labels
-    ptm_files = sorted(ptm_dir.glob("PTM_Model_*.tsv"))
-    if not ptm_files:
-        return []
 
-    comparisons = []
-    for ptm_file in ptm_files:
-        label = ptm_file.stem[len("PTM_Model_") :]  # Extract label after "PTM_Model_"
+async def load_ptm_comparison_summary(
+    results_dir: Path,
+    layer: PTMResultLayer,
+) -> dict[str, Any]:
+    """Calculate matched-feature correlations without returning full result rows."""
+    ptm_path = results_dir / _RESULT_FILENAMES["ptm_model"]
+    result_path = results_dir / _RESULT_FILENAMES[_LAYER_MODELS[layer]]
+    if not ptm_path.exists():
+        return {
+            "comparisons": [],
+            "matrix": [],
+            "pairs": [],
+            "available_for_all": False,
+        }
 
-        comparison: dict[str, Any] = {"label": label}
+    label_frame = await asyncio.to_thread(
+        pd.read_csv,
+        ptm_path,
+        sep="\t",
+        usecols=lambda column: column in {"Comparison", "Label"},
+    )
+    label_column = "Comparison" if "Comparison" in label_frame else "Label"
+    comparisons = label_frame[label_column].dropna().astype(str).unique().tolist()
+    feature_maps: dict[str, dict[str, float]] = {label: {} for label in comparisons}
 
-        # Load PTM model results
-        try:
-            df = await asyncio.to_thread(pd.read_csv, ptm_file, sep="\t")
-            comparison["ptm_model"] = _json_safe_records(df)
-        except Exception as e:
-            logger.error(f"Error loading PTM model {ptm_file.name}: {e}")
-            comparison["ptm_model"] = []
+    if result_path.exists():
+        frame = await asyncio.to_thread(
+            pd.read_csv,
+            result_path,
+            sep="\t",
+            usecols=lambda column: (
+                column in {"Comparison", "Label", "Protein", "ProteinName", "log2FC"}
+            ),
+        )
+        comparison_column = "Comparison" if "Comparison" in frame else "Label"
+        feature_column = "Protein" if "Protein" in frame else "ProteinName"
+        frame["log2FC"] = pd.to_numeric(frame["log2FC"], errors="coerce")
+        frame = frame.dropna(subset=[comparison_column, feature_column, "log2FC"])
+        frame = frame.drop_duplicates([comparison_column, feature_column], keep="last")
+        for label, group in frame.groupby(comparison_column, sort=False):
+            if str(label) in feature_maps:
+                feature_maps[str(label)] = dict(
+                    zip(
+                        group[feature_column].astype(str),
+                        group["log2FC"].astype(float),
+                        strict=True,
+                    )
+                )
 
-        # Load protein model results (may not exist in Mode A)
-        protein_file = ptm_dir / f"PROTEIN_Model_{label}.tsv"
-        if protein_file.exists():
-            try:
-                df = await asyncio.to_thread(pd.read_csv, protein_file, sep="\t")
-                comparison["protein_model"] = _json_safe_records(df)
-            except Exception as e:
-                logger.error(f"Error loading protein model {protein_file.name}: {e}")
-                comparison["protein_model"] = []
-        else:
-            comparison["protein_model"] = []
+    def correlation(left: str, right: str) -> tuple[int, float | None]:
+        shared = sorted(feature_maps[left].keys() & feature_maps[right].keys())
+        if len(shared) < 2:
+            return len(shared), None
+        left_values = np.array([feature_maps[left][key] for key in shared])
+        right_values = np.array([feature_maps[right][key] for key in shared])
+        if np.std(left_values) == 0 or np.std(right_values) == 0:
+            return len(shared), None
+        return len(shared), float(np.corrcoef(left_values, right_values)[0, 1])
 
-        # Load adjusted model results (may not exist in Mode A)
-        adjusted_file = ptm_dir / f"ADJUSTED_Model_{label}.tsv"
-        if adjusted_file.exists():
-            try:
-                df = await asyncio.to_thread(pd.read_csv, adjusted_file, sep="\t")
-                comparison["adjusted_model"] = _json_safe_records(df)
-            except Exception as e:
-                logger.error(f"Error loading adjusted model {adjusted_file.name}: {e}")
-                comparison["adjusted_model"] = []
-        else:
-            comparison["adjusted_model"] = []
+    matrix: list[list[float | None]] = []
+    for row, left in enumerate(comparisons):
+        values: list[float | None] = []
+        for column, right in enumerate(comparisons):
+            values.append(1.0 if row == column else correlation(left, right)[1])
+        matrix.append(values)
 
-        comparisons.append(comparison)
-
-    return comparisons
+    pairs = []
+    for left_index, left in enumerate(comparisons):
+        for right in comparisons[left_index + 1 :]:
+            matched, value = correlation(left, right)
+            pairs.append(
+                {
+                    "left": left,
+                    "right": right,
+                    "matched": matched,
+                    "correlation": value,
+                }
+            )
+    return {
+        "comparisons": comparisons,
+        "matrix": matrix,
+        "pairs": pairs,
+        "available_for_all": bool(comparisons)
+        and all(feature_maps[label] for label in comparisons),
+    }
 
 
 @router.get("/{session_id}/ptm/results")
 async def get_ptm_results(
     session_id: str,
+    comparison: str | None = Query(default=None),
+    layer: PTMResultLayer | None = Query(default=None),
     store: SessionStore = Depends(get_session_store),
 ):
     """Get PTM differential expression results with three-model output.
@@ -150,9 +235,55 @@ async def get_ptm_results(
 
     results_dir = settings.sessions_dir / session_id / "results"
 
-    comparisons = await load_ptm_results(results_dir)
+    comparisons = await load_ptm_results(
+        results_dir,
+        comparison=comparison,
+        layer=layer,
+    )
 
     return create_response({"comparisons": comparisons})
+
+
+@router.get("/{session_id}/ptm/results/download")
+async def download_ptm_results(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Download the immutable PTM result archive produced by the pipeline."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+    archive = settings.sessions_dir / session_id / "results" / "ptm_results.zip"
+    if not archive.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PTM result archive was not found",
+        )
+    return FileResponse(
+        archive,
+        media_type="application/zip",
+        filename="ptm_results.zip",
+    )
+
+
+@router.get("/{session_id}/ptm/compare")
+async def get_ptm_comparison_summary(
+    session_id: str,
+    layer: PTMResultLayer = Query(default="ptm"),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Return compact, layer-specific comparison correlations."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+    results_dir = settings.sessions_dir / session_id / "results"
+    return create_response(await load_ptm_comparison_summary(results_dir, layer))
 
 
 @router.get("/{session_id}/ptm/site/{site_id}/abundance")
@@ -290,4 +421,7 @@ async def get_ptm_qc_plots(
         return create_response(data)
     except Exception as e:
         logger.error(f"Error loading PTM QC data: {e}")
-        return create_response(default_result)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="PTM QC data could not be loaded",
+        ) from e

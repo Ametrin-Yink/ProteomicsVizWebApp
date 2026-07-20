@@ -1,5 +1,7 @@
 """Unit tests for visualization API routes — results, QC, protein data, tasks."""
 
+import io
+import zipfile
 from unittest.mock import AsyncMock
 
 import pandas as pd
@@ -46,6 +48,7 @@ def client(tmp_path, monkeypatch):
             "SiteLabel": ["P1 · C10", "P2 · candidate positions C20|C30"],
             "LocalizationStatus": ["Confident", "Ambiguous"],
             "issue": [None, None],
+            "UnusedMetadata": ["large metadata value", "large metadata value"],
         }
     ).to_csv(results_dir / "ptm_site_results.tsv", sep="\t", index=False)
     pd.DataFrame(
@@ -56,6 +59,7 @@ def client(tmp_path, monkeypatch):
             "pvalue": [0.5],
             "adj.pvalue": [0.5],
             "issue": [None],
+            "UnusedMetadata": ["large metadata value"],
         }
     ).to_csv(results_dir / "protein_results.tsv", sep="\t", index=False)
     pd.DataFrame(
@@ -97,6 +101,8 @@ def client(tmp_path, monkeypatch):
             "Abundance": [12.5],
         }
     ).to_csv(results_dir / "ptm_site_summarized.tsv", sep="\t", index=False)
+    with zipfile.ZipFile(results_dir / "ptm_results.zip", "w") as archive:
+        archive.writestr("ptm_site_results.tsv", "Protein\tlog2FC\nP1_C10\t1.2\n")
 
     session = Session(
         id="550e8400-e29b-41d4-a716-446655440000",
@@ -133,6 +139,8 @@ def test_modular_visualization_routes_are_registered_once():
         "/api/sessions/{session_id}/protein/{protein_id}/abundance",
         "/api/sessions/{session_id}/protein/{protein_id}/peptide",
         "/api/sessions/{session_id}/ptm/results",
+        "/api/sessions/{session_id}/ptm/results/download",
+        "/api/sessions/{session_id}/ptm/compare",
         "/api/sessions/{session_id}/ptm/qc/plots",
     }
     registered = [route.path for route in app.routes if route.path in expected]
@@ -301,7 +309,12 @@ class TestVisualizationManifest:
 
         results_dir = tmp_path / "results"
         results_dir.mkdir()
-        (results_dir / "ptm_site_results.tsv").touch()
+        pd.DataFrame(
+            {
+                "Comparison": ["Drug_vs_DMSO", "Drug2_vs_DMSO"],
+                "Protein": ["P1_C1", "P1_C1"],
+            }
+        ).to_csv(results_dir / "ptm_site_results.tsv", sep="\t", index=False)
         session = Session(
             id="ptm-without-protein",
             name="PTM without protein",
@@ -322,6 +335,34 @@ class TestVisualizationManifest:
         assert modules["bionet"]["visible"] is False
         assert modules["qc"]["data_scopes"] == ["ptm"]
 
+    def test_ptm_compare_capability_uses_produced_results(self, tmp_path):
+        from app.api.routes.visualization_manifest import build_visualization_manifest
+
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        pd.DataFrame({"Comparison": ["Drug_vs_DMSO"], "Protein": ["P1_C1"]}).to_csv(
+            results_dir / "ptm_site_results.tsv", sep="\t", index=False
+        )
+        session = Session(
+            id="ptm-stale-config",
+            name="PTM stale config",
+            pipeline="ptm",
+            config=SessionConfig(
+                comparisons=[
+                    {"group1": {"Condition": "Drug"}, "group2": {"Condition": "DMSO"}},
+                    {"group1": {"Condition": "Drug2"}, "group2": {"Condition": "DMSO"}},
+                ]
+            ),
+        )
+
+        manifest = build_visualization_manifest(session, results_dir)
+        compare = next(
+            module for module in manifest["modules"] if module["id"] == "compare"
+        )
+
+        assert compare["enabled"] is False
+        assert compare["disabled_reason"] == "At least two comparisons are required"
+
 
 class TestPTMVisualization:
     def test_stable_results_include_all_available_layers(self, client):
@@ -339,6 +380,84 @@ class TestPTMVisualization:
         assert comparisons[0]["ptm_model"][1]["LocalizationStatus"] == "Ambiguous"
         assert comparisons[0]["ptm_model"][0]["issue"] is None
         assert comparisons[0]["protein_model"][0]["issue"] is None
+
+    def test_results_can_project_one_comparison_and_layer(self, client):
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results",
+            params={"comparison": "Drug_vs_DMSO", "layer": "protein"},
+        )
+
+        assert response.status_code == 200
+        comparisons = response.json()["data"]["comparisons"]
+        assert len(comparisons) == 1
+        assert comparisons[0]["ptm_model"] == []
+        assert len(comparisons[0]["protein_model"]) == 1
+        assert comparisons[0]["adjusted_model"] == []
+        assert "Comparison" not in comparisons[0]["protein_model"][0]
+        assert "UnusedMetadata" not in comparisons[0]["protein_model"][0]
+
+    def test_invalid_result_layer_is_rejected(self, client):
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results",
+            params={"layer": "invalid"},
+        )
+
+        assert response.status_code == 422
+
+    def test_compare_summary_is_calculated_without_returning_result_rows(self, client):
+        from app.core.config import settings
+
+        results_dir = (
+            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
+        )
+        frame = pd.read_csv(results_dir / "ptm_site_results.tsv", sep="\t")
+        second = frame.copy()
+        second["Comparison"] = "Drug2_vs_DMSO"
+        second["log2FC"] = [2.4, 0.8]
+        pd.concat([frame, second], ignore_index=True).to_csv(
+            results_dir / "ptm_site_results.tsv", sep="\t", index=False
+        )
+
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/compare",
+            params={"layer": "ptm"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["comparisons"] == ["Drug_vs_DMSO", "Drug2_vs_DMSO"]
+        assert data["pairs"][0]["left"] == "Drug_vs_DMSO"
+        assert data["pairs"][0]["right"] == "Drug2_vs_DMSO"
+        assert data["pairs"][0]["matched"] == 2
+        assert data["pairs"][0]["correlation"] == pytest.approx(1.0)
+        assert "ptm_model" not in response.text
+
+    def test_downloads_existing_ptm_result_archive(self, client):
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results/download"
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            assert archive.namelist() == ["ptm_site_results.tsv"]
+
+    def test_corrupt_ptm_qc_is_an_error(self, client):
+        from app.core.config import settings
+
+        qc_file = (
+            settings.sessions_dir
+            / "550e8400-e29b-41d4-a716-446655440000"
+            / "results"
+            / "ptm_qc.json"
+        )
+        qc_file.write_text("not json", encoding="utf-8")
+
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/qc/plots"
+        )
+
+        assert response.status_code == 500
 
     def test_site_details_and_abundance_are_site_centric(self, client):
         details = client.get(
