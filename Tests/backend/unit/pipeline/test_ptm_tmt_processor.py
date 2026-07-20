@@ -218,6 +218,63 @@ def test_prepare_ptm_accepts_filename_prefixed_channel_metadata(tmp_path):
     assert set(pd.read_parquet(output)["Channel"].astype(str)) == set(_mapping())
 
 
+def test_prepare_ptm_uses_canonical_condition_order(tmp_path):
+    mapping = {
+        channel: {
+            **(
+                {"time": "24h", "condition": values["condition"]}
+                if index % 2
+                else {"condition": values["condition"], "time": "24h"}
+            ),
+            "replicate": values["replicate"],
+            "role": values["role"],
+        }
+        for index, (channel, values) in enumerate(_mapping().items())
+    }
+    row = {
+        "Sequence": "ACDK",
+        "Modifications": "C2(DBIA)",
+        "Charge": 2,
+        "Contaminant": False,
+        "Master Protein Accessions": "P1",
+        "Average Reporter SN": 10,
+        "Isolation Interference in Percent": 10,
+        **{f"Abundance {channel}": 100 for channel in mapping},
+    }
+    source = tmp_path / "ptm.txt"
+    output = tmp_path / "ptm.parquet"
+    _write_pd(source, [row])
+
+    prepare_pd_tmt_long(source, output, mapping, role="ptm")
+
+    assert set(pd.read_parquet(output)["Condition"]) == {
+        "DMSO_24h",
+        "Drug_24h",
+    }
+
+
+def test_sequence_alias_is_canonical_for_optional_protein(tmp_path):
+    row = {
+        "Sequence": "ACDK",
+        "Modifications": "C2(Carbamidomethyl)",
+        "Charge": 2,
+        "Contaminant": False,
+        "Master Protein Accessions": "P1",
+        "Average Reporter SN": 10,
+        "Normalized CHIMERYS Coefficient": 0.8,
+        **{f"Abundance {channel}": 100 for channel in _mapping()},
+    }
+    source = tmp_path / "protein.txt"
+    output = tmp_path / "protein.parquet"
+    _write_pd(source, [row])
+
+    prepare_pd_tmt_long(source, output, _mapping(), role="protein")
+
+    result = pd.read_parquet(output)
+    assert "Annotated_Sequence" in result
+    assert "Sequence" not in result
+
+
 def test_prepare_ptm_rejects_duplicate_metadata_for_one_reporter_channel(tmp_path):
     mapping = _mapping()
     mapping["old-ptm.txt::126"] = mapping["126"]
@@ -239,10 +296,14 @@ def test_prepare_ptm_rejects_duplicate_metadata_for_one_reporter_channel(tmp_pat
         prepare_pd_tmt_long(source, tmp_path / "ptm.parquet", mapping, role="ptm")
 
 
-def test_build_site_inputs_sums_repeated_psms_and_keeps_peptidoforms(tmp_path):
+@pytest.mark.parametrize("sequence_column", ["Sequence", "Annotated Sequence"])
+def test_build_site_inputs_sums_repeated_psms_and_keeps_peptidoforms(
+    tmp_path,
+    sequence_column,
+):
     mapping = _mapping()
     target = {
-        "Annotated Sequence": "[K].acDK.[R]",
+        sequence_column: "[K].acDK.[R]",
         "Modifications": "N-Term(TMT6plex); C2(DBIA)",
         "Charge": 2,
         "Contaminant": False,
@@ -255,7 +316,7 @@ def test_build_site_inputs_sums_repeated_psms_and_keeps_peptidoforms(tmp_path):
     }
     background = {
         **target,
-        "Annotated Sequence": "[K].TTK.[R]",
+        sequence_column: "[K].TTK.[R]",
         "Modifications": "N-Term(TMT6plex)",
         "ptmRS Best Site Probabilities": "",
         **{f"Abundance {channel}": 200 for channel in mapping},

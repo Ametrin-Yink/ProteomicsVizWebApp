@@ -11,6 +11,17 @@ from app.services.ptm_wrapper import ptm_wrapper
 from app.services.steps._helpers import build_comparison_pair_label, create_log_callback
 
 
+def _canonicalize_comparison(comparison: dict) -> dict:
+    """Use one stable condition-column order for PTM preparation and R labels."""
+    if "group1" not in comparison or "group2" not in comparison:
+        return comparison
+    return {
+        **comparison,
+        "group1": dict(sorted(comparison["group1"].items())),
+        "group2": dict(sorted(comparison["group2"].items())),
+    }
+
+
 def _add_unestimable_sites(
     frame: pd.DataFrame,
     metadata: pd.DataFrame,
@@ -90,7 +101,10 @@ async def step_ptm_group_comparison(ctx: StepContext) -> None:
     rds_file = ctx.step_outputs.get("rds_file")
     if rds_file is None:
         raise ValueError("No summarized PTM data from stage 4")
-    comparisons = ctx.config.comparisons or []
+    comparisons = [
+        _canonicalize_comparison(comparison)
+        for comparison in (ctx.config.comparisons or [])
+    ]
     if not comparisons:
         raise ValueError("No comparisons specified for PTM analysis")
 

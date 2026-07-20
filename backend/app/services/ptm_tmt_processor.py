@@ -301,7 +301,7 @@ def _mapping_frame(mapping: dict[str, dict[str, str | int]]) -> pd.DataFrame:
             raise ValueError(f"Reporter channel {channel} has duplicate metadata")
         seen_channels.add(channel)
         role = str(values.get("role", values.get("channel_role", "Sample")))
-        group_keys = [key for key in values if key not in ignored]
+        group_keys = sorted(key for key in values if key not in ignored)
         if not group_keys:
             raise ValueError(f"Channel {channel} has no condition metadata")
         condition = "_".join(str(values[key]) for key in group_keys)
@@ -385,7 +385,12 @@ def prepare_pd_tmt_long(
     for column in columns:
         if column in abundance_columns:
             continue
-        alias = column.replace(" ", "_")
+        if column in {"Sequence", "Annotated Sequence"}:
+            if column != sequence_column:
+                continue
+            alias = "Annotated_Sequence"
+        else:
+            alias = column.replace(" ", "_")
         original_select.append(f"r.{_sql_quote(column)} AS {_sql_quote(alias)}")
     original_sql = ",\n                    ".join(original_select)
     abundance_regex = r"Abundance\s+\d+[NC]?"

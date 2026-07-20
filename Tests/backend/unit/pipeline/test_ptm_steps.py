@@ -7,6 +7,7 @@ import pandas as pd
 from app.models.analysis import AnalysisConfig, AnalysisResult, PipelineTool
 from app.services.pipeline_engine import StepContext
 from app.services.steps.ptm_step3_comparison import (
+    _canonicalize_comparison,
     _filter_adjusted_results,
     step_ptm_group_comparison,
 )
@@ -102,6 +103,18 @@ def test_adjusted_results_require_a_quantified_matching_protein():
 
     assert filtered["Protein"].tolist() == ["P1_C10", "P2-2_C20"]
     assert filtered["ProteinMatch"].tolist() == ["exact", "canonical_fallback"]
+
+
+def test_ptm_comparison_condition_order_is_canonical():
+    comparison = {
+        "group1": {"time": "24h", "condition": "Drug"},
+        "group2": {"time": "24h", "condition": "DMSO"},
+    }
+
+    canonical = _canonicalize_comparison(comparison)
+
+    assert list(canonical["group1"]) == ["condition", "time"]
+    assert list(canonical["group2"]) == ["condition", "time"]
 
 
 def test_ptm_qc_logs_success_with_step(tmp_path):
