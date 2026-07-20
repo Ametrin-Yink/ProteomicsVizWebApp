@@ -43,6 +43,9 @@ import type {
   BioNetRunStatus,
   BioNetSubnetwork,
   PTMUploadResponse,
+  PTMComparisonData,
+  PTMComparisonSummary,
+  PTMResultLayer,
   VisualizationManifest,
 } from '@/types/api';
 
@@ -795,6 +798,25 @@ export const visualizationApi = {
     signal?: AbortSignal
   ): Promise<VisualizationManifest> => {
     return fetchApi<VisualizationManifest>(`${apiPrefix}/visualization/manifest`, { signal });
+  },
+
+  getPTMResults: (
+    apiPrefix: string,
+    comparison: string,
+    layer: PTMResultLayer,
+    signal?: AbortSignal
+  ): Promise<{ comparisons: PTMComparisonData[] }> => {
+    const query = new URLSearchParams({ comparison, layer });
+    return fetchApi(`${apiPrefix}/ptm/results?${query}`, { signal });
+  },
+
+  getPTMComparisonSummary: (
+    apiPrefix: string,
+    layer: PTMResultLayer,
+    signal?: AbortSignal
+  ): Promise<PTMComparisonSummary> => {
+    const query = new URLSearchParams({ layer });
+    return fetchApi(`${apiPrefix}/ptm/compare?${query}`, { signal });
   },
 
   // ── DE Results ──

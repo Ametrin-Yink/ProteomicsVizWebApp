@@ -4,22 +4,35 @@ import { createContext, useContext, type ReactNode } from 'react';
 
 import type { VisualizationManifest } from '@/types/api';
 
-const VisualizationManifestContext = createContext<VisualizationManifest | null>(null);
+export type VisualizationManifestState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; manifest: VisualizationManifest }
+  | { status: 'error'; message: string };
+
+const VisualizationManifestContext = createContext<VisualizationManifestState>({
+  status: 'idle',
+});
 
 export function VisualizationManifestProvider({
-  manifest,
+  state,
   children,
 }: {
-  manifest: VisualizationManifest | null;
+  state: VisualizationManifestState;
   children: ReactNode;
 }) {
   return (
-    <VisualizationManifestContext.Provider value={manifest}>
+    <VisualizationManifestContext.Provider value={state}>
       {children}
     </VisualizationManifestContext.Provider>
   );
 }
 
 export function useVisualizationManifest(): VisualizationManifest | null {
+  const state = useContext(VisualizationManifestContext);
+  return state.status === 'ready' ? state.manifest : null;
+}
+
+export function useVisualizationManifestState(): VisualizationManifestState {
   return useContext(VisualizationManifestContext);
 }

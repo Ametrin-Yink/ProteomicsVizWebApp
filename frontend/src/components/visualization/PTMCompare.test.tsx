@@ -15,6 +15,46 @@ vi.mock('@/components/visualization/compare/ProteinCompareWorkspace', () => ({
   ),
 }));
 
+function mockSummaries({
+  comparisons,
+  matched = 2,
+  correlation = 1,
+  protein = false,
+  adjusted = false,
+}: {
+  comparisons: string[];
+  matched?: number;
+  correlation?: number | null;
+  protein?: boolean;
+  adjusted?: boolean;
+}) {
+  global.fetch = vi.fn(async (input) => {
+    const url = String(input);
+    const layer = new URL(url, 'http://localhost').searchParams.get('layer');
+    const available = layer === 'ptm'
+      || (layer === 'protein' && protein)
+      || (layer === 'adjusted' && adjusted);
+    const pairs = comparisons.length < 2 ? [] : [{
+      left: comparisons[0],
+      right: comparisons[1],
+      matched,
+      correlation,
+    }];
+    return {
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve({
+        data: {
+          comparisons,
+          matrix: comparisons.length < 2 ? [[1]] : [[1, correlation], [correlation, 1]],
+          pairs,
+          available_for_all: available,
+        },
+      }),
+    } as unknown as Response;
+  });
+}
+
 describe('PTMCompare', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -31,12 +71,7 @@ describe('PTMCompare', () => {
   });
 
   it('requires two comparisons', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { comparisons: [{
-        label: 'Drug_vs_DMSO', ptm_model: [], protein_model: [], adjusted_model: [],
-      }] } }),
-    });
+    mockSummaries({ comparisons: ['Drug_vs_DMSO'] });
 
     await act(async () => {
       root.render(<PTMCompare sessionId="session-id" />);
@@ -48,23 +83,7 @@ describe('PTMCompare', () => {
   });
 
   it('compares matched PTM features across comparisons', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { comparisons: [
-        {
-          label: 'A_vs_Control',
-          ptm_model: [{ Protein: 'P1_C10', log2FC: 1 }, { Protein: 'P2_C20', log2FC: -1 }],
-          protein_model: [],
-          adjusted_model: [],
-        },
-        {
-          label: 'B_vs_Control',
-          ptm_model: [{ Protein: 'P1_C10', log2FC: 2 }, { Protein: 'P2_C20', log2FC: -2 }],
-          protein_model: [],
-          adjusted_model: [],
-        },
-      ] } }),
-    });
+    mockSummaries({ comparisons: ['A_vs_Control', 'B_vs_Control'] });
 
     await act(async () => {
       root.render(<PTMCompare sessionId="session-id" />);
@@ -76,25 +95,14 @@ describe('PTMCompare', () => {
     expect(container.textContent).toContain('Matched-feature evidence');
     expect(container.textContent).toContain('2');
     expect(container.textContent).toContain('1.000');
+    expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
   it('uses the standard protein Compare workspace for the optional protein layer', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { comparisons: [
-        {
-          label: 'A_vs_Control',
-          ptm_model: [{ Protein: 'P1_C10', log2FC: 1 }],
-          protein_model: [{ Protein: 'P1', log2FC: 0.5 }],
-          adjusted_model: [{ Protein: 'P1_C10', log2FC: 0.5 }],
-        },
-        {
-          label: 'B_vs_Control',
-          ptm_model: [{ Protein: 'P1_C10', log2FC: 2 }],
-          protein_model: [{ Protein: 'P1', log2FC: 1 }],
-          adjusted_model: [{ Protein: 'P1_C10', log2FC: 1 }],
-        },
-      ] } }),
+    mockSummaries({
+      comparisons: ['A_vs_Control', 'B_vs_Control'],
+      protein: true,
+      adjusted: true,
     });
 
     await act(async () => {
@@ -113,22 +121,10 @@ describe('PTMCompare', () => {
   });
 
   it('reports undefined correlation when fewer than two sites are shared', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { comparisons: [
-        {
-          label: 'A_vs_Control',
-          ptm_model: [{ Protein: 'P1_C10', log2FC: 1 }],
-          protein_model: [],
-          adjusted_model: [],
-        },
-        {
-          label: 'B_vs_Control',
-          ptm_model: [{ Protein: 'P1_C10', log2FC: 2 }],
-          protein_model: [],
-          adjusted_model: [],
-        },
-      ] } }),
+    mockSummaries({
+      comparisons: ['A_vs_Control', 'B_vs_Control'],
+      matched: 1,
+      correlation: null,
     });
 
     await act(async () => {

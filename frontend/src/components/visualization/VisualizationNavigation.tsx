@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 import ExportButton from '@/components/visualization/ExportButton';
 import {
@@ -26,8 +26,7 @@ export function VisualizationNavigation({
   sessionId: string;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const activeTab = searchParams.get('tab') || getActiveModuleId(pathname);
+  const activeTab = getActiveModuleId(pathname);
   const modules = getModulesForManifest(manifest);
 
   return (
@@ -71,7 +70,7 @@ export function VisualizationNavigation({
               );
             })}
           </div>
-          <ExportButton sessionId={sessionId} />
+          <ExportButton sessionId={sessionId} pipeline={manifest.pipeline} />
         </div>
       </div>
     </div>

@@ -1,26 +1,34 @@
 'use client';
 
 import React, { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { SessionManager } from '@/components/session/SessionManager';
+import { VisualizationModuleBoundary } from '@/components/visualization/VisualizationModuleBoundary';
 import { VisualizationNavigation } from '@/components/visualization/VisualizationNavigation';
 import { ApiProvider } from '@/lib/api-context';
 import { sessionApiPrefix, visualizationApi } from '@/lib/api-client';
 import { useSessionValidation } from '@/hooks/use-session-validation';
-import type { VisualizationManifest } from '@/types/api';
-import { VisualizationManifestProvider } from '@/lib/visualization-context';
+import {
+  VisualizationManifestProvider,
+  type VisualizationManifestState,
+} from '@/lib/visualization-context';
 
 function LayoutWithProvider({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
   const apiPrefix = sessionId ? sessionApiPrefix(sessionId) : '';
-  const [loadedManifest, setLoadedManifest] = useState<{
-    apiPrefix: string;
-    manifest: VisualizationManifest;
-  } | null>(null);
-  const manifest = loadedManifest?.apiPrefix === apiPrefix
-    ? loadedManifest.manifest
-    : null;
+  const [retryKey, setRetryKey] = useState(0);
+  const requestKey = `${apiPrefix}:${retryKey}`;
+  const [loadedState, setLoadedState] = useState<{
+    requestKey: string;
+    state: VisualizationManifestState;
+  }>({ requestKey: '', state: { status: 'idle' } });
+  const state: VisualizationManifestState = !apiPrefix
+    ? { status: 'idle' }
+    : loadedState.requestKey === requestKey
+      ? loadedState.state
+      : { status: 'loading' };
 
   useSessionValidation(sessionId || null);
 
@@ -29,25 +37,40 @@ function LayoutWithProvider({ children }: { children: React.ReactNode }) {
     const controller = new AbortController();
     visualizationApi.getManifest(apiPrefix, controller.signal)
       .then((nextManifest) => {
-        setLoadedManifest({ apiPrefix, manifest: nextManifest });
+        setLoadedState({
+          requestKey,
+          state: { status: 'ready', manifest: nextManifest },
+        });
       })
       .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          setLoadedManifest(null);
-        }
+        if (error instanceof Error && error.name === 'AbortError') return;
+        setLoadedState({
+          requestKey,
+          state: {
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Failed to load visualization capabilities.',
+          },
+        });
       });
     return () => controller.abort();
-  }, [apiPrefix]);
+  }, [apiPrefix, requestKey]);
 
   return (
     <ApiProvider apiPrefix={apiPrefix}>
-      <VisualizationManifestProvider manifest={manifest}>
-        {manifest && (
-          <VisualizationNavigation manifest={manifest} sessionId={sessionId} />
+      <VisualizationManifestProvider state={state}>
+        {state.status === 'ready' && (
+          <VisualizationNavigation manifest={state.manifest} sessionId={sessionId} />
         )}
-        <React.Fragment key={sessionId || 'no-session'}>
-          {children}
-        </React.Fragment>
+        <VisualizationModuleBoundary
+          state={state}
+          pathname={pathname}
+          sessionId={sessionId}
+          onRetry={() => setRetryKey((current) => current + 1)}
+        >
+          <React.Fragment key={sessionId || 'no-session'}>
+            {children}
+          </React.Fragment>
+        </VisualizationModuleBoundary>
       </VisualizationManifestProvider>
     </ApiProvider>
   );

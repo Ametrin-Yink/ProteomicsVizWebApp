@@ -12,7 +12,12 @@ import {
 } from '@/components/visualization/VolcanoWorkspace';
 import { VisualizationScopeTabs } from '@/components/visualization/VisualizationScopeTabs';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { getDataSource, updateVisualizationState } from '@/lib/api-client';
+import {
+  getDataSource,
+  sessionApiPrefix,
+  updateVisualizationState,
+  visualizationApi,
+} from '@/lib/api-client';
 import {
   formatNumber,
   formatPValue,
@@ -22,7 +27,8 @@ import {
 } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useUIStore } from '@/stores/ui-store';
-import type { DEResult, VolcanoFilters } from '@/types/api';
+import { useVisualizationManifest } from '@/lib/visualization-context';
+import type { DEResult, PTMComparisonData, VolcanoFilters } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -31,13 +37,6 @@ interface PTMVolcanoProps {
 }
 
 type Layer = 'ptm' | 'protein' | 'adjusted';
-
-interface ComparisonData {
-  label: string;
-  ptm_model: Record<string, unknown>[];
-  protein_model: Record<string, unknown>[];
-  adjusted_model: Record<string, unknown>[];
-}
 
 interface SiteDetails {
   site?: Record<string, unknown>;
@@ -80,7 +79,7 @@ function normalizeRow(raw: Record<string, unknown>): PTMResultRow {
   };
 }
 
-function rowsForLayer(comparison: ComparisonData, layer: Layer): PTMResultRow[] {
+function rowsForLayer(comparison: PTMComparisonData, layer: Layer): PTMResultRow[] {
   const source = layer === 'ptm'
     ? comparison.ptm_model
     : layer === 'protein'
@@ -282,8 +281,10 @@ function PTMInfoPanel({
 
 export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
   const addToast = useUIStore((state) => state.addToast);
+  const manifest = useVisualizationManifest();
   const [sessionName, setSessionName] = useState('Results');
-  const [comparisons, setComparisons] = useState<ComparisonData[]>([]);
+  const [comparisonLabels, setComparisonLabels] = useState<string[]>([]);
+  const [comparison, setComparison] = useState<PTMComparisonData | null>(null);
   const [comparisonIndex, setComparisonIndex] = useState(0);
   const [layer, setLayer] = useState<Layer>('ptm');
   const [filtersByComparison, setFiltersByComparison] = useState<Record<string, VolcanoFilters>>({});
@@ -291,18 +292,21 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resultLoading, setResultLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [batchComparisons, setBatchComparisons] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const apiPrefix = sessionApiPrefix(sessionId);
     Promise.all([
-      fetch(`/api/sessions/${sessionId}/ptm/results`).then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      }),
-      getDataSource(`/api/sessions/${sessionId}`),
-    ]).then(([resultResponse, session]) => {
-      setComparisons(resultResponse.data?.comparisons ?? []);
+      visualizationApi.getPTMComparisonSummary(apiPrefix, 'ptm', controller.signal),
+      getDataSource(apiPrefix),
+    ]).then(([summary, session]) => {
+      if (!active) return;
+      setComparisonLabels(summary.comparisons);
       setSessionName(session.name || 'Results');
       const restored: Record<string, Set<string>> = {};
       if (session.markers && typeof session.markers === 'object' && !Array.isArray(session.markers)) {
@@ -311,11 +315,48 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
       setMarkedByKey(restored);
       if (session.ptm_volcano_filters) setFiltersByComparison(session.ptm_volcano_filters);
     }).catch((reason) => {
+      if (!active || (reason instanceof Error && reason.name === 'AbortError')) return;
       setError(reason instanceof Error ? reason.message : 'Failed to load PTM results');
-    }).finally(() => setLoading(false));
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [sessionId]);
 
-  const comparison = comparisons[comparisonIndex];
+  const comparisonLabel = comparisonLabels[comparisonIndex] ?? '';
+  useEffect(() => {
+    if (!comparisonLabel) {
+      setComparison(null);
+      setResultLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    let active = true;
+    setError(null);
+    setResultLoading(true);
+    visualizationApi.getPTMResults(
+      sessionApiPrefix(sessionId),
+      comparisonLabel,
+      layer,
+      controller.signal,
+    ).then((response) => {
+      if (!active) return;
+      setComparison(response.comparisons[0] ?? null);
+    }).catch((reason) => {
+      if (!active || (reason instanceof Error && reason.name === 'AbortError')) return;
+      setError(reason instanceof Error ? reason.message : 'Failed to load PTM results');
+    }).finally(() => {
+      if (active) setResultLoading(false);
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [comparisonLabel, layer, sessionId]);
+
   const filters = comparison ? filtersByComparison[comparison.label] ?? DEFAULT_FILTERS : DEFAULT_FILTERS;
   const debouncedFilters = useDebounce(filters, 150);
   const layerRows = useMemo(() => comparison ? rowsForLayer(comparison, layer) : [], [comparison, layer]);
@@ -334,7 +375,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
     () => markedByKey[markerKey] ?? new Set<string>(),
     [markedByKey, markerKey],
   );
-  const comparisonLabel = comparison?.label.replace(/_vs_/g, ' vs ') ?? '';
+  const comparisonDisplayLabel = comparison?.label.replace(/_vs_/g, ' vs ') ?? '';
 
   const deCounts = useMemo(() => {
     const significant = plottedRows.filter((row) => isSignificantVolcano(
@@ -350,10 +391,10 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
     };
   }, [debouncedFilters, plottedRows]);
 
-  const comparisonOptions = useMemo(() => comparisons.map((item) => ({
-    value: item.label,
-    label: item.label.replace(/_vs_/g, ' vs '),
-  })), [comparisons]);
+  const comparisonOptions = useMemo(() => comparisonLabels.map((label) => ({
+    value: label,
+    label: label.replace(/_vs_/g, ' vs '),
+  })), [comparisonLabels]);
 
   const selectIds = useCallback((ids: string[]) => {
     setSelectedIds(new Set(ids));
@@ -387,11 +428,19 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
       .map((row) => row.id)));
   }, [debouncedFilters, markerKey, plottedRows, updateMarked]);
 
-  const handleBatchMark = () => {
+  const handleBatchMark = async () => {
+    setBatchLoading(true);
     try {
       const next = { ...markedByKey };
-      for (const label of batchComparisons) {
-        const item = comparisons.find((candidate) => candidate.label === label);
+      const items = await Promise.all(Array.from(batchComparisons).map(async (label) => {
+        const response = await visualizationApi.getPTMResults(
+          sessionApiPrefix(sessionId),
+          label,
+          layer,
+        );
+        return [label, response.comparisons[0]] as const;
+      }));
+      for (const [label, item] of items) {
         if (!item) continue;
         const comparisonFilters = filtersByComparison[label] ?? DEFAULT_FILTERS;
         next[`${label}::${layer}`] = new Set(rowsForLayer(item, layer)
@@ -407,6 +456,8 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
       setMarkedByKey(next);
     } catch {
       addToast('error', 'Failed to mark significant PTM entries across comparisons.');
+    } finally {
+      setBatchLoading(false);
     }
   };
 
@@ -431,7 +482,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
     return () => clearTimeout(timer);
   }, [filtersByComparison, sessionId]);
 
-  if (loading) {
+  if (loading || resultLoading) {
     return (
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -452,12 +503,8 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
         comparisonOptions={comparisonOptions}
         selectedComparison={comparison.label}
         onComparisonChange={(value) => {
-          const nextIndex = Math.max(0, comparisons.findIndex((item) => item.label === value));
-          const nextComparison = comparisons[nextIndex];
+          const nextIndex = Math.max(0, comparisonLabels.indexOf(value));
           setComparisonIndex(nextIndex);
-          if (nextComparison && layer !== 'ptm' && rowsForLayer(nextComparison, layer).length === 0) {
-            setLayer('ptm');
-          }
           clearSelection();
         }}
         entityCount={layerRows.length}
@@ -466,6 +513,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
         batchSelection={batchComparisons}
         onBatchSelectionChange={setBatchComparisons}
         onBatchMark={handleBatchMark}
+        batchLoading={batchLoading}
       />
 
       <div className="mb-6">
@@ -478,9 +526,9 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
           options={LAYERS.map((item) => ({
             ...item,
             disabled: item.key === 'protein'
-              ? comparison.protein_model.length === 0
+              ? !manifest?.modules.find((module) => module.id === 'volcano')?.data_scopes.includes('protein')
               : item.key === 'adjusted'
-                ? comparison.adjusted_model.length === 0
+                ? !manifest?.modules.find((module) => module.id === 'volcano')?.data_scopes.includes('adjusted_ptm')
                 : false,
             disabledReason: 'A matched protein PSM file is required for this layer.',
           }))}
@@ -519,7 +567,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
             markedProteins={markedIds}
             onSelectProteins={selectIds}
             onClearSelection={clearSelection}
-            comparisonLabel={comparisonLabel}
+            comparisonLabel={comparisonDisplayLabel}
             itemName={layer === 'protein' ? 'Proteins' : 'PTM sites'}
             getPointLabel={(item) => rowById.get(item.master_protein_accessions)?.gene
               || rowById.get(item.master_protein_accessions)?.display
@@ -557,7 +605,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
             selectedIds={selectedIds}
             markedIds={markedIds}
             filters={debouncedFilters}
-            comparisonLabel={comparisonLabel}
+            comparisonLabel={comparisonDisplayLabel}
             onSelect={(row) => selectIds([row.id])}
             onToggleMark={toggleMark}
             onMarkAllSignificant={markAllSignificant}

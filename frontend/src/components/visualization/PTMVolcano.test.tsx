@@ -16,13 +16,27 @@ describe('PTMVolcano', () => {
   let root: Root;
 
   beforeEach(() => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: { get: () => 'application/json' },
-      json: () => Promise.resolve({
-        data: {
-          comparisons: [{
+    global.fetch = vi.fn(async (input) => {
+      const url = String(input);
+      const response = (body: unknown) => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve(body),
+      } as unknown as Response);
+      if (url.includes('/ptm/compare')) {
+        return response({
+          data: {
+            comparisons: ['Drug_vs_DMSO'],
+            matrix: [[1]],
+            pairs: [],
+            available_for_all: true,
+          },
+        });
+      }
+      if (url.includes('/ptm/results?')) {
+        return response({
+          data: { comparisons: [{
             label: 'Drug_vs_DMSO',
             ptm_model: [{
               Protein: 'P1_C10',
@@ -36,9 +50,10 @@ describe('PTMVolcano', () => {
             }],
             protein_model: [],
             adjusted_model: [],
-          }],
-        },
-      }),
+          }] },
+        });
+      }
+      return response({ name: 'Results', markers: {}, ptm_volcano_filters: {} });
     });
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -53,6 +68,8 @@ describe('PTMVolcano', () => {
   it('shows a site-centric PTM layer and disables unavailable protein layers', async () => {
     await act(async () => {
       root.render(<PTMVolcano sessionId="session-id" />);
+      await Promise.resolve();
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -70,5 +87,9 @@ describe('PTMVolcano', () => {
     expect(container.textContent).toContain('No PTM Site Selected');
     expect(protein?.disabled).toBe(true);
     expect(adjusted?.disabled).toBe(true);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/ptm/results?comparison=Drug_vs_DMSO&layer=ptm'),
+      expect.anything(),
+    );
   });
 });

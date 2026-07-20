@@ -25,6 +25,27 @@ export interface VisualizationManifest {
   modules: VisualizationModuleCapability[];
 }
 
+export type PTMResultLayer = 'ptm' | 'protein' | 'adjusted';
+
+export interface PTMComparisonData {
+  label: string;
+  ptm_model: Record<string, unknown>[];
+  protein_model: Record<string, unknown>[];
+  adjusted_model: Record<string, unknown>[];
+}
+
+export interface PTMComparisonSummary {
+  comparisons: string[];
+  matrix: Array<Array<number | null>>;
+  pairs: Array<{
+    left: string;
+    right: string;
+    matched: number;
+    correlation: number | null;
+  }>;
+  available_for_all: boolean;
+}
+
 // Differential Expression Results
 export interface DEResult {
   master_protein_accessions: string;
