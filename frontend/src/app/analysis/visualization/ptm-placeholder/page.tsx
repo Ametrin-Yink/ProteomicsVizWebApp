@@ -4,33 +4,38 @@ import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import PTMVolcano from '@/components/visualization/PTMVolcano';
-import PTMResultsTable from '@/components/visualization/PTMResultsTable';
+import PTMCompare from '@/components/visualization/PTMCompare';
 import BioNetNetwork from '@/components/visualization/BioNetNetwork';
-import type { BioNetRunStatus, BioNetSubnetwork } from '@/types/api';
-
-/** Tab configuration for the PTM visualization page. */
-const TABS = [
-  { key: 'volcano', label: 'Volcano Plot' },
-  { key: 'results', label: 'Results Table' },
-  { key: 'qc', label: 'QC Metrics' },
-  { key: 'site-abundance', label: 'Site Abundance' },
-  { key: 'bionet', label: 'BioNet Network' },
-];
+import QCPlots from '@/components/visualization/QCPlots';
+import type { BioNetRunStatus, BioNetSubnetwork, QCData } from '@/types/api';
 
 // ─── QC Metrics Tab ─────────────────────────────────────────────────────────
 
 interface PTMQCMetrics {
-  total_sites: number;
-  significant_hits: number;
-  up_regulated: number;
-  down_regulated: number;
-  comparisons: string[];
+  filters?: Record<string, { input_psms?: number; quality_filtered_psms?: number }>;
+  preprocessing?: {
+    passing_site_count?: number;
+    localization?: Record<string, number>;
+    normalization?: { method?: string; applied?: boolean; complete_feature_count?: number; warning?: string | null };
+    quantified_protein_count?: number;
+  };
+  results?: {
+    ptm_rows?: number;
+    ptm_estimated?: number;
+    ptm_significant_bh_0_05?: number;
+    protein_layer_available?: boolean;
+    adjusted_layer_available?: boolean;
+  };
+  plots?: QCData;
+  protein_plots?: QCData | null;
 }
 
-function PTMQCTab({ sessionId }: { sessionId: string }) {
+export function PTMQCTab({ sessionId }: { sessionId: string }) {
   const [metrics, setMetrics] = useState<PTMQCMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedComparison, setSelectedComparison] = useState('');
+  const [layer, setLayer] = useState<'ptm' | 'protein'>('ptm');
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +86,7 @@ function PTMQCTab({ sessionId }: { sessionId: string }) {
     );
   }
 
-  if (!metrics || metrics.total_sites === 0) {
+  if (!metrics || !metrics.preprocessing) {
     return (
       <div className="bg-background rounded-lg border border-border p-8">
         <div className="text-center py-8">
@@ -92,41 +97,77 @@ function PTMQCTab({ sessionId }: { sessionId: string }) {
     );
   }
 
-  const cards = [
-    { label: 'Total Modification Sites', value: metrics.total_sites.toLocaleString(), color: 'text-primary' },
-    { label: 'Significant Hits', value: metrics.significant_hits.toLocaleString(), color: 'text-error' },
-    { label: 'Up-Regulated', value: metrics.up_regulated.toLocaleString(), color: 'text-[#E73564]' },
-    { label: 'Down-Regulated', value: metrics.down_regulated.toLocaleString(), color: 'text-[#00ADEF]' },
-    { label: 'Comparisons', value: metrics.comparisons.length.toString(), color: 'text-text-primary' },
+  const proteinAvailable = Boolean(
+    metrics.results?.protein_layer_available && metrics.protein_plots,
+  );
+  const plots = layer === 'protein' ? metrics.protein_plots : metrics.plots;
+  const conditions = Array.from(new Set(plots?.pca?.conditions ?? []));
+  const comparisonOptions = Object.keys(plots?.pvalue_distributions ?? {}).map((value) => ({
+    value,
+    label: value.replace(/_vs_/g, ' vs '),
+  }));
+  const entityLabel = layer === 'protein' ? 'Protein' : 'PTM Site';
+  const psmLabel = layer === 'protein' ? 'Protein PSM' : 'PTM PSM';
+  const entityPlural = layer === 'protein' ? 'Proteins' : 'PTM Site Groups';
+  const summaryCards = [
+    { label: `Total Unique ${psmLabel}s`, value: plots?.total_psms?.toLocaleString() ?? 'N/A' },
+    { label: `Avg ${psmLabel}s/Sample`, value: plots?.avg_psms_per_sample?.toLocaleString() ?? 'N/A' },
+    { label: `Total ${entityPlural}`, value: plots?.total_proteins?.toLocaleString() ?? 'N/A' },
+    { label: `Avg ${entityPlural}/Sample`, value: plots?.avg_proteins_per_sample?.toLocaleString() ?? 'N/A' },
+    { label: `Avg ${entityLabel} CV`, value: plots?.average_protein_cv == null ? 'N/A' : `${plots.average_protein_cv.toFixed(1)}%` },
+    { label: `Avg ${psmLabel} CV`, value: plots?.average_psm_cv == null ? 'N/A' : `${plots.average_psm_cv.toFixed(1)}%` },
   ];
 
   return (
     <div className="space-y-6" data-testid="ptm-qc-tab">
-      {/* Metric cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {cards.map((card) => (
-          <div
-            key={card.label}
-            className="bg-background rounded-lg border border-border p-4 text-center"
-            data-testid={`ptm-qc-card-${card.label.toLowerCase().replace(/\s+/g, '-')}`}
-          >
-            <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-            <p className="text-xs text-text-muted mt-1">{card.label}</p>
-          </div>
-        ))}
+      <div className="flex gap-1 rounded-lg border border-border bg-background p-3">
+        <button
+          type="button"
+          onClick={() => { setLayer('ptm'); setSelectedComparison(''); }}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            layer === 'ptm' ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface'
+          }`}
+        >
+          PTM
+        </button>
+        <button
+          type="button"
+          disabled={!proteinAvailable}
+          title={proteinAvailable ? 'Show protein-level QC' : 'A matched protein PSM file is required for protein-level QC.'}
+          onClick={() => { setLayer('protein'); setSelectedComparison(''); }}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            layer === 'protein' ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface'
+          } ${!proteinAvailable ? 'cursor-not-allowed opacity-40' : ''}`}
+        >
+          Protein
+        </button>
       </div>
 
-      {/* Comparison list */}
-      {metrics.comparisons.length > 0 && (
-        <div className="bg-background rounded-lg border border-border p-4">
-          <h4 className="text-sm font-medium text-text-primary mb-2">Comparisons</h4>
-          <ul className="space-y-1">
-            {metrics.comparisons.map((comp) => (
-              <li key={comp} className="text-sm text-text-secondary font-mono">
-                {comp.replace(/_vs_/g, ' vs ')}
-              </li>
-            ))}
-          </ul>
+      <div data-testid="ptm-qc-summary" className="rounded-lg border border-border bg-background p-4">
+        <h2 className="mb-4 text-base font-semibold text-text-primary">QC Summary Statistics</h2>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {summaryCards.map((card) => (
+            <div key={card.label} className="rounded-lg bg-surface p-3">
+              <span className="text-sm text-text-secondary">{card.label}</span>
+              <span className="ml-2 text-xl font-semibold text-text-primary">{card.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {plots ? (
+        <QCPlots
+          key={layer}
+          data={plots}
+          conditionList={conditions}
+          selectedComparison={selectedComparison}
+          onComparisonChange={setSelectedComparison}
+          comparisonOptions={comparisonOptions}
+          labels={{ psm: psmLabel, entity: entityLabel }}
+        />
+      ) : (
+        <div className="rounded-lg border border-border bg-background p-5 text-center">
+          <p className="text-text-secondary">No {entityLabel.toLowerCase()} abundance matrix is available for QC plots.</p>
         </div>
       )}
     </div>
@@ -134,27 +175,6 @@ function PTMQCTab({ sessionId }: { sessionId: string }) {
 }
 
 // ─── Site Abundance Tab ─────────────────────────────────────────────────────
-
-function PTMSiteAbundanceTab({ sessionId }: { sessionId: string }) {
-  return (
-    <div className="bg-background rounded-lg border border-border p-8 text-center" data-testid="ptm-site-abundance-tab">
-      <div className="max-w-md mx-auto">
-        <div className="w-16 h-16 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-2xl text-primary/40">&#8987;</span>
-        </div>
-        <h2 className="text-lg font-medium text-text-primary mb-2">
-          PTM Site Abundance
-        </h2>
-        <p className="text-text-secondary text-sm leading-relaxed">
-          Site-level abundance analysis will be available after the PTM pipeline completes.
-        </p>
-        <p className="text-text-muted text-xs mt-3">
-          Session: {sessionId.slice(0, 8)}...
-        </p>
-      </div>
-    </div>
-  );
-}
 
 // ─── BioNet Tab ─────────────────────────────────────────────────────────────
 
@@ -282,38 +302,24 @@ function PTMPlaceholderContent() {
       <div className="mx-auto px-6 py-8 max-w-7xl">
         {/* Page title */}
         <div className="mb-6">
-          <h1 className="text-xl font-semibold text-text-primary">PTM Analysis</h1>
-          <p className="text-sm text-text-muted mt-1">
-            Session: {sessionId.slice(0, 8)}...
-          </p>
-        </div>
-
-        {/* Tab bar */}
-        <div className="flex gap-1 mb-6 p-0.5 bg-background rounded-lg border border-border w-fit">
-          {TABS.map((t) => {
-            const isActive = tab === t.key || (!tab && t.key === 'volcano');
-            return (
-              <Link
-                key={t.key}
-                href={`/analysis/visualization/ptm-placeholder?session_id=${sessionId}&tab=${t.key}`}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  isActive
-                    ? 'bg-surface text-primary shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
-                data-testid={`ptm-tab-${t.key}`}
-              >
-                {t.label}
-              </Link>
-            );
-          })}
+          <h1 className="font-semibold text-text-primary">
+            {!tab || tab === 'volcano' || tab === 'results'
+              ? 'Differential Expression Results'
+              : tab === 'qc' ? 'QC Plots' : tab === 'compare' ? 'Compare Analysis' : 'PTM Analysis'}
+          </h1>
+          {tab === 'qc' && (
+            <p className="mt-2 text-text-secondary">
+              Quality control visualizations for the PTM analysis
+            </p>
+          )}
         </div>
 
         {/* Tab content */}
-        {(!tab || tab === 'volcano') && <PTMVolcano sessionId={sessionId} />}
-        {tab === 'results' && <PTMResultsTable sessionId={sessionId} />}
+        {(!tab || tab === 'volcano' || tab === 'results') && (
+          <PTMVolcano sessionId={sessionId} />
+        )}
         {tab === 'qc' && <PTMQCTab sessionId={sessionId} />}
-        {tab === 'site-abundance' && <PTMSiteAbundanceTab sessionId={sessionId} />}
+        {tab === 'compare' && <PTMCompare sessionId={sessionId} />}
         {tab === 'bionet' && <PTMBioNetTab sessionId={sessionId} />}
       </div>
     </div>

@@ -17,6 +17,9 @@ interface VolcanoPlotProps {
   onSelectProteins: (proteins: string[]) => void;
   onClearSelection?: () => void;
   comparisonLabel?: string;
+  itemName?: string;
+  getPointLabel?: (item: DEResult) => string;
+  getHoverText?: (item: DEResult) => string;
 }
 
 export default function VolcanoPlot({
@@ -27,6 +30,9 @@ export default function VolcanoPlot({
   onSelectProteins,
   onClearSelection,
   comparisonLabel,
+  itemName = 'Proteins',
+  getPointLabel,
+  getHoverText,
 }: VolcanoPlotProps) {
   const parts = comparisonLabel ? comparisonLabel.split(' vs ') : [];
   const group1Label = parts[0] || 'Treatment';
@@ -41,9 +47,11 @@ export default function VolcanoPlot({
         x: d.log_fc,
         y: -Math.log10(d.pval || 1e-300),
         color: getVolcanoPointColor(d.log_fc, d.pval, d.adj_pval, filters),
-        label: d.gene_name || parseDelimited(d.master_protein_accessions)[0],
+        label: getPointLabel
+          ? getPointLabel(d)
+          : d.gene_name || parseDelimited(d.master_protein_accessions)[0],
       }));
-  }, [data, markedProteins, filters]);
+  }, [data, filters, getPointLabel, markedProteins]);
 
   // Prepare plot data
   const plotData = useMemo(() => {
@@ -64,6 +72,7 @@ export default function VolcanoPlot({
 
     // Create hover text - handle multiple UniProt IDs, truncate long lists
     const hoverText = data.map((d) => {
+      if (getHoverText) return getHoverText(d);
       const accessions = parseDelimited(d.master_protein_accessions);
       const genes = d.gene_name ? parseDelimited(d.gene_name) : [];
       const maxAcc = 5;
@@ -101,7 +110,7 @@ export default function VolcanoPlot({
       hoverinfo: 'text',
       hoverlabel: { namelength: -1, font: { size: 12 } },
       customdata: points.map((p) => p.customdata),
-      name: 'Proteins',
+      name: itemName,
     };
 
     const traces: Array<Record<string, unknown>> = [mainTrace];
@@ -127,7 +136,7 @@ export default function VolcanoPlot({
     }
 
     return traces;
-  }, [data, filters, selectedProteins, markedPoints]);
+  }, [data, filters, getHoverText, itemName, markedPoints, selectedProteins]);
 
   // Dynamic y-axis max: ceil the tallest -log10(p-value) and add 10% headroom, minimum 2
   const dynamicMaxY = useMemo(() => {

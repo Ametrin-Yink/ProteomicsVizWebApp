@@ -22,8 +22,10 @@ from .inputs.step_input_tmt import step_input_tmt
 
 # ── PTM step handlers (preserved) ───────────────────────────────────────
 from .ptm_step1_prepare import step_ptm_prepare_data
+from .ptm_step2_resolve import step_ptm_resolve_shared_peptides
 from .ptm_step2_summarization import step_ptm_summarization
 from .ptm_step3_comparison import step_ptm_group_comparison
+from .ptm_step3_sites import step_ptm_build_sites
 from .ptm_step4_qc import step_ptm_qc_metrics
 
 # ── Shared step handlers ────────────────────────────────────────────────
@@ -42,9 +44,11 @@ __all__ = [
     "step_msstats_protein_abundance",
     "step_multi_condition_de",
     "step_protein_abundance_msqrob2",
+    "step_ptm_build_sites",
     "step_ptm_group_comparison",
     "step_ptm_prepare_data",
     "step_ptm_qc_metrics",
+    "step_ptm_resolve_shared_peptides",
     "step_ptm_summarization",
     "step_qc_metrics",
     "step_resolve_shared_peptides",

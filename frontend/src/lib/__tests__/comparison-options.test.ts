@@ -61,4 +61,19 @@ describe('comparison condition options', () => {
       Condition: 'Control',
     });
   });
+
+  it('uses TMT channel conditions for PTM and excludes channel roles', () => {
+    const config: SessionConfig = {
+      ...baseConfig,
+      tmt_channel_mapping: {
+        'ptm.txt::126': { condition: 'Drug', replicate: 1, role: 'Sample' },
+        'ptm.txt::127': { condition: 'DMSO', replicate: 1, channel_role: 'Sample' },
+      },
+    };
+
+    expect(getConditionOptions('ptm', config).map((option) => option.group)).toEqual([
+      { condition: 'DMSO' },
+      { condition: 'Drug' },
+    ]);
+  });
 });

@@ -42,7 +42,12 @@ class ProcessingOrchestrator:
         results_dir = await session_manager.get_results_dir(self._session_id)
 
         session = await session_manager.get_session(self._session_id)
-        file_paths = [uploads_dir / f.filename for f in session.files.proteomics]
+        selected_files = (
+            session.files.ptm_enrichment
+            if config.pipeline.value == "ptm"
+            else session.files.proteomics
+        )
+        file_paths = [uploads_dir / f.filename for f in selected_files]
 
         ctx = StepContext(
             config=config,

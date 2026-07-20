@@ -42,9 +42,13 @@ comparisons_json <- args[3]
 # group_comparison_multi() inserts a gene_mapping_file placeholder
 # before config_json, so config may be at args[4] (direct call)
 # or args[5] (called via BaseRWrapper.group_comparison_multi).
-config_json      <- if (length(args) >= 5 && nzchar(args[5])) args[5]
-                    else if (nzchar(args[4])) args[4]
-                    else "{}"
+config_json <- if (length(args) >= 5 && nzchar(args[5])) {
+    args[5]
+} else if (nzchar(args[4])) {
+    args[4]
+} else {
+    "{}"
+}
 
 cat("[PTM Group Comparison] Arguments:\n")
 cat("  RDS file:", rds_file, "\n")
@@ -154,6 +158,25 @@ flush.console()
 comparison_list <- list()
 comparison_labels <- character(length(comparisons))
 
+match_condition_levels <- function(values, group_label) {
+    exact_key <- paste(values, collapse = "_")
+    matched <- condition_levels[condition_levels == exact_key]
+    if (length(matched) == 0) {
+        matched <- condition_levels[vapply(condition_levels, function(level) {
+            all(vapply(values, function(value) grepl(value, level, fixed = TRUE), logical(1)))
+        }, logical(1))]
+    }
+    if (length(matched) > 1) {
+        stop(group_label, " ambiguously matches conditions: ", paste(matched, collapse = ", "))
+    }
+    if (length(matched) == 0) {
+        cat("  WARNING:", group_label, "did not match any condition level. Values:",
+            paste(values, collapse = "+"), "\n")
+        return(values)
+    }
+    matched
+}
+
 for (i in seq_along(comparisons)) {
     comp <- comparisons[[i]]
 
@@ -165,25 +188,8 @@ for (i in seq_along(comparisons)) {
     g1_values <- as.character(unlist(comp$group1))
     g2_values <- as.character(unlist(comp$group2))
 
-    # Match condition levels that contain ALL group values
-    g1_matched <- condition_levels[vapply(condition_levels, function(lv) {
-        all(vapply(g1_values, function(v) grepl(v, lv, fixed = TRUE), logical(1)))
-    }, logical(1))]
-
-    g2_matched <- condition_levels[vapply(condition_levels, function(lv) {
-        all(vapply(g2_values, function(v) grepl(v, lv, fixed = TRUE), logical(1)))
-    }, logical(1))]
-
-    if (length(g1_matched) == 0) {
-        cat("  WARNING: Comparison", i, "group1 did not match any condition level. ",
-            "Values:", paste(g1_values, collapse = "+"), "\n")
-        g1_matched <- g1_values
-    }
-    if (length(g2_matched) == 0) {
-        cat("  WARNING: Comparison", i, "group2 did not match any condition level. ",
-            "Values:", paste(g2_values, collapse = "+"), "\n")
-        g2_matched <- g2_values
-    }
+    g1_matched <- match_condition_levels(g1_values, paste("Comparison", i, "group1"))
+    g2_matched <- match_condition_levels(g2_values, paste("Comparison", i, "group2"))
 
     g1_label <- paste(g1_values, collapse = "+")
     g2_label <- paste(g2_values, collapse = "+")
@@ -204,7 +210,7 @@ flush.console()
 cat("[PTM Group Comparison] Building contrast matrix...\n")
 contrast_matrix <- MSstats::MSstatsContrastMatrix(
     comparison_list,
-    levels = condition_levels
+    conditions = condition_levels
 )
 
 cat("Contrast matrix:\n")
@@ -244,12 +250,13 @@ dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 for (i in seq_along(comparison_labels)) {
     label <- comparison_labels[i]
+    model_label <- rownames(contrast_matrix)[i]
 
     # --- PTM Model ---
     if (!is.null(result$PTM.Model)) {
         ptm_model <- result$PTM.Model
         if ("Label" %in% names(ptm_model)) {
-            ptm_subset <- ptm_model[ptm_model$Label == label, , drop = FALSE]
+            ptm_subset <- ptm_model[ptm_model$Label == model_label, , drop = FALSE]
         } else {
             ptm_subset <- ptm_model
         }
@@ -269,7 +276,7 @@ for (i in seq_along(comparison_labels)) {
     if (!is.null(result$PROTEIN.Model)) {
         protein_model <- result$PROTEIN.Model
         if ("Label" %in% names(protein_model)) {
-            protein_subset <- protein_model[protein_model$Label == label, , drop = FALSE]
+            protein_subset <- protein_model[protein_model$Label == model_label, , drop = FALSE]
         } else {
             protein_subset <- protein_model
         }
@@ -289,9 +296,14 @@ for (i in seq_along(comparison_labels)) {
     if (!is.null(result$ADJUSTED.Model)) {
         adjusted_model <- result$ADJUSTED.Model
         if ("Label" %in% names(adjusted_model)) {
-            adjusted_subset <- adjusted_model[adjusted_model$Label == label, , drop = FALSE]
+            adjusted_subset <- adjusted_model[adjusted_model$Label == model_label, , drop = FALSE]
         } else {
             adjusted_subset <- adjusted_model
+        }
+        if (nrow(adjusted_subset) > 0) {
+            if ("Adjusted" %in% names(adjusted_subset)) {
+                adjusted_subset <- adjusted_subset[adjusted_subset$Adjusted %in% TRUE, , drop = FALSE]
+            }
         }
         if (nrow(adjusted_subset) > 0) {
             adjusted_file <- file.path(output_dir, paste0("ADJUSTED_Model_", label, ".tsv"))

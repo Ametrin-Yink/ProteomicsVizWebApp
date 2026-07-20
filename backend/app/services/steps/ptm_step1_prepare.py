@@ -1,110 +1,80 @@
-"""Step 1 (PTM): Prepare PTM enrichment data — validate inputs, detect modification types, generate annotation CSV."""
+"""PTM stage 1: filter and melt real PD TMT PSM exports."""
 
-import csv
-import os
-import re
+import asyncio
+import json
 
+from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.pipeline_engine import StepContext
+from app.services.ptm_tmt_processor import prepare_pd_tmt_long
 
 
 async def step_ptm_prepare_data(ctx: StepContext) -> None:
-    """Validate PTM enrichment files, auto-detect modification types, generate annotation CSV.
+    if len(ctx.file_paths) != 1:
+        raise ValueError("PTM analysis requires exactly one enriched PTM file")
+    if not ctx.config.tmt_channel_mapping:
+        raise ValueError("TMT channel metadata is required for PTM analysis")
 
-    This is the first step of the PTM pipeline. It ensures all required inputs are
-    present and valid, detects which modification types are present in the data,
-    and writes the annotation CSV used by downstream MSstatsPTM steps.
-
-    Args:
-        ctx: Pipeline step context with config, file_paths, session_id, results_dir.
-
-    Raises:
-        ValueError: If required files are missing, CSV columns are invalid, or
-            FASTA file cannot be found on disk.
-    """
-    store = SessionStore()
+    store = SessionStore(settings.sessions_dir)
     session = await store.get(ctx.session_id)
+    if session is None:
+        raise ValueError(f"Session {ctx.session_id} not found")
 
-    # --- PTM enrichment files ---
-    # ctx.file_paths is a list of Path objects for PTM enrichment CSV files
-    ptm_files = list(ctx.file_paths)
+    ptm_long = ctx.results_dir / "ptm_filtered_long.parquet"
+    ptm_metrics = await asyncio.to_thread(
+        prepare_pd_tmt_long,
+        ctx.file_paths[0],
+        ptm_long,
+        ctx.config.tmt_channel_mapping,
+        role="ptm",
+    )
 
-    if not ptm_files:
-        raise ValueError("At least one PTM enrichment file is required")
+    protein_long = None
+    protein_metrics = None
+    if session.files.global_proteome:
+        protein_path = ctx.uploads_dir / session.files.global_proteome[0].filename
+        protein_long = ctx.results_dir / "protein_filtered_long.parquet"
+        protein_metrics = await asyncio.to_thread(
+            prepare_pd_tmt_long,
+            protein_path,
+            protein_long,
+            ctx.config.tmt_channel_mapping,
+            role="protein",
+        )
 
-    for f in ptm_files:
-        if not str(f).lower().endswith(".csv"):
-            raise ValueError(f"PTM enrichment file must be a CSV: {f}")
-
-    # --- Auto-detect modification types ---
-    # Read the first PTM file and scan the Modifications column for modification
-    # patterns like "Phospho [S5]" or "Acetyl [K]; Ubiquitinyl [K]"
-    first_file = ptm_files[0]
-    detected_mods: set[str] = set()
-
-    with open(str(first_file), newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        if "Modifications" not in (reader.fieldnames or []):
-            raise ValueError(
-                "PTM enrichment file is missing the required 'Modifications' column"
-            )
-        for row in reader:
-            mods = row.get("Modifications", "")
-            if mods:
-                # Extract modification names before brackets, e.g. "Phospho" from "Phospho [S5]"
-                found = re.findall(r"([A-Za-z]+)\s*\[", mods)
-                detected_mods.update(found)
-
-    sorted_mods = sorted(detected_mods)
-    ctx.step_outputs["detected_mods"] = sorted_mods
-
-    # Determine mod IDs: configured values take priority, fall back to detected,
-    # then default to Phospho
-    if ctx.config.ptm_mod_ids:
-        mod_ids = ctx.config.ptm_mod_ids
-    elif sorted_mods:
-        mod_ids = [sorted_mods[0]]
+    fasta_source = ctx.config.ptm_fasta_source
+    if fasta_source == "custom":
+        if not session.files.fasta:
+            raise ValueError("Custom FASTA file is missing")
+        fasta_path = ctx.uploads_dir / session.files.fasta[0].filename
     else:
-        mod_ids = ["Phospho"]
+        filename = (
+            "Human_Sequence.fasta"
+            if fasta_source == "human"
+            else "Mouse_Sequence.fasta"
+        )
+        fasta_path = settings.protein_database_dir / filename
+    if not fasta_path.exists():
+        raise ValueError(f"FASTA file not found: {fasta_path}")
 
-    # --- Validate FASTA file ---
-    # FASTA is loaded from the session's uploaded files
-    if not session.files.fasta:
-        raise ValueError("FASTA file is required for PTM analysis")
-    fasta_path = ctx.uploads_dir / session.files.fasta[0].filename
-    if not os.path.exists(str(fasta_path)):
-        raise ValueError(f"FASTA file not found on disk: {fasta_path}")
-
-    # --- Validate optional global proteome files ---
-    gp_paths: list = []
-    for f_info in session.files.global_proteome:
-        gp_path = ctx.uploads_dir / f_info.filename
-        if not os.path.exists(str(gp_path)):
-            raise ValueError(f"Global proteome file not found on disk: {gp_path}")
-        gp_paths.append(gp_path)
-
-    # --- Generate annotation CSV ---
-    # Write Run / Condition / BioReplicate columns from the analysis config metadata
-    metadata = ctx.config.metadata or {}
-    annotation_path = ctx.results_dir / "annotation.csv"
-    with open(str(annotation_path), "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Run", "Condition", "BioReplicate"])
-        for run_name, cols in metadata.items():
-            writer.writerow(
-                [
-                    run_name,
-                    cols.get("Condition", ""),
-                    cols.get("BioReplicate", ""),
-                ]
-            )
-
-    # --- Store outputs for downstream steps ---
-    ctx.step_outputs["annotation_csv"] = annotation_path
-    ctx.step_outputs["ptm_input_path"] = ptm_files
-    ctx.step_outputs["fasta_path"] = fasta_path
-    ctx.step_outputs["protein_input_path"] = gp_paths
-    ctx.step_outputs["mod_ids"] = mod_ids
-
-    ctx.state.add_log("info", "PTM data preparation complete")
-    ctx.step_outputs["ready"] = True
+    metrics_path = ctx.results_dir / "ptm_filter_metrics.json"
+    metrics_path.write_text(
+        json.dumps({"ptm": ptm_metrics, "protein": protein_metrics}, indent=2),
+        encoding="utf-8",
+    )
+    ctx.psm_file_path = ptm_long
+    ctx.result.total_psms = int(ptm_metrics["quality_filtered_psms"])
+    ctx.step_outputs.update(
+        {
+            "ptm_long_path": ptm_long,
+            "protein_long_path": protein_long,
+            "fasta_path": fasta_path,
+            "filter_metrics_path": metrics_path,
+            ctx.current_step_number: ptm_long,
+        }
+    )
+    ctx.state.add_log(
+        "info",
+        f"PTM quality filtering retained {ptm_metrics['quality_filtered_psms']} PSMs",
+        step=ctx.current_step_number,
+    )

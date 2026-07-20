@@ -49,6 +49,8 @@ def _reserve_processing(session_id: str, session: Session) -> None:
 
 def _derive_pipeline(session: Session) -> PipelineTool:
     """Derive pipeline tool from session, with backward compat for old sessions."""
+    if getattr(session, "pipeline", None) == "ptm":
+        return PipelineTool.PTM
     ft = getattr(session.config, "file_type", None) if session.config else None
     if ft == "tmt":
         return PipelineTool.MSSTATS
@@ -79,6 +81,9 @@ def _build_analysis_config(session: Session) -> AnalysisConfig:
     config_kwargs = session.config.model_dump(exclude_none=True)
     organism = config_kwargs.pop("organism", None)
     metadata = config_kwargs.pop("metadata_columns", None)
+    target_modification = config_kwargs.get("ptm_target_modification")
+    if target_modification:
+        config_kwargs["ptm_mod_ids"] = [target_modification]
     config_kwargs.update(
         {
             "organism": Organism(organism) if organism else Organism.HUMAN,
@@ -89,6 +94,72 @@ def _build_analysis_config(session: Session) -> AnalysisConfig:
     if metadata:
         config_kwargs["metadata"] = metadata
     return AnalysisConfig(**config_kwargs)
+
+
+def _validate_ptm_session(session: Session) -> None:
+    """Validate the complete immutable PTM run contract before queueing."""
+    if session.config is None:
+        raise ValueError("Session configuration is required")
+    if len(session.files.ptm_enrichment) != 1:
+        raise ValueError("PTM analysis requires exactly one enriched PTM file")
+    if len(session.files.global_proteome) > 1:
+        raise ValueError("PTM analysis accepts at most one protein PSM file")
+    target = session.config.ptm_target_modification
+    if not target:
+        raise ValueError("Select one target modification")
+    detected = {
+        item.get("name")
+        for item in session.files.ptm_enrichment[0].detected_modifications
+    }
+    if target not in detected:
+        raise ValueError(f"Target modification '{target}' was not detected")
+    fasta_source = session.config.ptm_fasta_source
+    if fasta_source not in {"human", "mouse", "custom"}:
+        raise ValueError("Select Human, Mouse, or Custom FASTA")
+    if fasta_source == "custom" and len(session.files.fasta) != 1:
+        raise ValueError("Custom FASTA selection is required")
+    mapping = session.config.tmt_channel_mapping or {}
+    channels = set(session.files.ptm_enrichment[0].tmt_channels or [])
+    mapping_channel_list = [str(key).rsplit("::", 1)[-1] for key in mapping]
+    mapping_channels = set(mapping_channel_list)
+    if mapping_channels != channels or len(mapping_channel_list) != len(channels):
+        raise ValueError("TMT metadata must cover every PTM reporter channel exactly")
+    for channel, values in mapping.items():
+        if "replicate" not in values:
+            raise ValueError(
+                f"Channel {channel} is missing biological replicate metadata"
+            )
+        condition_keys = {
+            key for key in values if key not in {"replicate", "role", "channel_role"}
+        }
+        if not condition_keys:
+            raise ValueError(f"Channel {channel} is missing condition metadata")
+    if session.files.global_proteome:
+        protein_channels = set(session.files.global_proteome[0].tmt_channels or [])
+        if protein_channels != channels:
+            raise ValueError("PTM and protein reporter channels must match exactly")
+    if not session.config.comparisons:
+        raise ValueError("At least one comparison is required")
+
+
+def _validate_processing_inputs(session: Session) -> None:
+    if session.pipeline == "ptm":
+        _validate_ptm_session(session)
+        return
+    if not session.files or not session.files.proteomics:
+        raise ValueError(
+            "No proteomics files uploaded. Please select proteomics files before processing."
+        )
+    min_files = (
+        MIN_DIA_FILES
+        if (session.config and session.config.file_type == "dia")
+        else MIN_PROTEOMICS_FILES
+    )
+    if len(session.files.proteomics) < min_files:
+        raise ValueError(
+            f"At least {min_files} proteomics files required. "
+            f"Current: {len(session.files.proteomics)}"
+        )
 
 
 def _schedule_background_task(coro) -> asyncio.Task:
@@ -200,22 +271,13 @@ async def retry_processing(
             detail="Session configuration is missing. Cannot retry without a valid config.",
         )
 
-    if not session.files or not session.files.proteomics:
+    try:
+        _validate_processing_inputs(session)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No proteomics files found. Cannot retry without uploaded files.",
-        )
-
-    min_files = (
-        MIN_DIA_FILES
-        if (session.config and session.config.file_type == "dia")
-        else MIN_PROTEOMICS_FILES
-    )
-    if len(session.files.proteomics) < min_files:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"At least {min_files} proteomics files required. Current: {len(session.files.proteomics)}",
-        )
+            detail=str(e),
+        ) from e
 
     _reserve_processing(session_id, session)
 
@@ -261,30 +323,21 @@ async def start_processing(
         )
 
     # Validate session has required configuration
-    if not session.config or not session.config.organism:
+    if not session.config or (
+        session.pipeline != "ptm" and not session.config.organism
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Session configuration required. Please configure treatment, control, and organism.",
         )
 
-    # Validate session has files
-    if not session.files or not session.files.proteomics:
+    try:
+        _validate_processing_inputs(session)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No proteomics files uploaded. Please upload proteomics files before starting processing.",
-        )
-
-    # Validate minimum file count (TMT: 1, DIA: 2)
-    min_files = (
-        MIN_DIA_FILES
-        if (session.config and session.config.file_type == "dia")
-        else MIN_PROTEOMICS_FILES
-    )
-    if len(session.files.proteomics) < min_files:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"At least {min_files} proteomics files required. Current: {len(session.files.proteomics)}",
-        )
+            detail=str(e),
+        ) from e
 
     _reserve_processing(session_id, session)
 

@@ -48,6 +48,11 @@ export interface SessionConfig {
   file_type?: 'tmt' | 'dia';
   // TMT channel-to-condition mapping
   tmt_channel_mapping?: Record<string, Record<string, string | number>>;
+  ptm_target_modification?: string;
+  ptm_fasta_source?: 'human' | 'mouse' | 'custom';
+  ptm_background_normalization?: boolean;
+  ptm_normalization_method?: 'background_peptide' | 'centered_median' | 'none';
+  ptm_imputation?: boolean;
   // Multi-condition
   comparisons?: Array<{
     group1: Record<string, string>;
@@ -92,6 +97,9 @@ export interface SessionConfig {
 
 export interface SessionFiles {
   proteomics: string[];
+  ptm_enrichment?: string[];
+  global_proteome?: string[];
+  fasta?: string[];
 }
 
 // ============================================================================

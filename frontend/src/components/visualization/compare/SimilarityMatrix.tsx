@@ -9,9 +9,18 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 interface Props {
   comparisons: string[];
   matrix: number[][];
+  title?: string;
+  metricLabel?: string;
+  range?: [number, number];
 }
 
-export default function SimilarityMatrix({ comparisons, matrix }: Props) {
+export default function SimilarityMatrix({
+  comparisons,
+  matrix,
+  title = 'Comparison Similarity Matrix',
+  metricLabel = 'RMSD',
+  range,
+}: Props) {
   const height = Math.max(400, comparisons.length * 40 + 120);
 
   const annotations = useMemo(() => {
@@ -59,12 +68,14 @@ export default function SimilarityMatrix({ comparisons, matrix }: Props) {
     x: labels,
     y: labels,
     colorscale: COLORSCALE_CYAN_GREY_CORAL as string[][],
+    zmin: range?.[0],
+    zmax: range?.[1],
     colorbar: { orientation: 'h', x: 0, y: -0.18, xanchor: 'right', yanchor: 'top', len: 0.35, thickness: 12 },
-    hovertemplate: 'Comparison: %{x}<br>vs %{y}<br>RMSD: %{z:.3f}<extra></extra>',
+    hovertemplate: `Comparison: %{x}<br>vs %{y}<br>${metricLabel}: %{z:.3f}<extra></extra>`,
   };
 
   const layout = {
-    title: { text: 'Comparison Similarity Matrix', font: { size: 16, color: '#111827' } },
+    title: { text: title, font: { size: 16, color: '#111827' } },
     xaxis: { tickangle: -90, automargin: true, title: { text: '', font: { size: 14 } } },
     yaxis: { autorange: 'reversed' as const, automargin: true, title: { text: '', font: { size: 14 } } },
     height,

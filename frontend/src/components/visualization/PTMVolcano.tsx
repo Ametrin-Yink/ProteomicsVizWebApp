@@ -1,7 +1,24 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { Microscope } from 'lucide-react';
+import VolcanoPlot from '@/components/visualization/VolcanoPlot';
+import { FilterPanel } from '@/components/visualization/FilterPanel';
+import PTMResultTable, { type PTMResultRow } from '@/components/visualization/PTMResultTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SearchableSelect } from '@/components/ui/Select';
+import { getDataSource, updateVisualizationState } from '@/lib/api-client';
+import {
+  formatNumber,
+  formatPValue,
+  getSignificanceLabel,
+  getVolcanoPointColor,
+  isSignificantVolcano,
+} from '@/lib/utils';
+import { useDebounce } from '@/hooks/use-debounce';
+import { useUIStore } from '@/stores/ui-store';
+import type { DEResult, VolcanoFilters } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
@@ -9,374 +26,626 @@ interface PTMVolcanoProps {
   sessionId: string;
 }
 
-// Fixed thresholds for PTM volcano
-const PVALUE_THRESHOLD = 0.05;
-const LOGFC_THRESHOLD = 1;
-const Y_THRESHOLD = -Math.log10(PVALUE_THRESHOLD);
+type Layer = 'ptm' | 'protein' | 'adjusted';
 
-// Color palette matching existing VolcanoPlot
-const COLOR_UP = '#E73564';
-const COLOR_DOWN = '#00ADEF';
-const COLOR_NS = '#6B7280';
-const THRESHOLD_LINE_COLOR = '#9CA3AF';
-
-interface PanelConfig {
-  key: string;
-  title: string;
-  dataKey: string; // key in comparison object, e.g. 'ptm_model'
-  fcKey: string;   // field in row for logFC
-  pvalKey: string;  // field in row for p-value
-  adjPvalKey: string;
+interface ComparisonData {
+  label: string;
+  ptm_model: Record<string, unknown>[];
+  protein_model: Record<string, unknown>[];
+  adjusted_model: Record<string, unknown>[];
 }
 
-const PANELS: PanelConfig[] = [
-  { key: 'ptm', title: 'PTM Model', dataKey: 'ptm_model', fcKey: 'ptmLog2FC', pvalKey: 'ptmPvalue', adjPvalKey: 'ptmAdjPvalue' },
-  { key: 'protein', title: 'Protein Model', dataKey: 'protein_model', fcKey: 'proteinLog2FC', pvalKey: 'proteinPvalue', adjPvalKey: 'proteinAdjPvalue' },
-  { key: 'adjusted', title: 'Adjusted Model', dataKey: 'adjusted_model', fcKey: 'adjustedLog2FC', pvalKey: 'adjustedPvalue', adjPvalKey: 'adjustedAdjPvalue' },
+interface SiteDetails {
+  site?: Record<string, unknown>;
+  evidence?: Record<string, unknown>[];
+  peptidoforms?: Record<string, unknown>[];
+}
+
+const DEFAULT_FILTERS: VolcanoFilters = {
+  foldChange: 1,
+  pValue: 0.05,
+  adjPValue: 1,
+  s0: 0.1,
+};
+
+const LAYERS: Array<{ key: Layer; label: string; description: string }> = [
+  { key: 'ptm', label: 'PTM', description: 'PTM site change using the selected normalization method' },
+  { key: 'protein', label: 'Protein', description: 'Matched global protein change' },
+  { key: 'adjusted', label: 'Protein-adjusted PTM', description: 'PTM change minus matched protein change' },
 ];
 
-/** Attempt to extract a numeric field from a row dict, trying multiple key variants. */
-function getNumeric(row: Record<string, unknown>, ...keys: string[]): number {
-  for (const k of keys) {
-    const v = row[k];
-    if (typeof v === 'number') return v;
-    if (typeof v === 'string') {
-      const n = parseFloat(v);
-      if (!isNaN(n)) return n;
-    }
-  }
-  return 0;
+function numeric(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** Build log2FC and p-value from a row using multiple key fallbacks. */
-function getFCPval(row: Record<string, unknown>, fcKeys: string[], pvalKeys: string[]): { logFC: number; pval: number } {
+function normalizeRow(raw: Record<string, unknown>): PTMResultRow {
+  const id = String(raw.Protein ?? raw.ProteinName ?? '');
   return {
-    logFC: getNumeric(row, ...fcKeys, 'log2FC', 'logFC'),
-    pval: getNumeric(row, ...pvalKeys, 'pvalue', 'Pvalue', 'p_val') || 1,
+    id,
+    display: String(raw.SiteLabel ?? id),
+    accession: String(raw.ProteinAccession ?? raw.GlobalProtein ?? raw.Protein ?? ''),
+    gene: String(raw.Gene ?? raw.Gene_Name ?? ''),
+    localization: String(raw.LocalizationStatus ?? ''),
+    mapping: String(raw.MappingStatus ?? ''),
+    logFC: numeric(raw.log2FC),
+    pValue: numeric(raw.pvalue),
+    adjPValue: numeric(raw['adj.pvalue']),
+    status: String(raw.Status ?? (numeric(raw.pvalue) === null ? 'Unestimable' : 'Estimated')),
+    raw,
   };
 }
 
-/** Get a stable identifier for a point for hover display. */
-function getPointId(row: Record<string, unknown>): string {
-  return String(row.site ?? row.Protein ?? row.protein ?? row.id ?? '');
+function rowsForLayer(comparison: ComparisonData, layer: Layer): PTMResultRow[] {
+  const source = layer === 'ptm'
+    ? comparison.ptm_model
+    : layer === 'protein'
+      ? comparison.protein_model
+      : comparison.adjusted_model;
+  return (source ?? []).map(normalizeRow);
 }
 
-function getGlobalProtein(row: Record<string, unknown>): string {
-  return String(row.globalProtein ?? row.GlobalProtein ?? row.Protein ?? row.protein ?? '');
+function toDEResult(row: PTMResultRow, filters: VolcanoFilters): DEResult {
+  return {
+    master_protein_accessions: row.id,
+    gene_name: row.gene,
+    log_fc: row.logFC ?? 0,
+    pval: row.pValue ?? 1,
+    adj_pval: row.adjPValue ?? 1,
+    significant: isSignificantVolcano(
+      row.logFC ?? 0,
+      row.pValue ?? 1,
+      row.adjPValue ?? 1,
+      filters,
+    ),
+  };
 }
 
-/** Get -log10 of p-value, clamped to avoid infinity. */
-function negLog10P(pval: number): number {
-  return -Math.log10(Math.max(pval, 1e-300));
+function LocalizationBadge({ status }: { status: string }) {
+  if (!status) return <span className="text-sm text-text-muted">-</span>;
+  const style = status === 'Confident'
+    ? 'border-success/20 bg-success/10 text-success'
+    : status === 'Ambiguous'
+      ? 'border-warning/30 bg-warning/10 text-warning'
+      : 'border-border bg-surface text-text-muted';
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${style}`}>{status}</span>;
 }
 
-interface VolcanoPanelProps {
-  rows: Record<string, unknown>[];
-  panel: PanelConfig;
-}
+function PTMInfoPanel({
+  sessionId,
+  row,
+  layer,
+  filters,
+}: {
+  sessionId: string;
+  row: PTMResultRow | null;
+  layer: Layer;
+  filters: VolcanoFilters;
+}) {
+  const [details, setDetails] = useState<SiteDetails | null>(null);
+  const [samples, setSamples] = useState<Record<string, unknown>[]>([]);
 
-/** Single volcano plot panel. */
-function VolcanoPanel({ rows, panel }: VolcanoPanelProps) {
-  const { plotData, shapes, dynamicMaxY } = useMemo(() => {
-    const fcKeys = [panel.fcKey, `log2FC_${panel.key}`, 'log2FC', 'logFC'];
-    const pvalKeys = [panel.pvalKey, `pvalue_${panel.key}`, 'pvalue', 'Pvalue'];
+  useEffect(() => {
+    if (!row || layer === 'protein') return;
+    const encoded = encodeURIComponent(row.id);
+    Promise.all([
+      fetch(`/api/sessions/${sessionId}/ptm/site/${encoded}`).then((response) => response.ok ? response.json() : null),
+      fetch(`/api/sessions/${sessionId}/ptm/site/${encoded}/abundance`).then((response) => response.ok ? response.json() : null),
+    ]).then(([detailResponse, abundanceResponse]) => {
+      setDetails(detailResponse?.data ?? null);
+      setSamples(abundanceResponse?.data?.samples ?? []);
+    }).catch(() => undefined);
+  }, [layer, row, sessionId]);
 
-    const pts = rows.map((row) => {
-      const { logFC, pval } = getFCPval(row, fcKeys, pvalKeys);
-      const y = negLog10P(pval);
-      const isSig = pval < PVALUE_THRESHOLD && Math.abs(logFC) > LOGFC_THRESHOLD;
-      const color = !isSig ? COLOR_NS : logFC > 0 ? COLOR_UP : COLOR_DOWN;
-      const pointId = getPointId(row);
-      const globalProt = getGlobalProtein(row);
-      return { logFC, y, color, pointId, globalProt, pval };
-    });
-
-    const dynamicMaxY = Math.max(2, Math.ceil(Math.max(0.1, ...pts.map((p) => p.y)) * 1.15));
-
-    const hoverText = pts.map((p) =>
-      `<b>${p.pointId}</b><br>` +
-      `Protein: ${p.globalProt}<br>` +
-      `Log2 FC: ${p.logFC.toFixed(3)}<br>` +
-      `P-value: ${p.pval.toExponential(2)}`
-    );
-
-    const trace = {
-      x: pts.map((p) => p.logFC),
-      y: pts.map((p) => p.y),
-      mode: 'markers' as const,
-      type: 'scatter' as const,
-      marker: {
-        color: pts.map((p) => p.color),
-        size: 6,
-        opacity: 0.7,
-      },
-      text: hoverText,
-      hoverinfo: 'text' as const,
-      hoverlabel: { namelength: -1, font: { size: 12 } },
-      name: panel.title,
-    };
-
-    const shapes: Array<Record<string, unknown>> = [];
-    const maxX = Math.max(1, ...pts.map((p) => Math.abs(p.logFC))) * 1.15;
-
-    // Vertical threshold lines at +/- log2FC
-    shapes.push({
-      type: 'line',
-      x0: -LOGFC_THRESHOLD,
-      x1: -LOGFC_THRESHOLD,
-      y0: 0,
-      y1: dynamicMaxY,
-      line: { color: THRESHOLD_LINE_COLOR, width: 1, dash: 'dash' },
-    });
-    shapes.push({
-      type: 'line',
-      x0: LOGFC_THRESHOLD,
-      x1: LOGFC_THRESHOLD,
-      y0: 0,
-      y1: dynamicMaxY,
-      line: { color: THRESHOLD_LINE_COLOR, width: 1, dash: 'dash' },
-    });
-
-    // Horizontal threshold line at p=0.05
-    shapes.push({
-      type: 'line',
-      x0: -maxX,
-      x1: maxX,
-      y0: Y_THRESHOLD,
-      y1: Y_THRESHOLD,
-      line: { color: THRESHOLD_LINE_COLOR, width: 1, dash: 'dash' },
-    });
-
-    return { plotData: [trace], shapes, dynamicMaxY };
-  }, [rows, panel]);
-
-  const layout = useMemo(() => ({
-    title: { text: panel.title, font: { size: 14, color: '#111827' } },
-    xaxis: {
-      title: { text: 'log₂(Fold Change)', font: { size: 12 } },
-      zeroline: true,
-      zerolinecolor: '#D1D5DB',
-      zerolinewidth: 1,
-      gridcolor: '#E5E7EB',
-      fixedrange: true,
-    },
-    yaxis: {
-      title: { text: '-log₁₀(p-value)', font: { size: 12 } },
-      range: [0, dynamicMaxY],
-      zeroline: true,
-      zerolinecolor: '#D1D5DB',
-      zerolinewidth: 1,
-      gridcolor: '#E5E7EB',
-      fixedrange: true,
-    },
-    shapes,
-    showlegend: false,
-    hovermode: 'closest' as const,
-    dragmode: false as const,
-    plot_bgcolor: '#FFFFFF',
-    paper_bgcolor: '#FFFFFF',
-    margin: { l: 50, r: 20, t: 40, b: 50 },
-  }), [panel.title, dynamicMaxY, shapes]);
-
-  const config = useMemo(() => ({
-    displayModeBar: 'hover',
-    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'zoom2d', 'pan2d'],
-    displaylogo: false,
-    responsive: true,
-  }), []);
-
-  if (rows.length === 0) {
+  if (!row) {
     return (
-      <div
-        className="bg-background rounded-lg border border-border p-4 flex items-center justify-center h-[400px]"
-        data-testid={`volcano-panel-${panel.key}-empty`}
-      >
-        <p className="text-sm text-text-muted">No data available for {panel.title}</p>
-      </div>
+      <EmptyState
+        title={layer === 'protein' ? 'No Protein Selected' : 'No PTM Site Selected'}
+        description={`Click on a point in the volcano plot or a row in the table to view ${layer === 'protein' ? 'protein' : 'PTM site'} details.`}
+        icon={<Microscope className="h-8 w-8 text-text-muted" />}
+      />
     );
   }
 
+  const site = details?.site ?? row.raw;
+  const evidence = details?.evidence ?? [];
+  const peptidoforms = details?.peptidoforms ?? [];
+  const abundancePairs = samples
+    .map((sample) => ({
+      sample,
+      abundance: numeric(sample.Abundance ?? sample.NormalizedAbundance),
+    }))
+    .filter((item): item is { sample: Record<string, unknown>; abundance: number } => item.abundance !== null);
+  const significance = getSignificanceLabel(
+    row.logFC ?? 0,
+    row.pValue ?? 1,
+    row.adjPValue ?? 1,
+    filters,
+  );
+  const significanceColor = getVolcanoPointColor(
+    row.logFC ?? 0,
+    row.pValue ?? 1,
+    row.adjPValue ?? 1,
+    filters,
+  );
+  const psmCount = evidence.length || Number(site.ConfidentEvidence ?? 0)
+    + Number(site.AmbiguousEvidence ?? 0)
+    + Number(site.UnscoredEvidence ?? 0);
+
+  const detailRow = (label: string, value: React.ReactNode, last = false) => (
+    <div className={`flex items-center justify-between py-2 ${last ? '' : 'border-b border-border'}`}>
+      <span className="text-sm text-text-muted">{label}</span>
+      <span className="ml-4 text-right text-sm font-medium text-text-primary">{value}</span>
+    </div>
+  );
+
   return (
-    <div
-      className="bg-background rounded-lg border border-border p-4"
-      data-testid={`volcano-panel-${panel.key}`}
-    >
-      <div className="w-full h-[400px]">
-        <Plot
-          data={plotData}
-          layout={layout}
-          config={config}
-          style={{ width: '100%', height: '100%' }}
-          useResizeHandler={true}
-        />
+    <div className="rounded-lg border border-border bg-background p-6" data-testid="ptm-info-panel">
+      <h3 className="mb-4 text-lg font-semibold text-text-primary">
+        {layer === 'protein' ? 'Protein Information' : 'PTM Site Information'}
+      </h3>
+
+      <div className="mb-6 space-y-1">
+        {layer !== 'protein' && detailRow('PTM Site', <span className="break-all">{row.display}</span>)}
+        {detailRow('UniProt ID', (
+          <a
+            href={`https://www.uniprot.org/uniprotkb/${row.accession.split(';')[0].trim()}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-secondary hover:underline"
+          >
+            {row.accession}
+          </a>
+        ))}
+        {detailRow('Gene', row.gene || '-')}
+        {layer !== 'protein' && detailRow('Target Modification', String(site.TargetModification ?? '-'))}
+        {layer !== 'protein' && detailRow('Localization', <LocalizationBadge status={String(site.LocalizationStatus ?? row.localization)} />)}
+        {layer !== 'protein' && detailRow('Mapping', String(site.MappingStatus ?? row.mapping ?? '-'))}
+        {detailRow('Fold Change', row.logFC === null ? '-' : formatNumber(2 ** row.logFC, 3))}
+        {detailRow('Log2 Fold Change', row.logFC === null ? '-' : formatNumber(row.logFC, 3))}
+        {detailRow('P-value', row.pValue === null ? '-' : formatPValue(row.pValue))}
+        {detailRow('Adj P-value', row.adjPValue === null ? '-' : formatPValue(row.adjPValue))}
+        {detailRow(layer === 'protein' ? 'Number of PSMs' : 'Supporting PSMs', psmCount || '-')}
+        {detailRow('Significance', (
+          <span
+            className="rounded px-2 py-1 text-sm font-medium"
+            style={{
+              backgroundColor: significance === 'Not Significant' ? 'var(--color-surface, #f1f5f9)' : `${significanceColor}20`,
+              color: significance === 'Not Significant' ? '#94a3b8' : significanceColor,
+            }}
+          >
+            {significance}
+          </span>
+        ), true)}
       </div>
+
+      {layer !== 'protein' && abundancePairs.length > 0 && (
+        <div className="mb-6">
+          <h4 className="mb-2 text-sm font-medium text-text-primary">PTM Site Abundance</h4>
+          <div className="h-52">
+            <Plot
+              data={[{
+                type: 'box',
+                x: abundancePairs.map(({ sample }) => String(sample.Condition ?? '')),
+                y: abundancePairs.map(({ abundance }) => abundance),
+                boxpoints: 'all',
+                jitter: 0.25,
+                pointpos: 0,
+                marker: { color: '#6366F1', size: 7 },
+                line: { color: '#6366F1' },
+                hovertemplate: '%{x}<br>log2 abundance: %{y:.3f}<extra></extra>',
+              }]}
+              layout={{
+                margin: { l: 48, r: 10, t: 8, b: 40 },
+                xaxis: { title: '' },
+                yaxis: { title: { text: 'log2 abundance' }, gridcolor: '#E5E7EB' },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                showlegend: false,
+              }}
+              config={{ displayModeBar: false, responsive: true }}
+              style={{ width: '100%', height: '100%' }}
+              useResizeHandler
+            />
+          </div>
+        </div>
+      )}
+
+      {layer !== 'protein' && evidence.length > 0 && (
+        <div>
+          <h4 className="mb-2 text-sm font-medium text-text-primary">
+            Localization Evidence ({evidence.length} PSMs, {peptidoforms.length} peptidoforms)
+          </h4>
+          <div className="max-h-52 space-y-2 overflow-y-auto">
+            {evidence.slice(0, 30).map((item, index) => (
+              <div key={`${String(item._SourceRow ?? index)}-${index}`} className="rounded-md border border-border p-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-mono text-text-primary">{String(item.PeptideSequence ?? '')}</span>
+                  <LocalizationBadge status={String(item.LocalizationStatus ?? '')} />
+                </div>
+                <p className="mt-1 text-text-muted">
+                  {String(item.LocalizationSource ?? 'Unscored')}
+                  {item.LocalizationScores ? ` · ${String(item.LocalizationScores)}%` : ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
-  const [comparisons, setComparisons] = useState<Record<string, unknown>[]>([]);
+  const addToast = useUIStore((state) => state.addToast);
+  const [sessionName, setSessionName] = useState('Results');
+  const [comparisons, setComparisons] = useState<ComparisonData[]>([]);
+  const [comparisonIndex, setComparisonIndex] = useState(0);
+  const [layer, setLayer] = useState<Layer>('ptm');
+  const [filtersByComparison, setFiltersByComparison] = useState<Record<string, VolcanoFilters>>({});
+  const [markedByKey, setMarkedByKey] = useState<Record<string, Set<string>>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [batchMarkOpen, setBatchMarkOpen] = useState(false);
+  const [batchComparisons, setBatchComparisons] = useState<Set<string>>(new Set());
+  const batchMarkRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
-    fetch(`/api/sessions/${sessionId}/ptm/results`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((json) => {
-        if (cancelled) return;
-        const comps = json.data?.comparisons ?? json.comparisons ?? [];
-        setComparisons(comps);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
+    Promise.all([
+      fetch(`/api/sessions/${sessionId}/ptm/results`).then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }),
+      getDataSource(`/api/sessions/${sessionId}`),
+    ]).then(([resultResponse, session]) => {
+      setComparisons(resultResponse.data?.comparisons ?? []);
+      setSessionName(session.name || 'Results');
+      const restored: Record<string, Set<string>> = {};
+      if (session.markers && typeof session.markers === 'object' && !Array.isArray(session.markers)) {
+        for (const [key, ids] of Object.entries(session.markers)) restored[key] = new Set(ids);
+      }
+      setMarkedByKey(restored);
+      if (session.ptm_volcano_filters) setFiltersByComparison(session.ptm_volcano_filters);
+    }).catch((reason) => {
+      setError(reason instanceof Error ? reason.message : 'Failed to load PTM results');
+    }).finally(() => setLoading(false));
   }, [sessionId]);
 
-  const currentComparison = comparisons[selectedIdx] as Record<string, unknown> | undefined;
-  const label = String(currentComparison?.label ?? '');
+  useEffect(() => {
+    if (!batchMarkOpen) return;
+    const close = (event: MouseEvent) => {
+      if (batchMarkRef.current && !batchMarkRef.current.contains(event.target as Node)) setBatchMarkOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [batchMarkOpen]);
 
-  const ptmRows = (currentComparison?.ptm_model as Record<string, unknown>[] | undefined) ?? [];
-  const proteinRows = (currentComparison?.protein_model as Record<string, unknown>[] | undefined) ?? [];
-  const adjustedRows = (currentComparison?.adjusted_model as Record<string, unknown>[] | undefined) ?? [];
+  const comparison = comparisons[comparisonIndex];
+  const filters = comparison ? filtersByComparison[comparison.label] ?? DEFAULT_FILTERS : DEFAULT_FILTERS;
+  const debouncedFilters = useDebounce(filters, 150);
+  const layerRows = useMemo(() => comparison ? rowsForLayer(comparison, layer) : [], [comparison, layer]);
+  const plottedRows = useMemo(
+    () => layerRows.filter((row) => row.logFC !== null && row.pValue !== null),
+    [layerRows],
+  );
+  const rowById = useMemo(() => new Map(layerRows.map((row) => [row.id, row])), [layerRows]);
+  const plotData = useMemo(
+    () => plottedRows.map((row) => toDEResult(row, debouncedFilters)),
+    [debouncedFilters, plottedRows],
+  );
+  const selectedRow = selectedId ? rowById.get(selectedId) ?? null : null;
+  const markerKey = comparison ? `${comparison.label}::${layer}` : '';
+  const markedIds = useMemo(
+    () => markedByKey[markerKey] ?? new Set<string>(),
+    [markedByKey, markerKey],
+  );
+  const comparisonLabel = comparison?.label.replace(/_vs_/g, ' vs ') ?? '';
 
-  const hasProtein = proteinRows.length > 0;
-  const hasAdjusted = adjustedRows.length > 0;
+  const deCounts = useMemo(() => {
+    const significant = plottedRows.filter((row) => isSignificantVolcano(
+      row.logFC ?? 0,
+      row.pValue ?? 1,
+      row.adjPValue ?? 1,
+      debouncedFilters,
+    ));
+    return {
+      total: significant.length,
+      up: significant.filter((row) => (row.logFC ?? 0) > 0).length,
+      down: significant.filter((row) => (row.logFC ?? 0) < 0).length,
+    };
+  }, [debouncedFilters, plottedRows]);
 
-  // Determine which panels to show
-  const visiblePanels = useMemo(() => {
-    const panels: PanelConfig[] = [PANELS[0]]; // PTM always shown
-    if (hasProtein) panels.push(PANELS[1]);
-    if (hasAdjusted) panels.push(PANELS[2]);
-    return panels;
-  }, [hasProtein, hasAdjusted]);
+  const comparisonOptions = useMemo(() => comparisons.map((item) => ({
+    value: item.label,
+    label: item.label.replace(/_vs_/g, ' vs '),
+  })), [comparisons]);
 
-  const gridClass = visiblePanels.length === 1
-    ? 'grid-cols-1 max-w-2xl mx-auto'
-    : visiblePanels.length === 2
-      ? 'grid-cols-1 md:grid-cols-2'
-      : 'grid-cols-1 md:grid-cols-3';
-
-  const comparisonLabels = comparisons.map((c) => String(c.label ?? ''));
-
-  const handleComparisonChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedIdx(Number(e.target.value));
+  const selectIds = useCallback((ids: string[]) => {
+    setSelectedIds(new Set(ids));
+    setSelectedId(ids[0] ?? null);
   }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectedId(null);
+  }, []);
+
+  const updateMarked = useCallback((key: string, ids: Set<string>) => {
+    setMarkedByKey((current) => ({ ...current, [key]: ids }));
+  }, []);
+
+  const toggleMark = useCallback((row: PTMResultRow) => {
+    const next = new Set(markedIds);
+    if (next.has(row.id)) next.delete(row.id);
+    else next.add(row.id);
+    updateMarked(markerKey, next);
+  }, [markedIds, markerKey, updateMarked]);
+
+  const markAllSignificant = useCallback(() => {
+    updateMarked(markerKey, new Set(plottedRows
+      .filter((row) => isSignificantVolcano(
+        row.logFC ?? 0,
+        row.pValue ?? 1,
+        row.adjPValue ?? 1,
+        debouncedFilters,
+      ))
+      .map((row) => row.id)));
+  }, [debouncedFilters, markerKey, plottedRows, updateMarked]);
+
+  const handleBatchMark = () => {
+    try {
+      const next = { ...markedByKey };
+      for (const label of batchComparisons) {
+        const item = comparisons.find((candidate) => candidate.label === label);
+        if (!item) continue;
+        const comparisonFilters = filtersByComparison[label] ?? DEFAULT_FILTERS;
+        next[`${label}::${layer}`] = new Set(rowsForLayer(item, layer)
+          .filter((row) => row.logFC !== null && row.pValue !== null)
+          .filter((row) => isSignificantVolcano(
+            row.logFC ?? 0,
+            row.pValue ?? 1,
+            row.adjPValue ?? 1,
+            comparisonFilters,
+          ))
+          .map((row) => row.id));
+      }
+      setMarkedByKey(next);
+      setBatchMarkOpen(false);
+    } catch {
+      addToast('error', 'Failed to mark significant PTM entries across comparisons.');
+    }
+  };
+
+  useEffect(() => {
+    if (loading || error) return;
+    const markers = Object.fromEntries(Object.entries(markedByKey)
+      .filter(([, ids]) => ids.size > 0)
+      .map(([key, ids]) => [key, Array.from(ids)]));
+    const timer = setTimeout(() => {
+      updateVisualizationState(`/api/sessions/${sessionId}`, { markers }).catch(() => undefined);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [error, loading, markedByKey, sessionId]);
+
+  useEffect(() => {
+    if (Object.keys(filtersByComparison).length === 0) return;
+    const timer = setTimeout(() => {
+      updateVisualizationState(`/api/sessions/${sessionId}`, {
+        ptm_volcano_filters: filtersByComparison,
+      }).catch(() => undefined);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [filtersByComparison, sessionId]);
 
   if (loading) {
     return (
-      <div data-testid="ptm-volcano-container" className="bg-background rounded-lg border border-border p-8">
-        <div className="flex items-center justify-center h-[300px]">
-          <div className="flex items-center gap-2 text-text-muted">
-            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" data-testid="loading-spinner">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <span>Loading PTM volcano data...</span>
-          </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <div className="h-48 animate-pulse rounded-lg bg-border/30" />
+          <div className="h-96 animate-pulse rounded-lg bg-border/30" />
         </div>
+        <div className="h-96 animate-pulse rounded-lg bg-border/30" />
       </div>
     );
   }
-
-  if (error) {
-    return (
-      <div data-testid="ptm-volcano-container" className="bg-background rounded-lg border border-border p-8">
-        <div className="text-center py-8">
-          <p className="text-error text-sm mb-2">Failed to load PTM volcano data.</p>
-          <p className="text-text-muted text-xs">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentComparison) {
-    return (
-      <div data-testid="ptm-volcano-container" className="bg-background rounded-lg border border-border p-8">
-        <div className="text-center py-8">
-          <p className="text-text-muted text-sm">No PTM results available for this session.</p>
-          <p className="text-text-muted text-xs mt-1">Run the PTM pipeline to generate volcano plots.</p>
-        </div>
-      </div>
-    );
-  }
+  if (error) return <div className="rounded-lg border border-error/20 bg-error/5 p-5 text-error">{error}</div>;
+  if (!comparison) return <div className="rounded-lg border border-border bg-background p-10 text-center text-text-muted">No PTM results are available.</div>;
 
   return (
-    <div data-testid="ptm-volcano-container" className="bg-background rounded-lg border border-border">
-      {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-text-primary">PTM Volcano Plot</h3>
-          {comparisonLabels.length > 1 && (
-            <select
-              value={selectedIdx}
-              onChange={handleComparisonChange}
-              className="px-3 py-1.5 text-sm border border-border rounded-md bg-background text-text-primary"
-              data-testid="comparison-select"
-            >
-              {comparisonLabels.map((l, i) => (
-                <option key={l} value={i}>{l.replace(/_vs_/g, ' vs ')}</option>
-              ))}
-            </select>
+    <div data-testid="ptm-volcano-container">
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-5 py-3 text-sm" data-testid="general-info-panel">
+        <span className="font-semibold text-text-primary">{sessionName}</span>
+        <div className="h-4 w-px bg-border" />
+        <SearchableSelect
+          options={comparisonOptions}
+          value={comparison.label}
+          onChange={(value) => {
+            const nextIndex = Math.max(0, comparisons.findIndex((item) => item.label === value));
+            const nextComparison = comparisons[nextIndex];
+            setComparisonIndex(nextIndex);
+            if (nextComparison && layer !== 'ptm' && rowsForLayer(nextComparison, layer).length === 0) {
+              setLayer('ptm');
+            }
+            clearSelection();
+          }}
+          placeholder="Select comparison..."
+          searchPlaceholder="Filter comparisons..."
+          className="min-w-[280px]"
+        />
+        <div className="h-4 w-px bg-border" />
+        <span className="text-text-secondary">
+          {layerRows.length.toLocaleString()} {layer === 'protein' ? 'proteins' : 'PTM sites'}
+        </span>
+        <div className="h-4 w-px bg-border" />
+        <span className="text-text-secondary">
+          {deCounts.total.toLocaleString()} DE (
+          <span className="font-semibold text-primary">{deCounts.up.toLocaleString()}↑</span>{' '}
+          <span className="font-semibold text-secondary">{deCounts.down.toLocaleString()}↓</span>)
+        </span>
+        <div className="h-4 w-px bg-border" />
+        <div className="relative" ref={batchMarkRef}>
+          <button
+            type="button"
+            onClick={() => setBatchMarkOpen((current) => !current)}
+            className="rounded-lg bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-border/30"
+          >
+            Mark Significant in Batch
+          </button>
+          {batchMarkOpen && (
+            <div className="absolute left-0 top-full z-50 mt-1 w-72 space-y-2 rounded-lg border border-border bg-background p-3 shadow-lg">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={batchComparisons.size === comparisons.length}
+                  onChange={() => setBatchComparisons(
+                    batchComparisons.size === comparisons.length
+                      ? new Set()
+                      : new Set(comparisons.map((item) => item.label)),
+                  )}
+                  className="rounded border-border"
+                />
+                Select All
+              </label>
+              <div className="max-h-48 space-y-1 overflow-y-auto border-t border-border pt-2">
+                {comparisonOptions.map((item) => (
+                  <label key={item.value} className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary hover:text-text-primary">
+                    <input
+                      type="checkbox"
+                      checked={batchComparisons.has(item.value)}
+                      onChange={() => {
+                        const next = new Set(batchComparisons);
+                        if (next.has(item.value)) next.delete(item.value);
+                        else next.add(item.value);
+                        setBatchComparisons(next);
+                      }}
+                      className="rounded border-border"
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleBatchMark}
+                disabled={batchComparisons.size === 0}
+                className="w-full rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                Mark {batchComparisons.size || ''} comparison(s)
+              </button>
+            </div>
           )}
         </div>
-        {label && (
-          <p className="text-sm text-text-muted mt-1">
-            Comparison: {label.replace(/_vs_/g, ' vs ')}
-          </p>
-        )}
       </div>
 
-      {/* Legend bar */}
-      <div className="px-4 pt-3 pb-0">
-        <div className="flex items-center gap-4 text-xs text-text-secondary">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLOR_UP }}></span>
-            <span>Upregulated (log2FC &gt; 1, p &lt; 0.05)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLOR_DOWN }}></span>
-            <span>Downregulated (log2FC &lt; -1, p &lt; 0.05)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLOR_NS }}></span>
-            <span>Not Significant</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Mode A note */}
-      {!hasProtein && (
-        <div className="px-4 pt-3" data-testid="mode-a-notice">
-          <p className="text-xs text-text-muted">
-            Global proteome data not available. Only the PTM model is shown.
-          </p>
-        </div>
-      )}
-
-      {/* Volcano panels */}
-      <div className={`grid ${gridClass} gap-4 p-4`}>
-        {visiblePanels.map((panel) => {
-          const rows = panel.dataKey === 'ptm_model' ? ptmRows
-            : panel.dataKey === 'protein_model' ? proteinRows
-            : adjustedRows;
-          return <VolcanoPanel key={panel.key} rows={rows} panel={panel} />;
+      <div className="mb-6 flex flex-wrap gap-1 rounded-lg border border-border bg-background p-3">
+        {LAYERS.map((item) => {
+          const disabled = item.key === 'protein'
+            ? comparison.protein_model.length === 0
+            : item.key === 'adjusted'
+              ? comparison.adjusted_model.length === 0
+              : false;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              disabled={disabled}
+              title={disabled ? 'A matched protein PSM file is required for this layer.' : item.description}
+              onClick={() => {
+                setLayer(item.key);
+                clearSelection();
+              }}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                layer === item.key ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface'
+              } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
+            >
+              {item.label}
+            </button>
+          );
         })}
       </div>
 
-      {/* Threshold indicator */}
-      <div data-testid="threshold-lines" className="px-4 pb-3 text-xs text-text-muted text-center">
-        Threshold lines: |log2FC| = {LOGFC_THRESHOLD}, P-value = {PVALUE_THRESHOLD}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <VolcanoPlot
+            data={plotData}
+            filters={debouncedFilters}
+            selectedProteins={selectedIds}
+            markedProteins={markedIds}
+            onSelectProteins={selectIds}
+            onClearSelection={clearSelection}
+            comparisonLabel={comparisonLabel}
+            itemName={layer === 'protein' ? 'Proteins' : 'PTM sites'}
+            getPointLabel={(item) => rowById.get(item.master_protein_accessions)?.gene
+              || rowById.get(item.master_protein_accessions)?.display
+              || item.master_protein_accessions}
+            getHoverText={(item) => {
+              const row = rowById.get(item.master_protein_accessions);
+              if (!row) return item.master_protein_accessions;
+              return [
+                `<b>${row.display}</b>`,
+                `Protein: ${row.accession}`,
+                `Gene: ${row.gene || 'N/A'}`,
+                `Log2 FC: ${item.log_fc.toFixed(3)}`,
+                `P-value: ${item.pval.toExponential(2)}`,
+                `Adj P-value: ${item.adj_pval.toExponential(2)}`,
+                row.localization ? `Localization: ${row.localization}` : '',
+              ].filter(Boolean).join('<br>');
+            }}
+          />
+
+          <FilterPanel
+            {...filters}
+            onChange={(updated) => setFiltersByComparison((current) => ({
+              ...current,
+              [comparison.label]: updated,
+            }))}
+            onReset={() => setFiltersByComparison((current) => ({
+              ...current,
+              [comparison.label]: DEFAULT_FILTERS,
+            }))}
+          />
+
+          <PTMResultTable
+            data={layerRows}
+            layer={layer}
+            selectedIds={selectedIds}
+            markedIds={markedIds}
+            filters={debouncedFilters}
+            comparisonLabel={comparisonLabel}
+            onSelect={(row) => selectIds([row.id])}
+            onToggleMark={toggleMark}
+            onMarkAllSignificant={markAllSignificant}
+            onClearAllMarks={() => updateMarked(markerKey, new Set())}
+          />
+        </div>
+
+        <div className="lg:col-span-1">
+          {selectedIds.size > 1 ? (
+            <div className="rounded-lg border border-border bg-background p-6">
+              <div className="py-8 text-center text-text-secondary">
+                <p className="text-lg font-medium">Multiple Entries Selected</p>
+                <p className="mt-2 text-sm">{selectedIds.size} entries selected.</p>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="mt-4 rounded-lg bg-surface px-4 py-2 text-sm font-medium text-text-secondary hover:bg-border/30"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          ) : (
+            <PTMInfoPanel
+              key={`${layer}:${selectedId ?? ''}`}
+              sessionId={sessionId}
+              row={selectedRow}
+              layer={layer}
+              filters={filters}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

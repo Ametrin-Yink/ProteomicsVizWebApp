@@ -70,6 +70,7 @@ export interface Session {
   id: string;
   name: string;
   template: string;
+  pipeline?: 'msqrob2' | 'msstats' | 'ptm';
   status: SessionStatus;
   currentStep: ProcessingStep;
   progress: number; // 0-100

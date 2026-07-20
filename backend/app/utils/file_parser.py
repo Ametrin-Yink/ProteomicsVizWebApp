@@ -27,6 +27,18 @@ TMT_REQUIRED_COLUMNS = [
     "Normalized CHIMERYS Coefficient",
 ]
 
+PTM_TMT_REQUIRED_COLUMNS = [
+    "Modifications",
+    "Charge",
+    "Contaminant",
+    "Master Protein Accessions",
+    "Quan Info",
+    "Average Reporter SN",
+    "Isolation Interference in Percent",
+]
+
+SEQUENCE_COLUMN_ALIASES = ("Sequence", "Annotated Sequence")
+
 # Required columns for DIA files (Quan Info NOT required — DIA PD exports lack it)
 DIA_REQUIRED_COLUMNS = [
     "Sequence",
@@ -143,7 +155,11 @@ def validate_tmt_columns(df: pd.DataFrame, filename: str) -> None:
     columns = set(df.columns)
 
     # Check required columns
-    missing = [col for col in TMT_REQUIRED_COLUMNS if col not in columns]
+    missing = [
+        col for col in TMT_REQUIRED_COLUMNS if col != "Sequence" and col not in columns
+    ]
+    if not any(alias in columns for alias in SEQUENCE_COLUMN_ALIASES):
+        missing.insert(0, "Sequence")
     if missing:
         raise InvalidFileFormatError(
             message=f"Missing required columns in {filename}",
@@ -185,6 +201,114 @@ def validate_tmt_columns(df: pd.DataFrame, filename: str) -> None:
                     "non_numeric_values": non_numeric_rows.to_list(),
                 },
             )
+
+
+def validate_ptm_tmt_columns(df: pd.DataFrame, filename: str) -> None:
+    """Validate a real PD TMT PTM PSM export.
+
+    PTM exports use isolation interference in place of the protein pipeline's
+    normalized CHIMERYS coefficient and commonly expose ``Annotated Sequence``
+    instead of ``Sequence``.
+    """
+    columns = set(df.columns)
+    missing = [col for col in PTM_TMT_REQUIRED_COLUMNS if col not in columns]
+    if not any(alias in columns for alias in SEQUENCE_COLUMN_ALIASES):
+        missing.insert(0, "Annotated Sequence")
+    if missing:
+        raise InvalidFileFormatError(
+            message=f"Missing required columns in {filename}",
+            details={
+                "filename": filename,
+                "missing_columns": missing,
+                "required_columns": [
+                    "Annotated Sequence",
+                    *PTM_TMT_REQUIRED_COLUMNS,
+                ],
+                "available_columns": list(columns),
+            },
+        )
+
+    pattern = re.compile(TMT_ABUNDANCE_PATTERN)
+    abundance_cols = [col for col in df.columns if pattern.match(str(col))]
+    if len(abundance_cols) < 2:
+        raise InvalidFileFormatError(
+            message=f"Missing TMT abundance columns in {filename}",
+            details={
+                "filename": filename,
+                "abundance_columns_found": abundance_cols,
+                "expected_pattern": str(TMT_ABUNDANCE_PATTERN),
+                "available_columns": list(columns),
+            },
+        )
+
+    sample = df[abundance_cols].head(100)
+    for col in abundance_cols:
+        numeric = pd.to_numeric(sample[col], errors="coerce")
+        mask = numeric.isna() & sample[col].notna()
+        if mask.any():
+            raise InvalidFileFormatError(
+                message=f"Non-numeric values found in abundance column '{col}' in {filename}",
+                details={
+                    "filename": filename,
+                    "column": col,
+                    "non_numeric_values": sample[col][mask].head(5).to_list(),
+                },
+            )
+
+
+def detect_modifications_in_file(file_path: Path) -> list[dict]:
+    """Return exact PD modification names and counts from the full file."""
+    delimiter = detect_delimiter(file_path)
+    counts: dict[str, dict] = {}
+    try:
+        chunks = pd.read_csv(
+            file_path,
+            delimiter=delimiter,
+            usecols=["Modifications"],
+            chunksize=50_000,
+            dtype=str,
+        )
+        for chunk in chunks:
+            for value in chunk["Modifications"].fillna(""):
+                row_names: set[str] = set()
+                for token in str(value).split(";"):
+                    match = re.search(r"^\s*([^()]+)\(([^()]+)\)\s*$", token)
+                    if not match:
+                        continue
+                    location, name = match.groups()
+                    name = name.strip()
+                    entry = counts.setdefault(
+                        name,
+                        {
+                            "name": name,
+                            "row_count": 0,
+                            "occurrence_count": 0,
+                            "sites": set(),
+                        },
+                    )
+                    entry["occurrence_count"] += 1
+                    entry["sites"].add(location.strip())
+                    row_names.add(name)
+                for name in row_names:
+                    counts[name]["row_count"] += 1
+    except Exception as e:
+        raise InvalidFileFormatError(
+            message=f"Failed to detect modifications in {file_path.name}",
+            details={"filename": file_path.name, "error": str(e)},
+        ) from e
+
+    result = []
+    for name in sorted(counts):
+        item = counts[name]
+        result.append(
+            {
+                "name": name,
+                "row_count": item["row_count"],
+                "occurrence_count": item["occurrence_count"],
+                "sites": sorted(item["sites"]),
+            }
+        )
+    return result
 
 
 def validate_dia_columns(df: pd.DataFrame, filename: str) -> None:
@@ -267,6 +391,14 @@ def parse_proteomics_file(file_path: Path, file_type: str) -> dict:
             "columns": columns,
             "tmt_channels": tmt_channels,
             "has_quan_value": None,
+        }
+    elif file_type == "ptm":
+        validate_ptm_tmt_columns(df, file_path.name)
+        return {
+            "columns": columns,
+            "tmt_channels": detect_tmt_channels(columns),
+            "has_quan_value": None,
+            "detected_modifications": detect_modifications_in_file(file_path),
         }
     elif file_type == "dia":
         validate_dia_columns(df, file_path.name)

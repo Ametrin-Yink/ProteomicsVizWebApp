@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import type { VolcanoFilters, GSEADatabase, GSEAData } from '@/types/api';
-import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork, Dna, ScrollText } from 'lucide-react';
+import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork } from 'lucide-react';
 import { visualizationApi, getDataSource, sessionApiPrefix } from '@/lib/api-client';
 import { buildVolcanoExport } from '@/lib/figures/volcano-figure';
 import { buildQcExport } from '@/lib/figures/qc-figures';
@@ -173,55 +173,71 @@ export function getModuleById(id: string): VisualizationModule | undefined {
   return VISUALIZATION_MODULES.find((m) => m.id === id);
 }
 
-/** PTM-specific visualization modules that link to placeholder pages. */
+/** PTM-specific visualization modules. */
 export const PTM_VISUALIZATION_MODULES: VisualizationModule[] = [
   {
     id: 'volcano',
     label: 'Volcano',
-    href: '/analysis/visualization/ptm-placeholder?tab=volcano',
+    href: '/analysis/visualization/ptm-placeholder?tab=volcano&pipeline=ptm',
     icon: ChartScatter,
     description: 'PTM differential expression volcano plot',
   },
   {
     id: 'qc',
     label: 'QC',
-    href: '/analysis/visualization/ptm-placeholder?tab=qc',
+    href: '/analysis/visualization/ptm-placeholder?tab=qc&pipeline=ptm',
     icon: Activity,
     description: 'PTM quality control plots',
   },
   {
-    id: 'site-abundance',
-    label: 'Site Abundance',
-    href: '/analysis/visualization/ptm-placeholder?tab=site-abundance',
-    icon: Dna,
-    description: 'PTM site-level abundance analysis',
+    id: 'compare',
+    label: 'Compare',
+    href: '/analysis/visualization/ptm-placeholder?tab=compare&pipeline=ptm',
+    icon: GitCompare,
+    description: 'Layer-aware correlation across matched PTM features or proteins',
   },
   {
-    id: 'results',
-    label: 'Results',
-    href: '/analysis/visualization/ptm-placeholder?tab=results',
-    icon: ScrollText,
-    description: 'PTM analysis results table',
+    id: 'gsea',
+    label: 'Protein GSEA',
+    href: '/analysis/visualization/gsea?tab=gsea&pipeline=ptm',
+    icon: Spline,
+    description: 'Gene Set Enrichment Analysis of the optional protein layer',
   },
   {
     id: 'bionet',
-    label: 'BioNet',
-    href: '/analysis/visualization/ptm-placeholder?tab=bionet',
+    label: 'Protein BioNet',
+    href: '/analysis/visualization/bionet?tab=bionet&pipeline=ptm',
     icon: ChartNetwork,
-    description: 'PTM protein-protein interaction network',
+    description: 'Protein-protein interaction network from the optional protein layer',
   },
 ];
 
 /**
  * Return the set of visualization modules appropriate for the given pipeline.
- * - 'ptm': shows only PTM-relevant tabs (placeholder content)
+ * - 'ptm': shows only PTM-relevant tabs
  * - 'msqrob2' or 'msstats' or undefined/null: shows all existing tabs
  */
-export function getModulesForPipeline(pipeline?: string | null): VisualizationModule[] {
+export function getModulesForPipeline(
+  pipeline?: string | null,
+  hasProteinLayer = true
+): VisualizationModule[] {
   if (pipeline === 'ptm') {
-    return PTM_VISUALIZATION_MODULES;
+    return hasProteinLayer
+      ? PTM_VISUALIZATION_MODULES
+      : PTM_VISUALIZATION_MODULES.filter(
+          (module) => module.id !== 'gsea' && module.id !== 'bionet'
+        );
   }
   return VISUALIZATION_MODULES;
+}
+
+export function getVisualizationUrl(sessionId: string, pipeline?: string | null): string {
+  const encodedSessionId = encodeURIComponent(sessionId);
+  if (pipeline === 'ptm') {
+    return `/analysis/visualization/ptm-placeholder?session_id=${encodedSessionId}&pipeline=ptm&tab=volcano`;
+  }
+  const pipelineParam = pipeline ? `&pipeline=${encodeURIComponent(pipeline)}` : '';
+  return `/analysis/visualization?session_id=${encodedSessionId}${pipelineParam}`;
 }
 
 /**

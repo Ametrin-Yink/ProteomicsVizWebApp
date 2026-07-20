@@ -5,6 +5,9 @@ Handles PTM summarization and group comparison through subprocess calls
 (NEVER rpy2). Implements steps 2-3 of the PTM pipeline.
 """
 
+from collections.abc import Callable
+from pathlib import Path
+
 from app.core.config import settings
 from app.models.analysis import AnalysisConfig
 from app.services.base_r_wrapper import BaseRWrapper
@@ -31,6 +34,17 @@ class PTMWrapper(BaseRWrapper):
     # ------------------------------------------------------------------
     # Abstract method implementations
     # ------------------------------------------------------------------
+
+    async def _resolve_n_cores(
+        self,
+        config: AnalysisConfig,
+        config_attr: str,
+        input_file: Path,
+        log_callback: Callable | None = None,
+    ) -> int:
+        """MSstatsPTM group comparison is serial; do not benchmark an RDS as Parquet."""
+        del config, config_attr, input_file, log_callback
+        return 1
 
     def _build_data_process_config(self, config: AnalysisConfig, n_cores: int) -> dict:
         """Build config JSON for step 2 (PTM summarization via MSstatsPTM)."""

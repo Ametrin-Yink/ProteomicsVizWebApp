@@ -109,6 +109,37 @@ class TestFoldChangeMatrix:
             assert accessions == ["P1", "P2"]
             assert gene_names == ["Gene1", "Gene2"]
 
+    def test_reads_ptm_session_protein_results(self, tmp_path):
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["WRONG"],
+                "Gene_Name": ["Wrong"],
+                "logFC": [99.0],
+                "pval": [0.1],
+                "adjPval": [0.2],
+            }
+        ).to_csv(results_dir / "Diff_Expression_A_vs_B.tsv", sep="\t", index=False)
+        pd.DataFrame(
+            {
+                "Protein": ["P1", "P2", "P1", "P2"],
+                "ProteinAccession": ["P1", "P2", "P1", "P2"],
+                "Comparison": ["A_vs_B", "A_vs_B", "C_vs_D", "C_vs_D"],
+                "log2FC": [1.5, -0.8, 2.0, 0.3],
+                "pvalue": [0.001, 0.05, 0.0001, 0.5],
+                "adj.pvalue": [0.01, 0.2, 0.005, 0.8],
+            }
+        ).to_csv(results_dir / "protein_results.tsv", sep="\t", index=False)
+
+        matrix, accessions, gene_names = build_fold_change_matrix(
+            str(tmp_path), ["A_vs_B", "C_vs_D"]
+        )
+
+        assert matrix.tolist() == [[1.5, 2.0], [-0.8, 0.3]]
+        assert accessions == ["P1", "P2"]
+        assert gene_names == ["P1", "P2"]
+
     def test_pvalue_lookup_does_not_match_accession_prefix(self, tmp_path):
         results_dir = tmp_path / "results"
         results_dir.mkdir()

@@ -6,7 +6,10 @@ from unittest.mock import AsyncMock, patch
 import pandas as pd
 from app.models.analysis import AnalysisConfig, AnalysisResult, PipelineTool
 from app.services.pipeline_engine import StepContext
-from app.services.steps.ptm_step3_comparison import step_ptm_group_comparison
+from app.services.steps.ptm_step3_comparison import (
+    _filter_adjusted_results,
+    step_ptm_group_comparison,
+)
 from app.services.steps.ptm_step4_qc import step_ptm_qc_metrics
 
 
@@ -45,24 +48,79 @@ def test_ptm_group_comparison_logs_success_with_step(tmp_path):
     rds_file = tmp_path / "ptm_summarized.rds"
     rds_file.touch()
     ctx.step_outputs["rds_file"] = rds_file
+    metadata = tmp_path / "ptm_site_metadata.tsv"
+    pd.DataFrame(
+        {
+            "ProteinName": ["P1_C10"],
+            "ProteinAccession": ["P1"],
+            "SiteLabel": ["P1 · C10"],
+        }
+    ).to_csv(metadata, sep="\t", index=False)
+    ctx.step_outputs["site_metadata_path"] = metadata
+    ctx.current_step_number = 5
+
+    async def write_result(**kwargs):
+        pd.DataFrame(
+            {
+                "Protein": ["P1_C10"],
+                "Label": ["Drug vs Control"],
+                "log2FC": [1.0],
+                "pvalue": [0.01],
+                "adj.pvalue": [0.02],
+            }
+        ).to_csv(
+            kwargs["output_dir"] / "PTM_Model_Drug_vs_Control.tsv",
+            sep="\t",
+            index=False,
+        )
 
     with patch(
         "app.services.steps.ptm_step3_comparison.ptm_wrapper.group_comparison_multi",
-        new=AsyncMock(),
+        new=AsyncMock(side_effect=write_result),
     ):
         asyncio.run(step_ptm_group_comparison(ctx))
 
-    assert ctx.state.logs[-1] == ("info", "PTM group comparison complete", 3)
+    assert ctx.state.logs[-1] == ("info", "PTM group comparison complete", 5)
+
+
+def test_adjusted_results_require_a_quantified_matching_protein():
+    metadata = pd.DataFrame(
+        {
+            "ProteinName": ["P1_C10", "P2-2_C20", "P3_C30"],
+            "ProteinAccession": ["P1", "P2-2", "P3"],
+        }
+    )
+    results = pd.DataFrame(
+        {
+            "Protein": ["P1_C10", "P2-2_C20", "P3_C30"],
+            "GlobalProtein": ["P1", "P2", "P3"],
+            "Adjusted": [True, True, True],
+        }
+    )
+
+    filtered = _filter_adjusted_results(results, metadata, {"P1", "P2"})
+
+    assert filtered["Protein"].tolist() == ["P1_C10", "P2-2_C20"]
+    assert filtered["ProteinMatch"].tolist() == ["exact", "canonical_fallback"]
 
 
 def test_ptm_qc_logs_success_with_step(tmp_path):
     ctx = _make_context(tmp_path)
-    de_file = tmp_path / "Diff_Expression_Drug_vs_Control.tsv"
-    pd.DataFrame({"adjPval": [0.01, 0.5], "logFC": [1.0, -1.0]}).to_csv(
-        de_file, sep="\t", index=False
-    )
-    ctx.step_outputs["de_paths"] = [de_file]
+    de_file = tmp_path / "ptm_site_results.tsv"
+    pd.DataFrame(
+        {
+            "adj.pvalue": [0.01, 0.5],
+            "log2FC": [1.0, -1.0],
+            "Status": ["Estimated", "Estimated"],
+        }
+    ).to_csv(de_file, sep="\t", index=False)
+    ctx.step_outputs["ptm_results_path"] = de_file
+    ctx.current_step_number = 6
 
     asyncio.run(step_ptm_qc_metrics(ctx))
 
-    assert ctx.state.logs[-1] == ("info", "PTM QC metrics complete", 4)
+    assert ctx.state.logs[-1] == (
+        "info",
+        "PTM QC metrics and result ZIP complete",
+        6,
+    )

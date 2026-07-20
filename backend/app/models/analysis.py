@@ -7,7 +7,7 @@ and various analysis results.
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -54,10 +54,12 @@ STEP_DISPLAY_NAMES: dict[str, dict[int, str]] = {
         6: "QC Metrics",
     },
     PipelineTool.PTM: {
-        1: "Prepare PTM Data",
-        2: "PTM Summarization (MSstatsPTM)",
-        3: "PTM Group Comparison (MSstatsPTM)",
-        4: "PTM QC Metrics",
+        1: "Prepare and Filter PTM TMT PSMs",
+        2: "Resolve Shared Peptides",
+        3: "Build PTM Site Features",
+        4: "PTM Summarization (MSstatsPTM)",
+        5: "PTM Group Comparison (MSstatsPTM)",
+        6: "PTM QC and Results",
     },
 }
 
@@ -108,6 +110,13 @@ class AnalysisConfig(BaseModel):
             legacy_min = data.get("min_peptides_per_protein", 1)
             migrated_min = int(legacy_min) if legacy_min is not None else 1
             data["min_psms_per_protein"] = max(migrated_min, 2 if strict else 1)
+        if (
+            "ptm_normalization_method" not in data
+            and "ptm_background_normalization" in data
+        ):
+            data["ptm_normalization_method"] = (
+                "background_peptide" if data["ptm_background_normalization"] else "none"
+            )
         return data
 
     # MSstats-specific parameters
@@ -194,8 +203,8 @@ class AnalysisConfig(BaseModel):
 
     # PTM-specific parameters
     ptm_labeling_type: str = Field(
-        default="LF",
-        description="Labeling type for PTM experiment: LF or TMT",
+        default="TMT",
+        description="PTM version 1 is TMT only",
     )
     ptm_mod_ids: list[str] = Field(
         default_factory=list,
@@ -225,6 +234,13 @@ class AnalysisConfig(BaseModel):
         default=True,
         description="Save fitted linear models in groupComparison output",
     )
+    ptm_target_modification: str | None = Field(default=None)
+    ptm_fasta_source: str = Field(default="human")
+    ptm_background_normalization: bool = Field(default=True)
+    ptm_normalization_method: Literal[
+        "background_peptide", "centered_median", "none"
+    ] = Field(default="background_peptide")
+    ptm_imputation: bool = Field(default=True)
 
 
 class DatabaseType(str, Enum):

@@ -82,7 +82,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
     loadOrganisms();
   }, [loadOrganisms]);
 
-  const canContinue = canStart && config.organism !== '';
+  const canContinue = canStart && (analysisType === 'ptm' || config.organism !== '');
 
   const handleBack = () => {
     router.push(`/new/comparisons?session=${sessionId}`);
@@ -105,8 +105,12 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
     router.replace(`/new/summary?session=${sessionId}`);
   };
 
-  const pipelineLabel = selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2';
-  const PipelineIcon = selectedPipeline === 'msstats' ? BarChart3 : Dna;
+  const pipelineLabel = selectedPipeline === 'ptm'
+    ? 'PTM TMT'
+    : selectedPipeline === 'msstats'
+      ? 'MSstats'
+      : 'msqrob2';
+  const PipelineIcon = selectedPipeline === 'msqrob2' ? Dna : BarChart3;
 
   return (
     <div className="space-y-6">
@@ -132,6 +136,7 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
           </div>
         </div>
         <div className="p-5">
+          {analysisType !== 'ptm' ? (
           <div className="mb-5">
             <label className="block text-sm font-medium text-text-primary mb-1.5">Organism</label>
             <div className="flex items-center gap-2">
@@ -166,6 +171,12 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
               )}
             </div>
           </div>
+          ) : (
+            <div className="mb-5 rounded-lg border border-border bg-surface p-3">
+              <p className="text-sm font-medium text-text-primary">FASTA reference</p>
+              <p className="mt-0.5 text-xs capitalize text-text-muted">{config.ptm_fasta_source}</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-5">
             <label className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:border-primary/30 transition-colors">
@@ -338,6 +349,49 @@ function ConfigContent({ sessionId }: { sessionId: string }) {
           </div>
           <div className="p-5">
             <MsstatsConfigForm config={config} setConfig={setConfig} />
+          </div>
+        </section>
+      )}
+
+      {selectedPipeline === 'ptm' && (
+        <section className="rounded-lg border border-border bg-background">
+          <div className="flex items-center gap-3 border-b border-border px-5 py-3">
+            <BarChart3 className="h-5 w-5 text-secondary" />
+            <div>
+              <h2 className="font-semibold text-text-primary">PTM Processing</h2>
+              <p className="text-sm text-text-muted">Normalization and missing-value handling</p>
+            </div>
+          </div>
+          <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <label className="rounded-lg border border-border bg-surface p-3">
+              <span className="block text-sm font-medium text-text-primary">Normalization method</span>
+              <span className="mb-2 block text-xs text-text-muted">Choose the reporter-channel reference distribution</span>
+              <select
+                data-testid="ptm-normalization-select"
+                value={config.ptm_normalization_method ?? 'background_peptide'}
+                onChange={(event) => setConfig({
+                  ptm_normalization_method: event.target.value as 'background_peptide' | 'centered_median' | 'none',
+                  ptm_background_normalization: event.target.value === 'background_peptide',
+                })}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="centered_median">Centered median</option>
+                <option value="background_peptide">Background peptides</option>
+                <option value="none">None (raw PTM)</option>
+              </select>
+            </label>
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border bg-surface p-3">
+              <span>
+                <span className="block text-sm font-medium text-text-primary">Model-based imputation</span>
+                <span className="block text-xs text-text-muted">Impute only after the per-condition coverage filter</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={config.ptm_imputation ?? true}
+                onChange={(event) => setConfig({ ptm_imputation: event.target.checked })}
+                className="h-4 w-4"
+              />
+            </label>
           </div>
         </section>
       )}

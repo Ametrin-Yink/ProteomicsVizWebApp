@@ -50,7 +50,7 @@ import type {
 export interface FileLibraryEntry {
   name: string;
   path: string;
-  type: 'txt' | 'csv' | 'folder';
+  type: 'txt' | 'csv' | 'fasta' | 'fa' | 'faa' | 'folder';
   size: number;
   modified_at: string | null;
 }
@@ -59,14 +59,21 @@ export interface SelectedFileInfo {
   filename: string;
   size: number;
   columns: string[];
-  file_type: 'tmt' | 'dia';
+  file_type: 'tmt' | 'dia' | 'ptm' | 'fasta';
   tmt_channels?: string[];
   has_quan_value?: boolean;
+  detected_modifications?: Array<{
+    name: string;
+    row_count: number;
+    occurrence_count: number;
+    sites: string[];
+  }>;
 }
 
 interface DataSource {
   id: string;
   name: string;
+  pipeline?: string;
   config?: {
     treatment?: string;
     control?: string;
@@ -75,7 +82,10 @@ interface DataSource {
       group2: Record<string, string>;
     }>;
   };
-  files?: { proteomics: Array<{ experiment: string }> };
+  files?: {
+    proteomics: Array<{ experiment: string }>;
+    global_proteome?: Array<{ filename: string }>;
+  };
   markers?: string[] | Record<string, string[]>;
   volcano_filters?: {
     foldChange: number;
@@ -83,6 +93,12 @@ interface DataSource {
     adjPValue: number;
     s0: number;
   };
+  ptm_volcano_filters?: Record<string, {
+    foldChange: number;
+    pValue: number;
+    adjPValue: number;
+    s0: number;
+  }>;
 }
 
 // Use empty base URL to go through Next.js proxy (avoids CORS)
@@ -448,6 +464,7 @@ export const sessionsApi = {
       id: sessionId,
       name: backendSession.name || name || `Analysis ${sessionId.slice(0, 8)}`,
       template: backendSession.template || template,
+      pipeline: backendSession.pipeline as Session['pipeline'],
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
@@ -478,6 +495,7 @@ export const sessionsApi = {
       id: sid,
       name: backendSession.name || backendSession.config?.experiment_name || `Analysis ${sid.slice(0, 8)}`,
       template: backendSession.template || 'protein_pairwise_comparison',
+      pipeline: backendSession.pipeline as Session['pipeline'],
       status: mapBackendStatus(sessionStatus),
       currentStep: null,
       progress: sessionStatus === 'completed' ? 100 : 0,
@@ -508,6 +526,7 @@ export const sessionsApi = {
         id: sessionId,
         name: s.name || s.config?.experiment_name || `Analysis ${sessionId.slice(0, 8)}`,
         template: s.template || 'protein_pairwise_comparison',
+        pipeline: s.pipeline as Session['pipeline'],
         status: mapBackendStatus(sessionStatus),
         currentStep: null,
         progress: sessionStatus === 'completed' ? 100 : 0,
@@ -1039,6 +1058,12 @@ export async function updateVisualizationState(
       adjPValue: number;
       s0: number;
     };
+    ptm_volcano_filters?: Record<string, {
+      foldChange: number;
+      pValue: number;
+      adjPValue: number;
+      s0: number;
+    }>;
   }
 ): Promise<void> {
   try {
@@ -1181,6 +1206,11 @@ export const fileLibraryApi = {
   selectForSession: (
     sessionId: string,
     paths: string[],
+    role: 'proteomics' | 'ptm_enrichment' | 'global_proteome' | 'custom_fasta' = 'proteomics',
   ): Promise<{ files: SelectedFileInfo[] }> =>
-    api.post<{ files: SelectedFileInfo[] }>(`/files/select`, { session_id: sessionId, paths }).then(r => r.data),
+    api.post<{ files: SelectedFileInfo[] }>(`/files/select`, {
+      session_id: sessionId,
+      paths,
+      role,
+    }).then(r => r.data),
 };

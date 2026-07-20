@@ -7,7 +7,7 @@ file metadata, and session state.
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -99,6 +99,13 @@ class SessionConfig(BaseModel):
             legacy_min = data.get("min_peptides_per_protein")
             migrated_min = int(legacy_min) if legacy_min is not None else 1
             data["min_psms_per_protein"] = max(migrated_min, 2 if strict else 1)
+        if (
+            "ptm_normalization_method" not in data
+            and "ptm_background_normalization" in data
+        ):
+            data["ptm_normalization_method"] = (
+                "background_peptide" if data["ptm_background_normalization"] else "none"
+            )
         return data
 
     # MSstats advanced parameters (new)
@@ -130,6 +137,18 @@ class SessionConfig(BaseModel):
         default=None,
         description="TMT channel → {group1: val1, ..., replicate: N} mapping",
     )
+
+    # PTM TMT analysis
+    ptm_target_modification: str | None = Field(default=None)
+    ptm_fasta_source: str | None = Field(
+        default=None,
+        pattern=r"^(human|mouse|custom)$",
+    )
+    ptm_background_normalization: bool = Field(default=True)
+    ptm_normalization_method: Literal[
+        "background_peptide", "centered_median", "none"
+    ] = Field(default="background_peptide")
+    ptm_imputation: bool = Field(default=True)
 
 
 class FileInfo(BaseModel):
@@ -163,6 +182,7 @@ class ProteomicsFileInfo(FileInfo):
     has_quan_value: bool | None = Field(
         default=None, description="Whether the file has a Quan Value column (DIA)"
     )
+    detected_modifications: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SessionFiles(BaseModel):
@@ -206,6 +226,10 @@ class Session(BaseModel):
         default=None,
         description="Volcano plot filter settings (foldChange, pValue, adjPValue, s0)",
     )
+    ptm_volcano_filters: dict[str, dict[str, float]] = Field(
+        default_factory=dict,
+        description="PTM volcano filters keyed by comparison label",
+    )
 
     model_config = {
         "from_attributes": True,
@@ -245,6 +269,7 @@ class VisualizationStateUpdate(BaseModel):
 
     markers: dict[str, list[str]] | None = None
     volcano_filters: dict[str, Any] | None = None
+    ptm_volcano_filters: dict[str, dict[str, float]] | None = None
 
 
 class SessionSummary(BaseModel):
@@ -252,6 +277,7 @@ class SessionSummary(BaseModel):
 
     id: str
     name: str
+    pipeline: str = ""
     state: SessionState
     created_at: datetime
     updated_at: datetime

@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import ProteinCorrelationPanel from '@/components/visualization/compare/ProteinCorrelationPanel';
-import ComparisonCorrelationPanel from '@/components/visualization/compare/ComparisonCorrelationPanel';
+import ProteinCompareWorkspace from '@/components/visualization/compare/ProteinCompareWorkspace';
 import { getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
@@ -11,9 +10,7 @@ import { formatGroup } from '@/lib/utils';
 function CompareContent() {
   const { apiPrefix } = useApi();
 
-  const [activeTab, setActiveTab] = useState<'protein' | 'comparison'>('protein');
   const [comparisons, setComparisons] = useState<Array<{ value: string; label: string }>>([]);
-  const [comparisonCount, setComparisonCount] = useState(0);
 
   useEffect(() => {
     if (!apiPrefix) return;
@@ -25,7 +22,6 @@ function CompareContent() {
           label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
         }));
         setComparisons(list);
-        setComparisonCount(list.length);
       }
     }).catch(() => {});
   }, [apiPrefix]);
@@ -48,36 +44,7 @@ function CompareContent() {
           <h1 className="font-semibold text-text-primary">Compare Analysis</h1>
         </div>
 
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setActiveTab('protein')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'protein'
-                ? 'bg-primary/10 text-primary'
-                : 'text-text-secondary hover:bg-surface hover:text-text-primary'
-            }`}
-          >
-            Protein Correlation
-          </button>
-          <button
-            onClick={() => setActiveTab('comparison')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'comparison'
-                ? 'bg-primary/10 text-primary'
-                : 'text-text-secondary hover:bg-surface hover:text-text-primary'
-            }`}
-            disabled={comparisonCount < 2}
-            title={comparisonCount < 2 ? 'Need at least 2 comparisons' : undefined}
-          >
-            Comparison Correlation
-          </button>
-        </div>
-
-        {activeTab === 'protein' ? (
-          <ProteinCorrelationPanel comparisons={comparisons} />
-        ) : (
-          <ComparisonCorrelationPanel comparisons={comparisons} />
-        )}
+        <ProteinCompareWorkspace comparisons={comparisons} />
       </div>
     </div>
   );

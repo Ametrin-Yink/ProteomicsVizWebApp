@@ -61,7 +61,7 @@ export default function HomePage() {
       // Save file_type to backend session config
       await sessionsApi.updateConfig(newSession.id, {
         ...useAnalysisStore.getState().config,
-        file_type: type === 'ptm' ? undefined : type,
+        file_type: type === 'ptm' ? 'tmt' : type,
       }).catch(() => {});
       addSession(newSession);
       router.push(`/new/upload?session=${newSession.id}&type=${type}`);

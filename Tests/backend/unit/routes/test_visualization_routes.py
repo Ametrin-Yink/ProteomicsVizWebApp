@@ -34,6 +34,70 @@ def client(tmp_path, monkeypatch):
     )
     de_df.to_csv(results_dir / "Diff_Expression.tsv", sep="\t", index=False)
 
+    pd.DataFrame(
+        {
+            "Protein": ["P1_C10", "P2_candidate_C20|C30"],
+            "Comparison": ["Drug_vs_DMSO", "Drug_vs_DMSO"],
+            "log2FC": [1.2, 0.4],
+            "pvalue": [0.01, 0.2],
+            "adj.pvalue": [0.02, 0.3],
+            "ProteinName": ["P1_C10", "P2_candidate_C20|C30"],
+            "ProteinAccession": ["P1", "P2"],
+            "SiteLabel": ["P1 · C10", "P2 · candidate positions C20|C30"],
+            "LocalizationStatus": ["Confident", "Ambiguous"],
+            "issue": [None, None],
+        }
+    ).to_csv(results_dir / "ptm_site_results.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "Protein": ["P1"],
+            "Comparison": ["Drug_vs_DMSO"],
+            "log2FC": [0.1],
+            "pvalue": [0.5],
+            "adj.pvalue": [0.5],
+            "issue": [None],
+        }
+    ).to_csv(results_dir / "protein_results.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "Protein": ["P1_C10"],
+            "Comparison": ["Drug_vs_DMSO"],
+            "GlobalProtein": ["P1"],
+            "Adjusted": [True],
+            "log2FC": [1.1],
+            "pvalue": [0.02],
+            "adj.pvalue": [0.03],
+        }
+    ).to_csv(results_dir / "adjusted_ptm_results.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "ProteinName": ["P1_C10"],
+            "ProteinAccession": ["P1"],
+            "SiteLabel": ["P1 · C10"],
+            "LocalizationStatus": ["Confident"],
+            "MappingStatus": ["FASTA mapped"],
+            "LocalizationSource": [None],
+        }
+    ).to_csv(results_dir / "ptm_site_metadata.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "ProteinName": ["P1_C10"],
+            "PeptideSequence": ["ACDK"],
+            "LocalizationStatus": ["Confident"],
+        }
+    ).to_csv(results_dir / "ptm_localization_evidence.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {"ProteinName": ["P1_C10"], "Peptidoform": ["ACDK|C2(DBIA)"], "PSMCount": [2]}
+    ).to_csv(results_dir / "ptm_peptidoforms.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "Protein": ["P1_C10"],
+            "Channel": ["126"],
+            "Condition": ["Drug"],
+            "Abundance": [12.5],
+        }
+    ).to_csv(results_dir / "ptm_site_summarized.tsv", sep="\t", index=False)
+
     session = Session(
         id="550e8400-e29b-41d4-a716-446655440000",
         name="Test",
@@ -153,6 +217,38 @@ class TestGetQCPlots:
         data = response.json()["data"]
         assert "pca" in data
         assert "pvalue_distribution" in data
+
+
+class TestPTMVisualization:
+    def test_stable_results_include_all_available_layers(self, client):
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results"
+        )
+        assert response.status_code == 200
+        comparisons = response.json()["data"]["comparisons"]
+        assert len(comparisons) == 1
+        assert len(comparisons[0]["ptm_model"]) == 2
+        assert len(comparisons[0]["protein_model"]) == 1
+        assert [row["Protein"] for row in comparisons[0]["adjusted_model"]] == [
+            "P1_C10"
+        ]
+        assert comparisons[0]["ptm_model"][1]["LocalizationStatus"] == "Ambiguous"
+        assert comparisons[0]["ptm_model"][0]["issue"] is None
+        assert comparisons[0]["protein_model"][0]["issue"] is None
+
+    def test_site_details_and_abundance_are_site_centric(self, client):
+        details = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/site/P1_C10"
+        )
+        abundance = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/site/P1_C10/abundance"
+        )
+        assert details.status_code == 200
+        assert details.json()["data"]["site"]["LocalizationStatus"] == "Confident"
+        assert details.json()["data"]["site"]["LocalizationSource"] is None
+        assert details.json()["data"]["peptidoforms"][0]["PSMCount"] == 2
+        assert abundance.status_code == 200
+        assert abundance.json()["data"]["samples"][0]["Abundance"] == 12.5
 
 
 @pytest.mark.asyncio

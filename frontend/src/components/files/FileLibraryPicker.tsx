@@ -11,7 +11,9 @@ import { useFileSearch } from '@/hooks/use-file-search';
 interface FileLibraryPickerProps {
   sessionId: string;
   /** 'tmt' | 'dia' | 'csv-only' — filters displayed files */
-  fileType: 'tmt' | 'dia' | 'csv-only';
+  fileType: 'tmt' | 'dia' | 'csv-only' | 'ptm' | 'fasta';
+  role?: 'proteomics' | 'ptm_enrichment' | 'global_proteome' | 'custom_fasta';
+  singleSelect?: boolean;
   onSelect: (selectedPaths: string[]) => void;
   onClose: () => void;
 }
@@ -19,6 +21,8 @@ interface FileLibraryPickerProps {
 export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   sessionId,
   fileType,
+  role = 'proteomics',
+  singleSelect = false,
   onSelect,
   onClose,
 }) => {
@@ -28,7 +32,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const [entries, setEntries] = useState<FileLibraryEntry[]>([]);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
-  const [pickerFilter, setPickerFilter] = useState<'all' | 'txt' | 'csv'>('all');
+  const [pickerFilter, setPickerFilter] = useState<'all' | 'txt' | 'csv' | 'fasta'>('all');
   const [loadError, setLoadError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -36,7 +40,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
 
   const { searchQuery, setSearchQuery, handleSearchChange, filteredEntries } = useFileSearch({
     entries,
-    fileType: pickerFilter === 'all' ? 'all' : pickerFilter,
+    fileType: pickerFilter === 'txt' || pickerFilter === 'csv' ? pickerFilter : 'all',
   });
 
   // Focus trap: Tab wraps within the dialog
@@ -79,6 +83,8 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
       if (signal.aborted) return;
       setEntries(data.entries.filter(e => {
         if (fileType === 'csv-only') return e.type === 'csv' || e.type === 'folder';
+        if (fileType === 'ptm') return e.type === 'txt' || e.type === 'folder';
+        if (fileType === 'fasta') return ['fasta', 'fa', 'faa', 'folder'].includes(e.type);
         return e.type === 'txt' || e.type === 'csv' || e.type === 'folder';
       }));
     } catch (err) {
@@ -98,11 +104,16 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
   const displayedEntries = useMemo(() => {
     return filteredEntries.filter(e => {
       if (pickerFilter === 'all' || e.type === 'folder') return true;
+      if (pickerFilter === 'fasta') return ['fasta', 'fa', 'faa'].includes(e.type);
       return e.type === pickerFilter;
     });
   }, [filteredEntries, pickerFilter]);
 
   const handleToggleSelect = (path: string) => {
+    if (singleSelect) {
+      setSelectedPaths(new Set([path]));
+      return;
+    }
     const next = new Set(selectedPaths);
     if (next.has(path)) next.delete(path);
     else next.add(path);
@@ -141,7 +152,7 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
         onSelect(paths);
       } else {
         // Pipeline mode: copy to session + parse
-        await fileLibraryApi.selectForSession(sessionId, paths);
+        await fileLibraryApi.selectForSession(sessionId, paths, role);
         onSelect(paths);
       }
     } catch (err) {
@@ -186,7 +197,12 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
           {/* File type filter dropdown */}
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-text-muted">Show:</span>
-            {(['all', 'txt', 'csv'] as const).map(t => (
+            {(fileType === 'fasta'
+              ? (['all', 'fasta'] as const)
+              : fileType === 'ptm'
+                ? (['all', 'txt'] as const)
+                : (['all', 'txt', 'csv'] as const)
+            ).map(t => (
               <button
                 key={t}
                 onClick={() => setPickerFilter(t)}
@@ -286,7 +302,8 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
                             handleSelectAll();
                           }
                         }}
-                        className="w-4 h-4 rounded"
+                        className={cn('w-4 h-4 rounded', singleSelect && 'invisible')}
+                        disabled={singleSelect}
                       />
                     </th>
                     <th className="px-2 py-2 text-xs font-medium text-text-muted uppercase">Name</th>
@@ -328,8 +345,10 @@ export const FileLibraryPicker: React.FC<FileLibraryPickerProps> = ({
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-surface/50">
           <div className="flex items-center gap-2">
-            <button onClick={handleSelectAll} className="text-xs text-primary hover:underline">Select All</button>
-            <span className="text-text-muted text-xs">·</span>
+            {!singleSelect && (
+              <button onClick={handleSelectAll} className="text-xs text-primary hover:underline">Select All</button>
+            )}
+            {!singleSelect && <span className="text-text-muted text-xs">·</span>}
             <button onClick={handleClearSelection} className="text-xs text-primary hover:underline">Clear Selection</button>
           </div>
           <div className="flex items-center gap-3">

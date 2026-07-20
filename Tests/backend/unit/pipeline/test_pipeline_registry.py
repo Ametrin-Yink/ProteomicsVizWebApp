@@ -56,13 +56,15 @@ class TestPipelineComposition:
                     step.number == i
                 ), f"Pipeline '{tool}' step '{step.name}' should be #{i}, got #{step.number}"
 
-    def test_pipeline_ptm_preserved(self):
-        """PTM_PIPELINE has 4 steps preserved unchanged."""
+    def test_pipeline_ptm_online(self):
+        """PTM TMT has the six explicit online processing stages."""
         pipeline = PIPELINES[PipelineTool.PTM]
-        assert len(pipeline.steps) == 4
+        assert len(pipeline.steps) == 6
 
         expected_names = [
             "prepare_ptm_data",
+            "resolve_ptm_shared_peptides",
+            "build_ptm_sites",
             "ptm_summarization",
             "ptm_group_comparison",
             "ptm_qc_metrics",

@@ -15,9 +15,11 @@ from app.services.pipeline_engine import (
 
 # ── PTM step handlers (preserved) ───────────────────────────────────────
 from app.services.steps import (
+    step_ptm_build_sites,
     step_ptm_group_comparison,
     step_ptm_prepare_data,
     step_ptm_qc_metrics,
+    step_ptm_resolve_shared_peptides,
     step_ptm_summarization,
 )
 
@@ -99,7 +101,13 @@ DIA_PROTEIN_STEPS: list[PipelineStepSpec] = [
 ]
 
 PTM_STEPS: list[PipelineStepSpec] = [
-    ("prepare_ptm_data", "Prepare PTM Data", step_ptm_prepare_data),
+    ("prepare_ptm_data", "Prepare and Filter PTM TMT PSMs", step_ptm_prepare_data),
+    (
+        "resolve_ptm_shared_peptides",
+        "Resolve Shared Peptides",
+        step_ptm_resolve_shared_peptides,
+    ),
+    ("build_ptm_sites", "Build PTM Site Features", step_ptm_build_sites),
     (
         "ptm_summarization",
         "PTM Summarization (MSstatsPTM)",

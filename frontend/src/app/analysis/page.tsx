@@ -17,6 +17,7 @@ import { SessionManager } from '@/components/session/SessionManager';
 import { useAnalysisStore, canStartAnalysis, getPipelineFromType } from '@/stores/analysis-store';
 import { useUIStore } from '@/stores/ui-store';
 import { sessionsApi, processingApi, mapBackendFiles } from '@/lib/api-client';
+import { getVisualizationUrl } from '@/config/visualization-modules';
 
 function AnalysisContent() {
   const router = useRouter();
@@ -100,9 +101,7 @@ function AnalysisContent() {
               return;
             }
             if (session.status === 'completed') {
-              const pipe = (session.config as unknown as Record<string, unknown>)?.pipeline || '';
-              const pipeParam = pipe ? `&pipeline=${pipe}` : '';
-              router.replace(`/analysis/visualization?session_id=${session.id}${pipeParam}`);
+              router.replace(getVisualizationUrl(session.id, session.pipeline));
               return;
             }
 

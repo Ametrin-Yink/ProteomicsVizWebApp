@@ -74,7 +74,24 @@ describe('fileLibraryApi', () => {
     expect(JSON.parse(init.body)).toEqual({
       session_id: 'session-uuid',
       paths: ['path/to/file.txt'],
+      role: 'proteomics',
     });
+  });
+
+  it('selectForSession sends a PTM file role', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ files: [] }),
+    });
+
+    await fileLibraryApi.selectForSession(
+      'session-uuid',
+      ['ptm/psms.txt'],
+      'ptm_enrichment',
+    );
+
+    const [, init] = mockFetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toMatchObject({ role: 'ptm_enrichment' });
   });
 
   it('delete calls DELETE /files/delete with body', async () => {

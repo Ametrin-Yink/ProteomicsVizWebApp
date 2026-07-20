@@ -30,6 +30,7 @@ import { useSessionStore, useSessions, useCurrentSession } from '@/stores/sessio
 import { useUIStore } from '@/stores/ui-store';
 import { useSidebar } from '@/components/layout/SidebarContext';
 import { sessionsApi } from '@/lib/api-client';
+import { getVisualizationUrl } from '@/config/visualization-modules';
 import { Button } from '@/components/ui/Button';
 import type { Session } from '@/types/session';
 
@@ -135,9 +136,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
       // Resume in the new wizard flow
       router.push(`/new/upload?session=${session.id}`);
     } else if (session.status === 'completed') {
-      const pipe = (session.config as unknown as Record<string, unknown>)?.pipeline || '';
-      const pipeParam = pipe ? `&pipeline=${pipe}` : '';
-      router.push(`/analysis/visualization?session_id=${session.id}${pipeParam}`);
+      router.push(getVisualizationUrl(session.id, session.pipeline));
     } else {
       // processing, error, cancelled → processing/log page
       router.push(`/analysis/processing?session_id=${session.id}`);

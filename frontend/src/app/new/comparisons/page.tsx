@@ -114,12 +114,12 @@ function ComparisonsContent() {
     const cards: Array<{ col: string; val: string; id: string }> = [];
     const seen = new Set<string>();
 
-    if (analysisType === 'tmt') {
+    if (analysisType === 'tmt' || analysisType === 'ptm') {
       // FR4.1: Derive from tmt_channel_mapping
       const mapping = config.tmt_channel_mapping || {};
       Object.values(mapping).forEach((entry) => {
         Object.entries(entry).forEach(([col, val]) => {
-          if (col === 'replicate') return;
+          if (['replicate', 'role', 'channel_role'].includes(col)) return;
           const strVal = String(val ?? '').trim();
           if (!strVal) return;
           const id = `${col}:${strVal}`;
@@ -198,7 +198,7 @@ function ComparisonsContent() {
       if (cards.length === 0) return 0;
       let count = 0;
 
-      if (analysisType === 'tmt') {
+      if (analysisType === 'tmt' || analysisType === 'ptm') {
         const mapping = config.tmt_channel_mapping || {};
         Object.values(mapping).forEach((entry) => {
           if (cards.every((c) => String(entry[c.col] ?? '') === c.val)) count++;
@@ -307,7 +307,7 @@ function ComparisonsContent() {
   };
 
   // --- Navigation ---
-  const backRoute = analysisType === 'ptm' ? '/new/upload' : '/new/metadata';
+  const backRoute = '/new/metadata';
 
   const handleContinue = async () => {
     if (comparisons.length === 0) {
@@ -672,7 +672,7 @@ function ComparisonsContent() {
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primary bg-surface border border-border rounded-lg hover:bg-border/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          {analysisType === 'ptm' ? 'Back to Upload' : 'Back to Metadata'}
+          Back to Metadata
         </button>
         <button
           data-testid="comparisons-continue-btn"

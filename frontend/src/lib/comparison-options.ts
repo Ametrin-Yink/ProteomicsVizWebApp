@@ -12,6 +12,11 @@ export interface Comparison {
 }
 
 const DIA_BOOKKEEPING_COLUMNS = new Set(['experiment', 'replicate', 'batch']);
+const TMT_BOOKKEEPING_COLUMNS = new Set(['replicate', 'role', 'channel_role']);
+
+function isTmtAnalysis(analysisType: AnalysisType | null): boolean {
+  return analysisType === 'tmt' || analysisType === 'ptm';
+}
 
 function getConditionColumns(
   rows: Array<Record<string, string | number>>,
@@ -21,8 +26,8 @@ function getConditionColumns(
   for (const row of rows) {
     for (const column of Object.keys(row)) {
       const normalized = column.toLowerCase();
-      const excluded = analysisType === 'tmt'
-        ? normalized === 'replicate'
+      const excluded = isTmtAnalysis(analysisType)
+        ? TMT_BOOKKEEPING_COLUMNS.has(normalized)
         : DIA_BOOKKEEPING_COLUMNS.has(normalized);
       if (!excluded) columns.add(column);
     }
@@ -40,7 +45,7 @@ export function getConditionOptions(
   analysisType: AnalysisType | null,
   config: SessionConfig
 ): ConditionOption[] {
-  const rows: Array<Record<string, string | number>> = analysisType === 'tmt'
+  const rows: Array<Record<string, string | number>> = isTmtAnalysis(analysisType)
     ? Object.values(config.tmt_channel_mapping ?? {})
     : Object.values(config.metadata_columns ?? {});
   const columns = getConditionColumns(rows, analysisType);

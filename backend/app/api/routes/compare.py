@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import numpy as np
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -72,6 +73,11 @@ class VennRequest(BaseModel):
 def _get_comparisons_from_session(session_id: str) -> list[str]:
     """Discover all comparisons from DE result files in the session."""
     results_dir = settings.sessions_dir / session_id / "results"
+    stable_protein_path = results_dir / "protein_results.tsv"
+    if stable_protein_path.exists():
+        frame = pd.read_csv(stable_protein_path, sep="\t", usecols=["Comparison"])
+        return frame["Comparison"].dropna().astype(str).unique().tolist()
+
     comparisons = []
     if results_dir.exists():
         for f in sorted(results_dir.glob("Diff_Expression_*.tsv")):
@@ -210,6 +216,7 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         marked_set = set()
         for acc_list in req.marked_proteins.values():
             marked_set.update(acc_list)
+        marked_set.intersection_update(accessions)
         # Fall back to proteins significant in at least one selected comparison
         if not marked_set:
             from app.services.compare_service import _load_de_file

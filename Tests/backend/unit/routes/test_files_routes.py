@@ -3,9 +3,13 @@
 import asyncio
 import io
 import time
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
+import pandas as pd
 import pytest
+from app.db.session_store import SessionStore
+from app.models.session import Session, SessionConfig, SessionFiles, SessionState
 from fastapi.testclient import TestClient
 
 
@@ -58,6 +62,63 @@ def client_with_files(mock_index, tmp_path, monkeypatch):
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def ptm_library_client(mock_index, tmp_path, monkeypatch):
+    library = tmp_path / "library"
+    sessions = tmp_path / "sessions"
+    library.mkdir()
+    monkeypatch.setattr("app.core.config.settings.file_library_dir", library)
+    monkeypatch.setattr("app.core.config.settings.sessions_dir", sessions)
+
+    base = {
+        "Annotated Sequence": "[K].ACDK.[R]",
+        "Modifications": "N-Term(TMT6plex); C2(DBIA)",
+        "Charge": 2,
+        "Contaminant": False,
+        "Master Protein Accessions": "P1",
+        "Quan Info": "",
+        "Average Reporter SN": 10,
+        "Isolation Interference in Percent": 10,
+        "Normalized CHIMERYS Coefficient": 0.9,
+        "Abundance 126": 100,
+        "Abundance 127": 120,
+    }
+    pd.DataFrame([base]).to_csv(library / "ptm.txt", sep="\t", index=False)
+    pd.DataFrame([base]).drop(columns=["Isolation Interference in Percent"]).to_csv(
+        library / "protein.txt", sep="\t", index=False
+    )
+    mismatch = {**base, "Abundance 128": 90}
+    del mismatch["Abundance 127"]
+    pd.DataFrame([mismatch]).drop(columns=["Isolation Interference in Percent"]).to_csv(
+        library / "protein_mismatch.txt", sep="\t", index=False
+    )
+    (library / "reference.fasta").write_text(">sp|P1|TEST\nMACDK\n", encoding="utf-8")
+
+    session_id = "550e8400-e29b-41d4-a716-446655440000"
+    session = Session(
+        id=session_id,
+        name="PTM",
+        template="multi_condition_comparison",
+        pipeline="ptm",
+        state=SessionState.CONFIGURING,
+        config=SessionConfig(file_type="tmt", resolve_shared_peptides=True),
+        files=SessionFiles(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    asyncio.run(SessionStore(sessions).create(session))
+
+    from app.api.routes.files import get_index_service
+    from app.api.routes.files import router as files_router
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.dependency_overrides[get_index_service] = lambda: mock_index
+    app.include_router(files_router, prefix="/api/files")
+    with TestClient(app) as client:
+        yield client, session_id, sessions
 
 
 class TestTreeEndpoint:
@@ -120,16 +181,15 @@ class TestUpload:
             files={"files": ("bad.exe", fake_file, "application/octet-stream")},
         )
         assert resp.status_code == 400
-        assert "Only .txt and .csv" in resp.json()["detail"]
+        assert "Only .txt, .csv, .fasta" in resp.json()["detail"]
 
-    def test_upload_rejects_fasta(self, client_with_files):
-        """Upload of .fasta file returns 400."""
+    def test_upload_accepts_fasta_for_library_selection(self, client_with_files):
         fake_file = io.BytesIO(b">sequence\nACGT")
         resp = client_with_files.post(
-            "/api/files/upload?target_path=proj",
+            "/api/files/upload?target_path=",
             files={"files": ("ref.fasta", fake_file, "text/plain")},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 200
 
 
 class TestSearch:
@@ -155,6 +215,60 @@ class TestScan:
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 1
+
+
+class TestPTMLibrarySelection:
+    def test_selects_enrichment_and_custom_fasta_by_role(self, ptm_library_client):
+        client, session_id, sessions = ptm_library_client
+        enrichment = client.post(
+            "/api/files/select",
+            json={
+                "session_id": session_id,
+                "paths": ["ptm.txt"],
+                "role": "ptm_enrichment",
+            },
+        )
+        fasta = client.post(
+            "/api/files/select",
+            json={
+                "session_id": session_id,
+                "paths": ["reference.fasta"],
+                "role": "custom_fasta",
+            },
+        )
+
+        assert enrichment.status_code == 200
+        modifications = enrichment.json()["files"][0]["detected_modifications"]
+        assert {item["name"] for item in modifications} == {"DBIA", "TMT6plex"}
+        assert fasta.status_code == 200
+        session = asyncio.run(SessionStore(sessions).get(session_id))
+        assert len(session.files.ptm_enrichment) == 1
+        assert len(session.files.fasta) == 1
+
+    def test_rejects_optional_protein_with_mismatched_channels(
+        self, ptm_library_client
+    ):
+        client, session_id, _ = ptm_library_client
+        first = client.post(
+            "/api/files/select",
+            json={
+                "session_id": session_id,
+                "paths": ["ptm.txt"],
+                "role": "ptm_enrichment",
+            },
+        )
+        mismatch = client.post(
+            "/api/files/select",
+            json={
+                "session_id": session_id,
+                "paths": ["protein_mismatch.txt"],
+                "role": "global_proteome",
+            },
+        )
+
+        assert first.status_code == 200
+        assert mismatch.status_code == 400
+        assert "channels must match exactly" in mismatch.json()["detail"]
 
 
 class TestDelete:

@@ -42,6 +42,10 @@ interface QCPlotsProps {
   selectedComparison: string;
   onComparisonChange: (value: string) => void;
   comparisonOptions: Array<{ value: string; label: string }>;
+  labels?: {
+    psm: string;
+    entity: string;
+  };
 }
 
 // 24-color palette — enough distinct colors for any realistic condition count
@@ -149,7 +153,14 @@ function normalizeBoxData(
   return traces;
 }
 
-export default function QCPlots({ data, conditionList, selectedComparison, onComparisonChange, comparisonOptions }: QCPlotsProps) {
+export default function QCPlots({
+  data,
+  conditionList,
+  selectedComparison,
+  onComparisonChange,
+  comparisonOptions,
+  labels = { psm: 'PSM', entity: 'Protein' },
+}: QCPlotsProps) {
   // Build a deterministic condition→color map from the condition list
   const conditionColors = useMemo(() => {
     const map: Record<string, string> = {};
@@ -280,7 +291,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
 
     const nConditions = traces.length;
     const layout = {
-      title: { text: 'PSM CVs by Condition (whiskers at 95th %ile)', font: { size: 14, color: '#111827' } },
+      title: { text: `${labels.psm} CVs by Condition (whiskers at 95th %ile)`, font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -297,7 +308,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     };
 
     return { traces, layout };
-  }, [data.psm_cv, getConditionColor]);
+  }, [data.psm_cv, getConditionColor, labels.psm]);
 
   const proteinCVPlot = useMemo(() => {
     if (!data.protein_cv) return null;
@@ -310,7 +321,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
 
     const nConditions = traces.length;
     const layout = {
-      title: { text: 'Protein CVs by Condition (whiskers at 95th %ile)', font: { size: 14, color: '#111827' } },
+      title: { text: `${labels.entity} CVs by Condition (whiskers at 95th %ile)`, font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Coefficient of Variation', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -327,7 +338,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     };
 
     return { traces, layout };
-  }, [data.protein_cv, getConditionColor]);
+  }, [data.protein_cv, getConditionColor, labels.entity]);
 
   const psmIntensityPlot = useMemo(() => {
     const boxData = data.intensity_distributions?.psm_boxplot;
@@ -340,7 +351,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
 
     const nTraces = traces.length;
     const layout = {
-      title: { text: 'PSM Intensity Distribution', font: { size: 14, color: '#111827' } },
+      title: { text: `${labels.psm} Intensity Distribution`, font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Log2 Intensity', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -360,7 +371,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     };
 
     return { traces, layout };
-  }, [data.intensity_distributions?.psm_boxplot, getConditionColor]);
+  }, [data.intensity_distributions?.psm_boxplot, getConditionColor, labels.psm]);
 
   const proteinIntensityPlot = useMemo(() => {
     const boxData = data.intensity_distributions?.protein_boxplot;
@@ -373,7 +384,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
 
     const nSamples = traces.length;
     const layout = {
-      title: { text: 'Protein Intensity Distribution', font: { size: 14, color: '#111827' } },
+      title: { text: `${labels.entity} Intensity Distribution`, font: { size: 14, color: '#111827' } },
       yaxis: {
         title: { text: 'Intensity', font: { size: 12 } },
         gridcolor: '#E5E7EB',
@@ -393,7 +404,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     };
 
     return { traces, layout };
-  }, [data.intensity_distributions?.protein_boxplot, getConditionColor]);
+  }, [data.intensity_distributions?.protein_boxplot, getConditionColor, labels.entity]);
 
   const completenessPlot = useMemo(() => {
     if (!data.data_completeness) return null;
@@ -423,7 +434,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     ];
 
     const layout = {
-      title: { text: 'Protein Data Completeness by Sample', font: { size: 14, color: '#111827' } },
+      title: { text: `${labels.entity} Data Completeness by Sample`, font: { size: 14, color: '#111827' } },
       xaxis: {
         tickangle: nSamples > 2 ? -90 : 0,
         tickfont: { size: 11 },
@@ -443,7 +454,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     };
 
     return { traces, layout };
-  }, [data.data_completeness]);
+  }, [data.data_completeness, labels.entity]);
 
   const psmCompletenessPlot = useMemo(() => {
     if (!data.psm_completeness) return null;
@@ -473,7 +484,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     ];
 
     const layout = {
-      title: { text: 'PSM Data Completeness by Sample', font: { size: 14, color: '#111827' } },
+      title: { text: `${labels.psm} Data Completeness by Sample`, font: { size: 14, color: '#111827' } },
       xaxis: {
         tickangle: nSamples > 2 ? -90 : 0,
         tickfont: { size: 11 },
@@ -493,7 +504,7 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
     };
 
     return { traces, layout };
-  }, [data.psm_completeness]);
+  }, [data.psm_completeness, labels.psm]);
 
   const config = {
     displayModeBar: 'hover',
@@ -505,12 +516,12 @@ export default function QCPlots({ data, conditionList, selectedComparison, onCom
   const plots = [
     { id: 'pca', data: pcaPlot, title: 'PCA Analysis' },
     { id: 'pvalue', data: pvalueDistPlot, title: 'P-value Distribution', showComparisonDropdown: true },
-    { id: 'psm-cv', data: psmCVPlot, title: 'PSM CVs' },
-    { id: 'protein-cv', data: proteinCVPlot, title: 'Protein CVs' },
-    { id: 'psm-intensity', data: psmIntensityPlot, title: 'PSM Intensity Distribution' },
-    { id: 'protein-intensity', data: proteinIntensityPlot, title: 'Protein Intensity Distribution' },
-    { id: 'completeness', data: completenessPlot, title: 'Protein Data Completeness' },
-    { id: 'psm-completeness', data: psmCompletenessPlot, title: 'PSM Data Completeness' },
+    { id: 'psm-cv', data: psmCVPlot, title: `${labels.psm} CVs` },
+    { id: 'protein-cv', data: proteinCVPlot, title: `${labels.entity} CVs` },
+    { id: 'psm-intensity', data: psmIntensityPlot, title: `${labels.psm} Intensity Distribution` },
+    { id: 'protein-intensity', data: proteinIntensityPlot, title: `${labels.entity} Intensity Distribution` },
+    { id: 'completeness', data: completenessPlot, title: `${labels.entity} Data Completeness` },
+    { id: 'psm-completeness', data: psmCompletenessPlot, title: `${labels.psm} Data Completeness` },
   ];
 
   const [expandedPlot, setExpandedPlot] = useState<string | null>(null);

@@ -56,6 +56,14 @@ class TestPipelineDerivation:
         session.template = "multi_condition_comparison"
         assert _derive_pipeline(session) == PipelineTool.MSQROB2
 
+    def test_ptm_pipeline_takes_precedence_over_tmt_file_type(self):
+        from app.api.routes.processing import _derive_pipeline
+
+        session = MagicMock()
+        session.pipeline = "ptm"
+        session.config.file_type = "tmt"
+        assert _derive_pipeline(session) == PipelineTool.PTM
+
 
 class TestTemplateDerivation:
     def test_msstats_template(self):

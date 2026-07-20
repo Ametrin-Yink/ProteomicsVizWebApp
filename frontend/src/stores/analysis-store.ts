@@ -121,6 +121,9 @@ const defaultConfig: SessionConfig = {
   msstats_n_cores: undefined,
   covariate_columns: [],
   msqrob2_batch_column: 'batch',
+  ptm_background_normalization: true,
+  ptm_normalization_method: 'background_peptide',
+  ptm_imputation: true,
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -170,7 +173,7 @@ export const useAnalysisStore = create<AnalysisState>()(
     uploadProgress: [],
     selectedFiles: new Set<string>(),
     analysisType: null,
-    ptmLabelingType: 'LF',
+    ptmLabelingType: 'TMT',
     ptmDetectedMods: [],
     ptmSelectedMods: [],
     ptmFastaFile: null,
@@ -194,7 +197,11 @@ export const useAnalysisStore = create<AnalysisState>()(
           state.config.file_type = 'dia';
         } else if (analysisType === 'ptm') {
           state.config.pipeline = 'ptm';
-          state.config.file_type = undefined;
+          state.config.file_type = 'tmt';
+          state.config.resolve_shared_peptides = true;
+          state.config.ptm_background_normalization = true;
+          state.config.ptm_normalization_method = 'background_peptide';
+          state.config.ptm_imputation = true;
         }
       });
     },
@@ -429,7 +436,7 @@ export const useAnalysisStore = create<AnalysisState>()(
         state.uploadProgress = [];
         state.selectedFiles.clear();
         state.analysisType = null;
-        state.ptmLabelingType = 'LF';
+        state.ptmLabelingType = 'TMT';
         state.ptmDetectedMods = [];
         state.ptmSelectedMods = [];
         state.ptmFastaFile = null;

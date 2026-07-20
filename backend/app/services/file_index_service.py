@@ -78,7 +78,7 @@ class FileIndexService:
         # Collect current filesystem state
         fs_paths: dict[str, dict] = {}
         for root, _dirs, files in os.walk(str(self.library_dir)):
-            # The DuckDB index file is filtered by extension below (only .txt/.csv indexed)
+            # The DuckDB index file is filtered by supported scientific extensions below.
             root_path = Path(root)
             # Add directories
             if root_path != self.library_dir:
@@ -99,7 +99,7 @@ class FileIndexService:
                 rel = self._normalize_path(fp)
                 st = fp.stat()
                 ext = fp.suffix.lstrip(".").lower()
-                if ext not in ("txt", "csv"):
+                if ext not in ("txt", "csv", "fasta", "fa", "faa"):
                     continue
                 parent = Path(rel).parent.as_posix()
                 if parent == ".":

@@ -18,6 +18,8 @@ import {
   CompleteMessage,
 } from '@/types/processing';
 
+type ProcessingPipeline = 'msqrob2' | 'msstats' | 'ptm';
+
 interface ProcessingStore {
   // State
   steps: ProcessingStepDef[];
@@ -34,7 +36,7 @@ interface ProcessingStore {
   queueLength: number;
 
   // Actions
-  initializeSteps: (pipeline?: 'msqrob2' | 'msstats') => void;
+  initializeSteps: (pipeline?: ProcessingPipeline) => void;
   setSessionId: (sessionId: string) => void;
   setFirstStepProcessing: () => void;
   updateStepProgress: (message: ProgressMessage['payload']) => void;
@@ -53,11 +55,22 @@ interface ProcessingStore {
 
 
 const createInitialSteps = (
-  pipeline: 'msqrob2' | 'msstats' = 'msqrob2'
+  pipeline: ProcessingPipeline = 'msqrob2'
 ): ProcessingStepDef[] => {
   return PROCESSING_STEPS
     .map((step) => {
       const patched = { ...step };
+      if (pipeline === 'ptm') {
+        const ptmSteps: Record<number, Partial<ProcessingStepDef>> = {
+          1: { name: 'Prepare and Filter PTM TMT PSMs' },
+          3: { name: 'Build PTM Site Features' },
+          4: { name: 'PTM Summarization (MSstatsPTM)', moduleName: 'R/MSstatsPTM', method: 'dataSummarizationPTM()' },
+          5: { name: 'PTM Group Comparison (MSstatsPTM)', moduleName: 'R/MSstatsPTM', method: 'groupComparisonPTM()' },
+          6: { name: 'PTM QC and Results' },
+        };
+        Object.assign(patched, ptmSteps[step.id]);
+        return { ...patched, status: 'not_started' as const };
+      }
       if (step.id === 4) {
         patched.name = pipeline === 'msstats'
           ? 'Protein Abundance (MSstats)'
@@ -93,7 +106,7 @@ export const useProcessingStore = create<ProcessingStore>()(
     queueLength: 0,
 
     // Initialize steps based on configuration
-    initializeSteps: (pipeline?: 'msqrob2' | 'msstats') => {
+    initializeSteps: (pipeline?: ProcessingPipeline) => {
       set((state) => {
         state.steps = createInitialSteps(pipeline);
         state.logs = [];

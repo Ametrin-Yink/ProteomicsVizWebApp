@@ -116,7 +116,7 @@ async def upload_files(
     files: list[UploadFile] = File(...),
     index: FileIndexService = Depends(get_index_service),
 ):
-    """Upload files to the library. Only .txt and .csv accepted."""
+    """Upload supported analysis files to the global library."""
     target_dir = (
         _validate_path(target_path) if target_path else settings.file_library_dir
     )
@@ -126,10 +126,13 @@ async def upload_files(
     for file in files:
         safe_name = _validate_name(file.filename or "")
         ext = Path(safe_name).suffix.lower()
-        if ext not in (".txt", ".csv"):
+        if ext not in (".txt", ".csv", ".fasta", ".fa", ".faa"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Only .txt and .csv files are allowed. '{safe_name}' is '{ext}'.",
+                detail=(
+                    "Only .txt, .csv, .fasta, .fa, and .faa files are allowed. "
+                    f"'{safe_name}' is '{ext}'."
+                ),
             )
 
         dest = target_dir / safe_name
@@ -407,14 +410,15 @@ async def select_files_for_session(
     body: dict,
     index: FileIndexService = Depends(get_index_service),
 ):
-    """Copy files from library to a session and parse them. Returns ProteomicsFileInfo list."""
+    """Copy role-specific files from the library into a session."""
 
     from app.db.session_store import SessionStore
-    from app.models.session import ProteomicsFileInfo
+    from app.models.session import FileInfo, ProteomicsFileInfo
     from app.utils.file_parser import parse_proteomics_file, sanitize_filename
 
     session_id = body.get("session_id", "")
     paths: list[str] = body.get("paths", [])
+    role = body.get("role", "proteomics")
 
     store = SessionStore(settings.sessions_dir)
     session = await store.get(session_id)
@@ -428,6 +432,18 @@ async def select_files_for_session(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Session must have file_type ('tmt' or 'dia') configured before selecting files.",
+        )
+
+    ptm_roles = {"ptm_enrichment", "global_proteome", "custom_fasta"}
+    if role in ptm_roles and session.pipeline != "ptm":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PTM file roles require a PTM session.",
+        )
+    if role in ptm_roles and len(paths) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role '{role}' requires exactly one selected file.",
         )
 
     file_type = session.config.file_type
@@ -457,29 +473,80 @@ async def select_files_for_session(
 
         await _run_in_thread(shutil.copy2, str(src_abs), str(dest))
 
-        # Parse file
-        result = await _run_in_thread(parse_proteomics_file, dest, file_type)
+        try:
+            if role == "custom_fasta":
+                if dest.suffix.lower() not in {".fasta", ".fa", ".faa"}:
+                    raise ValueError("Custom FASTA must use .fasta, .fa, or .faa")
+                file_info = FileInfo(
+                    filename=dest.name,
+                    original_filename=src_abs.name,
+                    size=dest.stat().st_size,
+                    columns=[],
+                )
+                session.files.fasta = [file_info]
+                result = {"columns": [], "file_type": "fasta"}
+            else:
+                parse_type = (
+                    "ptm"
+                    if role == "ptm_enrichment"
+                    else "tmt"
+                    if role == "global_proteome"
+                    else file_type
+                )
+                result = await _run_in_thread(parse_proteomics_file, dest, parse_type)
+                proteomics_file = ProteomicsFileInfo(
+                    filename=dest.name,
+                    original_filename=src_abs.name,
+                    size=dest.stat().st_size,
+                    columns=result["columns"],
+                    file_type=parse_type,
+                    tmt_channels=result.get("tmt_channels"),
+                    has_quan_value=result.get("has_quan_value", False),
+                    detected_modifications=result.get("detected_modifications", []),
+                )
 
-        proteomics_file = ProteomicsFileInfo(
-            filename=dest.name,
-            size=dest.stat().st_size,
-            columns=result["columns"],
-            file_type=file_type,
-            tmt_channels=result.get("tmt_channels"),
-            has_quan_value=result.get("has_quan_value", False),
-        )
-        session.files.proteomics.append(proteomics_file)
+                if role in {"ptm_enrichment", "global_proteome"}:
+                    other = (
+                        session.files.global_proteome
+                        if role == "ptm_enrichment"
+                        else session.files.ptm_enrichment
+                    )
+                    if other and set(other[0].tmt_channels or []) != set(
+                        proteomics_file.tmt_channels or []
+                    ):
+                        raise ValueError(
+                            "PTM and protein reporter channels must match exactly"
+                        )
+                if role == "ptm_enrichment":
+                    session.files.ptm_enrichment = [proteomics_file]
+                elif role == "global_proteome":
+                    session.files.global_proteome = [proteomics_file]
+                else:
+                    session.files.proteomics.append(proteomics_file)
+        except Exception as e:
+            await asyncio.to_thread(dest.unlink, missing_ok=True)
+            if isinstance(e, HTTPException):
+                raise
+            detail = getattr(e, "message", str(e))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=detail,
+            ) from e
 
         file_resp = {
             "filename": dest.name,
             "size": dest.stat().st_size,
             "columns": result["columns"],
-            "file_type": file_type,
+            "file_type": result.get(
+                "file_type", parse_type if role != "custom_fasta" else "fasta"
+            ),
         }
         if result.get("tmt_channels"):
             file_resp["tmt_channels"] = result["tmt_channels"]
         if result.get("has_quan_value"):
             file_resp["has_quan_value"] = result["has_quan_value"]
+        if result.get("detected_modifications"):
+            file_resp["detected_modifications"] = result["detected_modifications"]
 
         response_files.append(file_resp)
 

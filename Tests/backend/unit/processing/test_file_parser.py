@@ -13,8 +13,10 @@ from app.core.exceptions import InvalidFileFormatError
 from app.utils.file_parser import (
     detect_delimiter,
     detect_tmt_channels,
+    parse_proteomics_file,
     read_file_columns,
     validate_dia_columns,
+    validate_ptm_tmt_columns,
     validate_tmt_columns,
 )
 
@@ -168,6 +170,51 @@ class TestValidateTmtColumns:
             validate_tmt_columns(df, "test_tmt.txt")
         assert "Non-numeric" in str(exc_info.value.message)
         assert "Abundance 126" in str(exc_info.value.message)
+
+
+class TestValidatePtmTmtColumns:
+    @pytest.fixture
+    def valid_ptm_df(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "Annotated Sequence": ["[K].acDK.[R]"],
+                "Modifications": ["N-Term(TMT6plex); C2(DBIA)"],
+                "Charge": [2],
+                "Contaminant": [False],
+                "Master Protein Accessions": ["P12345"],
+                "Quan Info": ["ExcludedByMethod"],
+                "Average Reporter SN": [5.0],
+                "Isolation Interference in Percent": [50.0],
+                "ptmRS Best Site Probabilities": ["C2(DBIA): 75"],
+                "Abundance 126": [100.0],
+                "Abundance 127": [120.0],
+            }
+        )
+
+    def test_accepts_real_pd_ptm_headers_without_chimerys(self, valid_ptm_df):
+        validate_ptm_tmt_columns(valid_ptm_df, "ptm.txt")
+
+    def test_requires_isolation_interference(self, valid_ptm_df):
+        df = valid_ptm_df.drop(columns=["Isolation Interference in Percent"])
+        with pytest.raises(InvalidFileFormatError) as exc_info:
+            validate_ptm_tmt_columns(df, "ptm.txt")
+        assert (
+            "Isolation Interference in Percent"
+            in exc_info.value.details["missing_columns"]
+        )
+
+    def test_parser_detects_modifications_and_channels(self, tmp_path, valid_ptm_df):
+        path = tmp_path / "ptm.txt"
+        valid_ptm_df.to_csv(path, sep="\t", index=False)
+
+        parsed = parse_proteomics_file(path, "ptm")
+
+        assert parsed["tmt_channels"] == ["126", "127"]
+        assert [item["name"] for item in parsed["detected_modifications"]] == [
+            "DBIA",
+            "TMT6plex",
+        ]
+        assert parsed["detected_modifications"][0]["row_count"] == 1
 
 
 class TestValidateDiaColumns:

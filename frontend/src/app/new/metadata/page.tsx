@@ -1,7 +1,6 @@
 /**
  * Step 3: Metadata Page
  * Conditional metadata input: TMT shows TmtChannelMapping, DIA shows DiaMetadataTable.
- * PTM redirects to Comparisons (FR1.9).
  * Auto-saves to backend with 800ms debounce.
  * Restores state from backend on mount.
  */
@@ -23,6 +22,7 @@ import { FileLibraryPicker } from '@/components/files/FileLibraryPicker';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import { useAutoSave } from '@/hooks/use-auto-save';
 import { useBeforeUnload } from '@/hooks/use-beforeunload';
+import type { SessionConfig } from '@/types';
 import TmtChannelMapping from '@/components/analysis/TmtChannelMapping';
 import DiaMetadataTable from '@/components/analysis/DiaMetadataTable';
 
@@ -74,11 +74,6 @@ function MetadataContentInner() {
       router.replace('/');
       return;
     }
-    // FR1.9: PTM redirects to Comparisons
-    if (analysisType === 'ptm') {
-      router.replace(`/new/comparisons?session=${sessionId}`);
-      return;
-    }
     if (uploadedFiles.length === 0) {
       router.replace(`/new/upload?session=${sessionId}`);
       return;
@@ -104,30 +99,14 @@ function MetadataContentInner() {
         }
         if (sessionResp.ok) {
           const raw = await sessionResp.json();
-          const cfg = raw.config as Record<string, unknown> | null;
-          if (cfg && typeof cfg === 'object') {
-            const updates: Record<string, unknown> = {};
-
-            // Restore tmt_channel_mapping
-            if (cfg.tmt_channel_mapping && typeof cfg.tmt_channel_mapping === 'object') {
-              updates.tmt_channel_mapping = cfg.tmt_channel_mapping;
-            }
-
-            // Restore metadata_columns
-            if (cfg.metadata_columns && typeof cfg.metadata_columns === 'object') {
-              updates.metadata_columns = cfg.metadata_columns;
-            }
-
-            if (Object.keys(updates).length > 0) {
-              setConfig(updates);
-            }
-
-            // Restore analysis type from file_type config field
-            const fileTypeFromConfig = cfg.file_type as string | undefined;
-            if (fileTypeFromConfig === 'tmt' || fileTypeFromConfig === 'dia') {
-              useAnalysisStore.getState().setAnalysisType(fileTypeFromConfig as 'tmt' | 'dia');
-            }
+          const cfg = raw.config as Partial<SessionConfig> | null;
+          const fileTypeFromConfig = cfg?.file_type;
+          if (raw.pipeline === 'ptm') {
+            useAnalysisStore.getState().setAnalysisType('ptm');
+          } else if (fileTypeFromConfig === 'tmt' || fileTypeFromConfig === 'dia') {
+            useAnalysisStore.getState().setAnalysisType(fileTypeFromConfig);
           }
+          if (cfg) setConfig(cfg);
 
           // Restore uploaded files
           const restoredFiles = mapBackendFiles(raw.files);
@@ -136,6 +115,20 @@ function MetadataContentInner() {
             for (const file of restoredFiles) {
               addUploadedFile(file);
             }
+          }
+          const ptmFile = raw.files?.ptm_enrichment?.[0];
+          if (ptmFile) {
+            useAnalysisStore.getState().addUploadedFile({
+              filename: ptmFile.filename,
+              original_filename: ptmFile.original_filename,
+              size: ptmFile.size,
+              columns: ptmFile.columns ?? [],
+              experiment: '',
+              replicate: 0,
+              batch: '',
+              file_type: 'tmt',
+              tmt_channels: ptmFile.tmt_channels ?? [],
+            });
           }
         }
       } catch {
@@ -160,7 +153,7 @@ function MetadataContentInner() {
 
   // --- Validation ---
   const validation = useMemo(() => {
-    if (analysisType === 'tmt') {
+    if (analysisType === 'tmt' || analysisType === 'ptm') {
       const mapping = tmtChannelMapping || {};
       const fileChannelPairs = tmtFiles.flatMap((f) => (f.tmt_channels || []).map((ch) => ({ file: f, channel: ch, key: f.filename + '::' + ch })));
       if (fileChannelPairs.length === 0) {
@@ -172,7 +165,10 @@ function MetadataContentInner() {
         const entry = mapping[key];
         if (!entry) return true;
         const hasGroupVal = Object.entries(entry).some(
-          ([k, v]) => k !== 'replicate' && v !== undefined && v !== null && String(v).trim() !== ''
+          ([key, value]) => !['replicate', 'role', 'channel_role'].includes(key)
+            && value !== undefined
+            && value !== null
+            && String(value).trim() !== ''
         );
         const hasReplicate = entry.replicate !== undefined && Number(entry.replicate) > 0;
         return !hasGroupVal || !hasReplicate;
@@ -184,7 +180,7 @@ function MetadataContentInner() {
         const entry = mapping[key];
         if (!entry) return;
         const groupVals = Object.entries(entry)
-          .filter(([k]) => k !== 'replicate')
+          .filter(([key]) => !['replicate', 'role', 'channel_role'].includes(key))
           .map(([, v]) => String(v ?? '').trim())
           .filter(Boolean)
           .join('+');
@@ -311,15 +307,15 @@ function MetadataContentInner() {
       {/* Header */}
       <div className="text-center mb-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-3">
-          {analysisType === 'tmt' ? (
-            <><BarChart3 className="w-4 h-4" /> MSstats Pipeline</>
+          {analysisType === 'tmt' || analysisType === 'ptm' ? (
+            <><BarChart3 className="w-4 h-4" /> {analysisType === 'ptm' ? 'PTM TMT Pipeline' : 'MSstats Pipeline'}</>
           ) : (
             <><Dna className="w-4 h-4" /> msqrob2 Pipeline</>
           )}
         </div>
         <h1 className="font-bold text-text-primary">Experiment Metadata</h1>
         <p className="text-text-muted mt-1">
-          {analysisType === 'tmt'
+          {analysisType === 'tmt' || analysisType === 'ptm'
             ? 'Assign TMT channels to condition groups and replicates'
             : 'Configure metadata for each uploaded DIA file'
           }
@@ -327,7 +323,7 @@ function MetadataContentInner() {
       </div>
 
       {/* TMT Channel Mapping */}
-      {analysisType === 'tmt' && (
+      {(analysisType === 'tmt' || analysisType === 'ptm') && (
         <section className="bg-background border border-border rounded-lg">
           <div className="px-5 py-3 border-b border-border flex items-center gap-3">
             <BarChart3 className="w-5 h-5 text-primary" />
@@ -442,7 +438,7 @@ function MetadataContentInner() {
             if (paths.length > 0) {
               // Fetch first selected CSV content and parse
               const content = await fileLibraryApi.getContent(paths[0]);
-              if (analysisType === 'tmt') {
+              if (analysisType === 'tmt' || analysisType === 'ptm') {
                 // Import channel mapping for all TMT files (bare channel names
                 // in CSV apply to each file's channels)
                 for (const f of tmtFiles) {

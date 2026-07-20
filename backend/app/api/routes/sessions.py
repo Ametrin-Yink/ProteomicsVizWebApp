@@ -55,6 +55,7 @@ async def list_sessions(store: SessionStore = Depends(get_session_store)):
         SessionSummary(
             id=s.id,
             name=s.name,
+            pipeline=s.pipeline,
             state=s.state,
             created_at=s.created_at,
             updated_at=s.updated_at,
@@ -170,6 +171,8 @@ async def update_visualization_state(
         session.markers = data.markers
     if data.volcano_filters is not None:
         session.volcano_filters = data.volcano_filters
+    if data.ptm_volcano_filters is not None:
+        session.ptm_volcano_filters = data.ptm_volcano_filters
 
     await store.update(session)
     return session

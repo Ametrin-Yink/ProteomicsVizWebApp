@@ -105,6 +105,25 @@ class TestPatchVisualizationState:
         assert updated_session.markers == {"default": ["P00367"]}
         assert updated_session.volcano_filters["foldChange"] == 1.5
 
+    def test_patch_ptm_filters_by_comparison(self, client_with_mock_store, mock_store):
+        response = client_with_mock_store.patch(
+            "/api/sessions/test-session-id/visualization-state",
+            json={
+                "ptm_volcano_filters": {
+                    "Drug_vs_DMSO": {
+                        "foldChange": 1,
+                        "pValue": 0.05,
+                        "adjPValue": 1,
+                        "s0": 0.1,
+                    }
+                }
+            },
+        )
+
+        assert response.status_code == 200
+        updated_session = mock_store.update.call_args[0][0]
+        assert updated_session.ptm_volcano_filters["Drug_vs_DMSO"]["s0"] == 0.1
+
     def test_patch_session_not_found(self, client_with_mock_store, mock_store):
         """Returns 404 for non-existent session."""
         mock_store.get = AsyncMock(return_value=None)
@@ -143,7 +162,6 @@ class TestUpdateSession:
             },
         )
         assert response.status_code == 200
-        # Verify pipeline was set on the session
         updated = mock_store.update.call_args[0][0]
         assert updated.pipeline == "msstats"
 
@@ -155,3 +173,17 @@ class TestUpdateSession:
             json={"treatment": "DrugB", "control": "Vehicle", "organism": "mouse"},
         )
         assert response.status_code == 200
+
+
+class TestListSessions:
+    def test_includes_pipeline_for_client_routing(
+        self, client_with_mock_store, mock_store
+    ):
+        session = mock_store.get.return_value
+        session.pipeline = "ptm"
+        mock_store.list_all = AsyncMock(return_value=[session])
+
+        response = client_with_mock_store.get("/api/sessions")
+
+        assert response.status_code == 200
+        assert response.json()[0]["pipeline"] == "ptm"

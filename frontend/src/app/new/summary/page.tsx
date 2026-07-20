@@ -135,13 +135,21 @@ function SummaryContent() {
   };
 
   // D-028: Disable button when prereqs not met
-  const canStartAnalysis = sessionId && analysisType && config.organism && config.comparisons && config.comparisons.length > 0;
+  const canStartAnalysis = sessionId
+    && analysisType
+    && (analysisType === 'ptm' || config.organism)
+    && config.comparisons
+    && config.comparisons.length > 0;
   const startButtonTitle = !canStartAnalysis
     ? 'Ensure an organism is selected and comparisons are defined before starting.'
     : undefined;
 
-  const pipelineLabel = selectedPipeline === 'msstats' ? 'MSstats' : 'msqrob2';
-  const PipelineIcon = selectedPipeline === 'msstats' ? BarChart3 : Dna;
+  const pipelineLabel = selectedPipeline === 'ptm'
+    ? 'PTM TMT'
+    : selectedPipeline === 'msstats'
+      ? 'MSstats'
+      : 'msqrob2';
+  const PipelineIcon = selectedPipeline === 'msqrob2' ? Dna : BarChart3;
 
   return (
     <div className="space-y-6">
@@ -232,7 +240,7 @@ function SummaryContent() {
       </section>
 
       {/* TMT Channel Mapping */}
-      {analysisType === 'tmt' && config.tmt_channel_mapping && (
+      {(analysisType === 'tmt' || analysisType === 'ptm') && config.tmt_channel_mapping && (
         <section className="bg-background border border-border rounded-lg">
           <SectionHeader icon={Table2} title="TMT Channel Mapping" collapsed={isCollapsed('tmt-mapping')} onToggle={() => toggleSection('tmt-mapping')} />
           {!isCollapsed('tmt-mapping') && (
@@ -296,8 +304,10 @@ function SummaryContent() {
           {/* Shared params */}
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="bg-surface rounded-lg p-3">
-              <span className="text-text-muted block text-xs">Organism</span>
-              <span className="text-text-primary font-medium">{organismLabel}</span>
+              <span className="text-text-muted block text-xs">{analysisType === 'ptm' ? 'FASTA Reference' : 'Organism'}</span>
+              <span className="text-text-primary font-medium capitalize">
+                {analysisType === 'ptm' ? config.ptm_fasta_source : organismLabel}
+              </span>
             </div>
             <div className="bg-surface rounded-lg p-3">
               <span className="text-text-muted block text-xs">Resolve Shared Peptides</span>
@@ -324,6 +334,24 @@ function SummaryContent() {
               <span className="text-text-primary font-medium">{config.min_psms_per_protein}</span>
             </div>
           </div>
+
+          {selectedPipeline === 'ptm' && (
+            <div className="space-y-2">
+              <h3 className="border-t border-border pt-2 text-xs font-semibold uppercase tracking-wider text-text-muted">PTM Parameters</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg bg-surface p-3">
+                  <span className="block text-xs text-text-muted">Target modification</span>
+                  <span className="font-medium text-text-primary">{config.ptm_target_modification}</span>
+                </div>
+                <div className="rounded-lg bg-surface p-3">
+                  <span className="block text-xs text-text-muted">Normalization</span>
+                  <span className="font-medium text-text-primary">
+                    {(config.ptm_normalization_method ?? 'background_peptide').replaceAll('_', ' ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* msqrob2 params */}
           {selectedPipeline === 'msqrob2' && (

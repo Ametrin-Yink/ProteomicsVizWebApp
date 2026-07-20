@@ -17,6 +17,7 @@ import { SessionManager } from '@/components/session/SessionManager';
 import { formatDuration, cn } from '@/lib/utils';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import type { LogEntry } from '@/types/processing';
+import { getVisualizationUrl } from '@/config/visualization-modules';
 
 import {
   Activity,
@@ -207,7 +208,7 @@ export function ProcessingContent() {
 
   useSessionValidation(sessionId);
 
-  const pipeline = (searchParams.get('pipeline') as 'msqrob2' | 'msstats') || 'msqrob2';
+  const pipeline = (searchParams.get('pipeline') as 'msqrob2' | 'msstats' | 'ptm') || 'msqrob2';
   const [startError, setStartError] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -485,7 +486,7 @@ export function ProcessingContent() {
       }, 1000);
 
       const redirectTimer = setTimeout(() => {
-        router.push(`/analysis/visualization?session_id=${sessionId}&pipeline=${pipeline}`);
+        router.push(getVisualizationUrl(sessionId, pipeline));
       }, 3000);
 
       return () => {
@@ -543,7 +544,7 @@ export function ProcessingContent() {
 
   const handleNavigateToResults = useCallback(() => {
     if (sessionId) {
-      router.push(`/analysis/visualization?session_id=${sessionId}&pipeline=${pipeline}`);
+      router.push(getVisualizationUrl(sessionId, pipeline));
     }
   }, [sessionId, pipeline, router]);
 

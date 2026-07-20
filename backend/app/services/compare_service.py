@@ -28,13 +28,33 @@ def accession_matches(value: object, protein_id: str) -> bool:
 
 def _load_de_file(session_dir: str, comparison: str) -> pd.DataFrame | None:
     """Load a single Diff_Expression file for a comparison."""
-    file_path = Path(session_dir) / "results" / f"Diff_Expression_{comparison}.tsv"
-    # Fall back to simple format for single-comparison sessions
-    if not file_path.exists():
-        file_path = Path(session_dir) / "results" / "Diff_Expression.tsv"
+    results_dir = Path(session_dir) / "results"
+    stable_protein_path = results_dir / "protein_results.tsv"
+    if stable_protein_path.exists():
+        file_path = stable_protein_path
+    else:
+        file_path = results_dir / f"Diff_Expression_{comparison}.tsv"
         if not file_path.exists():
-            return None
+            file_path = results_dir / "Diff_Expression.tsv"
+            if not file_path.exists():
+                return None
     df = pd.read_csv(file_path, sep="\t")
+    if file_path.name == "protein_results.tsv":
+        if "Comparison" in df.columns:
+            df = df[df["Comparison"].astype(str) == comparison].copy()
+        if df.empty:
+            return None
+        accession_column = (
+            "ProteinAccession" if "ProteinAccession" in df.columns else "Protein"
+        )
+        df["accession"] = df[accession_column]
+        df["gene_name"] = df["Gene"] if "Gene" in df.columns else df["accession"]
+        df["log_fc"] = pd.to_numeric(df["log2FC"], errors="coerce")
+        df["pval"] = pd.to_numeric(df["pvalue"], errors="coerce")
+        df["adj_pval"] = pd.to_numeric(df["adj.pvalue"], errors="coerce").fillna(1.0)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        return df.dropna(subset=["log_fc", "pval"])
+
     # Normalize column names
     col_map = {
         "Master_Protein_Accessions": "accession",
