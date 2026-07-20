@@ -373,7 +373,6 @@ export function useSessionValidation(sessionId: string | null | undefined) {
 - `visualization/bionet/page.tsx`
 - `visualization/qc/page.tsx`
 - `visualization/compare/page.tsx`
-- `visualization/ptm-placeholder/page.tsx`
 
 ---
 
