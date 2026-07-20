@@ -841,6 +841,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization/manifest:
+    get:
+      tags:
+      - visualization
+      summary: Get Visualization Manifest
+      operationId: get_visualization_manifest_api_sessions__session_id__visualization_manifest_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/sessions/{session_id}/protein/{protein_id}/abundance:
     get:
       tags:
@@ -944,6 +969,89 @@ paths:
         schema:
           type: string
           title: Session Id
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comparison
+      - name: layer
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - ptm
+            - protein
+            - adjusted
+            type: string
+          - type: 'null'
+          title: Layer
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/ptm/results/download:
+    get:
+      tags:
+      - visualization
+      summary: Download Ptm Results
+      description: Download the immutable PTM result archive produced by the pipeline.
+      operationId: download_ptm_results_api_sessions__session_id__ptm_results_download_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/ptm/compare:
+    get:
+      tags:
+      - visualization
+      summary: Get Ptm Comparison Summary
+      description: Return compact, layer-specific comparison correlations.
+      operationId: get_ptm_comparison_summary_api_sessions__session_id__ptm_compare_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: layer
+        in: query
+        required: false
+        schema:
+          enum:
+          - ptm
+          - protein
+          - adjusted
+          type: string
+          default: ptm
+          title: Layer
       responses:
         '200':
           description: Successful Response
@@ -961,13 +1069,40 @@ paths:
       tags:
       - visualization
       summary: Get Ptm Site Abundance
-      description: 'Get per-site PTM abundance data across conditions.
-
-
-        Currently returns a placeholder -- full data will be available after
-
-        the PTM pipeline completes.'
+      description: Get summarized per-channel abundance for one PTM site.
       operationId: get_ptm_site_abundance_api_sessions__session_id__ptm_site__site_id__abundance_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: site_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Site Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/ptm/site/{site_id}:
+    get:
+      tags:
+      - visualization
+      summary: Get Ptm Site Details
+      description: Return localization, peptidoform, and supporting-PSM evidence for a site.
+      operationId: get_ptm_site_details_api_sessions__session_id__ptm_site__site_id__get
       parameters:
       - name: session_id
         in: path
@@ -2131,7 +2266,7 @@ paths:
       tags:
       - files
       summary: Upload Files
-      description: Upload files to the library. Only .txt and .csv accepted.
+      description: Upload supported analysis files to the global library.
       operationId: upload_files_api_files_upload_post
       parameters:
       - name: target_path
@@ -2313,7 +2448,7 @@ paths:
       tags:
       - files
       summary: Select Files For Session
-      description: Copy files from library to a session and parse them. Returns ProteomicsFileInfo list.
+      description: Copy role-specific files from the library into a session.
       operationId: select_files_for_session_api_files_select_post
       requestBody:
         content:
@@ -2955,6 +3090,11 @@ components:
           - type: 'null'
           title: Has Quan Value
           description: Whether the file has a Quan Value column (DIA)
+        detected_modifications:
+          items:
+            type: object
+          type: array
+          title: Detected Modifications
       type: object
       required:
       - filename
@@ -3016,6 +3156,14 @@ components:
           - type: 'null'
           title: Volcano Filters
           description: Volcano plot filter settings (foldChange, pValue, adjPValue, s0)
+        ptm_volcano_filters:
+          additionalProperties:
+            additionalProperties:
+              type: number
+            type: object
+          type: object
+          title: Ptm Volcano Filters
+          description: PTM volcano filters keyed by comparison label
       type: object
       required:
       - id
@@ -3262,6 +3410,33 @@ components:
           - type: 'null'
           title: Tmt Channel Mapping
           description: 'TMT channel → {group1: val1, ..., replicate: N} mapping'
+        ptm_target_modification:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ptm Target Modification
+        ptm_fasta_source:
+          anyOf:
+          - type: string
+            pattern: ^(human|mouse|custom)$
+          - type: 'null'
+          title: Ptm Fasta Source
+        ptm_background_normalization:
+          type: boolean
+          title: Ptm Background Normalization
+          default: true
+        ptm_normalization_method:
+          type: string
+          enum:
+          - background_peptide
+          - centered_median
+          - none
+          title: Ptm Normalization Method
+          default: background_peptide
+        ptm_imputation:
+          type: boolean
+          title: Ptm Imputation
+          default: true
       additionalProperties: false
       type: object
       title: SessionConfig
@@ -3331,6 +3506,10 @@ components:
         name:
           type: string
           title: Name
+        pipeline:
+          type: string
+          title: Pipeline
+          default: ''
         state:
           $ref: '#/components/schemas/SessionState'
         created_at:
@@ -3426,6 +3605,15 @@ components:
           - type: object
           - type: 'null'
           title: Volcano Filters
+        ptm_volcano_filters:
+          anyOf:
+          - additionalProperties:
+              additionalProperties:
+                type: number
+              type: object
+            type: object
+          - type: 'null'
+          title: Ptm Volcano Filters
       type: object
       title: VisualizationStateUpdate
       description: Partial update for visualization state (markers + volcano filters).
