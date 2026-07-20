@@ -21,6 +21,9 @@ from app.api.routes import (
     sessions,
     upload,
     visualization,
+    visualization_manifest,
+    visualization_proteins,
+    visualization_ptm,
 )
 from app.api.routes import (
     files as files_routes,
@@ -257,6 +260,21 @@ async def handle_cors_preflight(path: str):
 app.include_router(processing.router, prefix="/api/sessions", tags=["processing"])
 app.include_router(upload.router, prefix="/api/sessions", tags=["upload"])
 app.include_router(visualization.router, prefix="/api/sessions", tags=["visualization"])
+app.include_router(
+    visualization_manifest.router,
+    prefix="/api/sessions",
+    tags=["visualization"],
+)
+app.include_router(
+    visualization_proteins.router,
+    prefix="/api/sessions",
+    tags=["visualization"],
+)
+app.include_router(
+    visualization_ptm.router,
+    prefix="/api/sessions",
+    tags=["visualization"],
+)
 # Reports: session-scoped weblink upload + global report serving
 app.include_router(reports.router, prefix="/api/sessions", tags=["reports"])
 app.include_router(reports.global_router, prefix="/api", tags=["reports"])

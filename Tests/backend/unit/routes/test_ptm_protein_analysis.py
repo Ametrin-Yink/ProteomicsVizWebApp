@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
-from app.api.routes.visualization import _resolve_protein_analysis_file
+from app.api.routes.visualization import (
+    _resolve_protein_abundance_file,
+    _resolve_protein_analysis_file,
+)
 from app.core.config import settings
 from app.models.session import (
     ProteomicsFileInfo,
@@ -84,3 +87,37 @@ def test_rejects_ptm_protein_analysis_without_optional_protein(tmp_path):
         )
 
     assert error.value.status_code == 400
+
+
+def test_builds_ptm_protein_abundance_matrix_for_gsea_heatmaps(tmp_path):
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    de_file = results_dir / "ptm_protein_analysis.tsv"
+    pd.DataFrame(
+        {
+            "Master_Protein_Accessions": ["P1", "P2"],
+            "Gene_Name": ["GENE1", "GENE2"],
+        }
+    ).to_csv(de_file, sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "Protein": ["P1", "P1", "P2", "P2"],
+            "BioReplicate": ["Drug_1", "DMSO_1", "Drug_1", "DMSO_1"],
+            "Abundance": [12.0, 10.0, 7.0, 8.0],
+        }
+    ).to_csv(results_dir / "protein_summarized.tsv", sep="\t", index=False)
+
+    output_path = asyncio.run(
+        _resolve_protein_abundance_file(
+            _ptm_session(with_protein=True), results_dir, de_file
+        )
+    )
+
+    output = pd.read_csv(output_path, sep="\t")
+    assert output.columns.tolist() == [
+        "Master_Protein_Accessions",
+        "Gene_Name",
+        "DMSO_1",
+        "Drug_1",
+    ]
+    assert output.loc[output["Gene_Name"] == "GENE1", "Drug_1"].item() == 12.0

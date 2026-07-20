@@ -9,7 +9,6 @@ import json
 import logging
 import math
 import threading
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,10 +19,22 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.api.deps import get_session_store
+from app.api.routes.visualization_shared import (
+    FileCache,
+    create_response,
+)
+from app.api.routes.visualization_shared import (
+    build_sample_filter as _build_sample_filter,
+)
+from app.api.routes.visualization_shared import (
+    cache_key as _cache_key,
+)
+from app.api.routes.visualization_shared import (
+    visualization_cache as viz_cache,
+)
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.models.session import Session
-from app.services.compare_service import accession_matches
 from app.services.gsea_service import gsea_service
 from app.services.ptm_tmt_processor import read_fasta_subset
 from app.services.task_manager import (
@@ -32,7 +43,7 @@ from app.services.task_manager import (
     TaskTimeoutError,
     task_manager,
 )
-from app.utils.json_io import read_json_file, write_json_file
+from app.utils.json_io import read_json_file
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
 
@@ -88,160 +99,6 @@ router = APIRouter()
 logger = logging.getLogger("proteomics")
 
 
-# In-memory LRU cache for visualization results
-# Cache is keyed by session_id and file path, max 50 entries per type
-# Results are cached per session since files are immutable once written
-def _cache_key(session_id: str, *args) -> str:
-    """Generate a cache key from session_id and additional args."""
-    return f"{session_id}:{':'.join(str(a) for a in args)}"
-
-
-def create_response(data: Any) -> dict[str, Any]:
-    """Create standardized API response wrapper.
-
-    Args:
-        data: Response data
-
-    Returns:
-        Wrapped response with metadata
-    """
-    return {
-        "data": data,
-        "meta": {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "request_id": str(uuid.uuid4()),
-        },
-    }
-
-
-def _build_visualization_manifest(
-    session: Session, results_dir: Path
-) -> dict[str, Any]:
-    """Describe which visualization modules and data scopes a session supports."""
-    if session.pipeline != "ptm":
-        return {
-            "pipeline": session.pipeline,
-            "default_module": "volcano",
-            "modules": [
-                {
-                    "id": module_id,
-                    "visible": True,
-                    "enabled": True,
-                    "disabled_reason": None,
-                    "data_scopes": ["protein"],
-                }
-                for module_id in ("volcano", "qc", "gsea", "compare", "bionet")
-            ],
-        }
-
-    has_ptm = (results_dir / "ptm_site_results.tsv").exists()
-    has_protein = (results_dir / "protein_results.tsv").exists()
-    has_adjusted_ptm = (results_dir / "adjusted_ptm_results.tsv").exists()
-    comparison_count = len(session.config.comparisons or []) if session.config else 0
-
-    ptm_scopes = ["ptm"] if has_ptm else []
-    protein_scopes = ["protein"] if has_protein else []
-    adjusted_scopes = ["adjusted_ptm"] if has_adjusted_ptm else []
-    volcano_scopes = ptm_scopes + protein_scopes + adjusted_scopes
-    compare_enabled = has_ptm and comparison_count >= 2
-    compare_reason = None
-    if not has_ptm:
-        compare_reason = "PTM results are not available"
-    elif comparison_count < 2:
-        compare_reason = "At least two comparisons are required"
-
-    return {
-        "pipeline": "ptm",
-        "default_module": "volcano",
-        "modules": [
-            {
-                "id": "volcano",
-                "visible": True,
-                "enabled": has_ptm,
-                "disabled_reason": None if has_ptm else "PTM results are not available",
-                "data_scopes": volcano_scopes,
-            },
-            {
-                "id": "qc",
-                "visible": True,
-                "enabled": has_ptm,
-                "disabled_reason": None if has_ptm else "PTM results are not available",
-                "data_scopes": ptm_scopes + protein_scopes,
-            },
-            {
-                "id": "compare",
-                "visible": True,
-                "enabled": compare_enabled,
-                "disabled_reason": compare_reason,
-                "data_scopes": volcano_scopes,
-            },
-            {
-                "id": "gsea",
-                "visible": has_protein,
-                "enabled": has_protein,
-                "disabled_reason": None,
-                "data_scopes": protein_scopes,
-            },
-            {
-                "id": "bionet",
-                "visible": has_protein,
-                "enabled": has_protein,
-                "disabled_reason": None,
-                "data_scopes": protein_scopes,
-            },
-        ],
-    }
-
-
-@router.get("/{session_id}/visualization/manifest")
-async def get_visualization_manifest(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store),
-):
-    """Return the authoritative visualization capabilities for a session."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    results_dir = settings.sessions_dir / session_id / "results"
-    return create_response(_build_visualization_manifest(session, results_dir))
-
-
-class FileCache:
-    """Simple TTL-based file result cache for visualization endpoints."""
-
-    def __init__(self, max_size: int = 50):
-        self._max_size = max_size
-        self._cache: dict[str, tuple] = {}  # key -> (timestamp, result)
-
-    def get(self, key: str) -> Any:
-        if key in self._cache:
-            return self._cache[key][1]
-        return None
-
-    def set(self, key: str, value: Any) -> None:
-        # Evict oldest entries if at capacity
-        if len(self._cache) >= self._max_size:
-            oldest_key = min(self._cache, key=lambda k: self._cache[k][0])
-            del self._cache[oldest_key]
-        self._cache[key] = (datetime.now(UTC), value)
-
-    def invalidate(self, session_id: str) -> None:
-        """Remove all cached entries for a session."""
-        prefix = f"{session_id}:"
-        self._cache = {k: v for k, v in self._cache.items() if not k.startswith(prefix)}
-
-    def remove(self, key: str) -> None:
-        """Remove a single cache entry by exact key."""
-        self._cache.pop(key, None)
-
-    def clear(self) -> None:
-        self._cache.clear()
-
-
 def _resolve_de_file(results_dir: Path) -> Path | None:
     """Resolve the differential expression results file.
 
@@ -253,36 +110,6 @@ def _resolve_de_file(results_dir: Path) -> Path | None:
         return default
     candidates = sorted(results_dir.glob("Diff_Expression_*.tsv"))
     return candidates[0] if candidates else None
-
-
-def _build_sample_filter(session, comparison: str) -> list[str] | None:
-    """Build a list of condition name prefixes to filter sample columns by.
-
-    Parses the comparison name against session.config.comparisons to extract
-    the condition names that define which samples belong to this comparison.
-
-    Args:
-        session: Session object with config.comparisons
-        comparison: Comparison name (e.g. 'INCB224525_24h_vs_DMSO_24h')
-
-    Returns:
-        List of condition name prefixes, or None if no comparison specified
-    """
-    if not comparison:
-        return None
-    comparisons = session.config.comparisons if session.config else []
-    for comp in comparisons:
-        g1 = comp.get("group1", {})
-        g2 = comp.get("group2", {})
-        g1_str = "+".join(g1.values())
-        g2_str = "+".join(g2.values())
-        if f"{g1_str}_vs_{g2_str}" == comparison:
-            return list(g1.values()) + list(g2.values())
-    return None
-
-
-# Global cache instance
-viz_cache = FileCache(max_size=50)
 
 
 async def load_diff_expression_results(
@@ -1182,6 +1009,50 @@ async def _resolve_protein_analysis_file(
     return output_path
 
 
+async def _resolve_protein_abundance_file(
+    session: Session,
+    results_dir: Path,
+    de_file: Path,
+) -> Path:
+    """Return a wide protein abundance matrix for GSEA heatmaps."""
+    output_path = results_dir / "Protein_Abundances.tsv"
+    if output_path.exists() or session.pipeline != "ptm":
+        return output_path
+
+    summarized_path = results_dir / "protein_summarized.tsv"
+    if not summarized_path.exists():
+        return output_path
+
+    summarized, annotations = await asyncio.gather(
+        asyncio.to_thread(pd.read_csv, summarized_path, sep="\t"),
+        asyncio.to_thread(pd.read_csv, de_file, sep="\t"),
+    )
+    required_columns = {"Protein", "BioReplicate", "Abundance"}
+    if not required_columns.issubset(summarized.columns):
+        return output_path
+
+    matrix = summarized.pivot_table(
+        index="Protein",
+        columns="BioReplicate",
+        values="Abundance",
+        aggfunc="mean",
+    ).reset_index()
+    matrix = matrix.rename(columns={"Protein": "Master_Protein_Accessions"})
+    annotation_columns = ["Master_Protein_Accessions", "Gene_Name"]
+    if set(annotation_columns).issubset(annotations.columns):
+        gene_names = annotations[annotation_columns].drop_duplicates(
+            "Master_Protein_Accessions"
+        )
+        matrix = matrix.merge(gene_names, on="Master_Protein_Accessions", how="left")
+        ordered_columns = annotation_columns + [
+            column for column in matrix.columns if column not in annotation_columns
+        ]
+        matrix = matrix[ordered_columns]
+
+    await asyncio.to_thread(matrix.to_csv, output_path, sep="\t", index=False)
+    return output_path
+
+
 # Strong references to prevent background task GC
 _background_tasks: set[asyncio.Task] = set()
 
@@ -1563,7 +1434,7 @@ async def run_gsea_on_demand(
             detail="A GSEA run is already in progress for this session",
         )
 
-    protein_file = results_dir / "Protein_Abundances.tsv"
+    protein_file = await _resolve_protein_abundance_file(session, results_dir, de_file)
     gsea_output_dir = results_dir / "gsea" / request.comparison
 
     # Write initial "running" status before spawning background task so the
@@ -1906,571 +1777,3 @@ async def get_bionet_subnetwork(
     subnetwork = await read_json_file(subnetwork_path)
 
     return create_response(subnetwork)
-
-
-async def load_protein_abundance(
-    results_dir: Path,
-    protein_id: str,
-    session_id: str = "",
-    control: str = "",
-    treatment: str = "",
-    sample_filter: list[str] | None = None,
-) -> dict[str, Any]:
-    """Load protein abundance data from TSV file.
-
-    Args:
-        results_dir: Path to session results directory
-        protein_id: Protein accession ID
-        session_id: Session ID for cache keying
-        control: Control condition name for label matching
-        treatment: Treatment condition name for label matching
-        sample_filter: Optional list of condition name prefixes to filter samples by.
-                       Only sample columns starting with any of these prefixes are included.
-
-    Returns:
-        Protein abundance data dictionary matching frontend ProteinAbundance interface
-    """
-    filter_tag = ",".join(sorted(sample_filter)) if sample_filter else ""
-    cache_key = _cache_key(session_id, "protein_v2", protein_id, filter_tag)
-    cached = viz_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    abundance_file = results_dir / "Protein_Abundances.tsv"
-
-    if not abundance_file.exists():
-        return {"samples": [], "abundances": [], "conditions": []}
-
-    try:
-        df = await asyncio.to_thread(pd.read_csv, abundance_file, sep="\t")
-
-        # Find the protein row (handle multiple accessions separated by ;)
-        protein_row = df[
-            df["Master_Protein_Accessions"].map(
-                lambda value: accession_matches(value, protein_id)
-            )
-        ]
-
-        if protein_row.empty:
-            return {"samples": [], "abundances": [], "conditions": []}
-
-        # Get abundance columns (all columns except metadata)
-        metadata_cols = [
-            "Master_Protein_Accessions",
-            "Gene_Name",
-            "PSM_Count",
-            "psm_count",
-            "Protein",
-        ]
-        abundance_cols = [col for col in df.columns if col not in metadata_cols]
-
-        # Filter to comparison-relevant samples when sample_filter is provided
-        if sample_filter:
-            abundance_cols = [
-                col
-                for col in abundance_cols
-                if any(col.startswith(prefix) for prefix in sample_filter)
-            ]
-
-        # Build arrays for frontend format - include ALL samples, even with NA/0 values
-        samples = []
-        abundances = []
-        conditions = []
-
-        for col in abundance_cols:
-            samples.append(col)
-            value = protein_row.iloc[0].get(col)
-            # Convert NA to 0, otherwise reverse log2 transform
-            if pd.isna(value):
-                abundances.append(0.0)
-            else:
-                abundances.append(2.0 ** float(value))
-            # Infer condition from sample name using session config
-            condition = "Unknown"
-            if control and control.lower() in col.lower():
-                condition = "Control"
-            elif treatment and treatment.lower() in col.lower():
-                condition = "Treatment"
-            elif "DMSO" in col.upper() or "VEHICLE" in col.upper():
-                condition = "Control"
-            conditions.append(condition)
-
-        result = {
-            "samples": samples,
-            "abundances": abundances,
-            "conditions": conditions,
-        }
-        viz_cache.set(cache_key, result)
-        return result
-    except Exception as e:
-        logger.error(f"Error loading protein abundance: {e}")
-        return {"samples": [], "abundances": [], "conditions": []}
-
-
-@router.get("/{session_id}/protein/{protein_id}/abundance")
-async def get_protein_abundance(
-    session_id: str,
-    protein_id: str,
-    comparison: str = Query("", description="Comparison name to filter samples"),
-    store: SessionStore = Depends(get_session_store),
-):
-    """Get protein abundance data, optionally filtered by comparison."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    # Get results directory
-    results_dir = settings.sessions_dir / session_id / "results"
-
-    # Extract control/treatment from session config for condition labeling
-    control = session.config.control if session.config else ""
-    treatment = session.config.treatment if session.config else ""
-
-    # Build sample filter from comparison config
-    sample_filter = _build_sample_filter(session, comparison)
-
-    # Load protein abundance from file
-    abundance_data = await load_protein_abundance(
-        results_dir,
-        protein_id,
-        session_id,
-        control=control,
-        treatment=treatment,
-        sample_filter=sample_filter,
-    )
-
-    return create_response(abundance_data)
-
-
-async def load_peptide_abundance(
-    results_dir: Path,
-    protein_id: str,
-    session_id: str = "",
-    sample_filter: list[str] | None = None,
-) -> dict[str, Any]:
-    """Load peptide abundance data from Parquet or TSV file.
-
-    Aggregates PSMs into peptides by summing abundances for each unique
-    peptide sequence across samples. Applies normalization coefficients
-    from Step 6 so peptide abundances are on the same scale as protein abundances.
-
-    Args:
-        results_dir: Path to session results directory
-        protein_id: Protein accession ID
-        session_id: Session ID for cache keying
-        sample_filter: Optional list of condition name prefixes to filter samples by.
-
-    Returns:
-        Peptide abundance data dictionary matching frontend PeptideAbundanceData interface
-    """
-    filter_tag = ",".join(sorted(sample_filter)) if sample_filter else ""
-    cache_key = _cache_key(session_id, "peptide", protein_id, filter_tag)
-    cached = viz_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    # Load normalization coefficients from Step 6
-    norm_coeff_file = results_dir / "normalization_coefficients.tsv"
-    norm_factors = {}
-    if norm_coeff_file.exists():
-        try:
-            coeff_df = await asyncio.to_thread(pd.read_csv, norm_coeff_file, sep="\t")
-            for _, row in coeff_df.iterrows():
-                norm_factors[row["Sample"]] = float(row["LinearFactor"])
-            logger.debug(
-                f"Loaded normalization coefficients for {len(norm_factors)} samples"
-            )
-        except Exception as e:
-            logger.warning(f"Could not load normalization coefficients: {e}")
-
-    # Pipeline uses Parquet for performance, fall back to TSV for compatibility.
-    # MSstats saves PSM_Abundances.parquet; msqrob2 saves PSM_Combined.parquet.
-    psm_files = [
-        results_dir / "PSM_Abundances.parquet",
-        results_dir / "PSM_Combined.parquet",
-        results_dir / "PSM_Abundances.tsv",
-    ]
-
-    df = None
-    for psm_path in psm_files:
-        if not psm_path.exists():
-            continue
-        try:
-            if psm_path.suffix == ".parquet":
-                df = await asyncio.to_thread(pd.read_parquet, psm_path)
-            else:
-                df = await asyncio.to_thread(pd.read_csv, psm_path, sep="\t")
-            break
-        except Exception as e:
-            logger.error(f"Error reading {psm_path.name}: {e}")
-
-    if df is None:
-        return {"peptides": []}
-
-    try:
-        # Filter rows for this protein
-        protein_rows = df[
-            df["Master_Protein_Accessions"].map(
-                lambda value: accession_matches(value, protein_id)
-            )
-        ]
-
-        if protein_rows.empty:
-            return {"peptides": []}
-
-        # Get unique samples
-        all_samples = sorted(protein_rows["Sample_Origination"].dropna().unique())
-
-        # Filter to comparison-relevant samples when sample_filter is provided
-        if sample_filter:
-            all_samples = [
-                s
-                for s in all_samples
-                if any(str(s).startswith(prefix) for prefix in sample_filter)
-            ]
-
-        # Group by Sequence to aggregate PSMs into peptides
-        peptides = []
-        for sequence, group in protein_rows.groupby("Sequence"):
-            # Sum abundances per sample for this peptide
-            sample_sums = {}
-            for _, row in group.iterrows():
-                sample = str(row.get("Sample_Origination", ""))
-                abundance = row.get("Abundance")
-                if pd.notna(abundance) and sample:
-                    sample_sums[sample] = sample_sums.get(sample, 0) + float(abundance)
-
-            samples = []
-            abundances = []
-            for s in all_samples:
-                if s in sample_sums:
-                    samples.append(s)
-                    # Apply normalization coefficient if available
-                    val = sample_sums[s]
-                    if s in norm_factors:
-                        val *= norm_factors[s]
-                    abundances.append(val)
-
-            if samples:
-                peptides.append(
-                    {
-                        "peptide_id": sequence,
-                        "sequence": sequence,
-                        "abundances": abundances,
-                        "samples": samples,
-                    }
-                )
-
-        result = {"peptides": peptides}
-        viz_cache.set(cache_key, result)
-        return result
-    except Exception as e:
-        logger.error(f"Error loading peptide abundance: {e}")
-        return {"peptides": []}
-
-
-@router.get("/{session_id}/protein/{protein_id}/peptide")
-async def get_protein_peptide(
-    session_id: str,
-    protein_id: str,
-    comparison: str = Query("", description="Comparison name to filter samples"),
-    store: SessionStore = Depends(get_session_store),
-):
-    """Get peptide abundance data for a protein, optionally filtered by comparison."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    # Get results directory
-    results_dir = settings.sessions_dir / session_id / "results"
-
-    # Build sample filter from comparison config
-    sample_filter = _build_sample_filter(session, comparison)
-
-    # Load peptide data from file
-    peptide_data = await load_peptide_abundance(
-        results_dir, protein_id, session_id, sample_filter=sample_filter
-    )
-
-    return create_response(peptide_data)
-
-
-# ---- PTM-specific endpoints ----
-
-_PTM_COMPARISONS_DIR = "ptm_comparisons"
-
-
-def _json_safe_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
-    """Convert a result frame to records without non-JSON NaN/Infinity values."""
-    clean = frame.replace([np.inf, -np.inf], np.nan).astype(object)
-    return clean.where(pd.notna(clean), None).to_dict(orient="records")
-
-
-async def load_ptm_results(
-    results_dir: Path,
-) -> list[dict[str, Any]]:
-    """Load PTM differential expression results from the ptm_comparisons directory.
-
-    Reads PTM_Model_{label}.tsv, PROTEIN_Model_{label}.tsv, and ADJUSTED_Model_{label}.tsv
-    files and groups them by comparison label.
-
-    Mode A comparisons only have the PTM model file; Mode B has all three.
-
-    Args:
-        results_dir: Path to session results directory
-
-    Returns:
-        List of comparison dicts with ptm_model, protein_model, adjusted_model entries
-    """
-    stable_paths = {
-        "ptm_model": results_dir / "ptm_site_results.tsv",
-        "protein_model": results_dir / "protein_results.tsv",
-        "adjusted_model": results_dir / "adjusted_ptm_results.tsv",
-    }
-    if stable_paths["ptm_model"].exists():
-        frames: dict[str, pd.DataFrame] = {}
-        for layer, path in stable_paths.items():
-            if path.exists():
-                frames[layer] = await asyncio.to_thread(pd.read_csv, path, sep="\t")
-        ptm_frame = frames["ptm_model"]
-        if "Comparison" not in ptm_frame.columns:
-            ptm_frame["Comparison"] = (
-                ptm_frame["Label"].astype(str)
-                if "Label" in ptm_frame.columns
-                else "comparison"
-            )
-        comparisons = []
-        for label in ptm_frame["Comparison"].dropna().astype(str).unique():
-            comparison: dict[str, Any] = {"label": label}
-            for layer in stable_paths:
-                frame = frames.get(layer)
-                if frame is None:
-                    comparison[layer] = []
-                    continue
-                if "Comparison" in frame.columns:
-                    subset = frame[frame["Comparison"].astype(str) == label]
-                else:
-                    subset = frame
-                comparison[layer] = _json_safe_records(subset)
-            comparisons.append(comparison)
-        return comparisons
-
-    ptm_dir = results_dir / _PTM_COMPARISONS_DIR
-    if not ptm_dir.exists() or not ptm_dir.is_dir():
-        return []
-
-    # Find all PTM_Model_*.tsv files to discover available labels
-    ptm_files = sorted(ptm_dir.glob("PTM_Model_*.tsv"))
-    if not ptm_files:
-        return []
-
-    comparisons = []
-    for ptm_file in ptm_files:
-        label = ptm_file.stem[len("PTM_Model_") :]  # Extract label after "PTM_Model_"
-
-        comparison: dict[str, Any] = {"label": label}
-
-        # Load PTM model results
-        try:
-            df = await asyncio.to_thread(pd.read_csv, ptm_file, sep="\t")
-            comparison["ptm_model"] = _json_safe_records(df)
-        except Exception as e:
-            logger.error(f"Error loading PTM model {ptm_file.name}: {e}")
-            comparison["ptm_model"] = []
-
-        # Load protein model results (may not exist in Mode A)
-        protein_file = ptm_dir / f"PROTEIN_Model_{label}.tsv"
-        if protein_file.exists():
-            try:
-                df = await asyncio.to_thread(pd.read_csv, protein_file, sep="\t")
-                comparison["protein_model"] = _json_safe_records(df)
-            except Exception as e:
-                logger.error(f"Error loading protein model {protein_file.name}: {e}")
-                comparison["protein_model"] = []
-        else:
-            comparison["protein_model"] = []
-
-        # Load adjusted model results (may not exist in Mode A)
-        adjusted_file = ptm_dir / f"ADJUSTED_Model_{label}.tsv"
-        if adjusted_file.exists():
-            try:
-                df = await asyncio.to_thread(pd.read_csv, adjusted_file, sep="\t")
-                comparison["adjusted_model"] = _json_safe_records(df)
-            except Exception as e:
-                logger.error(f"Error loading adjusted model {adjusted_file.name}: {e}")
-                comparison["adjusted_model"] = []
-        else:
-            comparison["adjusted_model"] = []
-
-        comparisons.append(comparison)
-
-    return comparisons
-
-
-@router.get("/{session_id}/ptm/results")
-async def get_ptm_results(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store),
-):
-    """Get PTM differential expression results with three-model output.
-
-    Returns grouped data for each comparison label, containing the PTM model,
-    protein model, and adjusted model results where available.
-    Mode A comparisons only have the PTM model; Mode B has all three.
-    """
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    results_dir = settings.sessions_dir / session_id / "results"
-
-    comparisons = await load_ptm_results(results_dir)
-
-    return create_response({"comparisons": comparisons})
-
-
-@router.get("/{session_id}/ptm/site/{site_id}/abundance")
-async def get_ptm_site_abundance(
-    session_id: str,
-    site_id: str,
-    store: SessionStore = Depends(get_session_store),
-):
-    """Get summarized per-channel abundance for one PTM site."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    results_dir = settings.sessions_dir / session_id / "results"
-    summarized_path = results_dir / "ptm_site_summarized.tsv"
-    if summarized_path.exists():
-        frame = await asyncio.to_thread(pd.read_csv, summarized_path, sep="\t")
-        protein_column = "Protein" if "Protein" in frame.columns else "ProteinName"
-        frame = frame[frame[protein_column].astype(str) == site_id].copy()
-        records = _json_safe_records(frame)
-    else:
-        abundance_path = results_dir / "ptm_site_abundance.tsv"
-        if not abundance_path.exists():
-            records = []
-        else:
-            frame = await asyncio.to_thread(pd.read_csv, abundance_path, sep="\t")
-            frame = frame[frame["ProteinName"].astype(str) == site_id]
-            if not frame.empty:
-                frame = frame.groupby(
-                    ["Channel", "Condition", "Replicate"], as_index=False
-                )["NormalizedAbundance"].sum()
-                abundance = pd.to_numeric(frame["NormalizedAbundance"], errors="coerce")
-                frame["Abundance"] = np.where(abundance > 0, np.log2(abundance), np.nan)
-            records = _json_safe_records(frame)
-    return create_response({"site": site_id, "samples": records})
-
-
-@router.get("/{session_id}/ptm/site/{site_id}")
-async def get_ptm_site_details(
-    session_id: str,
-    site_id: str,
-    store: SessionStore = Depends(get_session_store),
-):
-    """Return localization, peptidoform, and supporting-PSM evidence for a site."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-    results_dir = settings.sessions_dir / session_id / "results"
-
-    async def load_matching(path: Path) -> list[dict[str, Any]]:
-        if not path.exists():
-            return []
-        frame = await asyncio.to_thread(pd.read_csv, path, sep="\t")
-        protein_column = "ProteinName" if "ProteinName" in frame.columns else "Protein"
-        frame = frame[frame[protein_column].astype(str) == site_id]
-        return _json_safe_records(frame)
-
-    metadata, evidence, peptidoforms = await asyncio.gather(
-        load_matching(results_dir / "ptm_site_metadata.tsv"),
-        load_matching(results_dir / "ptm_localization_evidence.tsv"),
-        load_matching(results_dir / "ptm_peptidoforms.tsv"),
-    )
-    if not metadata:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"PTM site {site_id} not found",
-        )
-    return create_response(
-        {
-            "site": metadata[0],
-            "evidence": evidence,
-            "peptidoforms": peptidoforms,
-        }
-    )
-
-
-@router.get("/{session_id}/ptm/qc/plots")
-async def get_ptm_qc_plots(
-    session_id: str,
-    store: SessionStore = Depends(get_session_store),
-):
-    """Get PTM-specific QC data."""
-    session = await store.get(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    results_dir = settings.sessions_dir / session_id / "results"
-    qc_file = results_dir / "ptm_qc.json"
-
-    default_result: dict[str, Any] = {
-        "total_sites": 0,
-        "significant_hits": 0,
-        "up_regulated": 0,
-        "down_regulated": 0,
-        "comparisons": [],
-    }
-
-    if not qc_file.exists():
-        return create_response(default_result)
-
-    try:
-        data = await read_json_file(qc_file)
-        needs_ptm_plots = not data.get("plots")
-        needs_protein_plots = bool(
-            data.get("results", {}).get("protein_layer_available")
-        ) and not data.get("protein_plots")
-        if needs_ptm_plots or needs_protein_plots:
-            from app.services.ptm_qc_calculator import (
-                calculate_protein_qc_plots,
-                calculate_ptm_qc_plots,
-            )
-
-            plot_data, protein_plot_data = await asyncio.gather(
-                calculate_ptm_qc_plots(results_dir)
-                if needs_ptm_plots
-                else asyncio.sleep(0, result=None),
-                calculate_protein_qc_plots(results_dir)
-                if needs_protein_plots
-                else asyncio.sleep(0, result=None),
-            )
-            if plot_data is not None:
-                data["plots"] = plot_data
-            if protein_plot_data is not None:
-                data["protein_plots"] = protein_plot_data
-            await write_json_file(qc_file, data, indent=2)
-        return create_response(data)
-    except Exception as e:
-        logger.error(f"Error loading PTM QC data: {e}")
-        return create_response(default_result)

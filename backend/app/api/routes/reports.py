@@ -748,7 +748,8 @@ async def get_report_protein_abundance(
     session_data = await asyncio.to_thread(get_report_session, report_id)
     sample_filter = _build_sample_filter_from_session(session_data, comparison)
 
-    from app.api.routes.visualization import create_response, load_protein_abundance
+    from app.api.routes.visualization import create_response
+    from app.api.routes.visualization_proteins import load_protein_abundance
 
     data = await load_protein_abundance(
         results_dir,
@@ -771,7 +772,8 @@ async def get_report_protein_peptide(
     session_data = await asyncio.to_thread(get_report_session, report_id)
     sample_filter = _build_sample_filter_from_session(session_data, comparison)
 
-    from app.api.routes.visualization import create_response, load_peptide_abundance
+    from app.api.routes.visualization import create_response
+    from app.api.routes.visualization_proteins import load_peptide_abundance
 
     data = await load_peptide_abundance(
         results_dir,

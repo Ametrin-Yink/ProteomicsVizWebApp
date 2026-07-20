@@ -127,6 +127,19 @@ def client(tmp_path, monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_modular_visualization_routes_are_registered_once():
+    expected = {
+        "/api/sessions/{session_id}/visualization/manifest",
+        "/api/sessions/{session_id}/protein/{protein_id}/abundance",
+        "/api/sessions/{session_id}/protein/{protein_id}/peptide",
+        "/api/sessions/{session_id}/ptm/results",
+        "/api/sessions/{session_id}/ptm/qc/plots",
+    }
+    registered = [route.path for route in app.routes if route.path in expected]
+
+    assert sorted(registered) == sorted(expected)
+
+
 class TestGetResults:
     def test_returns_paginated_results(self, client):
         response = client.get(
@@ -284,7 +297,7 @@ class TestVisualizationManifest:
         assert modules["bionet"]["visible"] is True
 
     def test_ptm_pipeline_hides_protein_modules_without_protein_results(self, tmp_path):
-        from app.api.routes.visualization import _build_visualization_manifest
+        from app.api.routes.visualization_manifest import build_visualization_manifest
 
         results_dir = tmp_path / "results"
         results_dir.mkdir()
@@ -301,7 +314,7 @@ class TestVisualizationManifest:
             ),
         )
 
-        manifest = _build_visualization_manifest(session, results_dir)
+        manifest = build_visualization_manifest(session, results_dir)
         modules = {module["id"]: module for module in manifest["modules"]}
 
         assert modules["compare"]["enabled"] is True
@@ -344,7 +357,7 @@ class TestPTMVisualization:
 
 @pytest.mark.asyncio
 async def test_protein_abundance_uses_exact_accession_match(tmp_path):
-    from app.api.routes.visualization import load_protein_abundance
+    from app.api.routes.visualization_proteins import load_protein_abundance
 
     pd.DataFrame(
         {
@@ -361,7 +374,7 @@ async def test_protein_abundance_uses_exact_accession_match(tmp_path):
 
 @pytest.mark.asyncio
 async def test_peptide_abundance_uses_exact_accession_match(tmp_path):
-    from app.api.routes.visualization import load_peptide_abundance
+    from app.api.routes.visualization_proteins import load_peptide_abundance
 
     pd.DataFrame(
         {
