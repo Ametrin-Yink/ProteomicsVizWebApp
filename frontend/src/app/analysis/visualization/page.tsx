@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
+import PTMVolcano from '@/components/visualization/PTMVolcano';
 import ProteinInfo from '@/components/visualization/ProteinInfo';
 import ProteinTable from '@/components/visualization/ProteinTable';
 import type { DEResult, DEResultsData, VolcanoFilters } from '@/types/api';
@@ -17,6 +19,7 @@ import {
 import { formatGroup, isSignificantVolcano, parseDelimited } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useVisualizationManifest } from '@/lib/visualization-context';
 
 
 function ResultsContent() {
@@ -460,6 +463,30 @@ function ResultsContent() {
 
 export { ResultsContent };
 
+function VisualizationResultsContent() {
+  const manifest = useVisualizationManifest();
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+
+  if (sessionId && !manifest) {
+    return <div className="m-8 h-96 animate-pulse rounded-lg bg-border/30" />;
+  }
+  if (!sessionId || manifest?.pipeline !== 'ptm') {
+    return <ResultsContent />;
+  }
+
+  return (
+    <div className="flex-1 bg-surface">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-6">
+          <h1 className="font-semibold text-text-primary">Differential Expression Results</h1>
+        </div>
+        <PTMVolcano sessionId={sessionId} />
+      </div>
+    </div>
+  );
+}
+
 export default function ResultsPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center">
@@ -469,7 +496,7 @@ export default function ResultsPage() {
       </div>
     </div>}>
       <ErrorBoundary>
-        <ResultsContent />
+        <VisualizationResultsContent />
       </ErrorBoundary>
     </Suspense>
   );

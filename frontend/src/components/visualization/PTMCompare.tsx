@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import SimilarityMatrix from '@/components/visualization/compare/SimilarityMatrix';
 import ProteinCompareWorkspace from '@/components/visualization/compare/ProteinCompareWorkspace';
+import { VisualizationScopeTabs } from '@/components/visualization/VisualizationScopeTabs';
 
 type Layer = 'ptm_model' | 'protein_model' | 'adjusted_model';
 
@@ -113,23 +114,18 @@ export default function PTMCompare({ sessionId }: { sessionId: string }) {
         <p className="mt-1 text-sm text-text-muted">
           Pearson correlation of log2 fold changes using feature IDs quantified in both comparisons.
         </p>
-        <div className="mt-4 flex flex-wrap gap-1">
-          {LAYERS.map((item) => {
-            const disabled = comparisons.some((comparison) => comparison[item.key].length === 0);
-            return (
-              <button
-                key={item.key}
-                type="button"
-                disabled={disabled}
-                onClick={() => setLayer(item.key)}
-                className={`rounded-md px-4 py-2 text-sm font-medium ${
-                  layer === item.key ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface'
-                } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
+        <div className="mt-4">
+          <VisualizationScopeTabs<Layer>
+            value={layer}
+            onChange={setLayer}
+            options={LAYERS.map((item) => ({
+              ...item,
+              disabled: comparisons.some(
+                (comparison) => comparison[item.key].length === 0,
+              ),
+              disabledReason: 'This result layer is not available for every comparison.',
+            }))}
+          />
         </div>
       </div>
 

@@ -1,18 +1,16 @@
 'use client';
 
 import React, { Suspense, useEffect, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { getVisualizationUrl } from '@/config/visualization-modules';
+import { useSearchParams } from 'next/navigation';
 import { SessionManager } from '@/components/session/SessionManager';
 import { VisualizationNavigation } from '@/components/visualization/VisualizationNavigation';
 import { ApiProvider } from '@/lib/api-context';
 import { sessionApiPrefix, visualizationApi } from '@/lib/api-client';
 import { useSessionValidation } from '@/hooks/use-session-validation';
 import type { VisualizationManifest } from '@/types/api';
+import { VisualizationManifestProvider } from '@/lib/visualization-context';
 
 function LayoutWithProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
   const apiPrefix = sessionId ? sessionApiPrefix(sessionId) : '';
@@ -41,24 +39,16 @@ function LayoutWithProvider({ children }: { children: React.ReactNode }) {
     return () => controller.abort();
   }, [apiPrefix]);
 
-  useEffect(() => {
-    if (
-      sessionId &&
-      manifest?.pipeline === 'ptm' &&
-      pathname === '/analysis/visualization'
-    ) {
-      router.replace(getVisualizationUrl(sessionId, 'ptm'));
-    }
-  }, [manifest?.pipeline, pathname, router, sessionId]);
-
   return (
     <ApiProvider apiPrefix={apiPrefix}>
-      {manifest && (
-        <VisualizationNavigation manifest={manifest} sessionId={sessionId} />
-      )}
-      <React.Fragment key={sessionId || 'no-session'}>
-        {children}
-      </React.Fragment>
+      <VisualizationManifestProvider manifest={manifest}>
+        {manifest && (
+          <VisualizationNavigation manifest={manifest} sessionId={sessionId} />
+        )}
+        <React.Fragment key={sessionId || 'no-session'}>
+          {children}
+        </React.Fragment>
+      </VisualizationManifestProvider>
     </ApiProvider>
   );
 }

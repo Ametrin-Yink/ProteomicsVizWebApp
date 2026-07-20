@@ -2,11 +2,14 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import QCPlots from '@/components/visualization/QCPlots';
+import { useSearchParams } from 'next/navigation';
+import QCWorkspace from '@/components/visualization/QCWorkspace';
+import PTMQCWorkspace from '@/components/visualization/PTMQCWorkspace';
 import type { QCData } from '@/types/api';
 import { visualizationApi, getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
+import { useVisualizationManifest } from '@/lib/visualization-context';
 
 function QCContent() {
   const { apiPrefix } = useApi();
@@ -34,8 +37,8 @@ function QCContent() {
           const conditions = new Set<string>();
           if (config.comparisons && config.comparisons.length > 0) {
             config.comparisons.forEach((comp) => {
-              Object.keys(comp.group1 || {}).forEach((c) => conditions.add(c));
-              Object.keys(comp.group2 || {}).forEach((c) => conditions.add(c));
+              conditions.add(formatGroup(comp.group1));
+              conditions.add(formatGroup(comp.group2));
             });
           }
           if (config.treatment) conditions.add(config.treatment);
@@ -112,80 +115,51 @@ function QCContent() {
           </p>
         </div>
 
-        {/* QC Summary Statistics */}
-        {data && (
-          <div data-testid="qc-summary" className="mb-6 bg-background rounded-lg border border-border p-4">
-            <h2 className="text-base font-semibold text-text-primary mb-4">QC Summary Statistics</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* PSM Statistics */}
-              <div className="bg-surface rounded-lg p-3">
-                <span className="text-sm text-text-secondary">Total Unique PSMs</span>
-                <span className="ml-2 text-xl font-semibold text-text-primary">
-                  {data.total_psms?.toLocaleString() || 'N/A'}
-                </span>
-              </div>
-              <div className="bg-surface rounded-lg p-3">
-                <span className="text-sm text-text-secondary">Avg Unique PSMs/Sample</span>
-                <span className="ml-2 text-xl font-semibold text-text-primary">
-                  {data.avg_psms_per_sample?.toLocaleString() || 'N/A'}
-                </span>
-              </div>
-
-              {/* Protein Statistics */}
-              <div className="bg-surface rounded-lg p-3">
-                <span className="text-sm text-text-secondary">Total Proteins</span>
-                <span className="ml-2 text-xl font-semibold text-text-primary">
-                  {data.total_proteins?.toLocaleString() || 'N/A'}
-                </span>
-              </div>
-              <div className="bg-surface rounded-lg p-3">
-                <span className="text-sm text-text-secondary">Avg Proteins/Sample</span>
-                <span className="ml-2 text-xl font-semibold text-text-primary">
-                  {data.avg_proteins_per_sample?.toLocaleString() || 'N/A'}
-                </span>
-              </div>
-
-              {/* CV Statistics - MIN-010: Show separate Protein and PSM CV */}
-              <div className="bg-surface rounded-lg p-3">
-                <span className="text-sm text-text-secondary">Avg Protein CV</span>
-                <span className="ml-2 text-xl font-semibold text-text-primary">
-                  {data.average_protein_cv?.toFixed(1) || data.average_cv?.toFixed(1) || 'N/A'}%
-                </span>
-              </div>
-              <div className="bg-surface rounded-lg p-3">
-                <span className="text-sm text-text-secondary">Avg PSM CV</span>
-                <span className="ml-2 text-xl font-semibold text-text-primary">
-                  {data.average_psm_cv?.toFixed(1) || 'N/A'}%
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* QC Plots Grid */}
-        {data ? (
-          <QCPlots
-            data={data}
-            conditionList={conditionList.length > 0 ? conditionList : undefined}
-            selectedComparison={selectedComparison}
-            onComparisonChange={setSelectedComparison}
-            comparisonOptions={comparisons.map((c) => {
-              const g1Label = formatGroup(c.group1);
-              const g2Label = formatGroup(c.group2);
-              return { value: `${g1Label}_vs_${g2Label}`, label: `${g1Label} vs ${g2Label}` };
-            })}
-          />
-        ) : (
-          <div className="bg-surface rounded-lg border border-border p-5 text-center">
-            <p className="text-text-secondary">No QC data available</p>
-          </div>
-        )}
+        <QCWorkspace
+          data={data}
+          labels={{ psm: 'PSM', entity: 'Protein', entityPlural: 'Proteins' }}
+          conditionList={conditionList.length > 0 ? conditionList : undefined}
+          selectedComparison={selectedComparison}
+          onComparisonChange={setSelectedComparison}
+          comparisonOptions={comparisons.map((comparison) => {
+            const group1 = formatGroup(comparison.group1);
+            const group2 = formatGroup(comparison.group2);
+            return { value: `${group1}_vs_${group2}`, label: `${group1} vs ${group2}` };
+          })}
+        />
       </div>
     </div>
   );
 }
 
 export { QCContent };
+
+function VisualizationQCContent() {
+  const manifest = useVisualizationManifest();
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+
+  if (sessionId && !manifest) {
+    return <div className="m-8 h-96 animate-pulse rounded-lg bg-border/30" />;
+  }
+  if (!sessionId || manifest?.pipeline !== 'ptm') {
+    return <QCContent />;
+  }
+
+  return (
+    <div className="flex-1 bg-surface">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-6">
+          <h1 className="font-semibold text-text-primary">QC Plots</h1>
+          <p className="mt-2 text-text-secondary">
+            Quality control visualizations for the PTM analysis
+          </p>
+        </div>
+        <PTMQCWorkspace sessionId={sessionId} />
+      </div>
+    </div>
+  );
+}
 
 export default function QCPage() {
   return (
@@ -197,7 +171,7 @@ export default function QCPage() {
         </div>
       </div>
     }>
-      <QCContent />
+      <VisualizationQCContent />
     </Suspense>
   );
 }

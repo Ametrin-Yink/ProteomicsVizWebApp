@@ -2,10 +2,13 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import PTMCompare from '@/components/visualization/PTMCompare';
 import ProteinCompareWorkspace from '@/components/visualization/compare/ProteinCompareWorkspace';
 import { getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { formatGroup } from '@/lib/utils';
+import { useVisualizationManifest } from '@/lib/visualization-context';
 
 function CompareContent() {
   const { apiPrefix } = useApi();
@@ -52,6 +55,30 @@ function CompareContent() {
 
 export { CompareContent };
 
+function VisualizationCompareContent() {
+  const manifest = useVisualizationManifest();
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session_id') || searchParams.get('session') || '';
+
+  if (sessionId && !manifest) {
+    return <div className="m-8 h-96 animate-pulse rounded-lg bg-border/30" />;
+  }
+  if (!sessionId || manifest?.pipeline !== 'ptm') {
+    return <CompareContent />;
+  }
+
+  return (
+    <div className="flex-1 bg-surface">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-6">
+          <h1 className="font-semibold text-text-primary">Compare Analysis</h1>
+        </div>
+        <PTMCompare sessionId={sessionId} />
+      </div>
+    </div>
+  );
+}
+
 export default function ComparePage() {
   return (
     <Suspense fallback={
@@ -59,7 +86,7 @@ export default function ComparePage() {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
       </div>
     }>
-      <CompareContent />
+      <VisualizationCompareContent />
     </Suspense>
   );
 }

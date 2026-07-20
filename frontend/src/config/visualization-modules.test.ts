@@ -9,7 +9,7 @@ import type { VisualizationManifest } from '@/types/api';
 describe('PTM visualization routing', () => {
   it('opens completed PTM sessions on the PTM volcano page', () => {
     expect(getVisualizationUrl('session-1', 'ptm')).toBe(
-      '/analysis/visualization/ptm-placeholder?session_id=session-1&pipeline=ptm&tab=volcano'
+      '/analysis/visualization?session_id=session-1&pipeline=ptm'
     );
   });
 

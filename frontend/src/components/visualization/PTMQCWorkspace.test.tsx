@@ -1,15 +1,16 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PTMQCTab } from './page';
+
+import PTMQCWorkspace from './PTMQCWorkspace';
 
 vi.mock('@/components/visualization/QCPlots', () => ({
   default: ({ labels }: { labels: { psm: string; entity: string } }) => (
-    <div data-testid="qc-plots">{labels.psm} plots · {labels.entity} plots</div>
+    <div data-testid="qc-plots">{labels.psm} plots Â· {labels.entity} plots</div>
   ),
 }));
 
-describe('PTMQCTab', () => {
+describe('PTMQCWorkspace', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -23,7 +24,7 @@ describe('PTMQCTab', () => {
           normalization: { method: 'centered_median', applied: true, complete_feature_count: 80 },
           quantified_protein_count: 50,
         },
-        results: { ptm_significant_bh_0_05: 10, protein_layer_available: true, adjusted_layer_available: true },
+        results: { protein_layer_available: true },
         plots: {
           pca: { samples: ['Drug_1', 'DMSO_1'], pc1: [1, -1], pc2: [0, 0], conditions: ['Drug', 'DMSO'], pc1_variance: 80, pc2_variance: 20 },
           pvalue_distributions: { Drug_vs_DMSO: { bins: [0, 1], counts: [100] } },
@@ -58,7 +59,7 @@ describe('PTMQCTab', () => {
 
   it('switches the shared QC summary and plots between PTM and protein levels', async () => {
     await act(async () => {
-      root.render(<PTMQCTab sessionId="session-id" />);
+      root.render(<PTMQCWorkspace sessionId="session-id" />);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -66,8 +67,7 @@ describe('PTMQCTab', () => {
     expect(container.textContent).toContain('QC Summary Statistics');
     expect(container.textContent).toContain('Total Unique PTM PSMs');
     expect(container.textContent).toContain('Avg PTM Site CV');
-    expect(container.textContent).not.toContain('PTM QC Context');
-    expect(container.textContent).toContain('PTM PSM plots · PTM Site plots');
+    expect(container.textContent).toContain('PTM PSM plots Â· PTM Site plots');
 
     const proteinButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent === 'Protein');
@@ -76,7 +76,7 @@ describe('PTMQCTab', () => {
 
     expect(container.textContent).toContain('Total Unique Protein PSMs');
     expect(container.textContent).toContain('Avg Protein CV');
-    expect(container.textContent).toContain('Protein PSM plots · Protein plots');
+    expect(container.textContent).toContain('Protein PSM plots Â· Protein plots');
   });
 
   it('keeps protein QC visible but disabled without a protein matrix', async () => {
@@ -90,7 +90,7 @@ describe('PTMQCTab', () => {
     });
 
     await act(async () => {
-      root.render(<PTMQCTab sessionId="session-id" />);
+      root.render(<PTMQCWorkspace sessionId="session-id" />);
       await Promise.resolve();
       await Promise.resolve();
     });

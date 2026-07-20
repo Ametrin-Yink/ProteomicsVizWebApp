@@ -10,6 +10,7 @@ import {
   VolcanoSummaryBar,
   VolcanoWorkspace,
 } from '@/components/visualization/VolcanoWorkspace';
+import { VisualizationScopeTabs } from '@/components/visualization/VisualizationScopeTabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getDataSource, updateVisualizationState } from '@/lib/api-client';
 import {
@@ -467,31 +468,23 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
         onBatchMark={handleBatchMark}
       />
 
-      <div className="mb-6 flex flex-wrap gap-1 rounded-lg border border-border bg-background p-3">
-        {LAYERS.map((item) => {
-          const disabled = item.key === 'protein'
-            ? comparison.protein_model.length === 0
-            : item.key === 'adjusted'
-              ? comparison.adjusted_model.length === 0
-              : false;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              disabled={disabled}
-              title={disabled ? 'A matched protein PSM file is required for this layer.' : item.description}
-              onClick={() => {
-                setLayer(item.key);
-                clearSelection();
-              }}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                layer === item.key ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface'
-              } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
+      <div className="mb-6">
+        <VisualizationScopeTabs<Layer>
+          value={layer}
+          onChange={(nextLayer) => {
+            setLayer(nextLayer);
+            clearSelection();
+          }}
+          options={LAYERS.map((item) => ({
+            ...item,
+            disabled: item.key === 'protein'
+              ? comparison.protein_model.length === 0
+              : item.key === 'adjusted'
+                ? comparison.adjusted_model.length === 0
+                : false,
+            disabledReason: 'A matched protein PSM file is required for this layer.',
+          }))}
+        />
       </div>
 
       <VolcanoWorkspace

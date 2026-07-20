@@ -187,35 +187,35 @@ export const PTM_VISUALIZATION_MODULES: VisualizationModule[] = [
   {
     id: 'volcano',
     label: 'Volcano',
-    href: '/analysis/visualization/ptm-placeholder?tab=volcano&pipeline=ptm',
+    href: '/analysis/visualization?pipeline=ptm',
     icon: ChartScatter,
     description: 'PTM differential expression volcano plot',
   },
   {
     id: 'qc',
     label: 'QC',
-    href: '/analysis/visualization/ptm-placeholder?tab=qc&pipeline=ptm',
+    href: '/analysis/visualization/qc?pipeline=ptm',
     icon: Activity,
     description: 'PTM quality control plots',
   },
   {
     id: 'compare',
     label: 'Compare',
-    href: '/analysis/visualization/ptm-placeholder?tab=compare&pipeline=ptm',
+    href: '/analysis/visualization/compare?pipeline=ptm',
     icon: GitCompare,
     description: 'Layer-aware correlation across matched PTM features or proteins',
   },
   {
     id: 'gsea',
     label: 'Protein GSEA',
-    href: '/analysis/visualization/gsea?tab=gsea&pipeline=ptm',
+    href: '/analysis/visualization/gsea?pipeline=ptm',
     icon: Spline,
     description: 'Gene Set Enrichment Analysis of the optional protein layer',
   },
   {
     id: 'bionet',
     label: 'Protein BioNet',
-    href: '/analysis/visualization/bionet?tab=bionet&pipeline=ptm',
+    href: '/analysis/visualization/bionet?pipeline=ptm',
     icon: ChartNetwork,
     description: 'Protein-protein interaction network from the optional protein layer',
   },
@@ -241,7 +241,7 @@ export function getModulesForManifest(
 export function getVisualizationUrl(sessionId: string, pipeline?: string | null): string {
   const encodedSessionId = encodeURIComponent(sessionId);
   if (pipeline === 'ptm') {
-    return `/analysis/visualization/ptm-placeholder?session_id=${encodedSessionId}&pipeline=ptm&tab=volcano`;
+    return `/analysis/visualization?session_id=${encodedSessionId}&pipeline=ptm`;
   }
   const pipelineParam = pipeline ? `&pipeline=${encodeURIComponent(pipeline)}` : '';
   return `/analysis/visualization?session_id=${encodedSessionId}${pipelineParam}`;
