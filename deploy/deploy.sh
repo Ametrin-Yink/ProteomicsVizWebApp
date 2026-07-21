@@ -146,7 +146,13 @@ as_app bash -c '
 ' _ "$FRONTEND_ENV" "$STAGING_DIR/frontend"
 
 echo "Verifying the R package environment"
-as_app Rscript -e 'packages <- c("msqrob2", "QFeatures", "limma", "MSstats", "MSstatsConvert", "MSstatsPTM", "MSstatsBioNet", "Biostrings", "BiocParallel", "SummarizedExperiment", "data.table", "matrixStats", "jsonlite", "arrow", "tzdb"); missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) stop(paste("Missing R packages:", paste(missing, collapse = ", "))); cat("R package check passed\n")'
+as_app bash -c '
+    set -Eeuo pipefail
+    set -a
+    source "$1"
+    set +a
+    Rscript -e '\''packages <- c("msqrob2", "QFeatures", "limma", "MSstats", "MSstatsConvert", "MSstatsPTM", "MSstatsBioNet", "Biostrings", "BiocParallel", "SummarizedExperiment", "data.table", "matrixStats", "jsonlite", "arrow", "tzdb"); missing <- packages[!vapply(packages, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) stop(paste("Missing R packages:", paste(missing, collapse = ", "))); cat("R package check passed\n")'\''
+' _ "$BACKEND_ENV"
 
 echo "Validating the release backend import"
 as_app bash -c '

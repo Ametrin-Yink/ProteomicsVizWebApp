@@ -18,6 +18,8 @@ Install Git, Python 3.12 with venv support, Node.js 22 with npm, R 4.5 or newer,
 Caddy 2.10 or newer, and the system libraries needed to build the Python and R
 dependencies. Install the R packages listed by
 `backend/scripts/install_r_packages.R` and verify them before the first release.
+`bootstrap-almalinux.sh` installs the required system packages; it does not
+silently update R packages during later application deployments.
 
 The service definitions expect `/usr/bin/python3`, `/usr/bin/npm`, and
 `/usr/bin/Rscript`. Update the unit or environment file deliberately if the
@@ -25,6 +27,17 @@ server installs a runtime elsewhere; do not depend on an interactive shell's
 `PATH`.
 
 ## One-time server setup
+
+The preferred setup is the reviewed bootstrap script:
+
+```bash
+sudo bash deploy/bootstrap-almalinux.sh
+```
+
+It installs distribution packages, creates the service account and directories,
+configures SELinux and the port-8000 firewalld rule, and installs Caddy and the
+systemd units. The equivalent individual file-installation steps are documented
+below for audit and recovery.
 
 Run these administrative steps after reviewing the paths and account names:
 
@@ -39,7 +52,8 @@ sudo install -d -m 0750 -o proteomicsviz -g proteomicsviz \
   /home/proteomicsviz/data/reports \
   /home/proteomicsviz/data/file-library \
   /home/proteomicsviz/data/protein-database \
-  /home/proteomicsviz/data/runtime
+  /home/proteomicsviz/data/runtime \
+  /home/proteomicsviz/R/library
 
 sudo install -d -m 0750 -o root -g proteomicsviz /etc/proteomicsviz
 sudo install -m 0640 -o root -g proteomicsviz \
@@ -60,6 +74,16 @@ sudo install -m 0644 -o root -g root deploy/Caddyfile /etc/caddy/Caddyfile
 Review both files under `/etc/proteomicsviz` before continuing. Populate
 `/home/proteomicsviz/data/protein-database` with the required FASTA and gene-name
 files. Do not copy Windows virtual environments, `node_modules`, or `.next`.
+
+Install the application R packages into the dedicated library after opening a
+new SSH login so membership in the `proteomicsviz` group is active:
+
+```bash
+cd /path/to/ProteomicsVizWebApp
+umask 0002
+R_LIBS_USER=/home/proteomicsviz/R/library \
+  Rscript backend/scripts/install_r_packages.R
+```
 
 Validate the gateway configuration and load the units:
 
