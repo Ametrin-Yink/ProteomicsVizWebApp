@@ -74,6 +74,9 @@ def inject_tmt_known_answers(file_path: Path) -> None:
         lines = handle.readlines()
     headers = lines[0].rstrip("\r\n").split("\t")
     accession_index = headers.index("Master Protein Accessions")
+    abundance_indexes = [
+        index for index, header in enumerate(headers) if header.startswith("Abundance ")
+    ]
     column_indexes = {
         accession: [headers.index(column) for column in columns]
         for accession, columns in targets.items()
@@ -87,6 +90,15 @@ def inject_tmt_known_answers(file_path: Path) -> None:
         accession = fields[accession_index]
         if accession not in targets:
             continue
+        if accession == "P25815":
+            observed = [
+                float(fields[index]) for index in abundance_indexes if fields[index]
+            ]
+            assert observed
+            fill_value = str(float(np.median(observed)))
+            for column_index in abundance_indexes:
+                if not fields[column_index]:
+                    fields[column_index] = fill_value
         for column_index in column_indexes[accession]:
             if not fields[column_index]:
                 continue

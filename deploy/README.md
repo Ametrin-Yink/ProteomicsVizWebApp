@@ -28,6 +28,13 @@ server installs a runtime elsewhere; do not depend on an interactive shell's
 
 ## One-time server setup
 
+Before exposing the report gateway, reserve `10.202.25.39` in DHCP or configure
+an equivalent static address. `NEXT_PUBLIC_REPORT_BASE_URL` is embedded in the
+frontend build, so an address change invalidates generated links until the
+frontend environment is updated and a new release is built. A descriptive
+hostname is recommended for administration but is not required while report
+URLs intentionally use the reserved IP address.
+
 The preferred setup is the reviewed bootstrap script:
 
 ```bash

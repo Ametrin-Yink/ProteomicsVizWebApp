@@ -37,6 +37,7 @@ desktop.ini
 node_modules/
 .npm/
 .next/
+.next-e2e/
 out/
 dist/
 *.tsbuildinfo
