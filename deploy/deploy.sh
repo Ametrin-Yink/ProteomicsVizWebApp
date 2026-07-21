@@ -55,7 +55,7 @@ done
 
 [[ $EUID -eq 0 ]] || die "Run this script through sudo"
 
-for command_name in caddy curl git npm python3 Rscript runuser ss systemctl systemd-analyze tar; do
+for command_name in caddy curl git npm python3 restorecon Rscript runuser ss systemctl systemd-analyze tar; do
     command -v "$command_name" >/dev/null 2>&1 || die "Missing command: $command_name"
 done
 
@@ -197,6 +197,7 @@ fi
 
 mv -- "$STAGING_DIR" "$RELEASE_DIR"
 STAGING_DIR=""
+restorecon -R "$RELEASE_DIR"
 
 CADDY_BACKUP=""
 CADDY_CHANGED=false

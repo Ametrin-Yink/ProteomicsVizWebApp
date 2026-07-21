@@ -81,6 +81,12 @@ install -d -m 0750 -o "$APP_USER" -g "$APP_GROUP" \
     "$APP_ROOT/data/runtime"
 install -d -m 2775 -o "$APP_USER" -g "$APP_GROUP" "$APP_ROOT/R/library"
 
+semanage fcontext --add --type usr_t "$APP_ROOT(/.*)?" 2>/dev/null || \
+    semanage fcontext --modify --type usr_t "$APP_ROOT(/.*)?"
+semanage fcontext --add --type var_lib_t "$APP_ROOT/data(/.*)?" 2>/dev/null || \
+    semanage fcontext --modify --type var_lib_t "$APP_ROOT/data(/.*)?"
+restorecon -R "$APP_ROOT"
+
 install -d -m 0750 -o root -g "$APP_GROUP" /etc/proteomicsviz
 if [[ ! -e /etc/proteomicsviz/backend.env ]]; then
     install -m 0640 -o root -g "$APP_GROUP" \
