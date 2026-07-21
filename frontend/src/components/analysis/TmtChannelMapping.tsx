@@ -220,12 +220,13 @@ export const TmtChannelMapping: React.FC<TmtChannelMappingProps> = ({ file, comp
 
   const removeColumn = (colName: string) => {
     if (!window.confirm(`Delete column "${colName}" and all its data? This cannot be undone.`)) return;
-    channels.forEach((channel) => {
-      const entry = tmtChannelMapping[channel];
-      if (!entry) return;
-      const { [colName]: _, ...rest } = entry;
-      updateChannelMapping(file.filename, channel, rest);
+    const current = useAnalysisStore.getState().config.tmt_channel_mapping ?? {};
+    const next = structuredClone(current);
+    const prefix = `${file.filename}::`;
+    Object.entries(next).forEach(([key, entry]) => {
+      if (key.startsWith(prefix)) delete entry[colName];
     });
+    setConfig({ tmt_channel_mapping: next });
   };
 
   const renameColumn = (oldName: string, newName: string) => {
