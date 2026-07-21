@@ -38,6 +38,6 @@
 
 # The full application is loopback-only. Reach it from the Windows development
 # PC through an SSH tunnel; do not open this listener in firewalld.
-127.0.0.1:8001 {
+http://127.0.0.1:8001 {
 	reverse_proxy 127.0.0.1:3000
 }
