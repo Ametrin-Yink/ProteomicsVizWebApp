@@ -86,7 +86,8 @@ test('PTM sessions use the PTM workspace and capability-gated navigation', async
   await expect(page.getByText(/PTM sites/).first()).toBeVisible();
   await expect(page.getByTestId('compare-tab')).toHaveAttribute('aria-disabled', 'true');
   await expect(page.getByTestId('gsea-tab')).toHaveCount(0);
-  await expect(page.getByTestId('download-ptm-results-btn')).toHaveAttribute(
+  await expect(page.getByTestId('export-report-btn')).toHaveText(/Export/);
+  await expect(page.getByRole('link', { name: 'Download Results' })).toHaveAttribute(
     'href',
     `/api/sessions/${sessionId}/ptm/results/download`,
   );
