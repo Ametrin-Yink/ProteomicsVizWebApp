@@ -22,7 +22,7 @@ import { VisualizationPipelineWorkspace } from '@/components/visualization/Visua
 
 
 function ResultsContent() {
-  const { apiPrefix } = useApi();
+  const { apiPrefix, canPersistVisualizationState } = useApi();
   const addToast = useUIStore((s) => s.addToast);
 
   const [data, setData] = useState<DEResultsData | null>(null);
@@ -252,7 +252,7 @@ function ResultsContent() {
 
   // Save markers to backend when they change (debounced)
   useEffect(() => {
-    if (!apiPrefix) return;
+    if (!apiPrefix || !canPersistVisualizationState) return;
     const markersObj: Record<string, string[]> = {};
     for (const [comp, set] of Object.entries(markedProteins)) {
       if (set.size > 0) markersObj[comp] = Array.from(set);
@@ -265,11 +265,11 @@ function ResultsContent() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [markedProteins, apiPrefix]);
+  }, [markedProteins, apiPrefix, canPersistVisualizationState]);
 
   // Save filters to backend when they change (debounced)
   useEffect(() => {
-    if (!apiPrefix) return;
+    if (!apiPrefix || !canPersistVisualizationState) return;
     const timer = setTimeout(async () => {
       try {
         await updateVisualizationState(apiPrefix, { volcano_filters: filters });
@@ -278,7 +278,7 @@ function ResultsContent() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [filters, apiPrefix]);
+  }, [filters, apiPrefix, canPersistVisualizationState]);
 
   const comparisonLabel = useMemo(() => {
     if (selectedComparison) {

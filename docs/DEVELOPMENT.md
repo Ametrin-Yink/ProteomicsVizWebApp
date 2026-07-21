@@ -62,3 +62,24 @@ under `Tests/fixtures/`. Release qualification covers TMT and DIA only; PTM is
 omitted.
 
 See `AGENTS/07-testing.md` for the required first-principles test quality standard.
+
+## Shared report development
+
+Shared report pages use `/reports/{share_token}` and the capability-scoped API at
+`/api/shared-reports/{share_token}`. The internal `/api/reports` surface is for
+management and must not be exposed by the public production listener.
+
+Local development can omit `NEXT_PUBLIC_REPORT_BASE_URL`; generated links then
+use the current browser origin. Production builds must set it to the public
+report gateway. Set `REPORTS_DIR` to a persistent directory outside the Git
+checkout on the server.
+
+Run the focused report checks with:
+
+```powershell
+backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit/services/test_report_store.py Tests/backend/unit/services/test_report_generator.py Tests/backend/integration/routes/test_report_routes.py -q
+npm --prefix frontend test -- --run src/components/layout/AppShell.test.tsx src/lib/__tests__/api-client-contract.test.ts
+```
+
+See `docs/REPORT_SHARING.md` and `deploy/Caddyfile` for the security boundary and
+production port layout.

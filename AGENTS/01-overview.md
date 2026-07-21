@@ -2,6 +2,11 @@
 
 Full-stack scientific web application for proteomics data analysis and visualization. Researchers upload PSM (peptide-spectrum match) CSV files, configure experimental conditions, and get differential protein abundance analysis with interactive visualizations.
 
+Completed sessions can be published as self-contained interactive reports. Public
+report access uses a random capability token and a separate shared-report API;
+internal report IDs remain on the management surface. See
+`docs/REPORT_SHARING.md` before changing report routes or deployment exposure.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -40,9 +45,12 @@ ProteomicsVizWebApp/
 │   ├── e2e/                   # Playwright E2E
 │   └── fixtures/              # Test data
 ├── AGENTS/                    # Developer guides
+├── deploy/                    # Production gateway allowlist
 ├── docs/
-│   └── openapi.yaml           # API specification
-└── backend/sessions/          # Runtime session storage
+│   ├── api/openapi.yaml       # API specification
+│   └── REPORT_SHARING.md      # Report security/deployment contract
+├── backend/sessions/          # Runtime session storage
+└── backend/reports/           # Default local report storage
 ```
 
 ## Color Scheme

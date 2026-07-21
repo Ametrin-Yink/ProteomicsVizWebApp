@@ -3,6 +3,18 @@ import type { NextConfig } from "next";
 const backendUrl = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
 const nextConfig: NextConfig = {
+  async headers() {
+    return [
+      {
+        source: '/reports/:shareToken',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       {

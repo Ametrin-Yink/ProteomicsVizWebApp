@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Trash2, ExternalLink, Loader2, Check, X, Pencil } from 'lucide-react';
-import { exportApi } from '@/lib/api-client';
+import { Trash2, ExternalLink, Loader2, Check, X, Pencil, Copy, RotateCcw } from 'lucide-react';
+import { exportApi, reportWebUrl } from '@/lib/api-client';
+import { copyText } from '@/lib/clipboard';
 
 interface ReportItem {
   report_id: string;
+  share_token: string;
   name: string;
   session_id: string;
   session_name: string;
@@ -17,6 +19,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,6 +88,27 @@ export default function ReportsPage() {
     }
   };
 
+  const handleCopyLink = async (report: ReportItem) => {
+    if (await copyText(reportWebUrl(report.share_token))) {
+      setCopiedId(report.report_id);
+      window.setTimeout(() => setCopiedId(null), 1500);
+    }
+  };
+
+  const handleRotateLink = async (reportId: string) => {
+    if (!confirm('Replace this report link? The current link will stop working.')) return;
+    try {
+      const result = await exportApi.rotateShareToken(reportId);
+      setReports((prev) => prev.map((report) => (
+        report.report_id === reportId
+          ? { ...report, share_token: result.share_token }
+          : report
+      )));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Link replacement failed');
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-bold mb-6">Reports</h1>
@@ -111,9 +135,9 @@ export default function ReportsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left px-4 py-3 text-sm font-semibold w-[40%]">Name</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold w-[40%]">Experiment</th>
-                <th className="text-right px-4 py-3 text-sm font-semibold w-[20%]">Actions</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold w-[35%]">Name</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold w-[35%]">Experiment</th>
+                <th className="text-right px-4 py-3 text-sm font-semibold w-[30%]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -160,13 +184,29 @@ export default function ReportsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <a
-                        href={`/reports/${r.report_id}`}
+                        href={`/reports/${r.share_token}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 px-3 py-1.5 text-sm bg-surface hover:bg-border rounded-lg transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5" /> Open
                       </a>
+                      <button
+                        onClick={() => handleCopyLink(r)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm bg-surface hover:bg-border rounded-lg transition-colors"
+                        title="Copy shared report link"
+                      >
+                        {copiedId === r.report_id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedId === r.report_id ? 'Copied' : 'Copy'}
+                      </button>
+                      <button
+                        onClick={() => handleRotateLink(r.report_id)}
+                        className="p-2 text-text-secondary hover:bg-surface rounded-lg transition-colors"
+                        title="Replace shared link"
+                        aria-label={`Replace shared link for ${r.name}`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => handleDelete(r.report_id)}
                         className="flex items-center gap-1 px-3 py-1.5 text-sm text-error hover:bg-error/5 rounded-lg transition-colors"

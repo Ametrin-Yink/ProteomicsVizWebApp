@@ -100,16 +100,14 @@ def make_completed_session(sessions_dir: Path, session_id: str) -> Path:
 
 def test_generate_copies_all_expected_files(temp_dirs):
     from app.services.report_generator import generate_report
-    from app.services.report_store import create_report
+    from app.services.report_store import create_report, get_report_staging_dir
 
-    sessions_dir, reports_dir = temp_dirs
+    sessions_dir, _reports_dir = temp_dirs
     session_id = "abc-123-def"
     make_completed_session(sessions_dir, session_id)
 
     meta = create_report("My Report", session_id, "Test Experiment")
-    report_dir = reports_dir / meta["report_id"]
-    report_dir.mkdir(parents=True, exist_ok=True)
-    (report_dir / "report.json").write_text(json.dumps(meta))
+    report_dir = get_report_staging_dir(meta["report_id"])
 
     generate_report(session_id, meta["report_id"])
 
@@ -132,16 +130,14 @@ def test_generate_copies_all_expected_files(temp_dirs):
 
 def test_generate_excludes_uploads_and_pipeline_state(temp_dirs):
     from app.services.report_generator import generate_report
-    from app.services.report_store import create_report
+    from app.services.report_store import create_report, get_report_staging_dir
 
-    sessions_dir, reports_dir = temp_dirs
+    sessions_dir, _reports_dir = temp_dirs
     session_id = "abc-456"
     make_completed_session(sessions_dir, session_id)
 
     meta = create_report("R", session_id, "E")
-    report_dir = reports_dir / meta["report_id"]
-    report_dir.mkdir(parents=True, exist_ok=True)
-    (report_dir / "report.json").write_text(json.dumps(meta))
+    report_dir = get_report_staging_dir(meta["report_id"])
 
     generate_report(session_id, meta["report_id"])
 

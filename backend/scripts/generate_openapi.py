@@ -20,6 +20,7 @@ def _schema_text() -> str:
     os.environ["SESSIONS_DIR"] = str(isolated_runtime)
     os.environ["FILE_LIBRARY_DIR"] = str(isolated_runtime)
     os.environ["PROTEIN_DATABASE_DIR"] = str(isolated_runtime)
+    os.environ["REPORTS_DIR"] = str(isolated_runtime)
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(BACKEND_ROOT))
 

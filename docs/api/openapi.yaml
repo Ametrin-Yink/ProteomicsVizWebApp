@@ -1168,6 +1168,12 @@ paths:
         schema:
           type: string
           title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportNameRequest'
       responses:
         '200':
           description: Successful Response
@@ -1183,7 +1189,7 @@ paths:
   /api/reports:
     get:
       tags:
-      - reports
+      - report-management
       summary: Get Reports
       description: List all reports.
       operationId: get_reports_api_reports_get
@@ -1194,36 +1200,9 @@ paths:
             application/json:
               schema: {}
   /api/reports/{report_id}:
-    get:
-      tags:
-      - reports
-      summary: Get Report Meta
-      description: 'Return report metadata and session data in a shape compatible with
-
-        getDataSource on the frontend (config, markers, etc. at top level).'
-      operationId: get_report_meta_api_reports__report_id__get
-      parameters:
-      - name: report_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Report Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
     patch:
       tags:
-      - reports
+      - report-management
       summary: Rename Report
       description: Rename a report.
       operationId: rename_report_api_reports__report_id__patch
@@ -1234,6 +1213,12 @@ paths:
         schema:
           type: string
           title: Report Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportNameRequest'
       responses:
         '200':
           description: Successful Response
@@ -1248,7 +1233,7 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     delete:
       tags:
-      - reports
+      - report-management
       summary: Delete Report Endpoint
       description: Delete a report.
       operationId: delete_report_endpoint_api_reports__report_id__delete
@@ -1271,13 +1256,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/results:
-    get:
+  /api/reports/{report_id}/share-token/rotate:
+    post:
       tags:
-      - reports
-      summary: Get Report Results
-      description: Get paginated DE results from a report.
-      operationId: get_report_results_api_reports__report_id__results_get
+      - report-management
+      summary: Rotate Report Share Token
+      description: Revoke the old shared link and return a replacement.
+      operationId: rotate_report_share_token_api_reports__report_id__share_token_rotate_post
       parameters:
       - name: report_id
         in: path
@@ -1285,6 +1270,60 @@ paths:
         schema:
           type: string
           title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Meta
+      description: 'Return report metadata and session data in a shape compatible with
+
+        getDataSource on the frontend (config, markers, etc. at top level).'
+      operationId: get_report_meta_api_shared_reports__share_token__get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/results:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Results
+      description: Get paginated DE results from a report.
+      operationId: get_report_results_api_shared_reports__share_token__results_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
       - name: comparison
         in: query
         required: false
@@ -1349,20 +1388,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/qc/plots:
+  /api/shared-reports/{share_token}/qc/plots:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Qc Plots
       description: Get QC plot data.
-      operationId: get_report_qc_plots_api_reports__report_id__qc_plots_get
+      operationId: get_report_qc_plots_api_shared_reports__share_token__qc_plots_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1375,20 +1414,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/gsea/status:
+  /api/shared-reports/{share_token}/gsea/status:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Gsea Status
       description: Read GSEA run status from the report's gsea_run_status.json.
-      operationId: get_report_gsea_status_api_reports__report_id__gsea_status_get
+      operationId: get_report_gsea_status_api_shared_reports__share_token__gsea_status_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1401,20 +1440,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/gsea/run:
+  /api/shared-reports/{share_token}/gsea/run:
     post:
       tags:
-      - reports
+      - shared-reports
       summary: Run Report Gsea
       description: Run GSEA on report data.
-      operationId: run_report_gsea_api_reports__report_id__gsea_run_post
+      operationId: run_report_gsea_api_shared_reports__share_token__gsea_run_post
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportGseaRunRequest'
       responses:
         '200':
           description: Successful Response
@@ -1427,20 +1472,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/gsea/{database}:
+  /api/shared-reports/{share_token}/gsea/{database}:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Gsea Results
       description: Get paginated GSEA results for a database.
-      operationId: get_report_gsea_results_api_reports__report_id__gsea__database__get
+      operationId: get_report_gsea_results_api_shared_reports__share_token__gsea__database__get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       - name: database
         in: path
         required: true
@@ -1511,20 +1556,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/gsea/{database}/plot:
+  /api/shared-reports/{share_token}/gsea/{database}/plot:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Gsea Plot
       description: Get GSEA enrichment plot data for a specific pathway.
-      operationId: get_report_gsea_plot_api_reports__report_id__gsea__database__plot_get
+      operationId: get_report_gsea_plot_api_shared_reports__share_token__gsea__database__plot_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       - name: database
         in: path
         required: true
@@ -1556,20 +1601,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/gsea/{database}/heatmap:
+  /api/shared-reports/{share_token}/gsea/{database}/heatmap:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Gsea Heatmap
       description: Get GSEA heatmap data (z-scores for leading-edge genes).
-      operationId: get_report_gsea_heatmap_api_reports__report_id__gsea__database__heatmap_get
+      operationId: get_report_gsea_heatmap_api_shared_reports__share_token__gsea__database__heatmap_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       - name: database
         in: path
         required: true
@@ -1601,20 +1646,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/bionet/run:
+  /api/shared-reports/{share_token}/bionet/run:
     post:
       tags:
-      - reports
+      - shared-reports
       summary: Run Report Bionet
       description: Run BioNet on report data.
-      operationId: run_report_bionet_api_reports__report_id__bionet_run_post
+      operationId: run_report_bionet_api_shared_reports__share_token__bionet_run_post
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportBioNetRunRequest'
       responses:
         '200':
           description: Successful Response
@@ -1627,20 +1678,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/bionet/status:
+  /api/shared-reports/{share_token}/bionet/status:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Bionet Status
       description: Read BioNet run status from the report.
-      operationId: get_report_bionet_status_api_reports__report_id__bionet_status_get
+      operationId: get_report_bionet_status_api_shared_reports__share_token__bionet_status_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1653,20 +1704,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/bionet/subnetwork:
+  /api/shared-reports/{share_token}/bionet/subnetwork:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Bionet Subnetwork
       description: Return the BioNet subnetwork JSON.
-      operationId: get_report_bionet_subnetwork_api_reports__report_id__bionet_subnetwork_get
+      operationId: get_report_bionet_subnetwork_api_shared_reports__share_token__bionet_subnetwork_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1679,20 +1730,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/protein/{protein_id}/abundance:
+  /api/shared-reports/{share_token}/protein/{protein_id}/abundance:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Protein Abundance
       description: Get protein abundance data, optionally filtered by comparison.
-      operationId: get_report_protein_abundance_api_reports__report_id__protein__protein_id__abundance_get
+      operationId: get_report_protein_abundance_api_shared_reports__share_token__protein__protein_id__abundance_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       - name: protein_id
         in: path
         required: true
@@ -1718,20 +1769,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/protein/{protein_id}/peptide:
+  /api/shared-reports/{share_token}/protein/{protein_id}/peptide:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Protein Peptide
       description: Get peptide abundance data for a protein.
-      operationId: get_report_protein_peptide_api_reports__report_id__protein__protein_id__peptide_get
+      operationId: get_report_protein_peptide_api_shared_reports__share_token__protein__protein_id__peptide_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       - name: protein_id
         in: path
         required: true
@@ -1757,20 +1808,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/compare/protein-correlation:
+  /api/shared-reports/{share_token}/compare/protein-correlation:
     post:
       tags:
-      - reports
+      - shared-reports
       summary: Run Report Protein Correlation
       description: Run protein-correlation analysis on report data.
-      operationId: run_report_protein_correlation_api_reports__report_id__compare_protein_correlation_post
+      operationId: run_report_protein_correlation_api_shared_reports__share_token__compare_protein_correlation_post
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportProteinCorrelationRequest'
       responses:
         '200':
           description: Successful Response
@@ -1785,17 +1842,17 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Protein Correlation Results
       description: Return protein-correlation results.
-      operationId: get_report_protein_correlation_results_api_reports__report_id__compare_protein_correlation_get
+      operationId: get_report_protein_correlation_results_api_shared_reports__share_token__compare_protein_correlation_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1808,20 +1865,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/compare/protein-correlation/status:
+  /api/shared-reports/{share_token}/compare/protein-correlation/status:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Protein Correlation Status
       description: Read protein-correlation run status.
-      operationId: get_report_protein_correlation_status_api_reports__report_id__compare_protein_correlation_status_get
+      operationId: get_report_protein_correlation_status_api_shared_reports__share_token__compare_protein_correlation_status_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1834,20 +1891,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/compare/comparison-correlation:
+  /api/shared-reports/{share_token}/compare/comparison-correlation:
     post:
       tags:
-      - reports
+      - shared-reports
       summary: Run Report Comparison Correlation
       description: Run comparison-correlation analysis on report data.
-      operationId: run_report_comparison_correlation_api_reports__report_id__compare_comparison_correlation_post
+      operationId: run_report_comparison_correlation_api_shared_reports__share_token__compare_comparison_correlation_post
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportComparisonCorrelationRequest'
       responses:
         '200':
           description: Successful Response
@@ -1862,17 +1925,17 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Comparison Correlation Results
       description: Return comparison-correlation results.
-      operationId: get_report_comparison_correlation_results_api_reports__report_id__compare_comparison_correlation_get
+      operationId: get_report_comparison_correlation_results_api_shared_reports__share_token__compare_comparison_correlation_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1885,20 +1948,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/compare/comparison-correlation/status:
+  /api/shared-reports/{share_token}/compare/comparison-correlation/status:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Comparison Correlation Status
       description: Read comparison-correlation run status.
-      operationId: get_report_comparison_correlation_status_api_reports__report_id__compare_comparison_correlation_status_get
+      operationId: get_report_comparison_correlation_status_api_shared_reports__share_token__compare_comparison_correlation_status_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -1911,20 +1974,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/compare/venn:
+  /api/shared-reports/{share_token}/compare/venn:
     post:
       tags:
-      - reports
+      - shared-reports
       summary: Run Report Venn
       description: Compute Venn diagram data for report comparisons.
-      operationId: run_report_venn_api_reports__report_id__compare_venn_post
+      operationId: run_report_venn_api_shared_reports__share_token__compare_venn_post
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
+          title: Share Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportVennRequest'
       responses:
         '200':
           description: Successful Response
@@ -1937,46 +2006,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/compare/proteins:
+  /api/shared-reports/{share_token}/compare/proteins:
     get:
       tags:
-      - reports
+      - shared-reports
       summary: Get Report Compare Proteins
       description: List all proteins across all comparisons.
-      operationId: get_report_compare_proteins_api_reports__report_id__compare_proteins_get
+      operationId: get_report_compare_proteins_api_shared_reports__share_token__compare_proteins_get
       parameters:
-      - name: report_id
+      - name: share_token
         in: path
         required: true
         schema:
           type: string
-          title: Report Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/reports/{report_id}/visualization-state:
-    patch:
-      tags:
-      - reports
-      summary: Patch Report Visualization State
-      description: Update markers and/or volcano filters in the report's session.json.
-      operationId: patch_report_visualization_state_api_reports__report_id__visualization_state_patch
-      parameters:
-      - name: report_id
-        in: path
-        required: true
-        schema:
-          type: string
-          title: Report Id
+          title: Share Token
       responses:
         '200':
           description: Successful Response
@@ -3101,6 +3144,210 @@ components:
       - size
       title: ProteomicsFileInfo
       description: Proteomics file metadata — user-provided, not filename-parsed.
+    ReportBioNetRunRequest:
+      properties:
+        comparison:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Comparison
+        pvalue_cutoff:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Pvalue Cutoff
+          default: 0.05
+        logfc_cutoff:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Logfc Cutoff
+          default: 0.5
+        statement_types:
+          items:
+            type: string
+            maxLength: 100
+            minLength: 1
+          type: array
+          maxItems: 50
+          title: Statement Types
+        paper_count_cutoff:
+          type: integer
+          maximum: 1000000.0
+          minimum: 0.0
+          title: Paper Count Cutoff
+          default: 1
+        evidence_count_cutoff:
+          type: integer
+          maximum: 1000000.0
+          minimum: 0.0
+          title: Evidence Count Cutoff
+          default: 1
+        correlation_cutoff:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: -1.0
+          - type: 'null'
+          title: Correlation Cutoff
+        sources_filter:
+          anyOf:
+          - items:
+              type: string
+              maxLength: 100
+              minLength: 1
+            type: array
+            maxItems: 50
+          - type: 'null'
+          title: Sources Filter
+      type: object
+      required:
+      - comparison
+      title: ReportBioNetRunRequest
+      description: Bounded BioNet request available to a shared report recipient.
+    ReportComparisonCorrelationRequest:
+      properties:
+        primary_comparison:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Primary Comparison
+        selected_comparisons:
+          items:
+            type: string
+            maxLength: 200
+            minLength: 1
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Selected Comparisons
+        marked_proteins:
+          additionalProperties:
+            items:
+              type: string
+              maxLength: 500
+              minLength: 1
+            type: array
+          type: object
+          maxProperties: 100
+          title: Marked Proteins
+        cluster_method:
+          type: string
+          enum:
+          - pca
+          - umap
+          - tsne
+          title: Cluster Method
+          default: pca
+      type: object
+      required:
+      - primary_comparison
+      - selected_comparisons
+      title: ReportComparisonCorrelationRequest
+    ReportGseaRunRequest:
+      properties:
+        comparison:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Comparison
+        databases:
+          items:
+            type: string
+            maxLength: 100
+            minLength: 1
+          type: array
+          maxItems: 5
+          minItems: 1
+          title: Databases
+        min_size:
+          type: integer
+          maximum: 5000.0
+          minimum: 1.0
+          title: Min Size
+          default: 15
+        max_size:
+          type: integer
+          maximum: 5000.0
+          minimum: 1.0
+          title: Max Size
+          default: 500
+        permutations:
+          type: integer
+          maximum: 10000.0
+          minimum: 100.0
+          title: Permutations
+          default: 1000
+      type: object
+      required:
+      - comparison
+      - databases
+      title: ReportGseaRunRequest
+      description: Bounded GSEA request available to a shared report recipient.
+    ReportNameRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+      type: object
+      required:
+      - name
+      title: ReportNameRequest
+      description: Validated report name payload.
+    ReportProteinCorrelationRequest:
+      properties:
+        protein_id:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Protein Id
+        cluster_method:
+          type: string
+          enum:
+          - pca
+          - umap
+          - tsne
+          title: Cluster Method
+          default: pca
+        color_comparison:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Color Comparison
+      type: object
+      required:
+      - protein_id
+      - color_comparison
+      title: ReportProteinCorrelationRequest
+    ReportVennRequest:
+      properties:
+        comparisons:
+          items:
+            type: string
+            maxLength: 200
+            minLength: 1
+          type: array
+          maxItems: 3
+          minItems: 2
+          title: Comparisons
+        pvalue_threshold:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Pvalue Threshold
+          default: 0.05
+        logfc_threshold:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Logfc Threshold
+          default: 1.0
+      type: object
+      required:
+      - comparisons
+      title: ReportVennRequest
     Session:
       properties:
         id:

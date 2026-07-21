@@ -9,11 +9,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { TopNavigation } from '@/components/layout/TopNavigation';
-import { SidebarProvider } from '@/components/layout/SidebarContext';
-import { TaskStatusBar } from '@/components/layout/TaskStatusBar';
-import { ToastProvider } from '@/components/ui/ToastProvider';
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { AppShell } from '@/components/layout/AppShell';
 
 // Metadata
 export const metadata: Metadata = {
@@ -53,21 +49,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         >
           Skip to main content
         </a>
-        <SidebarProvider>
-          {/* Top Navigation Bar */}
-          <TopNavigation />
-
-          {/* Main Layout Container */}
-          <div id="main-content" className="flex h-screen pt-14">
-            <ErrorBoundary>{children}</ErrorBoundary>
-          </div>
-
-          {/* Task Status Bar - bottom-right task monitor */}
-          <TaskStatusBar />
-
-          {/* Toast notifications */}
-          <ToastProvider />
-        </SidebarProvider>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

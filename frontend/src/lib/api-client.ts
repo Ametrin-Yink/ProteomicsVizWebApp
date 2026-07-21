@@ -439,8 +439,16 @@ export function sessionApiPrefix(sessionId: string): string {
   return `/api/sessions/${sessionId}`;
 }
 
-export function reportApiPrefix(reportId: string): string {
-  return `/api/reports/${reportId}`;
+export function reportApiPrefix(shareToken: string): string {
+  return `/api/shared-reports/${shareToken}`;
+}
+
+export function reportWebUrl(shareToken: string): string {
+  const path = `/reports/${shareToken}`;
+  const configuredBase = process.env.NEXT_PUBLIC_REPORT_BASE_URL?.replace(/\/$/, '');
+  if (configuredBase) return `${configuredBase}${path}`;
+  if (typeof window !== 'undefined') return `${window.location.origin}${path}`;
+  return path;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1152,15 +1160,21 @@ export const organismsApi = {
 
 export const exportApi = {
   /** List all reports across sessions */
-  listAll: async (): Promise<{ reports: Array<{ report_id: string; name: string; session_id: string; session_name: string; created_at: string }> }> => {
+  listAll: async (): Promise<{ reports: Array<{ report_id: string; share_token: string; name: string; session_id: string; session_name: string; created_at: string }> }> => {
     const response = await fetch(apiUrl('/reports'));
-    return handleResponse<{ reports: Array<{ report_id: string; name: string; session_id: string; session_name: string; created_at: string }> }>(response);
+    return handleResponse<{ reports: Array<{ report_id: string; share_token: string; name: string; session_id: string; session_name: string; created_at: string }> }>(response);
   },
 
   /** Delete a report */
   delete: async (reportId: string): Promise<{ message: string }> => {
     const response = await fetch(apiUrl(`/reports/${reportId}`), { method: 'DELETE' });
     return handleResponse<{ message: string }>(response);
+  },
+
+  /** Revoke a shared link and return its replacement capability. */
+  rotateShareToken: async (reportId: string): Promise<{ share_token: string; weblink: string }> => {
+    const response = await fetch(apiUrl(`/reports/${reportId}/share-token/rotate`), { method: 'POST' });
+    return handleResponse<{ share_token: string; weblink: string }>(response);
   },
 };
 

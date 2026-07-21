@@ -9,7 +9,7 @@ Full-stack scientific web application for proteomics data analysis and visualiza
 - **Processing Pipeline:** 6-stage analysis pipeline with TMT→MSstats or DIA→msqrob2 paths
 - **Visualization:** Interactive volcano plots, QC metrics, GSEA enrichment, BioNet networks
 - **Session Management:** Persistent sessions that survive server restarts
-- **Reports:** Export comprehensive HTML analysis reports
+- **Shared Reports:** Generate opaque links to self-contained interactive report snapshots; recipients can view results and run report-scoped GSEA, BioNet, and Compare analyses
 
 ## Prerequisites
 
@@ -79,9 +79,11 @@ Once processing completes, explore your results through interactive visualizatio
 - **QC Plots** — PCA, p-value distribution, coefficient of variation, intensity distributions
 - **GSEA** — Gene Set Enrichment Analysis results with leading edge gene details
 
-### 5. Export
+### 5. Share or Export
 
-Download results as CSV or generate a comprehensive PDF report.
+Download results as CSV or generate an interactive shared report. Shared links
+grant access to one report only; they do not expose uploads, session creation,
+report management, or the rest of the application.
 
 ## Processing Pipeline
 
@@ -104,6 +106,7 @@ On-demand analysis: GSEA (enrichment), BioNet (INDRA subnetworks), Compare (PCA/
 ProteomicsVizWebApp/
 ├── backend/            # FastAPI server + R pipeline scripts
 ├── frontend/           # Next.js web application
+├── deploy/             # Production gateway configuration
 ├── Tests/              # All test files (unit + integration, organized by domain)
 ├── AGENTS/             # Developer documentation
 └── docs/               # API specification + design specs
@@ -114,6 +117,7 @@ ProteomicsVizWebApp/
 - **[AGENTS/](AGENTS/)** — Developer guides covering architecture, coding standards, API contract, and more
 - **[docs/api/openapi.yaml](docs/api/openapi.yaml)** — Full API specification
 - **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** — Contributor guidelines
+- **[docs/REPORT_SHARING.md](docs/REPORT_SHARING.md)** — Shared-link security model, port allocation, limitations, and deployment checks
 
 ## Testing
 
