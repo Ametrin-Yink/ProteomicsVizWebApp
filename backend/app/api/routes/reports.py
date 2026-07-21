@@ -281,7 +281,112 @@ async def get_report_meta(share_token: str):
         "files": session.get("files"),
         "markers": session.get("markers"),
         "volcano_filters": session.get("volcano_filters"),
+        "ptm_volcano_filters": session.get("ptm_volcano_filters"),
     }
+
+
+@shared_router.get("/shared-reports/{share_token}/visualization/manifest")
+async def get_report_visualization_manifest(share_token: str):
+    """Return visualization capabilities for a self-contained report."""
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    session_data = await asyncio.to_thread(get_report_session, report_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Report session not found")
+
+    from types import SimpleNamespace
+
+    from app.api.routes.visualization_manifest import build_visualization_manifest
+    from app.api.routes.visualization_shared import create_response
+
+    session = SimpleNamespace(pipeline=session_data.get("pipeline", ""))
+    manifest = build_visualization_manifest(session, report_dir / "results")
+    return create_response(manifest)
+
+
+@shared_router.get("/shared-reports/{share_token}/ptm/results")
+async def get_report_ptm_results(
+    share_token: str,
+    comparison: str | None = Query(default=None),
+    layer: Literal["ptm", "protein", "adjusted"] | None = Query(default=None),
+):
+    """Return PTM result layers from an exported report."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_ptm import load_ptm_results
+    from app.api.routes.visualization_shared import create_response
+
+    comparisons = await load_ptm_results(
+        report_dir / "results",
+        comparison=comparison,
+        layer=layer,
+    )
+    return create_response({"comparisons": comparisons})
+
+
+@shared_router.get("/shared-reports/{share_token}/ptm/results/download")
+async def download_report_ptm_results(share_token: str):
+    """Download the immutable PTM result archive from an exported report."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    archive = report_dir / "results" / "ptm_results.zip"
+    if not archive.exists():
+        raise HTTPException(status_code=404, detail="PTM result archive was not found")
+
+    from fastapi.responses import FileResponse
+
+    return FileResponse(
+        archive,
+        media_type="application/zip",
+        filename="ptm_results.zip",
+    )
+
+
+@shared_router.get("/shared-reports/{share_token}/ptm/compare")
+async def get_report_ptm_comparison_summary(
+    share_token: str,
+    layer: Literal["ptm", "protein", "adjusted"] = Query(default="ptm"),
+):
+    """Return compact PTM comparison data from an exported report."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_ptm import load_ptm_comparison_summary
+    from app.api.routes.visualization_shared import create_response
+
+    return create_response(
+        await load_ptm_comparison_summary(report_dir / "results", layer)
+    )
+
+
+@shared_router.get("/shared-reports/{share_token}/ptm/site/{site_id}/abundance")
+async def get_report_ptm_site_abundance(share_token: str, site_id: str):
+    """Return summarized PTM site abundance from an exported report."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_ptm import load_ptm_site_abundance
+    from app.api.routes.visualization_shared import create_response
+
+    samples = await load_ptm_site_abundance(report_dir / "results", site_id)
+    return create_response({"site": site_id, "samples": samples})
+
+
+@shared_router.get("/shared-reports/{share_token}/ptm/site/{site_id}")
+async def get_report_ptm_site_details(share_token: str, site_id: str):
+    """Return PTM site evidence from an exported report."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_ptm import load_ptm_site_details
+    from app.api.routes.visualization_shared import create_response
+
+    details = await load_ptm_site_details(report_dir / "results", site_id)
+    if details is None:
+        raise HTTPException(status_code=404, detail=f"PTM site {site_id} not found")
+    return create_response(details)
+
+
+@shared_router.get("/shared-reports/{share_token}/ptm/qc/plots")
+async def get_report_ptm_qc_plots(share_token: str):
+    """Return PTM QC data from an exported report."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_ptm import load_ptm_qc_data
+    from app.api.routes.visualization_shared import create_response
+
+    data = await load_ptm_qc_data(report_dir / "results")
+    return create_response(data)
 
 
 @management_router.patch("/reports/{report_id}")

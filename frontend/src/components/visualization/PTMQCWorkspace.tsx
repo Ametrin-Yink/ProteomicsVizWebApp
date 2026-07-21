@@ -17,7 +17,13 @@ interface PTMQCMetrics {
 
 type QCScope = 'ptm' | 'protein';
 
-export default function PTMQCWorkspace({ sessionId }: { sessionId: string }) {
+export default function PTMQCWorkspace({
+  sessionId,
+  apiPrefix = `/api/sessions/${sessionId}`,
+}: {
+  sessionId: string;
+  apiPrefix?: string;
+}) {
   const [metrics, setMetrics] = useState<PTMQCMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +32,7 @@ export default function PTMQCWorkspace({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/sessions/${sessionId}/ptm/qc/plots`, { signal: controller.signal })
+    fetch(`${apiPrefix}/ptm/qc/plots`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
@@ -41,7 +47,7 @@ export default function PTMQCWorkspace({ sessionId }: { sessionId: string }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [sessionId]);
+  }, [apiPrefix]);
 
   if (loading) {
     return (

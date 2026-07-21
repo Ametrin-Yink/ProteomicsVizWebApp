@@ -5,6 +5,10 @@ import { useParams } from 'next/navigation';
 import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork, Loader2, AlertCircle, Share2 } from 'lucide-react';
 import { ApiProvider } from '@/lib/api-context';
 import { reportApiPrefix } from '@/lib/api-client';
+import { VisualizationManifestProvider } from '@/lib/visualization-context';
+import type { VisualizationManifest } from '@/types/api';
+import PTMVolcano from '@/components/visualization/PTMVolcano';
+import PTMQCWorkspace from '@/components/visualization/PTMQCWorkspace';
 
 import { ResultsContent } from '@/app/analysis/visualization/page';
 import { QCContent } from '@/app/analysis/visualization/qc/page';
@@ -28,23 +32,31 @@ function ReportViewerContent() {
   const apiPrefix = reportApiPrefix(shareToken);
 
   const [reportMeta, setReportMeta] = useState<{
-    name: string; session_name: string; created_at: string;
+    name: string; session_name: string; created_at: string; pipeline: string;
   } | null>(null);
+  const [manifest, setManifest] = useState<VisualizationManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('volcano');
 
   useEffect(() => {
     if (!shareToken) return;
-    const url = `${apiPrefix}`;
-    fetch(url)
-      .then(r => { if (!r.ok) throw new Error('Report not found'); return r.json(); })
-      .then(data => {
+    Promise.all([
+      fetch(apiPrefix),
+      fetch(`${apiPrefix}/visualization/manifest`),
+    ])
+      .then(async ([reportResponse, manifestResponse]) => {
+        if (!reportResponse.ok || !manifestResponse.ok) throw new Error('Report not found');
+        return Promise.all([reportResponse.json(), manifestResponse.json()]);
+      })
+      .then(([data, manifestResponse]) => {
         setReportMeta({
           name: data._report?.name || data.name || '',
           session_name: data._report?.session_name || '',
           created_at: data._report?.created_at || '',
+          pipeline: data.pipeline || '',
         });
+        setManifest(manifestResponse.data ?? manifestResponse);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -61,7 +73,7 @@ function ReportViewerContent() {
     );
   }
 
-  if (error || !reportMeta) {
+  if (error || !reportMeta || !manifest) {
     return (
       <div className="h-screen bg-surface flex items-center justify-center">
         <div className="bg-error/5 border border-error/20 rounded-lg p-6 max-w-md text-center">
@@ -74,8 +86,13 @@ function ReportViewerContent() {
     );
   }
 
+  const visibleTabs = reportMeta.pipeline === 'ptm'
+    ? TABS.filter((tab) => tab.id === 'volcano' || tab.id === 'qc')
+    : TABS;
+
   return (
-    <ApiProvider apiPrefix={apiPrefix} scope="shared-report">
+    <VisualizationManifestProvider state={{ status: 'ready', manifest }}>
+      <ApiProvider apiPrefix={apiPrefix} scope="shared-report">
       <div className="h-screen bg-surface flex flex-col">
         <div className="bg-background border-b border-border px-6 py-3 shrink-0">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -96,7 +113,7 @@ function ReportViewerContent() {
           <div className="max-w-7xl mx-auto px-6">
             <div className="flex items-center py-2">
               <div className="flex items-center gap-1">
-                {TABS.map((tab) => {
+                {visibleTabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
@@ -119,14 +136,27 @@ function ReportViewerContent() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'volcano' && <ResultsContent />}
-          {activeTab === 'qc' && <QCContent />}
+          {activeTab === 'volcano' && (reportMeta.pipeline === 'ptm' ? (
+            <div className="mx-auto max-w-7xl px-6 py-8">
+              <PTMVolcano
+                sessionId={shareToken}
+                apiPrefix={apiPrefix}
+                canPersistVisualizationState={false}
+              />
+            </div>
+          ) : <ResultsContent />)}
+          {activeTab === 'qc' && (reportMeta.pipeline === 'ptm' ? (
+            <div className="mx-auto max-w-7xl px-6 py-8">
+              <PTMQCWorkspace sessionId={shareToken} apiPrefix={apiPrefix} />
+            </div>
+          ) : <QCContent />)}
           {activeTab === 'gsea' && <GSEAAnalysisContent />}
           {activeTab === 'compare' && <CompareContent />}
           {activeTab === 'bionet' && <BioNetContent />}
         </div>
       </div>
-    </ApiProvider>
+      </ApiProvider>
+    </VisualizationManifestProvider>
   );
 }
 

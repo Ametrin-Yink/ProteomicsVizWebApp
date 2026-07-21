@@ -100,6 +100,78 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
     (session_dir / "gsea_run_status.json").write_text('{"Trt_vs_Ctrl": "completed"}')
 
 
+def make_completed_ptm_session(sessions_dir: Path, session_id: str):
+    session_dir = sessions_dir / session_id
+    results_dir = session_dir / "results"
+    results_dir.mkdir(parents=True)
+    (session_dir / "session.json").write_text(
+        json.dumps(
+            {
+                "id": session_id,
+                "name": "PTM Experiment",
+                "state": "completed",
+                "pipeline": "ptm",
+                "config": {
+                    "comparisons": [
+                        {
+                            "group1": {"Condition": "Drug"},
+                            "group2": {"Condition": "DMSO"},
+                        }
+                    ]
+                },
+                "markers": {},
+                "ptm_volcano_filters": {
+                    "Drug_vs_DMSO": {
+                        "foldChange": 1,
+                        "pValue": 0.05,
+                        "adjPValue": 1,
+                        "s0": 0.1,
+                    }
+                },
+            }
+        )
+    )
+    result_header = (
+        "Comparison\tProtein\tSiteLabel\tProteinAccession\tGene\t"
+        "LocalizationStatus\tlog2FC\tpvalue\tadj.pvalue\n"
+    )
+    (results_dir / "ptm_site_results.tsv").write_text(
+        result_header
+        + "Drug_vs_DMSO\tP1_C10\tP1 C10\tP1\tGENE1\tConfident\t2\t0.001\t0.01\n"
+    )
+    (results_dir / "protein_results.tsv").write_text(
+        result_header + "Drug_vs_DMSO\tP1\tP1\tP1\tGENE1\t\t1\t0.01\t0.02\n"
+    )
+    (results_dir / "adjusted_ptm_results.tsv").write_text(
+        result_header
+        + "Drug_vs_DMSO\tP1_C10\tP1 C10\tP1\tGENE1\tConfident\t1\t0.01\t0.02\n"
+    )
+    (results_dir / "ptm_site_metadata.tsv").write_text(
+        "ProteinName\tSiteLabel\nP1_C10\tP1 C10\n"
+    )
+    (results_dir / "ptm_localization_evidence.tsv").write_text(
+        "ProteinName\tLocalizationStatus\nP1_C10\tConfident\n"
+    )
+    (results_dir / "ptm_peptidoforms.tsv").write_text(
+        "ProteinName\tPeptidoform\nP1_C10\tACDC\n"
+    )
+    (results_dir / "ptm_site_summarized.tsv").write_text(
+        "Protein\tChannel\tCondition\tReplicate\tAbundance\n"
+        "P1_C10\t126\tDrug\t1\t10\n"
+    )
+    (results_dir / "ptm_qc.json").write_text(
+        json.dumps(
+            {
+                "preprocessing": {"passing_site_count": 1},
+                "results": {"protein_layer_available": True},
+                "plots": {"total_psms": 1, "total_proteins": 1},
+                "protein_plots": {"total_psms": 1, "total_proteins": 1},
+            }
+        )
+    )
+    (results_dir / "ptm_results.zip").write_bytes(b"ptm archive")
+
+
 def test_list_reports_empty(client):
     response = client.get("/api/reports")
     assert response.status_code == 200
@@ -173,6 +245,57 @@ def test_generate_and_view_report(client):
     assert response.status_code == 200
     response = client.get(f"/api/shared-reports/{share_token}")
     assert response.status_code == 404
+
+
+def test_generate_and_view_ptm_report(client):
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
+    session_id = str(uuid.uuid4())
+    make_completed_ptm_session(sessions_dir, session_id)
+
+    generated = client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "PTM Report"},
+    )
+    assert generated.status_code == 200
+    prefix = f"/api/shared-reports/{generated.json()['share_token']}"
+
+    metadata = client.get(prefix)
+    assert metadata.status_code == 200
+    assert metadata.json()["pipeline"] == "ptm"
+    assert metadata.json()["ptm_volcano_filters"]["Drug_vs_DMSO"]["pValue"] == 0.05
+
+    manifest = client.get(f"{prefix}/visualization/manifest")
+    assert manifest.status_code == 200
+    assert manifest.json()["data"]["pipeline"] == "ptm"
+
+    results = client.get(
+        f"{prefix}/ptm/results",
+        params={"comparison": "Drug_vs_DMSO", "layer": "ptm"},
+    )
+    assert results.status_code == 200
+    assert (
+        results.json()["data"]["comparisons"][0]["ptm_model"][0]["Protein"] == "P1_C10"
+    )
+
+    summary = client.get(f"{prefix}/ptm/compare", params={"layer": "ptm"})
+    assert summary.status_code == 200
+    assert summary.json()["data"]["comparisons"] == ["Drug_vs_DMSO"]
+
+    details = client.get(f"{prefix}/ptm/site/P1_C10")
+    assert details.status_code == 200
+    assert details.json()["data"]["site"]["ProteinName"] == "P1_C10"
+
+    abundance = client.get(f"{prefix}/ptm/site/P1_C10/abundance")
+    assert abundance.status_code == 200
+    assert abundance.json()["data"]["samples"][0]["Channel"] == 126
+
+    qc = client.get(f"{prefix}/ptm/qc/plots")
+    assert qc.status_code == 200
+    assert qc.json()["data"]["preprocessing"]["passing_site_count"] == 1
+
+    download = client.get(f"{prefix}/ptm/results/download")
+    assert download.status_code == 200
+    assert download.content == b"ptm archive"
 
 
 def test_generate_rejects_non_completed_session(client):

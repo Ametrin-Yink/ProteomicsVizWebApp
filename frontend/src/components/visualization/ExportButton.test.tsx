@@ -23,16 +23,15 @@ describe('ExportButton', () => {
     container.remove();
   });
 
-  it('downloads the generated PTM archive instead of opening protein reports', async () => {
+  it('opens the session report export for PTM analyses', async () => {
     await act(async () => {
       root.render(<ExportButton sessionId="session id" pipeline="ptm" />);
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    const download = container.querySelector('[data-testid="download-ptm-results-btn"]');
-    expect(download?.textContent).toContain('Download Results');
-    expect(download?.getAttribute('href')).toBe('/api/sessions/session%20id/ptm/results/download');
-    expect(container.querySelector('[data-testid="export-report-btn"]')).toBeNull();
+    const exportButton = container.querySelector('[data-testid="export-report-btn"]');
+    expect(exportButton?.textContent).toContain('Export');
+    expect(container.querySelector('[data-testid="download-ptm-results-btn"]')).toBeNull();
   });
 });

@@ -34,6 +34,8 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface PTMVolcanoProps {
   sessionId: string;
+  apiPrefix?: string;
+  canPersistVisualizationState?: boolean;
 }
 
 type Layer = 'ptm' | 'protein' | 'adjusted';
@@ -115,12 +117,12 @@ function LocalizationBadge({ status }: { status: string }) {
 }
 
 function PTMInfoPanel({
-  sessionId,
+  apiPrefix,
   row,
   layer,
   filters,
 }: {
-  sessionId: string;
+  apiPrefix: string;
   row: PTMResultRow | null;
   layer: Layer;
   filters: VolcanoFilters;
@@ -132,13 +134,13 @@ function PTMInfoPanel({
     if (!row || layer === 'protein') return;
     const encoded = encodeURIComponent(row.id);
     Promise.all([
-      fetch(`/api/sessions/${sessionId}/ptm/site/${encoded}`).then((response) => response.ok ? response.json() : null),
-      fetch(`/api/sessions/${sessionId}/ptm/site/${encoded}/abundance`).then((response) => response.ok ? response.json() : null),
+      fetch(`${apiPrefix}/ptm/site/${encoded}`).then((response) => response.ok ? response.json() : null),
+      fetch(`${apiPrefix}/ptm/site/${encoded}/abundance`).then((response) => response.ok ? response.json() : null),
     ]).then(([detailResponse, abundanceResponse]) => {
       setDetails(detailResponse?.data ?? null);
       setSamples(abundanceResponse?.data?.samples ?? []);
     }).catch(() => undefined);
-  }, [layer, row, sessionId]);
+  }, [apiPrefix, layer, row]);
 
   if (!row) {
     return (
@@ -279,7 +281,12 @@ function PTMInfoPanel({
   );
 }
 
-export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
+export default function PTMVolcano({
+  sessionId,
+  apiPrefix,
+  canPersistVisualizationState = true,
+}: PTMVolcanoProps) {
+  const resolvedApiPrefix = apiPrefix ?? sessionApiPrefix(sessionId);
   const addToast = useUIStore((state) => state.addToast);
   const manifest = useVisualizationManifest();
   const [sessionName, setSessionName] = useState('Results');
@@ -300,10 +307,9 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    const apiPrefix = sessionApiPrefix(sessionId);
     Promise.all([
-      visualizationApi.getPTMComparisonSummary(apiPrefix, 'ptm', controller.signal),
-      getDataSource(apiPrefix),
+      visualizationApi.getPTMComparisonSummary(resolvedApiPrefix, 'ptm', controller.signal),
+      getDataSource(resolvedApiPrefix),
     ]).then(([summary, session]) => {
       if (!active) return;
       setComparisonLabels(summary.comparisons);
@@ -324,7 +330,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
       active = false;
       controller.abort();
     };
-  }, [sessionId]);
+  }, [resolvedApiPrefix]);
 
   const comparisonLabel = comparisonLabels[comparisonIndex] ?? '';
   useEffect(() => {
@@ -338,7 +344,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
     setError(null);
     setResultLoading(true);
     visualizationApi.getPTMResults(
-      sessionApiPrefix(sessionId),
+      resolvedApiPrefix,
       comparisonLabel,
       layer,
       controller.signal,
@@ -355,7 +361,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
       active = false;
       controller.abort();
     };
-  }, [comparisonLabel, layer, sessionId]);
+  }, [comparisonLabel, layer, resolvedApiPrefix]);
 
   const filters = comparison ? filtersByComparison[comparison.label] ?? DEFAULT_FILTERS : DEFAULT_FILTERS;
   const debouncedFilters = useDebounce(filters, 150);
@@ -434,7 +440,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
       const next = { ...markedByKey };
       const items = await Promise.all(Array.from(batchComparisons).map(async (label) => {
         const response = await visualizationApi.getPTMResults(
-          sessionApiPrefix(sessionId),
+          resolvedApiPrefix,
           label,
           layer,
         );
@@ -462,25 +468,25 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
   };
 
   useEffect(() => {
-    if (loading || error) return;
+    if (loading || error || !canPersistVisualizationState) return;
     const markers = Object.fromEntries(Object.entries(markedByKey)
       .filter(([, ids]) => ids.size > 0)
       .map(([key, ids]) => [key, Array.from(ids)]));
     const timer = setTimeout(() => {
-      updateVisualizationState(`/api/sessions/${sessionId}`, { markers }).catch(() => undefined);
+      updateVisualizationState(resolvedApiPrefix, { markers }).catch(() => undefined);
     }, 300);
     return () => clearTimeout(timer);
-  }, [error, loading, markedByKey, sessionId]);
+  }, [canPersistVisualizationState, error, loading, markedByKey, resolvedApiPrefix]);
 
   useEffect(() => {
-    if (Object.keys(filtersByComparison).length === 0) return;
+    if (!canPersistVisualizationState || Object.keys(filtersByComparison).length === 0) return;
     const timer = setTimeout(() => {
-      updateVisualizationState(`/api/sessions/${sessionId}`, {
+      updateVisualizationState(resolvedApiPrefix, {
         ptm_volcano_filters: filtersByComparison,
       }).catch(() => undefined);
     }, 500);
     return () => clearTimeout(timer);
-  }, [filtersByComparison, sessionId]);
+  }, [canPersistVisualizationState, filtersByComparison, resolvedApiPrefix]);
 
   if (loading || resultLoading) {
     return (
@@ -553,7 +559,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
         ) : (
           <PTMInfoPanel
             key={`${layer}:${selectedId ?? ''}`}
-            sessionId={sessionId}
+            apiPrefix={resolvedApiPrefix}
             row={selectedRow}
             layer={layer}
             filters={filters}
@@ -605,7 +611,7 @@ export default function PTMVolcano({ sessionId }: PTMVolcanoProps) {
             selectedIds={selectedIds}
             markedIds={markedIds}
             filters={debouncedFilters}
-            comparisonLabel={comparisonDisplayLabel}
+            downloadUrl={`${resolvedApiPrefix}/ptm/results/download`}
             onSelect={(row) => selectIds([row.id])}
             onToggleMark={toggleMark}
             onMarkAllSignificant={markAllSignificant}

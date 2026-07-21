@@ -99,4 +99,22 @@ describe('PTMQCWorkspace', () => {
       .find((button) => button.textContent === 'Protein');
     expect(proteinButton?.disabled).toBe(true);
   });
+
+  it('loads QC data from a shared-report API prefix', async () => {
+    await act(async () => {
+      root.render(
+        <PTMQCWorkspace
+          sessionId="session-id"
+          apiPrefix="/api/shared-reports/share-token"
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/shared-reports/share-token/ptm/qc/plots',
+      expect.anything(),
+    );
+  });
 });

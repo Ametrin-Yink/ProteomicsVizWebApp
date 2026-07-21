@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Download, Eraser } from 'lucide-react';
 import type { VolcanoFilters } from '@/types/api';
-import { exportToCSV, formatNumber, formatPValue, isSignificantVolcano } from '@/lib/utils';
+import { formatNumber, formatPValue, isSignificantVolcano } from '@/lib/utils';
 
 export interface PTMResultRow {
   id: string;
@@ -25,7 +25,7 @@ interface Props {
   selectedIds: Set<string>;
   markedIds: Set<string>;
   filters: VolcanoFilters;
-  comparisonLabel: string;
+  downloadUrl: string;
   onSelect: (row: PTMResultRow) => void;
   onToggleMark: (row: PTMResultRow) => void;
   onMarkAllSignificant: () => void;
@@ -40,7 +40,7 @@ export default function PTMResultTable({
   selectedIds,
   markedIds,
   filters,
-  comparisonLabel,
+  downloadUrl,
   onSelect,
   onToggleMark,
   onMarkAllSignificant,
@@ -104,26 +104,6 @@ export default function PTMResultTable({
       : <ChevronDown className="ml-1 inline h-4 w-4" />;
   };
 
-  const handleExport = () => {
-    exportToCSV(sorted.map((row) => ({
-      ...(layer === 'protein'
-        ? { Protein: row.display }
-        : { 'PTM Site': row.display, Protein: row.accession }),
-      Gene: row.gene,
-      Localization: row.localization,
-      Mapping: row.mapping,
-      'Log2 FC': row.logFC,
-      'P-value': row.pValue,
-      'Adj P-value': row.adjPValue,
-      Significance: isSignificantVolcano(
-        row.logFC ?? 0,
-        row.pValue ?? 1,
-        row.adjPValue ?? 1,
-        filters,
-      ) ? 'Significant' : 'Not Significant',
-    })), `ptm_${layer}_${comparisonLabel.replaceAll(' ', '_')}.csv`);
-  };
-
   const headerClass = 'cursor-pointer px-4 py-3 font-medium text-text-secondary hover:bg-surface';
 
   return (
@@ -163,13 +143,13 @@ export default function PTMResultTable({
               <Eraser className="h-4 w-4" /> Clear All Markers ({markedIds.size})
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleExport}
+          <a
+            href={downloadUrl}
+            download="ptm_results.zip"
             className="flex items-center gap-2 rounded-md border-border bg-background px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface"
           >
-            <Download className="h-4 w-4" /> Export All
-          </button>
+            <Download className="h-4 w-4" /> Download Results
+          </a>
         </div>
       </div>
 

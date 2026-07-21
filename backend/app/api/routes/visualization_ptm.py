@@ -213,6 +213,101 @@ async def load_ptm_comparison_summary(
     }
 
 
+async def load_ptm_site_abundance(
+    results_dir: Path, site_id: str
+) -> list[dict[str, Any]]:
+    """Load summarized abundance rows for one PTM site."""
+    summarized_path = results_dir / "ptm_site_summarized.tsv"
+    if summarized_path.exists():
+        frame = await asyncio.to_thread(pd.read_csv, summarized_path, sep="\t")
+        protein_column = "Protein" if "Protein" in frame.columns else "ProteinName"
+        frame = frame[frame[protein_column].astype(str) == site_id].copy()
+        return _json_safe_records(frame)
+
+    abundance_path = results_dir / "ptm_site_abundance.tsv"
+    if not abundance_path.exists():
+        return []
+    frame = await asyncio.to_thread(pd.read_csv, abundance_path, sep="\t")
+    frame = frame[frame["ProteinName"].astype(str) == site_id]
+    if not frame.empty:
+        frame = frame.groupby(["Channel", "Condition", "Replicate"], as_index=False)[
+            "NormalizedAbundance"
+        ].sum()
+        abundance = pd.to_numeric(frame["NormalizedAbundance"], errors="coerce")
+        frame["Abundance"] = np.where(abundance > 0, np.log2(abundance), np.nan)
+    return _json_safe_records(frame)
+
+
+async def load_ptm_site_details(
+    results_dir: Path, site_id: str
+) -> dict[str, Any] | None:
+    """Load localization, peptidoform, and evidence records for one PTM site."""
+
+    async def load_matching(path: Path) -> list[dict[str, Any]]:
+        if not path.exists():
+            return []
+        frame = await asyncio.to_thread(pd.read_csv, path, sep="\t")
+        protein_column = "ProteinName" if "ProteinName" in frame.columns else "Protein"
+        frame = frame[frame[protein_column].astype(str) == site_id]
+        return _json_safe_records(frame)
+
+    metadata, evidence, peptidoforms = await asyncio.gather(
+        load_matching(results_dir / "ptm_site_metadata.tsv"),
+        load_matching(results_dir / "ptm_localization_evidence.tsv"),
+        load_matching(results_dir / "ptm_peptidoforms.tsv"),
+    )
+    if not metadata:
+        return None
+    return {
+        "site": metadata[0],
+        "evidence": evidence,
+        "peptidoforms": peptidoforms,
+    }
+
+
+async def load_ptm_qc_data(
+    results_dir: Path, *, persist_generated_plots: bool = False
+) -> dict[str, Any]:
+    """Load PTM QC data and lazily calculate missing plot payloads."""
+    qc_file = results_dir / "ptm_qc.json"
+    default_result: dict[str, Any] = {
+        "total_sites": 0,
+        "significant_hits": 0,
+        "up_regulated": 0,
+        "down_regulated": 0,
+        "comparisons": [],
+    }
+    if not qc_file.exists():
+        return default_result
+
+    data = await read_json_file(qc_file)
+    needs_ptm_plots = not data.get("plots")
+    needs_protein_plots = bool(
+        data.get("results", {}).get("protein_layer_available")
+    ) and not data.get("protein_plots")
+    if needs_ptm_plots or needs_protein_plots:
+        from app.services.ptm_qc_calculator import (
+            calculate_protein_qc_plots,
+            calculate_ptm_qc_plots,
+        )
+
+        plot_data, protein_plot_data = await asyncio.gather(
+            calculate_ptm_qc_plots(results_dir)
+            if needs_ptm_plots
+            else asyncio.sleep(0, result=None),
+            calculate_protein_qc_plots(results_dir)
+            if needs_protein_plots
+            else asyncio.sleep(0, result=None),
+        )
+        if plot_data is not None:
+            data["plots"] = plot_data
+        if protein_plot_data is not None:
+            data["protein_plots"] = protein_plot_data
+        if persist_generated_plots:
+            await write_json_file(qc_file, data, indent=2)
+    return data
+
+
 @router.get("/{session_id}/ptm/results")
 async def get_ptm_results(
     session_id: str,
@@ -301,26 +396,7 @@ async def get_ptm_site_abundance(
         )
 
     results_dir = settings.sessions_dir / session_id / "results"
-    summarized_path = results_dir / "ptm_site_summarized.tsv"
-    if summarized_path.exists():
-        frame = await asyncio.to_thread(pd.read_csv, summarized_path, sep="\t")
-        protein_column = "Protein" if "Protein" in frame.columns else "ProteinName"
-        frame = frame[frame[protein_column].astype(str) == site_id].copy()
-        records = _json_safe_records(frame)
-    else:
-        abundance_path = results_dir / "ptm_site_abundance.tsv"
-        if not abundance_path.exists():
-            records = []
-        else:
-            frame = await asyncio.to_thread(pd.read_csv, abundance_path, sep="\t")
-            frame = frame[frame["ProteinName"].astype(str) == site_id]
-            if not frame.empty:
-                frame = frame.groupby(
-                    ["Channel", "Condition", "Replicate"], as_index=False
-                )["NormalizedAbundance"].sum()
-                abundance = pd.to_numeric(frame["NormalizedAbundance"], errors="coerce")
-                frame["Abundance"] = np.where(abundance > 0, np.log2(abundance), np.nan)
-            records = _json_safe_records(frame)
+    records = await load_ptm_site_abundance(results_dir, site_id)
     return create_response({"site": site_id, "samples": records})
 
 
@@ -339,31 +415,13 @@ async def get_ptm_site_details(
         )
     results_dir = settings.sessions_dir / session_id / "results"
 
-    async def load_matching(path: Path) -> list[dict[str, Any]]:
-        if not path.exists():
-            return []
-        frame = await asyncio.to_thread(pd.read_csv, path, sep="\t")
-        protein_column = "ProteinName" if "ProteinName" in frame.columns else "Protein"
-        frame = frame[frame[protein_column].astype(str) == site_id]
-        return _json_safe_records(frame)
-
-    metadata, evidence, peptidoforms = await asyncio.gather(
-        load_matching(results_dir / "ptm_site_metadata.tsv"),
-        load_matching(results_dir / "ptm_localization_evidence.tsv"),
-        load_matching(results_dir / "ptm_peptidoforms.tsv"),
-    )
-    if not metadata:
+    details = await load_ptm_site_details(results_dir, site_id)
+    if details is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"PTM site {site_id} not found",
         )
-    return create_response(
-        {
-            "site": metadata[0],
-            "evidence": evidence,
-            "peptidoforms": peptidoforms,
-        }
-    )
+    return create_response(details)
 
 
 @router.get("/{session_id}/ptm/qc/plots")
@@ -380,44 +438,8 @@ async def get_ptm_qc_plots(
         )
 
     results_dir = settings.sessions_dir / session_id / "results"
-    qc_file = results_dir / "ptm_qc.json"
-
-    default_result: dict[str, Any] = {
-        "total_sites": 0,
-        "significant_hits": 0,
-        "up_regulated": 0,
-        "down_regulated": 0,
-        "comparisons": [],
-    }
-
-    if not qc_file.exists():
-        return create_response(default_result)
-
     try:
-        data = await read_json_file(qc_file)
-        needs_ptm_plots = not data.get("plots")
-        needs_protein_plots = bool(
-            data.get("results", {}).get("protein_layer_available")
-        ) and not data.get("protein_plots")
-        if needs_ptm_plots or needs_protein_plots:
-            from app.services.ptm_qc_calculator import (
-                calculate_protein_qc_plots,
-                calculate_ptm_qc_plots,
-            )
-
-            plot_data, protein_plot_data = await asyncio.gather(
-                calculate_ptm_qc_plots(results_dir)
-                if needs_ptm_plots
-                else asyncio.sleep(0, result=None),
-                calculate_protein_qc_plots(results_dir)
-                if needs_protein_plots
-                else asyncio.sleep(0, result=None),
-            )
-            if plot_data is not None:
-                data["plots"] = plot_data
-            if protein_plot_data is not None:
-                data["protein_plots"] = protein_plot_data
-            await write_json_file(qc_file, data, indent=2)
+        data = await load_ptm_qc_data(results_dir, persist_generated_plots=True)
         return create_response(data)
     except Exception as e:
         logger.error(f"Error loading PTM QC data: {e}")

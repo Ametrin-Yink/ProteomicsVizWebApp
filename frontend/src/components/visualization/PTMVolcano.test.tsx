@@ -83,7 +83,10 @@ describe('PTMVolcano', () => {
     expect(container.textContent).toContain('1 DE (1↑ 0↓)');
     expect(container.textContent).toContain('Mark Significant in Batch');
     expect(container.textContent).toContain('Mark All Significant');
-    expect(container.textContent).toContain('Export All');
+    expect(container.textContent).toContain('Download Results');
+    expect(
+      container.querySelector('a[download="ptm_results.zip"]')?.getAttribute('href'),
+    ).toBe('/api/sessions/session-id/ptm/results/download');
     expect(container.textContent).toContain('No PTM Site Selected');
     expect(protein?.disabled).toBe(true);
     expect(adjusted?.disabled).toBe(true);
@@ -91,5 +94,29 @@ describe('PTMVolcano', () => {
       expect.stringContaining('/ptm/results?comparison=Drug_vs_DMSO&layer=ptm'),
       expect.anything(),
     );
+  });
+
+  it('loads PTM results from a shared-report API prefix', async () => {
+    await act(async () => {
+      root.render(
+        <PTMVolcano
+          sessionId="session-id"
+          apiPrefix="/api/shared-reports/share-token"
+          canPersistVisualizationState={false}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/shared-reports/share-token/ptm/results?'),
+      expect.anything(),
+    );
+    expect(
+      container.querySelector('a[download="ptm_results.zip"]')?.getAttribute('href'),
+    ).toBe('/api/shared-reports/share-token/ptm/results/download');
   });
 });
