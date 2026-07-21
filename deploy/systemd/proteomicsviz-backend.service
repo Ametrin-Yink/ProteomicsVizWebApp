@@ -1,0 +1,32 @@
+[Unit]
+Description=ProteomicsViz FastAPI backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proteomicsviz
+Group=proteomicsviz
+WorkingDirectory=/home/proteomicsviz/data/runtime
+EnvironmentFile=/etc/proteomicsviz/backend.env
+Environment=HOME=/home/proteomicsviz
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/proteomicsviz/current/backend/.venv/bin/python -m uvicorn app.main:app --app-dir /home/proteomicsviz/current/backend --host 127.0.0.1 --port 8100 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=30
+UMask=0077
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

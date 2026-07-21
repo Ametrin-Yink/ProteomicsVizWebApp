@@ -1,0 +1,30 @@
+[Unit]
+Description=ProteomicsViz Next.js frontend
+After=network-online.target proteomicsviz-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=proteomicsviz
+Group=proteomicsviz
+WorkingDirectory=/home/proteomicsviz/current/frontend
+EnvironmentFile=/etc/proteomicsviz/frontend.env
+Environment=HOME=/home/proteomicsviz
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

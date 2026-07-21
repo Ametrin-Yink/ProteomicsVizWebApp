@@ -154,7 +154,9 @@ The intended server layout is:
 Run the FastAPI and Next.js processes as separate systemd services under an
 unprivileged service account. Caddy is the only network-facing service. The
 backend service must use one Uvicorn worker and systemd must stop its R child
-processes with the backend service.
+processes with the backend service. Installation and operation of the committed
+service files and deployment script are documented in
+[deploy/README.md](../deploy/README.md).
 
 ## Current limitations
 
