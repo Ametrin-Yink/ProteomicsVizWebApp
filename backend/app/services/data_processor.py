@@ -337,7 +337,7 @@ class DataProcessor:
                       SELECT "Master_Protein_Accessions" FROM passing_proteins
                   )
             ) TO '{output_path_fwd}'
-            (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
+            (FORMAT PARQUET, COMPRESSION UNCOMPRESSED, ROW_GROUP_SIZE 100000)
         """
 
         con = duckdb.connect()

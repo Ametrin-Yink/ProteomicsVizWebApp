@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 from app.services.data_processor import DataProcessor, ProcessingConfig
 
@@ -687,3 +688,38 @@ class TestStep5DuckDB:
 
             result = pd.read_parquet(output_path, engine="pyarrow")
             assert set(result["Master_Protein_Accessions"]) == {"P2"}
+
+    def test_r_facing_output_does_not_require_optional_parquet_codecs(self):
+        """The R handoff must be readable by a minimal Arrow build."""
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.parquet"
+            output_path = Path(tmp) / "PSM_Abundances.parquet"
+            _write_test_parquet(
+                input_path,
+                [
+                    {
+                        "Master_Protein_Accessions": "P1",
+                        "Unique_PSM": "PEP1||2",
+                        "Condition": "Control",
+                        "Replicate": 1,
+                        "Abundance": 100.0,
+                    }
+                ],
+            )
+            processor = DataProcessor(
+                ProcessingConfig(
+                    max_missing_fraction_per_condition=0.40,
+                    min_psms_per_protein=1,
+                    expected_replicates_by_condition={"Control": 1},
+                )
+            )
+
+            processor.step3_filter_by_criteria_duckdb(input_path, output_path)
+
+            metadata = pq.read_metadata(output_path)
+            codecs = {
+                metadata.row_group(row_group).column(column).compression
+                for row_group in range(metadata.num_row_groups)
+                for column in range(metadata.num_columns)
+            }
+            assert codecs == {"UNCOMPRESSED"}
