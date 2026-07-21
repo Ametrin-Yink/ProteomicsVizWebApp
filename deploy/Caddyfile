@@ -1,0 +1,43 @@
+# Public report gateway. Only opaque shared-report capabilities and the
+# frontend assets needed to render them are reachable on port 8000.
+:8000 {
+	@shared_api {
+		path /api/shared-reports/*
+		method GET POST HEAD OPTIONS
+	}
+	handle @shared_api {
+		header Cache-Control "private, no-store"
+		header Referrer-Policy "no-referrer"
+		request_body {
+			max_size 2MB
+		}
+		reverse_proxy 127.0.0.1:8100
+	}
+
+	@shared_page path_regexp shared_page ^/reports/[A-Za-z0-9_-]{43}/?$
+	handle @shared_page {
+		header Cache-Control "private, no-store"
+		header Referrer-Policy "no-referrer"
+		header X-Robots-Tag "noindex, nofollow, noarchive"
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle /_next/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	@report_assets path /cytoscape.min.js /plotly.min.js /favicon.svg
+	handle @report_assets {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# The full application is loopback-only. Reach it from the Windows development
+# PC through an SSH tunnel; do not open this listener in firewalld.
+127.0.0.1:8001 {
+	reverse_proxy 127.0.0.1:3000
+}

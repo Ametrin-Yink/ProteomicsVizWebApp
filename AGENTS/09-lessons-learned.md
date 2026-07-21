@@ -139,3 +139,19 @@ Automated test assertions are necessary but not sufficient. For every UI feature
 **Problem:** `getSessionIdFromURL()` used `typeof window === 'undefined'` check — server rendered empty `session=""`, client rendered actual session ID. React hydration mismatch.
 
 **Fix:** Use `useState('')` + `useEffect(() => setSessionId(...), [])` so the initial render (empty) matches SSR.
+
+## Shared Reports Are Bearer Capabilities
+
+**Problem:** A predictable report ID in a URL is not access control, and serving
+the report viewer through the normal application shell exposes navigation to
+private workflows even if individual buttons are disabled.
+
+**Fix:** Give every report a separate 256-bit share token, resolve shared data
+only below `/api/shared-reports/{share_token}`, remove private shell components
+on shared pages, and enforce the same separation at the production reverse
+proxy. Keep management on a loopback-only listener reached by SSH.
+
+**Lesson:** A UI-only restriction is not a security boundary. Separate identifiers,
+backend routers, frontend scope, and gateway routes must all express the same
+capability boundary. Because capability URLs grant access, support rotation and
+keep full URLs out of referrers, caches, and access logs.

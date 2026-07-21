@@ -330,6 +330,15 @@ class ProcessingPipeline:
 
 ## Recovery Procedures
 
+### Shared Report Recovery
+
+Invalid, expired-by-rotation, and nonexistent report capabilities all return the
+same 404 response; do not reveal whether an internal report exists. Report
+generation failures remove the unpublished staging directory. A status file left
+as `running` after restart is changed to `error` with `server_restarted` when no
+matching `TaskManager` task exists, allowing the recipient to run the analysis
+again.
+
 ### Processing Recovery
 
 Retries are clean full replays, not step-level resumes. The retry route accepts

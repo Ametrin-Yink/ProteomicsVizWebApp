@@ -76,6 +76,11 @@ class Settings(BaseSettings):
         description="Directory for the global file library",
     )
 
+    reports_dir: Path = Field(
+        default=Path(__file__).resolve().parent.parent.parent / "reports",
+        description="Directory for published report snapshots",
+    )
+
     # CORS settings
     cors_origins: list[str] = Field(
         default=[
@@ -215,7 +220,13 @@ class Settings(BaseSettings):
         """Directory for GSEA cache files."""
         return self.sessions_dir / ".cache" / "gsea"
 
-    @field_validator("sessions_dir", "protein_database_dir", "file_library_dir", mode="before")
+    @field_validator(
+        "sessions_dir",
+        "protein_database_dir",
+        "file_library_dir",
+        "reports_dir",
+        mode="before",
+    )
     @classmethod
     def resolve_path(cls, v: Path | str | None) -> Path:
         """Ensure paths are resolved Path objects."""
@@ -230,6 +241,7 @@ class Settings(BaseSettings):
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.protein_database_dir.mkdir(parents=True, exist_ok=True)
         self.file_library_dir.mkdir(parents=True, exist_ok=True)
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
         # Create GSEA cache directory if caching is enabled
         if self.gsea_cache_enabled:
             self.gsea_cache_dir.mkdir(parents=True, exist_ok=True)

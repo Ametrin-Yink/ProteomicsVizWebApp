@@ -30,6 +30,7 @@ Coverage must be planned around these risks:
 | API compatibility | Generated OpenAPI drift check and frontend API-client behavior tests |
 | State and recovery | Queue, retry, cancel, restart, persistence, and rollback tests |
 | Data safety | Isolated roots, path-boundary tests, collision and atomicity tests |
+| Shared report isolation | Capability-token access, revoked-link failure, no public management/list/upload routes, and bounded report computations |
 | UI behavior | Component tests for states/errors and a few critical browser journeys |
 | Performance | Separate representative-data tests with explicit resource expectations |
 
@@ -134,6 +135,12 @@ the browser layer.
 For UI changes, inspect the rendered result at the supported viewport in addition
 to automated assertions. Screenshots are evidence for visual layout, not a
 substitute for behavioral assertions.
+
+Shared-report changes require integration coverage that uses the share token for
+report data while retaining the internal ID for management. Tests must prove that
+staged reports are invisible, rotation revokes the old link, source-session
+deletion does not break a published report, invalid comparisons are rejected,
+and the shared application shell does not render private navigation or task UI.
 
 ## Suite health targets
 

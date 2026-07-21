@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork, Loader2, AlertCircle } from 'lucide-react';
+import { ChartScatter, Activity, Spline, GitCompare, ChartNetwork, Loader2, AlertCircle, Share2 } from 'lucide-react';
 import { ApiProvider } from '@/lib/api-context';
 import { reportApiPrefix } from '@/lib/api-client';
 
@@ -25,8 +24,8 @@ type TabId = (typeof TABS)[number]['id'];
 
 function ReportViewerContent() {
   const params = useParams();
-  const reportId = params.reportId as string;
-  const apiPrefix = reportApiPrefix(reportId);
+  const shareToken = params.reportId as string;
+  const apiPrefix = reportApiPrefix(shareToken);
 
   const [reportMeta, setReportMeta] = useState<{
     name: string; session_name: string; created_at: string;
@@ -36,7 +35,7 @@ function ReportViewerContent() {
   const [activeTab, setActiveTab] = useState<TabId>('volcano');
 
   useEffect(() => {
-    if (!reportId) return;
+    if (!shareToken) return;
     const url = `${apiPrefix}`;
     fetch(url)
       .then(r => { if (!r.ok) throw new Error('Report not found'); return r.json(); })
@@ -49,7 +48,7 @@ function ReportViewerContent() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [reportId, apiPrefix]);
+  }, [shareToken, apiPrefix]);
 
   if (loading) {
     return (
@@ -68,17 +67,15 @@ function ReportViewerContent() {
         <div className="bg-error/5 border border-error/20 rounded-lg p-6 max-w-md text-center">
           <AlertCircle className="w-10 h-10 text-error mx-auto mb-3" />
           <h2 className="text-lg font-semibold text-error mb-2">Error Loading Report</h2>
-          <p className="text-sm text-error/80 mb-4">{error || 'Report not found'}</p>
-          <Link href="/reports" className="inline-flex items-center px-4 py-2 bg-surface text-text-primary rounded-lg hover:bg-border transition-colors text-sm">
-            Back to Reports
-          </Link>
+          <p className="text-sm text-error/80">{error || 'Report not found'}</p>
+          <p className="mt-3 text-xs text-text-muted">Ask the sender for a current report link.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <ApiProvider apiPrefix={apiPrefix}>
+    <ApiProvider apiPrefix={apiPrefix} scope="shared-report">
       <div className="h-screen bg-surface flex flex-col">
         <div className="bg-background border-b border-border px-6 py-3 shrink-0">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -89,9 +86,9 @@ function ReportViewerContent() {
                 {new Date(reportMeta.created_at).toLocaleDateString()}
               </p>
             </div>
-            <Link href="/reports" className="text-sm text-text-secondary hover:text-text-primary transition-colors">
-              &larr; All Reports
-            </Link>
+            <div className="flex items-center gap-2 rounded-full bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary">
+              <Share2 className="h-3.5 w-3.5" /> Shared report
+            </div>
           </div>
         </div>
 

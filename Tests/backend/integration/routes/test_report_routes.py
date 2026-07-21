@@ -120,51 +120,58 @@ def test_generate_and_view_report(client):
     assert response.status_code == 200
     data = response.json()
     assert "report_id" in data
+    assert "share_token" in data
     report_id = data["report_id"]
+    share_token = data["share_token"]
     assert report_id.startswith("rpt_")
 
     # GET report metadata
-    response = client.get(f"/api/reports/{report_id}")
+    response = client.get(f"/api/shared-reports/{share_token}")
     assert response.status_code == 200
     meta = response.json()
     assert meta["_report"]["name"] == "Integration Test Report"
+    assert "session_id" not in meta["_report"]
     assert "config" in meta  # session fields at top level
 
     # GET results
-    response = client.get(f"/api/reports/{report_id}/results")
+    response = client.get(f"/api/shared-reports/{share_token}/results")
     assert response.status_code == 200
 
     # GET QC
-    response = client.get(f"/api/reports/{report_id}/qc/plots")
+    response = client.get(f"/api/shared-reports/{share_token}/qc/plots")
     assert response.status_code == 200
 
     # GET GSEA status
-    response = client.get(f"/api/reports/{report_id}/gsea/status")
+    response = client.get(f"/api/shared-reports/{share_token}/gsea/status")
     assert response.status_code == 200
 
     # GET GSEA data
-    response = client.get(f"/api/reports/{report_id}/gsea/go_bp")
+    response = client.get(f"/api/shared-reports/{share_token}/gsea/go_bp")
     assert response.status_code == 200
 
     # GET protein abundance
-    response = client.get(f"/api/reports/{report_id}/protein/P12345/abundance")
+    response = client.get(f"/api/shared-reports/{share_token}/protein/P12345/abundance")
     assert response.status_code == 200
 
     # GET bionet subnetwork
-    response = client.get(f"/api/reports/{report_id}/bionet/subnetwork")
+    response = client.get(f"/api/shared-reports/{share_token}/bionet/subnetwork")
     assert response.status_code == 200
 
-    # PATCH visualization state
+    # Shared links cannot persist another viewer's visualization state.
     response = client.patch(
-        f"/api/reports/{report_id}/visualization-state",
+        f"/api/shared-reports/{share_token}/visualization-state",
         json={"markers": {"Trt_vs_Ctrl": ["P12345"]}},
     )
-    assert response.status_code == 200
+    assert response.status_code in {404, 405}
+
+    # Internal IDs are management-only and do not render report data.
+    response = client.get(f"/api/reports/{report_id}")
+    assert response.status_code == 405
 
     # DELETE report
     response = client.delete(f"/api/reports/{report_id}")
     assert response.status_code == 200
-    response = client.get(f"/api/reports/{report_id}")
+    response = client.get(f"/api/shared-reports/{share_token}")
     assert response.status_code == 404
 
 
@@ -180,6 +187,45 @@ def test_generate_rejects_non_completed_session(client):
         json={"name": "Should Fail"},
     )
     assert response.status_code == 400
+    assert client.get("/api/reports").json() == {"reports": []}
+
+
+def test_shared_compute_requests_are_bounded_and_report_scoped(client):
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
+    session_id = str(uuid.uuid4())
+    make_completed_session_with_files(sessions_dir, session_id)
+    generated = client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "Bounded Report"},
+    ).json()
+    share_token = generated["share_token"]
+    prefix = f"/api/shared-reports/{share_token}"
+
+    response = client.post(
+        f"{prefix}/gsea/run",
+        json={
+            "comparison": "Trt_vs_Ctrl",
+            "databases": ["go_bp"],
+            "permutations": 100_000,
+        },
+    )
+    assert response.status_code == 422
+
+    response = client.post(
+        f"{prefix}/bionet/run",
+        json={"comparison": "Another_Report_Comparison"},
+    )
+    assert response.status_code == 400
+
+    response = client.post(
+        f"{prefix}/compare/venn",
+        json={
+            "comparisons": ["Trt_vs_Ctrl", "Another_Report_Comparison"],
+            "pvalue_threshold": 0.05,
+            "logfc_threshold": 1,
+        },
+    )
+    assert response.status_code == 400
 
 
 def test_report_survives_session_deletion(client):
@@ -193,28 +239,57 @@ def test_report_survives_session_deletion(client):
         json={"name": "Persistent Report"},
     )
     assert response.status_code == 200
-    report_id = response.json()["report_id"]
+    share_token = response.json()["share_token"]
 
     # Delete original session
     shutil.rmtree(sessions_dir / session_id)
 
     # Report should still work
-    response = client.get(f"/api/reports/{report_id}")
+    response = client.get(f"/api/shared-reports/{share_token}")
     assert response.status_code == 200
-    response = client.get(f"/api/reports/{report_id}/results")
+    response = client.get(f"/api/shared-reports/{share_token}/results")
     assert response.status_code == 200
-    response = client.get(f"/api/reports/{report_id}/protein/P12345/abundance")
+    response = client.get(f"/api/shared-reports/{share_token}/protein/P12345/abundance")
     assert response.status_code == 200
 
 
 def test_report_not_found(client):
-    response = client.get("/api/reports/rpt_nonexistent")
+    response = client.get(
+        "/api/shared-reports/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    )
     assert response.status_code == 404
 
 
 def test_delete_nonexistent_report(client):
     response = client.delete("/api/reports/rpt_nonexistent")
     assert response.status_code == 404
+
+
+def test_rotate_share_token_revokes_old_link(client):
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
+    session_id = str(uuid.uuid4())
+    make_completed_session_with_files(sessions_dir, session_id)
+
+    generated = client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "Rotatable Report"},
+    ).json()
+    report_id = generated["report_id"]
+    old_token = generated["share_token"]
+
+    response = client.post(f"/api/reports/{report_id}/share-token/rotate")
+    assert response.status_code == 200
+    new_token = response.json()["share_token"]
+    assert new_token != old_token
+
+    assert client.get(f"/api/shared-reports/{old_token}").status_code == 404
+    assert client.get(f"/api/shared-reports/{new_token}").status_code == 200
+
+
+def test_shared_surface_has_no_listing_or_delete(client):
+    assert client.get("/api/shared-reports").status_code in {404, 405}
+    token = "A" * 43
+    assert client.delete(f"/api/shared-reports/{token}").status_code == 405
 
 
 def test_report_protein_correlation_uses_exact_accession_matching(

@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 
 from app.core.config import settings
+from app.services.report_store import get_report_staging_dir
 
 logger = logging.getLogger("proteomics")
 
@@ -57,8 +58,7 @@ def generate_report(session_id: str, report_id: str) -> None:
             "Only completed sessions can be exported."
         )
 
-    reports_dir = settings.base_dir / "reports"
-    report_dir = reports_dir / report_id
+    report_dir = get_report_staging_dir(report_id)
     if not report_dir.is_dir():
         raise ValueError(f"Report directory not found: {report_id}")
 

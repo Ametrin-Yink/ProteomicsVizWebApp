@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   organismsApi,
   processingApi,
+  reportApiPrefix,
+  reportWebUrl,
   sessionsApi,
   uploadApi,
   visualizationApi,
@@ -27,6 +29,15 @@ beforeEach(() => {
 });
 
 describe('frontend/backend API contract', () => {
+  it('uses the capability-scoped API prefix for a shared report', () => {
+    expect(reportApiPrefix('opaque-share-token')).toBe(
+      '/api/shared-reports/opaque-share-token'
+    );
+    expect(reportWebUrl('opaque-share-token')).toBe(
+      `${window.location.origin}/reports/opaque-share-token`
+    );
+  });
+
   it('sends non-default session configuration to the config endpoint', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ id: 'session-1' }));
 

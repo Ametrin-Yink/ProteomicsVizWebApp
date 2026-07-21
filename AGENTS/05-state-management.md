@@ -68,3 +68,12 @@ export const useSessionActions = () => {
 - Storing derived/computed data (compute on demand instead)
 - Mutating state outside store actions
 - Mixing domain state in one store (sessions + UI + analysis)
+
+## Shared report scope
+
+Visualization components are reused through `ApiProvider`. Session pages use a
+session API prefix and may persist markers/filters. Shared report pages use the
+capability API prefix with `scope="shared-report"`; they load the report's initial
+state but keep each viewer's later markers and filters local. Do not infer this
+permission from URL text inside visualization componentsâ€”use
+`canPersistVisualizationState` from `useApi()`.

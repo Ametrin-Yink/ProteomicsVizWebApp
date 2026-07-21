@@ -275,9 +275,14 @@ app.include_router(
     prefix="/api/sessions",
     tags=["visualization"],
 )
-# Reports: session-scoped weblink upload + global report serving
+# Reports: private management plus capability-scoped shared report access
 app.include_router(reports.router, prefix="/api/sessions", tags=["reports"])
-app.include_router(reports.global_router, prefix="/api", tags=["reports"])
+app.include_router(
+    reports.management_router,
+    prefix="/api",
+    tags=["report-management"],
+)
+app.include_router(reports.shared_router, prefix="/api", tags=["shared-reports"])
 app.include_router(compare.router, prefix="/api/sessions", tags=["compare"])
 app.include_router(files_routes.router, prefix="/api/files", tags=["files"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])

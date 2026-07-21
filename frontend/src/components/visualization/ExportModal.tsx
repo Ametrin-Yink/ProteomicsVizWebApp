@@ -2,6 +2,8 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Loader2, Link, Copy, CheckCircle } from 'lucide-react';
+import { reportWebUrl } from '@/lib/api-client';
+import { copyText } from '@/lib/clipboard';
 
 interface ExportModalProps {
   sessionId: string;
@@ -90,7 +92,7 @@ export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProp
       }
 
       const result = await response.json();
-      setResultUrl(`${window.location.origin}${result.weblink}`);
+      setResultUrl(reportWebUrl(result.share_token));
       setState('weblink-ready');
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to generate report');
@@ -99,7 +101,7 @@ export function ExportModal({ sessionId, sessionName, onClose }: ExportModalProp
   }, [name, sessionId]);
 
   const copyUrl = useCallback(async () => {
-    try { await navigator.clipboard.writeText(resultUrl); setCopied(true); } catch {}
+    if (await copyText(resultUrl)) setCopied(true);
   }, [resultUrl]);
 
   return (

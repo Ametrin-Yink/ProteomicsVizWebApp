@@ -37,3 +37,16 @@
 ## Biomart Fallback
 
 - Always implement fallback when Biomart is offline — return UniProt IDs as-is
+
+## Shared Report Boundary
+
+- **NEVER expose** `/api/sessions`, `/api/files`, `/api/reports`, uploads,
+  WebSockets, or the full application shell on the public report listener.
+- **NEVER use an internal report ID as a public capability.** Shared routes accept
+  only the random `share_token` below `/api/shared-reports/{share_token}`.
+- **NEVER add report listing, rename, delete, token rotation, upload, session
+  creation, or visualization-state persistence to the shared surface.**
+- Shared GSEA, BioNet, and Compare requests must be report-scoped, bounded, and
+  scheduled through `TaskManager`.
+- The current report task locks require one backend worker. Do not enable multiple
+  Uvicorn workers until coordination moves to shared durable infrastructure.

@@ -1,6 +1,12 @@
 # 04 - API Contract
 
-Base URL: `http://localhost:8000/api/sessions`
+API surfaces:
+
+- Session and application API: `/api/sessions`, `/api/files`, and related routes
+  on the private application listener.
+- Report management API: `/api/reports` on the private application listener.
+- Shared capability API: `/api/shared-reports/{share_token}` on the public report
+  listener.
 
 ## Response Format
 
@@ -38,6 +44,36 @@ Base URL: `http://localhost:8000/api/sessions`
 | GET | `/api/sessions/{id}/compare/result` | Compare task results |
 | GET | `/api/organisms` | List supported organisms |
 | WS | `/ws/sessions/{id}` | Real-time pipeline updates |
+
+## Report endpoints
+
+| Method | Path | Exposure | Description |
+|---|---|---|---|
+| POST | `/api/sessions/{id}/reports/generate` | Private | Atomically publish a completed session snapshot and return its internal ID and share token |
+| GET | `/api/reports` | Private | List reports, including management IDs and share tokens |
+| PATCH | `/api/reports/{report_id}` | Private | Rename a report |
+| DELETE | `/api/reports/{report_id}` | Private | Delete a report |
+| POST | `/api/reports/{report_id}/share-token/rotate` | Private | Revoke the old link and return a replacement |
+| GET | `/api/shared-reports/{share_token}` | Public capability | Get sanitized report metadata and copied session configuration |
+| GET | `/api/shared-reports/{share_token}/results` | Public capability | Get differential-expression results |
+| GET | `/api/shared-reports/{share_token}/qc/plots` | Public capability | Get QC data |
+| GET/POST | `/api/shared-reports/{share_token}/gsea/...` | Public capability | Read or run bounded report GSEA |
+| GET/POST | `/api/shared-reports/{share_token}/bionet/...` | Public capability | Read or run bounded report BioNet |
+| GET/POST | `/api/shared-reports/{share_token}/compare/...` | Public capability | Read or run bounded report comparisons |
+| GET | `/api/shared-reports/{share_token}/protein/{protein_id}/...` | Public capability | Get abundance or peptide data from the report |
+
+The shared surface intentionally has no list, upload, session creation, rename,
+delete, link rotation, task cancellation, or visualization-state PATCH endpoint.
+Do not accept an internal `report_id` on shared routes. Invalid and revoked tokens
+return the same 404 response.
+
+Shared users can write derived GSEA, BioNet, and Compare artifacts within the one
+report granted by the token. Input comparisons must exist in that report, request
+sizes must stay bounded, and heavy work must use `TaskManager`. Viewer markers and
+filters are local state and must not be persisted to the report.
+
+See `docs/REPORT_SHARING.md` for the bearer-capability model and public gateway
+allowlist. The generated route-level contract is `docs/api/openapi.yaml`.
 
 ## Key Types
 

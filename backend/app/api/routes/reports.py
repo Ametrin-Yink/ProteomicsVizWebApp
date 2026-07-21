@@ -1,42 +1,133 @@
-"""
-Report API routes -- self-contained report viewing endpoints.
-
-Replaces the old ZIP-based export flow with read-only endpoints that
-serve data directly from report directories.  The session-scoped
-``router`` (mounted at ``/api/sessions``) is used for the generate
-endpoint; the ``global_router`` (mounted at ``/api``) serves all
-/reports/{report_id}/... endpoints.
-
-Key pattern: every endpoint validates the report exists via
-``get_report_dir()``, then reads data from the report directory.
-On-demand compute features (GSEA run, BioNet run, compare run) are
-stubs for now.
-"""
+"""Management and capability-scoped APIs for self-contained reports."""
 
 import asyncio
 import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.services.report_generator import generate_report
 from app.services.report_store import (
     create_report,
     delete_report,
+    discard_staged_report,
+    get_report_by_share_token,
     get_report_dir,
     get_report_metadata,
     get_report_session,
+    get_report_staging_dir,
     list_reports,
-    patch_report_state,
+    publish_report,
+    rotate_share_token,
+)
+from app.services.task_manager import (
+    TaskCancelledError,
+    TaskKind,
+    TaskTimeoutError,
+    task_manager,
 )
 from app.utils.json_io import read_json_file, write_json_file
 
 logger = logging.getLogger("proteomics")
 
 router = APIRouter()  # Session-scoped:  mounted at /api/sessions
-global_router = APIRouter()  # Global:          mounted at /api
+management_router = APIRouter()  # Private report administration
+shared_router = APIRouter()  # Capability-scoped report viewing and computation
+
+VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
+ComparisonName = Annotated[str, Field(min_length=1, max_length=200)]
+ProteinIdentifier = Annotated[str, Field(min_length=1, max_length=500)]
+AnalysisOption = Annotated[str, Field(min_length=1, max_length=100)]
+
+
+class ReportNameRequest(BaseModel):
+    """Validated report name payload."""
+
+    name: str = Field(min_length=1, max_length=200)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Report name is required")
+        return value
+
+
+class ReportGseaRunRequest(BaseModel):
+    """Bounded GSEA request available to a shared report recipient."""
+
+    comparison: ComparisonName
+    databases: list[AnalysisOption] = Field(min_length=1, max_length=5)
+    min_size: int = Field(default=15, ge=1, le=5000)
+    max_size: int = Field(default=500, ge=1, le=5000)
+    permutations: int = Field(default=1000, ge=100, le=10000)
+
+    @model_validator(mode="after")
+    def validate_request(self):
+        if self.min_size > self.max_size:
+            raise ValueError("min_size must not exceed max_size")
+        invalid = set(self.databases) - VALID_GSEA_DATABASES
+        if invalid:
+            raise ValueError(f"Unsupported GSEA databases: {sorted(invalid)}")
+        if len(set(self.databases)) != len(self.databases):
+            raise ValueError("GSEA databases must be unique")
+        return self
+
+
+class ReportBioNetRunRequest(BaseModel):
+    """Bounded BioNet request available to a shared report recipient."""
+
+    comparison: ComparisonName
+    pvalue_cutoff: float = Field(default=0.05, ge=0, le=1)
+    logfc_cutoff: float = Field(default=0.5, ge=0, le=100)
+    statement_types: list[AnalysisOption] = Field(
+        default_factory=lambda: ["IncreaseAmount", "DecreaseAmount"],
+        max_length=50,
+    )
+    paper_count_cutoff: int = Field(default=1, ge=0, le=1_000_000)
+    evidence_count_cutoff: int = Field(default=1, ge=0, le=1_000_000)
+    correlation_cutoff: float | None = Field(default=None, ge=-1, le=1)
+    sources_filter: list[AnalysisOption] | None = Field(default=None, max_length=50)
+
+
+class ReportProteinCorrelationRequest(BaseModel):
+    protein_id: ProteinIdentifier
+    cluster_method: Literal["pca", "umap", "tsne"] = "pca"
+    color_comparison: ComparisonName
+
+
+class ReportComparisonCorrelationRequest(BaseModel):
+    primary_comparison: ComparisonName
+    selected_comparisons: list[ComparisonName] = Field(min_length=1, max_length=100)
+    marked_proteins: dict[ComparisonName, list[ProteinIdentifier]] = Field(
+        default_factory=dict, max_length=100
+    )
+    cluster_method: Literal["pca", "umap", "tsne"] = "pca"
+
+    @model_validator(mode="after")
+    def validate_markers(self):
+        marker_count = sum(len(values) for values in self.marked_proteins.values())
+        if marker_count > 10_000:
+            raise ValueError("At most 10000 marked proteins may be submitted")
+        return self
+
+
+class ReportVennRequest(BaseModel):
+    comparisons: list[ComparisonName] = Field(min_length=2, max_length=3)
+    pvalue_threshold: float = Field(default=0.05, ge=0, le=1)
+    logfc_threshold: float = Field(default=1.0, ge=0, le=100)
+
+    @field_validator("comparisons")
+    @classmethod
+    def validate_unique_comparisons(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError("Venn comparisons must be unique")
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +141,40 @@ def _get_report_dir_or_404(report_id: str) -> Path:
     if d is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return d
+
+
+def _get_shared_report_or_404(share_token: str) -> tuple[str, Path, dict]:
+    """Resolve one report capability without revealing why lookup failed."""
+    resolved = get_report_by_share_token(share_token)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return resolved
+
+
+def _report_task_key(report_id: str) -> str:
+    return f"report:{report_id}"
+
+
+def _report_task_recently_started(data: dict, grace_seconds: int = 10) -> bool:
+    """Avoid declaring a just-scheduled task stale before TaskManager sees it."""
+    started_at = data.get("started_at")
+    if not isinstance(started_at, str):
+        return False
+    try:
+        started = datetime.fromisoformat(started_at)
+        return (datetime.now(UTC) - started).total_seconds() < grace_seconds
+    except (TypeError, ValueError):
+        return False
+
+
+def _validate_comparisons(report_dir: Path, comparisons: list[str]) -> None:
+    available = set(_get_comparisons(report_dir / "results"))
+    invalid = set(comparisons) - available
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown report comparisons: {sorted(invalid)}",
+        )
 
 
 def _get_comparisons(results_dir: Path) -> list[str]:
@@ -87,28 +212,17 @@ def _build_sample_filter_from_session(
 
 
 @router.post("/{session_id}/reports/generate")
-async def generate_report_endpoint(session_id: str, request: Request):
+async def generate_report_endpoint(session_id: str, request: ReportNameRequest):
     """Generate a self-contained report from a completed session."""
-    body = await request.json()
-    name = (body.get("name") or "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Report name is required")
-
     metadata = await asyncio.to_thread(
         create_report,
-        name=name,
+        name=request.name.strip(),
         session_id=session_id,
         session_name="",
     )
     try:
         await asyncio.to_thread(generate_report, session_id, metadata["report_id"])
-    except ValueError as e:
-        await asyncio.to_thread(delete_report, metadata["report_id"])
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    # Update session_name from the session.json that was just copied in
-    report_dir = get_report_dir(metadata["report_id"])
-    if report_dir is not None:
+        report_dir = get_report_staging_dir(metadata["report_id"])
         session_json_path = report_dir / "session.json"
         if session_json_path.exists():
             session_data = await read_json_file(session_json_path)
@@ -118,11 +232,19 @@ async def generate_report_endpoint(session_id: str, request: Request):
                 metadata,
                 indent=2,
             )
+        await asyncio.to_thread(publish_report, metadata["report_id"])
+    except ValueError as e:
+        await asyncio.to_thread(discard_staged_report, metadata["report_id"])
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        await asyncio.to_thread(discard_staged_report, metadata["report_id"])
+        raise
 
     return {
         "report_id": metadata["report_id"],
+        "share_token": metadata["share_token"],
         "name": metadata["name"],
-        "weblink": f"/reports/{metadata['report_id']}",
+        "weblink": f"/reports/{metadata['share_token']}",
         "created_at": metadata["created_at"],
     }
 
@@ -132,27 +254,29 @@ async def generate_report_endpoint(session_id: str, request: Request):
 # ---------------------------------------------------------------------------
 
 
-@global_router.get("/reports")
+@management_router.get("/reports")
 async def get_reports():
     """List all reports."""
     return {"reports": await asyncio.to_thread(list_reports)}
 
 
-@global_router.get("/reports/{report_id}")
-async def get_report_meta(report_id: str):
+@shared_router.get("/shared-reports/{share_token}")
+async def get_report_meta(share_token: str):
     """Return report metadata and session data in a shape compatible with
     getDataSource on the frontend (config, markers, etc. at top level)."""
-    _get_report_dir_or_404(report_id)
-    meta, session = await asyncio.gather(
-        asyncio.to_thread(get_report_metadata, report_id),
-        asyncio.to_thread(get_report_session, report_id),
-    )
-    meta = meta or {}
+    report_id, _report_dir, meta = _get_shared_report_or_404(share_token)
+    session = await asyncio.to_thread(get_report_session, report_id)
     session = session or {}
     return {
-        "_report": meta,
-        "id": report_id,
+        "_report": {
+            "name": meta.get("name", ""),
+            "session_name": meta.get("session_name", ""),
+            "created_at": meta.get("created_at", ""),
+        },
+        "id": share_token,
         "name": meta.get("session_name") or session.get("name", ""),
+        "template": session.get("template"),
+        "pipeline": session.get("pipeline"),
         "config": session.get("config"),
         "files": session.get("files"),
         "markers": session.get("markers"),
@@ -160,21 +284,17 @@ async def get_report_meta(report_id: str):
     }
 
 
-@global_router.patch("/reports/{report_id}")
-async def rename_report(report_id: str, request: Request):
+@management_router.patch("/reports/{report_id}")
+async def rename_report(report_id: str, request: ReportNameRequest):
     """Rename a report."""
-    body = await request.json()
-    name = (body.get("name") or "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Name is required")
     report_dir = _get_report_dir_or_404(report_id)
     meta = await asyncio.to_thread(get_report_metadata, report_id) or {}
-    meta["name"] = name
+    meta["name"] = request.name.strip()
     await write_json_file(report_dir / "report.json", meta, indent=2)
-    return {"message": "Renamed", "name": name}
+    return {"message": "Renamed", "name": request.name.strip()}
 
 
-@global_router.delete("/reports/{report_id}")
+@management_router.delete("/reports/{report_id}")
 async def delete_report_endpoint(report_id: str):
     """Delete a report."""
     if not await asyncio.to_thread(delete_report, report_id):
@@ -182,14 +302,26 @@ async def delete_report_endpoint(report_id: str):
     return {"message": "Report deleted"}
 
 
+@management_router.post("/reports/{report_id}/share-token/rotate")
+async def rotate_report_share_token(report_id: str):
+    """Revoke the old shared link and return a replacement."""
+    share_token = await asyncio.to_thread(rotate_share_token, report_id)
+    if share_token is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return {
+        "share_token": share_token,
+        "weblink": f"/reports/{share_token}",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Differential expression results
 # ---------------------------------------------------------------------------
 
 
-@global_router.get("/reports/{report_id}/results")
+@shared_router.get("/shared-reports/{share_token}/results")
 async def get_report_results(
-    report_id: str,
+    share_token: str,
     comparison: str = Query(""),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=20000),
@@ -199,7 +331,9 @@ async def get_report_results(
     search: str = Query(""),
 ):
     """Get paginated DE results from a report."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if comparison:
+        _validate_comparisons(report_dir, [comparison])
     results_dir = report_dir / "results"
 
     from app.api.routes.visualization import (
@@ -258,10 +392,10 @@ async def get_report_results(
 # ---------------------------------------------------------------------------
 
 
-@global_router.get("/reports/{report_id}/qc/plots")
-async def get_report_qc_plots(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/qc/plots")
+async def get_report_qc_plots(share_token: str):
     """Get QC plot data."""
-    report_dir = _get_report_dir_or_404(report_id)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     results_dir = report_dir / "results"
 
     from app.api.routes.visualization import create_response, load_qc_results
@@ -275,14 +409,23 @@ async def get_report_qc_plots(report_id: str):
 # ---------------------------------------------------------------------------
 
 
-@global_router.get("/reports/{report_id}/gsea/status")
-async def get_report_gsea_status(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/gsea/status")
+async def get_report_gsea_status(share_token: str):
     """Read GSEA run status from the report's gsea_run_status.json."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     p = report_dir / "gsea_run_status.json"
     if not p.exists():
         return {"status": "idle"}
-    return await read_json_file(p)
+    data = await read_json_file(p)
+    if (
+        data.get("status") == "running"
+        and not _report_task_recently_started(data)
+        and not task_manager.has_active_task(_report_task_key(report_id), TaskKind.GSEA)
+    ):
+        data["status"] = "error"
+        data["error"] = "server_restarted"
+        await write_json_file(p, data, indent=2, default=str)
+    return data
 
 
 # Per-report locks for preventing concurrent compute runs
@@ -303,6 +446,7 @@ async def _report_write_gsea_status(report_dir: Path, data: dict) -> None:
 
 
 async def _report_background_gsea_run(
+    report_id: str,
     report_dir: Path,
     comparison: str,
     databases: list[str],
@@ -335,16 +479,29 @@ async def _report_background_gsea_run(
             status_data["databases"][db_name] = "completed" if success else "error"
             await _report_write_gsea_status(report_dir, status_data)
 
-        gsea_results = await gsea_service.run_gsea_for_comparison(
-            diff_expression_path=de_file,
-            comparison_name=comparison,
-            output_dir=gsea_output_dir,
-            databases=databases,
-            protein_abundance_path=protein_file if protein_file.exists() else None,
-            min_size=min_size,
-            max_size=max_size,
-            permutations=permutations,
-            on_db_complete=on_db_done,
+        def run_gsea_sync():
+            return asyncio.run(
+                gsea_service.run_gsea_for_comparison(
+                    diff_expression_path=de_file,
+                    comparison_name=comparison,
+                    output_dir=gsea_output_dir,
+                    databases=databases,
+                    protein_abundance_path=(
+                        protein_file if protein_file.exists() else None
+                    ),
+                    min_size=min_size,
+                    max_size=max_size,
+                    permutations=permutations,
+                    on_db_complete=on_db_done,
+                )
+            )
+
+        gsea_results = await task_manager.submit(
+            _report_task_key(report_id),
+            TaskKind.GSEA,
+            run_gsea_sync,
+            label=f"Shared report GSEA: {comparison}",
+            timeout_seconds=30 * 60,
         )
 
         status_data["status"] = "completed"
@@ -352,7 +509,18 @@ async def _report_background_gsea_run(
 
         results_file = gsea_output_dir / "GSEA_Results.json"
         await asyncio.to_thread(gsea_service.save_results, gsea_results, results_file)
+        from app.api.routes.visualization import _gsea_file_cache
 
+        _gsea_file_cache.remove(str(results_file))
+
+    except TaskCancelledError:
+        status_data["status"] = "error"
+        status_data["error"] = "Task cancelled"
+        await _report_write_gsea_status(report_dir, status_data)
+    except TaskTimeoutError:
+        status_data["status"] = "error"
+        status_data["error"] = "Task timed out after 30 minutes"
+        await _report_write_gsea_status(report_dir, status_data)
     except Exception as e:
         logger.error(f"Report GSEA background run failed: {e}")
         status_data["status"] = "error"
@@ -363,21 +531,16 @@ async def _report_background_gsea_run(
         _report_gsea_locks.pop(str(report_dir), None)
 
 
-@global_router.post("/reports/{report_id}/gsea/run")
-async def run_report_gsea(report_id: str, request: Request):
+@shared_router.post("/shared-reports/{share_token}/gsea/run")
+async def run_report_gsea(share_token: str, request: ReportGseaRunRequest):
     """Run GSEA on report data."""
-    report_dir = _get_report_dir_or_404(report_id)
-    body = await request.json()
-    comparison = body.get("comparison", "")
-    databases = body.get("databases", [])
-    min_size = int(body.get("min_size", 15))
-    max_size = int(body.get("max_size", 500))
-    permutations = int(body.get("permutations", 1000))
-
-    if not comparison or not databases:
-        raise HTTPException(
-            status_code=400, detail="comparison and databases are required"
-        )
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    comparison = request.comparison
+    databases = request.databases
+    min_size = request.min_size
+    max_size = request.max_size
+    permutations = request.permutations
+    _validate_comparisons(report_dir, [comparison])
 
     results_dir = report_dir / "results"
     de_file = results_dir / f"Diff_Expression_{comparison}.tsv"
@@ -402,6 +565,7 @@ async def run_report_gsea(report_id: str, request: Request):
 
     task = asyncio.create_task(
         _report_background_gsea_run(
+            report_id=report_id,
             report_dir=report_dir,
             comparison=comparison,
             databases=databases,
@@ -417,9 +581,9 @@ async def run_report_gsea(report_id: str, request: Request):
     return {"status": "started", "comparison": comparison, "databases": databases}
 
 
-@global_router.get("/reports/{report_id}/gsea/{database}")
+@shared_router.get("/shared-reports/{share_token}/gsea/{database}")
 async def get_report_gsea_results(
-    report_id: str,
+    share_token: str,
     database: str,
     comparison: str = Query(""),
     page: int = Query(1, ge=1),
@@ -430,7 +594,9 @@ async def get_report_gsea_results(
     search: str = Query(""),
 ):
     """Get paginated GSEA results for a database."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if comparison:
+        _validate_comparisons(report_dir, [comparison])
     base_results_dir = report_dir / "results"
     results_dir = (
         base_results_dir / "gsea" / comparison if comparison else base_results_dir
@@ -485,15 +651,17 @@ async def get_report_gsea_results(
     return create_response(gsea_data)
 
 
-@global_router.get("/reports/{report_id}/gsea/{database}/plot")
+@shared_router.get("/shared-reports/{share_token}/gsea/{database}/plot")
 async def get_report_gsea_plot(
-    report_id: str,
+    share_token: str,
     database: str,
     term: str = Query(...),
     comparison: str = Query(""),
 ):
     """Get GSEA enrichment plot data for a specific pathway."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if comparison:
+        _validate_comparisons(report_dir, [comparison])
     base_results_dir = report_dir / "results"
     results_dir = (
         base_results_dir / "gsea" / comparison if comparison else base_results_dir
@@ -536,15 +704,17 @@ async def get_report_gsea_plot(
     )
 
 
-@global_router.get("/reports/{report_id}/gsea/{database}/heatmap")
+@shared_router.get("/shared-reports/{share_token}/gsea/{database}/heatmap")
 async def get_report_gsea_heatmap(
-    report_id: str,
+    share_token: str,
     database: str,
     term: str = Query(...),
     comparison: str = Query(""),
 ):
     """Get GSEA heatmap data (z-scores for leading-edge genes)."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if comparison:
+        _validate_comparisons(report_dir, [comparison])
     base_results_dir = report_dir / "results"
     results_dir = (
         base_results_dir / "gsea" / comparison if comparison else base_results_dir
@@ -607,6 +777,7 @@ async def get_report_gsea_heatmap(
 
 
 async def _report_background_bionet_run(
+    report_id: str,
     report_dir: Path,
     request_body: dict,
     de_file: Path,
@@ -630,12 +801,16 @@ async def _report_background_bionet_run(
         nodes_csv = bionet_dir / "nodes.csv"
         edges_csv = bionet_dir / "edges.csv"
 
-        node_count, edge_count = await asyncio.to_thread(
+        node_count, edge_count = await task_manager.submit(
+            _report_task_key(report_id),
+            TaskKind.BIONET,
             bionet_service.run_bionet,
-            de_file=de_file,
-            config=request_body,
-            nodes_csv=nodes_csv,
-            edges_csv=edges_csv,
+            de_file,
+            request_body,
+            nodes_csv,
+            edges_csv,
+            label=f"Shared report BioNet: {request_body['comparison']}",
+            timeout_seconds=30 * 60,
         )
 
         import pandas as pd
@@ -656,6 +831,14 @@ async def _report_background_bionet_run(
         status_data["edge_count"] = edge_count
         status_data["completed_at"] = datetime.now(UTC).isoformat()
         await write_json_file(status_file, status_data, indent=2, default=str)
+    except TaskCancelledError:
+        status_data["status"] = "error"
+        status_data["error"] = "Task cancelled"
+        await write_json_file(status_file, status_data, indent=2, default=str)
+    except TaskTimeoutError:
+        status_data["status"] = "error"
+        status_data["error"] = "Task timed out after 30 minutes"
+        await write_json_file(status_file, status_data, indent=2, default=str)
     except Exception as e:
         logger.error(f"Report BioNet background run failed: {e}")
         status_data["status"] = "error"
@@ -666,15 +849,13 @@ async def _report_background_bionet_run(
         _report_bionet_locks.pop(str(report_dir), None)
 
 
-@global_router.post("/reports/{report_id}/bionet/run")
-async def run_report_bionet(report_id: str, request: Request):
+@shared_router.post("/shared-reports/{share_token}/bionet/run")
+async def run_report_bionet(share_token: str, request: ReportBioNetRunRequest):
     """Run BioNet on report data."""
-    report_dir = _get_report_dir_or_404(report_id)
-    body = await request.json()
-
-    comparison = body.get("comparison", "")
-    if not comparison:
-        raise HTTPException(status_code=400, detail="comparison is required")
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    body = request.model_dump()
+    comparison = request.comparison
+    _validate_comparisons(report_dir, [comparison])
 
     results_dir = report_dir / "results"
     de_file = results_dir / f"Diff_Expression_{comparison}.tsv"
@@ -699,6 +880,7 @@ async def run_report_bionet(report_id: str, request: Request):
 
     task = asyncio.create_task(
         _report_background_bionet_run(
+            report_id=report_id,
             report_dir=report_dir,
             request_body=body,
             de_file=de_file,
@@ -711,20 +893,31 @@ async def run_report_bionet(report_id: str, request: Request):
     return {"status": "started", "comparison": comparison}
 
 
-@global_router.get("/reports/{report_id}/bionet/status")
-async def get_report_bionet_status(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/bionet/status")
+async def get_report_bionet_status(share_token: str):
     """Read BioNet run status from the report."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     p = report_dir / "bionet" / "bionet_status.json"
     if not p.exists():
         return {"status": "idle"}
-    return await read_json_file(p)
+    data = await read_json_file(p)
+    if (
+        data.get("status") == "running"
+        and not _report_task_recently_started(data)
+        and not task_manager.has_active_task(
+            _report_task_key(report_id), TaskKind.BIONET
+        )
+    ):
+        data["status"] = "error"
+        data["error"] = "server_restarted"
+        await write_json_file(p, data, indent=2, default=str)
+    return data
 
 
-@global_router.get("/reports/{report_id}/bionet/subnetwork")
-async def get_report_bionet_subnetwork(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/bionet/subnetwork")
+async def get_report_bionet_subnetwork(share_token: str):
     """Return the BioNet subnetwork JSON."""
-    report_dir = _get_report_dir_or_404(report_id)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     p = report_dir / "bionet" / "bionet_subnetwork.json"
     if not p.exists():
         raise HTTPException(status_code=404, detail="No BioNet subnetwork available")
@@ -736,14 +929,16 @@ async def get_report_bionet_subnetwork(report_id: str):
 # ---------------------------------------------------------------------------
 
 
-@global_router.get("/reports/{report_id}/protein/{protein_id}/abundance")
+@shared_router.get("/shared-reports/{share_token}/protein/{protein_id}/abundance")
 async def get_report_protein_abundance(
-    report_id: str,
+    share_token: str,
     protein_id: str,
     comparison: str = Query(""),
 ):
     """Get protein abundance data, optionally filtered by comparison."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if comparison:
+        _validate_comparisons(report_dir, [comparison])
     results_dir = report_dir / "results"
     session_data = await asyncio.to_thread(get_report_session, report_id)
     sample_filter = _build_sample_filter_from_session(session_data, comparison)
@@ -760,14 +955,16 @@ async def get_report_protein_abundance(
     return create_response(data)
 
 
-@global_router.get("/reports/{report_id}/protein/{protein_id}/peptide")
+@shared_router.get("/shared-reports/{share_token}/protein/{protein_id}/peptide")
 async def get_report_protein_peptide(
-    report_id: str,
+    share_token: str,
     protein_id: str,
     comparison: str = Query(""),
 ):
     """Get peptide abundance data for a protein."""
-    report_dir = _get_report_dir_or_404(report_id)
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if comparison:
+        _validate_comparisons(report_dir, [comparison])
     results_dir = report_dir / "results"
     session_data = await asyncio.to_thread(get_report_session, report_id)
     sample_filter = _build_sample_filter_from_session(session_data, comparison)
@@ -1098,11 +1295,57 @@ async def _schedule_report_background(coro) -> asyncio.Task:
     return task
 
 
-@global_router.post("/reports/{report_id}/compare/protein-correlation")
-async def run_report_protein_correlation(report_id: str, request: Request):
+async def _run_report_compute_task(
+    report_id: str,
+    report_dir: Path,
+    compute_type: str,
+    body: dict,
+) -> None:
+    """Run one report comparison job through the global compute queue."""
+    runner = (
+        _run_report_protein_correlation
+        if compute_type == "protein-correlation"
+        else _run_report_comparison_correlation
+    )
+    try:
+        await task_manager.submit(
+            _report_task_key(report_id),
+            TaskKind.COMPUTE,
+            runner,
+            report_dir,
+            body,
+            label=f"Shared report: {compute_type}",
+            timeout_seconds=10 * 60,
+        )
+    except TaskCancelledError:
+        await asyncio.to_thread(
+            _report_compare_write_status,
+            report_dir,
+            compute_type,
+            {"status": "error", "error": "Task cancelled"},
+        )
+    except TaskTimeoutError:
+        await asyncio.to_thread(
+            _report_compare_write_status,
+            report_dir,
+            compute_type,
+            {"status": "error", "error": "Task timed out after 10 minutes"},
+        )
+    except Exception:
+        logger.exception("Shared report comparison task failed")
+
+
+@shared_router.post("/shared-reports/{share_token}/compare/protein-correlation")
+async def run_report_protein_correlation(
+    share_token: str, request: ReportProteinCorrelationRequest
+):
     """Run protein-correlation analysis on report data."""
-    report_dir = _get_report_dir_or_404(report_id)
-    body = await request.json()
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    body = request.model_dump()
+    _validate_comparisons(report_dir, [request.color_comparison])
+
+    if task_manager.has_active_task(_report_task_key(report_id), TaskKind.COMPUTE):
+        raise HTTPException(status_code=409, detail="Computation already in progress")
 
     compare_dir = report_dir / "results" / "compare"
     await asyncio.to_thread(compare_dir.mkdir, parents=True, exist_ok=True)
@@ -1131,24 +1374,39 @@ async def run_report_protein_correlation(report_id: str, request: Request):
         )
 
     await _schedule_report_background(
-        asyncio.to_thread(_run_report_protein_correlation, report_dir, body)
+        _run_report_compute_task(report_id, report_dir, "protein-correlation", body)
     )
     return {"status": "running"}
 
 
-@global_router.get("/reports/{report_id}/compare/protein-correlation/status")
-async def get_report_protein_correlation_status(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/compare/protein-correlation/status")
+async def get_report_protein_correlation_status(share_token: str):
     """Read protein-correlation run status."""
-    report_dir = _get_report_dir_or_404(report_id)
-    return await asyncio.to_thread(
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    data = await asyncio.to_thread(
         _report_compare_read_status, report_dir, "protein-correlation"
     )
+    if (
+        data.get("status") == "running"
+        and not _report_task_recently_started(data)
+        and not task_manager.has_active_task(
+            _report_task_key(report_id), TaskKind.COMPUTE
+        )
+    ):
+        data = {"status": "error", "error": "server_restarted"}
+        await asyncio.to_thread(
+            _report_compare_write_status,
+            report_dir,
+            "protein-correlation",
+            data,
+        )
+    return data
 
 
-@global_router.get("/reports/{report_id}/compare/protein-correlation")
-async def get_report_protein_correlation_results(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/compare/protein-correlation")
+async def get_report_protein_correlation_results(share_token: str):
     """Return protein-correlation results."""
-    report_dir = _get_report_dir_or_404(report_id)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     rp = _report_compare_result_path(report_dir, "protein-correlation")
     if not rp.exists():
         raise HTTPException(
@@ -1157,11 +1415,20 @@ async def get_report_protein_correlation_results(report_id: str):
     return await read_json_file(rp)
 
 
-@global_router.post("/reports/{report_id}/compare/comparison-correlation")
-async def run_report_comparison_correlation(report_id: str, request: Request):
+@shared_router.post("/shared-reports/{share_token}/compare/comparison-correlation")
+async def run_report_comparison_correlation(
+    share_token: str, request: ReportComparisonCorrelationRequest
+):
     """Run comparison-correlation analysis on report data."""
-    report_dir = _get_report_dir_or_404(report_id)
-    body = await request.json()
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    body = request.model_dump()
+    _validate_comparisons(
+        report_dir,
+        [request.primary_comparison, *request.selected_comparisons],
+    )
+
+    if task_manager.has_active_task(_report_task_key(report_id), TaskKind.COMPUTE):
+        raise HTTPException(status_code=409, detail="Computation already in progress")
 
     compare_dir = report_dir / "results" / "compare"
     await asyncio.to_thread(compare_dir.mkdir, parents=True, exist_ok=True)
@@ -1190,24 +1457,41 @@ async def run_report_comparison_correlation(report_id: str, request: Request):
         )
 
     await _schedule_report_background(
-        asyncio.to_thread(_run_report_comparison_correlation, report_dir, body)
+        _run_report_compute_task(report_id, report_dir, "comparison-correlation", body)
     )
     return {"status": "running"}
 
 
-@global_router.get("/reports/{report_id}/compare/comparison-correlation/status")
-async def get_report_comparison_correlation_status(report_id: str):
+@shared_router.get(
+    "/shared-reports/{share_token}/compare/comparison-correlation/status"
+)
+async def get_report_comparison_correlation_status(share_token: str):
     """Read comparison-correlation run status."""
-    report_dir = _get_report_dir_or_404(report_id)
-    return await asyncio.to_thread(
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    data = await asyncio.to_thread(
         _report_compare_read_status, report_dir, "comparison-correlation"
     )
+    if (
+        data.get("status") == "running"
+        and not _report_task_recently_started(data)
+        and not task_manager.has_active_task(
+            _report_task_key(report_id), TaskKind.COMPUTE
+        )
+    ):
+        data = {"status": "error", "error": "server_restarted"}
+        await asyncio.to_thread(
+            _report_compare_write_status,
+            report_dir,
+            "comparison-correlation",
+            data,
+        )
+    return data
 
 
-@global_router.get("/reports/{report_id}/compare/comparison-correlation")
-async def get_report_comparison_correlation_results(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/compare/comparison-correlation")
+async def get_report_comparison_correlation_results(share_token: str):
     """Return comparison-correlation results."""
-    report_dir = _get_report_dir_or_404(report_id)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     rp = _report_compare_result_path(report_dir, "comparison-correlation")
     if not rp.exists():
         raise HTTPException(
@@ -1216,34 +1500,33 @@ async def get_report_comparison_correlation_results(report_id: str):
     return await read_json_file(rp)
 
 
-@global_router.post("/reports/{report_id}/compare/venn")
-async def run_report_venn(report_id: str, request: Request):
+@shared_router.post("/shared-reports/{share_token}/compare/venn")
+async def run_report_venn(share_token: str, request: ReportVennRequest):
     """Compute Venn diagram data for report comparisons."""
-    report_dir = _get_report_dir_or_404(report_id)
-    body = await request.json()
-    comparisons = body.get("comparisons", [])
-    pvalue_threshold = body.get("pvalue_threshold", 0.05)
-    logfc_threshold = body.get("logfc_threshold", 1.0)
-
-    if len(comparisons) < 2 or len(comparisons) > 3:
-        raise HTTPException(status_code=400, detail="Venn requires 2 or 3 comparisons")
+    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    comparisons = request.comparisons
+    _validate_comparisons(report_dir, comparisons)
 
     from app.services.compare_service import compute_venn_data
 
-    result = await asyncio.to_thread(
+    result = await task_manager.submit(
+        _report_task_key(report_id),
+        TaskKind.COMPUTE,
         compute_venn_data,
         str(report_dir),
         comparisons,
-        pvalue_threshold,
-        logfc_threshold,
+        request.pvalue_threshold,
+        request.logfc_threshold,
+        label=f"Shared report Venn: {'+'.join(comparisons)}",
+        timeout_seconds=5 * 60,
     )
     return result
 
 
-@global_router.get("/reports/{report_id}/compare/proteins")
-async def get_report_compare_proteins(report_id: str):
+@shared_router.get("/shared-reports/{share_token}/compare/proteins")
+async def get_report_compare_proteins(share_token: str):
     """List all proteins across all comparisons."""
-    report_dir = _get_report_dir_or_404(report_id)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     results_dir = report_dir / "results"
     comparisons = _get_comparisons(results_dir)
     if not comparisons:
@@ -1261,27 +1544,3 @@ async def get_report_compare_proteins(report_id: str):
         ]
 
     return await asyncio.to_thread(_load)
-
-
-# ---------------------------------------------------------------------------
-# Visualization state
-# ---------------------------------------------------------------------------
-
-
-@global_router.patch("/reports/{report_id}/visualization-state")
-async def patch_report_visualization_state(report_id: str, request: Request):
-    """Update markers and/or volcano filters in the report's session.json."""
-    body = await request.json()
-    markers = body.get("markers")
-    volcano_filters = body.get("volcano_filters")
-
-    updated = await asyncio.to_thread(
-        patch_report_state,
-        report_id,
-        markers=markers,
-        volcano_filters=volcano_filters,
-    )
-    if not updated:
-        raise HTTPException(status_code=404, detail="Report not found")
-
-    return {"message": "Visualization state updated"}
