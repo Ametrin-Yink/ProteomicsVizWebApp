@@ -35,11 +35,33 @@ bioc_packages <- c(
     "BiocParallel",
     "SummarizedExperiment"
 )
-BiocManager::install(bioc_packages, ask = FALSE)
+
+# MSstats 4.18.1 requests C++11, but its current RcppArmadillo dependency
+# requires C++14 when packages are built from source.
+local({
+    makevars <- tempfile("Makevars-")
+    old_makevars <- Sys.getenv("R_MAKEVARS_USER", unset = NA_character_)
+    on.exit({
+        if (is.na(old_makevars)) {
+            Sys.unsetenv("R_MAKEVARS_USER")
+        } else {
+            Sys.setenv(R_MAKEVARS_USER = old_makevars)
+        }
+        unlink(makevars)
+    })
+    writeLines("CXX11STD = -std=gnu++14", makevars)
+    Sys.setenv(R_MAKEVARS_USER = makevars)
+    BiocManager::install(bioc_packages, ask = FALSE, update = FALSE)
+})
 
 # ── CRAN packages ────────────────────────────────────────────────────────
 cran_packages <- c("data.table", "matrixStats", "jsonlite", "arrow", "tzdb")
-install.packages(cran_packages, repos = "https://cloud.r-project.org/")
+missing_cran_packages <- cran_packages[
+    !vapply(cran_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_cran_packages) > 0) {
+    install.packages(missing_cran_packages, repos = "https://cloud.r-project.org/")
+}
 
 required_packages <- c(bioc_packages, cran_packages)
 missing_packages <- required_packages[
