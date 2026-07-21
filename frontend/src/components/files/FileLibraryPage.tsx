@@ -321,28 +321,6 @@ export const FileLibraryPage: React.FC = () => {
     );
   }
 
-  // ---- Empty state ----
-  if (!loading && entries.length === 0 && currentPath === '') {
-    return (
-      <div className="flex-1 flex items-center justify-center" data-testid="files-empty">
-        <div className="flex flex-col items-center gap-3 max-w-md text-center">
-          <FolderOpen className="w-16 h-16 text-text-muted" />
-          <h2 className="text-lg font-semibold text-text-primary">Your file library is empty</h2>
-          <p className="text-sm text-text-muted">
-            Drop .txt or .csv files here, or click Upload to get started.
-            You can also copy files directly to the file library folder on disk and click Refresh.
-          </p>
-          <button
-            onClick={handleRefresh}
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-dark"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ---- Normal state ----
   return (
     <div className="flex-1 flex flex-col h-full" data-testid="files-page">
