@@ -315,6 +315,44 @@ class TestTMTDuckDBStreaming:
             assert "DMSO_24h" in conditions
             assert "DrugA_24h" in conditions
 
+    def test_group_column_names_with_spaces_and_colons(self):
+        """Imported design headers are valid metadata column names."""
+        from app.services.data_processor import DataProcessor, ProcessingConfig
+
+        channel_mapping = {
+            "126": {
+                "Factor 1: Treatment": "DMSO",
+                "Factor 2: Cell line": "Jurkat",
+                "Factor 3: Time": "24h",
+                "replicate": 1,
+            },
+            "127N": {
+                "Factor 1: Treatment": "DrugA",
+                "Factor 2: Cell line": "Jurkat",
+                "Factor 3: Time": "24h",
+                "replicate": 1,
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "test_tmt.txt"
+            parquet_path = Path(tmp) / "output.parquet"
+            _write_tmt_csv(csv_path)
+
+            processor = DataProcessor(ProcessingConfig())
+            processor.step1_2_duckdb_tmt([csv_path], channel_mapping, parquet_path)
+
+            result = pd.read_parquet(parquet_path, engine="pyarrow")
+            assert {
+                "Factor 1: Treatment",
+                "Factor 2: Cell line",
+                "Factor 3: Time",
+            }.issubset(result.columns)
+            assert set(result["Condition"]) == {
+                "DMSO_Jurkat_24h",
+                "DrugA_Jurkat_24h",
+            }
+
     def test_missing_channel_mapping_raises(self):
         """Empty channel mapping raises ValueError."""
         from app.services.data_processor import DataProcessor, ProcessingConfig

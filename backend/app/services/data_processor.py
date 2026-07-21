@@ -48,6 +48,11 @@ def _sqlesc(s: str) -> str:
     return str(s).replace("'", "''")
 
 
+def _sql_identifier(s: str) -> str:
+    """Quote a DuckDB identifier supplied by imported metadata."""
+    return '"' + str(s).replace('"', '""') + '"'
+
+
 @dataclass
 class ProcessingConfig:
     """Configuration for data processing."""
@@ -656,7 +661,7 @@ class DataProcessor:
 
         values_clause = ",\n".join(values_parts)
         meta_cols = ["channel", "condition", "replicate", *group_cols]
-        meta_cols_clause = ", ".join(meta_cols)
+        meta_cols_clause = ", ".join(_sql_identifier(col) for col in meta_cols)
 
         # Build non-abundance column SELECT list (rename spaces -> underscores)
         non_abundance_cols = [col for col in first_cols if col not in abundance_cols]
@@ -692,9 +697,13 @@ class DataProcessor:
         psm_where_clause = " AND ".join(psm_filter_parts)
 
         # Build condition expression (group cols joined with _)
-        condition_expr = " || '_' || ".join(f"m.{c}" for c in group_cols)
+        condition_expr = " || '_' || ".join(
+            f"m.{_sql_identifier(col)}" for col in group_cols
+        )
         # Build group column SELECT suffix
-        group_select_sql = ",\n            ".join(f'm.{c} AS "{c}"' for c in group_cols)
+        group_select_sql = ",\n            ".join(
+            f"m.{_sql_identifier(col)} AS {_sql_identifier(col)}" for col in group_cols
+        )
 
         # Build file list for read_csv
         file_list_sql = ", ".join(
