@@ -85,7 +85,10 @@ class TestTMTFullChainDuckDB:
         # Create test input
         csv_path = tmp_path / "test_tmt.txt"
         _write_tmt_csv(csv_path)
-        mapping = _make_channel_mapping()
+        mapping = {
+            f"{csv_path.name}::{channel}": metadata
+            for channel, metadata in _make_channel_mapping().items()
+        }
 
         results_dir = tmp_path / "results"
         uploads_dir = tmp_path / "uploads"

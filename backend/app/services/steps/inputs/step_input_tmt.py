@@ -33,11 +33,28 @@ async def step_input_tmt(ctx: StepContext) -> None:
 
     psm_path = ctx.results_dir / "PSM_Combined.parquet"
 
+    # Session configuration stores mappings by file and reporter channel
+    # ("filename::126"). The DuckDB processor receives the reporter label.
+    source_filenames = {path.name for path in ctx.file_paths}
+    channel_mapping: dict[str, dict] = {}
+    for mapping_key, metadata in ctx.config.tmt_channel_mapping.items():
+        filename, separator, channel = mapping_key.rpartition("::")
+        if separator:
+            if filename not in source_filenames:
+                continue
+        else:
+            channel = mapping_key
+
+        existing = channel_mapping.get(channel)
+        if existing is not None and existing != metadata:
+            raise ValueError(f"Conflicting TMT mappings for reporter channel {channel}")
+        channel_mapping[channel] = metadata
+
     processor = DataProcessor(ProcessingConfig())
     await asyncio.to_thread(
         processor.step1_2_duckdb_tmt,
         ctx.file_paths,
-        ctx.config.tmt_channel_mapping,
+        channel_mapping,
         psm_path,
     )
     ctx.df = None

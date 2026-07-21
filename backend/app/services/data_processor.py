@@ -783,6 +783,9 @@ class DataProcessor:
             )
 
         num_rows = pq.ParquetFile(output_path).metadata.num_rows
+        if num_rows == 0:
+            raise ValueError("No TMT PSM rows matched the configured reporter channels")
+
         con = duckdb.connect()
         try:
             num_conditions = con.execute(

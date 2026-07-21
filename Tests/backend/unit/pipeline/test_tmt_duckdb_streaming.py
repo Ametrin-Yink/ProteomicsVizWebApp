@@ -365,3 +365,20 @@ class TestTMTDuckDBStreaming:
             processor = DataProcessor(ProcessingConfig())
             with pytest.raises(ValueError, match="channel_mapping"):
                 processor.step1_2_duckdb_tmt([csv_path], {}, parquet_path)
+
+    def test_unmatched_channel_mapping_raises(self):
+        """A mapping with no reporter-channel matches fails explicitly."""
+        from app.services.data_processor import DataProcessor, ProcessingConfig
+
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "test_tmt.txt"
+            parquet_path = Path(tmp) / "output.parquet"
+            _write_tmt_csv(csv_path)
+
+            processor = DataProcessor(ProcessingConfig())
+            with pytest.raises(ValueError, match="matched"):
+                processor.step1_2_duckdb_tmt(
+                    [csv_path],
+                    {"128N": {"condition": "Drug", "replicate": 1}},
+                    parquet_path,
+                )
