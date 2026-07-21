@@ -73,7 +73,7 @@ For production builds, set:
 ```text
 NEXT_PUBLIC_REPORT_BASE_URL=http://10.202.25.39:8000
 BACKEND_URL=http://127.0.0.1:8100
-REPORTS_DIR=/srv/proteomicsviz/data/reports
+REPORTS_DIR=/home/proteomicsviz/data/reports
 CORS_ORIGINS=["http://127.0.0.1:8001","http://localhost:8001"]
 ```
 
@@ -101,6 +101,60 @@ to server loopback would make their browsers call their own computers.
   still contain the token.
 - Prefer internal TLS before using the system for sensitive data. Plain HTTP on
   a shared LAN does not protect a report token from network interception.
+
+## Release and deployment workflow
+
+Development stays on Windows. AlmaLinux runs only verified revisions from
+`main`; do not edit production source files on the server.
+
+Use this initial, deliberately manual release flow:
+
+1. Create a feature or fix branch from `main` on the development PC.
+2. Run the required checks in `docs/DEVELOPMENT.md`, including the R-backed
+   scientific release gate for TMT/DIA changes.
+3. Merge the verified branch into `main` and push it to GitHub.
+4. Record the commit to deploy and, for an important release, create a version
+   tag. A production release must always be traceable to one exact commit.
+5. From an SSH session, fetch that commit into a new release directory such as
+   `/home/proteomicsviz/releases/<commit>`; never update the live directory in
+   place and never store runtime data inside a release directory.
+6. Create the release's Python virtual environment, install its dependencies,
+   and build the Next.js frontend with the production environment values. Do
+   not copy the Windows virtual environment, `node_modules`, or `.next` output.
+7. Before switching traffic, verify the R package set, validate
+   `deploy/Caddyfile`, start or smoke-test the new backend and frontend on
+   loopback, and confirm the backend health endpoint succeeds.
+8. Point `/home/proteomicsviz/current` at the new release, restart the backend
+   and frontend systemd services, and run the checks in
+   [Pre-deployment verification](#pre-deployment-verification).
+9. Keep the previous release until the new release has passed a representative
+   report and pipeline check. Roll back by restoring the previous `current`
+   target and restarting the two application services; persistent data is not
+   rolled back with application code.
+
+The first deployments should be initiated explicitly over SSH after a merge.
+Do not restart production automatically on every push to `main`. Automate this
+workflow only after the health check, rollback, data compatibility, and backup
+restore procedures have been exercised successfully.
+
+The intended server layout is:
+
+```text
+/home/proteomicsviz/
+|-- current -> releases/<commit>
+|-- releases/
+|   `-- <commit>/
+`-- data/
+    |-- sessions/
+    |-- reports/
+    |-- file-library/
+    `-- protein-database/
+```
+
+Run the FastAPI and Next.js processes as separate systemd services under an
+unprivileged service account. Caddy is the only network-facing service. The
+backend service must use one Uvicorn worker and systemd must stop its R child
+processes with the backend service.
 
 ## Current limitations
 
