@@ -55,7 +55,7 @@ done
 
 [[ $EUID -eq 0 ]] || die "Run this script through sudo"
 
-for command_name in caddy curl git npm python3 Rscript runuser systemctl systemd-analyze tar; do
+for command_name in caddy curl git npm python3 Rscript runuser ss systemctl systemd-analyze tar; do
     command -v "$command_name" >/dev/null 2>&1 || die "Missing command: $command_name"
 done
 
@@ -248,6 +248,16 @@ systemctl restart "$BACKEND_SERVICE" "$FRONTEND_SERVICE"
 if [[ "$CADDY_CHANGED" == true ]]; then
     systemctl reload "$CADDY_SERVICE"
 fi
+
+verify_private_listener() {
+    local listeners
+    listeners="$(ss -H -ltn 'sport = :8001' | awk '{print $4}')"
+    [[ "$listeners" == "127.0.0.1:8001" ]] || {
+        echo "Expected a loopback-only listener on port 8001; found: ${listeners:-none}" >&2
+        return 1
+    }
+}
+verify_private_listener
 
 wait_for_url() {
     local url="$1"
