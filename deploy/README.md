@@ -146,6 +146,29 @@ sudo journalctl -u proteomicsviz-backend.service -u proteomicsviz-frontend.servi
 Uvicorn access logging is disabled because shared report tokens appear in URL
 paths. Application errors and R output remain available through journald.
 
+## Roll back a release
+
+Use this only when the selected release uses the currently installed systemd
+units, environment files, and Caddy configuration. Replace `<PREVIOUS_SHA>`
+with a full commit SHA already present under `/home/proteomicsviz/releases`:
+
+```bash
+sudo bash -c '
+set -Eeuo pipefail
+release=/home/proteomicsviz/releases/<PREVIOUS_SHA>
+test -d "$release"
+link=/home/proteomicsviz/.current.rollback.$$
+ln -s "$release" "$link"
+mv -Tf -- "$link" /home/proteomicsviz/current
+systemctl restart proteomicsviz-backend.service proteomicsviz-frontend.service
+curl --fail http://127.0.0.1:8100/health
+curl --fail http://127.0.0.1:8001/ >/dev/null
+'
+```
+
+If a release changes deployment configuration, review and install its systemd,
+environment, and Caddy files before switching to it.
+
 ## Private application access
 
 Keep port 8001 closed in firewalld. From Windows, create the two tunnels:
