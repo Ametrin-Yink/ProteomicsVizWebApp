@@ -32,7 +32,7 @@ class Settings(BaseSettings):
         default="Proteomics Visualization API", description="Application name"
     )
     app_version: str = Field(
-        default="1.0.0",
+        default="0.1.0",
         description="Application version (sync with git tags on release)",
     )
     debug: bool = Field(default=False, description="Debug mode")

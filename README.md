@@ -2,6 +2,8 @@
 
 ProteomicsViz is an internal web application for end-to-end proteomics analysis. It supports TMT protein, DIA protein, and PTM TMT workflows, then presents interactive results and publishable capability-link reports.
 
+Current release: **0.1.0** (`v0.1.0`).
+
 ## What it does
 
 - Uploads local files or reuses files from the server file library.

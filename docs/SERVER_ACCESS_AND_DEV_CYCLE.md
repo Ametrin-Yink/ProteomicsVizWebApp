@@ -95,6 +95,17 @@ git push origin main
 
 Use the full 40-character SHA returned by `git rev-parse`; do not rely on an anticipated or abbreviated hash.
 
+For a named release, create an annotated semantic-version tag on the verified
+`main` commit and push it together with `main`:
+
+```powershell
+git tag -a v<version> -m "ProteomicsViz <version>"
+git push origin main v<version>
+```
+
+The backend application version, frontend package version, documentation, and
+release tag must agree.
+
 ## Update the server checkout
 
 Fast-forward the clean administrative checkout after GitHub has the new commit:

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Proteomics Visualization API
   description: Proteomics Visualization Web App API
-  version: 1.0.0
+  version: 0.1.0
 paths:
   /health:
     get:
