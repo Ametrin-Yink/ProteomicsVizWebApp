@@ -1,7 +1,7 @@
 /**
  * Processing Page
  * Real-time processing pipeline with WebSocket updates
- * Following AGENTS/10-processing-pipeline.md and AGENTS/11-websocket-protocol.md
+ * See docs/PIPELINES.md and docs/engineering/API_AND_STATE.md.
  */
 
 'use client';

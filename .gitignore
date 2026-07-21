@@ -140,8 +140,8 @@ settings.local.json
 
 # --- Local AI assistant instructions ---
 # Keep personal tool prompts and machine-specific agent context out of Git.
+# The repository-level AGENTS.md is intentionally tracked.
 AGENT.md
-AGENTS.md
 CLAUDE.md
 
 # --- Design docs (local only) ---

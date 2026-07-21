@@ -2,7 +2,7 @@
  * Session Store using Zustand
  *
  * Manages session state with proper actions - NEVER mutate state directly.
- * Follows AGENTS/05-state-management.md patterns.
+ * See docs/engineering/API_AND_STATE.md.
  */
 
 import { create } from 'zustand';

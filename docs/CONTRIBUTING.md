@@ -1,94 +1,32 @@
-# Contributing to Proteomics Visualization Web App
+# Contributing
 
-## Prerequisites
+## Principles
 
-- **Python 3.12** — backend venv at `backend/.venv/`
-- **Node.js 20+** — frontend
-- **R 4.5+** — with `Rscript` available on `PATH`
-- **Git**
+- State assumptions when behavior or scientific intent is ambiguous.
+- Make the minimum change that satisfies an observable requirement.
+- Add a regression test before fixing a bug whenever practical.
+- Preserve unrelated user changes and avoid adjacent refactoring.
+- Treat generated outputs, runtime sessions, reports, uploaded data, virtual environments, `node_modules`, and `.next` as non-source artifacts.
 
-## Setup
+## Branch and review workflow
 
-### Backend
+1. Update local `main` and create a focused feature or fix branch.
+2. Implement and verify the change using [DEVELOPMENT.md](DEVELOPMENT.md).
+3. Update the nearest current document if behavior, configuration, dependencies, APIs, or operations changed.
+4. Open a pull request or perform the project’s equivalent review.
+5. Merge only verified work to `main`; `main` is the production release branch.
 
-```bash
-backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
-```
+Use a concise commit message that says what changed. The repository does not require a particular commit-message convention.
 
-**Required R packages:**
-```bash
-Rscript -e "BiocManager::install(c('msqrob2', 'QFeatures', 'limma', 'MSstats'))"
-```
+## Architecture constraints
 
-### Frontend
+- Invoke R through `Rscript`; do not add `rpy2`.
+- Keep TypeScript strict and do not suppress errors with `as any` or `@ts-ignore`.
+- Do not perform blocking filesystem or subprocess work directly on the async event loop.
+- Keep session/report paths within configured roots and use atomic writes/publication where data safety matters.
+- Preserve the public shared-report boundary in [REPORT_SHARING.md](REPORT_SHARING.md).
+- Put backend tests under `Tests/`; colocate frontend unit/component tests under `frontend/src/`; keep browser tests in `frontend/e2e/`.
 
-```bash
-npm --prefix frontend install
-```
-
-### Tests
-
-```bash
-# Hermetic backend PR suite (from project root)
-backend/.venv/Scripts/python.exe -m pytest
-
-# Required before a TMT/DIA release
-backend/.venv/Scripts/python.exe -m pytest -m r Tests/backend/integration/pipeline
-
-# Frontend unit/component and isolated browser tests
-npm --prefix frontend test
-npm --prefix frontend run test:e2e
-```
-
-## Development
-
-```bash
-# Terminal 1 - Backend
-backend/.venv/Scripts/python.exe -m uvicorn app.main:app --app-dir backend --reload --reload-exclude "sessions" --port 8000
-
-# Terminal 2 - Frontend
-npm --prefix frontend run dev
-```
-
-## Code Quality
-
-```bash
-# Frontend
-npm --prefix frontend run lint
-npm --prefix frontend run lint:fix
-
-# Backend
-backend/.venv/Scripts/python.exe -m ruff check backend Tests
-```
-
-## Commit Messages
-
-Use conventional commits:
-
-```
-feat: add volcano plot selection modes
-fix: resolve QC plots empty issue
-docs: update API documentation
-test: add E2E tests for bioinformatics
-refactor: simplify data transformation
-```
-
-## Pull Request Process
-
-1. Create feature branch from `main`
-2. Run all tests and lint checks
-3. Update documentation if needed
-4. Submit PR with clear description
-
-## Architecture Notes
-
-- **R integration**: Always via `subprocess.run(['Rscript', ...])`, never rpy2
-- **Session storage**: JSON files in `backend/sessions/{session_id}/`
-- **Test location**: Backend tests use `Tests/`; browser tests use `frontend/e2e/`; frontend unit/component tests are colocated under `frontend/src/`
-- **Test quality**: Follow the risk-based standard in `AGENTS/07-testing.md`; test count alone is not a quality measure
-- **TypeScript**: strict mode required, no `as any` or `@ts-ignore`
-
-For full developer guides, see the [AGENTS/](../AGENTS/) directory.
-
-For the current local environment and baseline verification commands, see
-[DEVELOPMENT.md](DEVELOPMENT.md).
+See [AGENTS.md](../AGENTS.md) for repository rules and
+[docs/engineering/](engineering/ARCHITECTURE.md) for detailed engineering
+guidance.

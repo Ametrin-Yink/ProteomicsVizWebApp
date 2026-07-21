@@ -1,6 +1,6 @@
 /**
  * WebSocket hook for real-time processing updates
- * Following AGENTS/11-websocket-protocol.md
+ * See docs/engineering/API_AND_STATE.md.
  * Implements reconnection with exponential backoff
  */
 

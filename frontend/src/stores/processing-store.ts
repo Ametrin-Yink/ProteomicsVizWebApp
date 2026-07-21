@@ -1,7 +1,7 @@
 /**
  * Processing store using Zustand
  * Manages processing pipeline state with real-time updates
- * Following AGENTS/05-state-management.md - NEVER mutate state directly
+ * See docs/engineering/API_AND_STATE.md; never mutate state directly.
  */
 
 import { create } from 'zustand';

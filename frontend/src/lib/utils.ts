@@ -1,6 +1,6 @@
 /**
  * Utility functions
- * Following AGENTS/03-coding-standards.md
+ * Follow the repository rules in AGENTS.md.
  */
 
 import { clsx, type ClassValue } from 'clsx';

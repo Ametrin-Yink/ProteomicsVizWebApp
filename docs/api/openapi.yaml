@@ -1310,6 +1310,231 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/visualization/manifest:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Visualization Manifest
+      description: Return visualization capabilities for a self-contained report.
+      operationId: get_report_visualization_manifest_api_shared_reports__share_token__visualization_manifest_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/ptm/results:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Ptm Results
+      description: Return PTM result layers from an exported report.
+      operationId: get_report_ptm_results_api_shared_reports__share_token__ptm_results_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: comparison
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comparison
+      - name: layer
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - ptm
+            - protein
+            - adjusted
+            type: string
+          - type: 'null'
+          title: Layer
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/ptm/results/download:
+    get:
+      tags:
+      - shared-reports
+      summary: Download Report Ptm Results
+      description: Download the immutable PTM result archive from an exported report.
+      operationId: download_report_ptm_results_api_shared_reports__share_token__ptm_results_download_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/ptm/compare:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Ptm Comparison Summary
+      description: Return compact PTM comparison data from an exported report.
+      operationId: get_report_ptm_comparison_summary_api_shared_reports__share_token__ptm_compare_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: layer
+        in: query
+        required: false
+        schema:
+          enum:
+          - ptm
+          - protein
+          - adjusted
+          type: string
+          default: ptm
+          title: Layer
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/ptm/site/{site_id}/abundance:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Ptm Site Abundance
+      description: Return summarized PTM site abundance from an exported report.
+      operationId: get_report_ptm_site_abundance_api_shared_reports__share_token__ptm_site__site_id__abundance_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: site_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Site Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/ptm/site/{site_id}:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Ptm Site Details
+      description: Return PTM site evidence from an exported report.
+      operationId: get_report_ptm_site_details_api_shared_reports__share_token__ptm_site__site_id__get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: site_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Site Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/ptm/qc/plots:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Ptm Qc Plots
+      description: Return PTM QC data from an exported report.
+      operationId: get_report_ptm_qc_plots_api_shared_reports__share_token__ptm_qc_plots_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/shared-reports/{share_token}/results:
     get:
       tags:

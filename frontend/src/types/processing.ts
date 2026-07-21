@@ -1,6 +1,6 @@
 /**
  * Processing pipeline types
- * Following AGENTS/11-websocket-protocol.md and AGENTS/10-processing-pipeline.md
+ * See docs/engineering/API_AND_STATE.md and docs/PIPELINES.md.
  */
 
 export type StepStatus = 'not_started' | 'in_progress' | 'completed' | 'error' | 'cancelled';

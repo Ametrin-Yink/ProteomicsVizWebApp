@@ -1,141 +1,90 @@
 # Native AlmaLinux deployment
 
-ProteomicsViz runs as two application services behind Caddy:
+ProteomicsViz runs without containers as two systemd services behind Caddy:
 
-- `proteomicsviz-backend.service`: FastAPI and its R child processes on
-  `127.0.0.1:8100`.
-- `proteomicsviz-frontend.service`: the production Next.js server on
-  `127.0.0.1:3000`.
-- `caddy.service`: the public report gateway on port 8000 and the private
-  loopback application gateway on port 8001.
+- `proteomicsviz-backend.service`: FastAPI and R children on `127.0.0.1:8100`.
+- `proteomicsviz-frontend.service`: production Next.js on `127.0.0.1:3000`.
+- `caddy.service`: public shared-report gateway on port 8000 and private loopback gateway on port 8001.
 
-The detailed report capability model, port contract, release workflow, and
-verification checklist are in [docs/REPORT_SHARING.md](../docs/REPORT_SHARING.md).
+This is appropriate for one application on one managed server: systemd supplies lifecycle supervision, Caddy supplies the network boundary, and immutable release directories provide rollback without adding container orchestration.
 
-## Prerequisites
+Read [docs/REPORT_SHARING.md](../docs/REPORT_SHARING.md) before changing listeners or routes.
+For the daily Windows SSH tunnel, Git, server-pull, and release sequence, see
+[Server access and development cycle](../docs/SERVER_ACCESS_AND_DEV_CYCLE.md).
 
-Install Git, Python 3.12 with venv support, Node.js 22 with npm, R 4.5 or newer,
-Caddy 2.10 or newer, and the system libraries needed to build the Python and R
-dependencies. Install the R packages listed by
-`backend/scripts/install_r_packages.R` and verify them before the first release.
-`bootstrap-almalinux.sh` installs the required system packages; it does not
-silently update R packages during later application deployments.
+## Server prerequisites
 
-The service definitions expect `/usr/bin/python3`, `/usr/bin/npm`, and
-`/usr/bin/Rscript`. Update the unit or environment file deliberately if the
-server installs a runtime elsewhere; do not depend on an interactive shell's
-`PATH`.
+- AlmaLinux 10.x
+- Git
+- Python 3.12 with venv support
+- Node.js 22 with npm
+- R 4.5+
+- Caddy 2.10+
+- System libraries required by Python and R dependencies
+- A reserved address for `10.202.25.39`
 
-## One-time server setup
-
-Before exposing the report gateway, reserve `10.202.25.39` in DHCP or configure
-an equivalent static address. `NEXT_PUBLIC_REPORT_BASE_URL` is embedded in the
-frontend build, so an address change invalidates generated links until the
-frontend environment is updated and a new release is built. A descriptive
-hostname is recommended for administration but is not required while report
-URLs intentionally use the reserved IP address.
-
-The preferred setup is the reviewed bootstrap script:
+`bootstrap-almalinux.sh` installs system packages, the `proteomicsviz` service account, persistent directories, SELinux/firewalld rules, Caddy, and systemd units. Review it and the example environment files before running it:
 
 ```bash
 sudo bash deploy/bootstrap-almalinux.sh
 ```
 
-It installs distribution packages, creates the service account and directories,
-configures SELinux and the port-8000 firewalld rule, and installs Caddy and the
-systemd units. The equivalent individual file-installation steps are documented
-below for audit and recovery.
-
-Run these administrative steps after reviewing the paths and account names:
+Install R packages once into the persistent library from the trusted administrative checkout at `/home/kyin/ProteomicsViz`:
 
 ```bash
-sudo useradd --system --create-home \
-  --home-dir /home/proteomicsviz \
-  --shell /sbin/nologin proteomicsviz
-
-sudo install -d -m 0750 -o proteomicsviz -g proteomicsviz \
-  /home/proteomicsviz/releases \
-  /home/proteomicsviz/data/sessions \
-  /home/proteomicsviz/data/reports \
-  /home/proteomicsviz/data/file-library \
-  /home/proteomicsviz/data/protein-database \
-  /home/proteomicsviz/data/runtime \
-  /home/proteomicsviz/R/library
-
-sudo install -d -m 0750 -o root -g proteomicsviz /etc/proteomicsviz
-sudo install -m 0640 -o root -g proteomicsviz \
-  deploy/backend.env.example /etc/proteomicsviz/backend.env
-sudo install -m 0640 -o root -g proteomicsviz \
-  deploy/frontend.env.example /etc/proteomicsviz/frontend.env
-
-sudo install -m 0644 -o root -g root \
-  deploy/systemd/proteomicsviz-backend.service \
-  /etc/systemd/system/proteomicsviz-backend.service
-sudo install -m 0644 -o root -g root \
-  deploy/systemd/proteomicsviz-frontend.service \
-  /etc/systemd/system/proteomicsviz-frontend.service
-
-sudo install -m 0644 -o root -g root deploy/Caddyfile /etc/caddy/Caddyfile
-```
-
-Review both files under `/etc/proteomicsviz` before continuing. Populate
-`/home/proteomicsviz/data/protein-database` with the required FASTA and gene-name
-files. Do not copy Windows virtual environments, `node_modules`, or `.next`.
-
-Install the application R packages into the dedicated library after opening a
-new SSH login so membership in the `proteomicsviz` group is active:
-
-```bash
-cd /path/to/ProteomicsVizWebApp
+cd /home/kyin/ProteomicsViz
 umask 0002
 R_LIBS_USER=/home/proteomicsviz/R/library \
   Rscript backend/scripts/install_r_packages.R
 ```
 
-Validate the gateway configuration and load the units:
+Populate `/home/proteomicsviz/data/protein-database` with required reference files. Do not copy Windows virtual environments, `node_modules`, or `.next`.
 
-```bash
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl daemon-reload
-sudo systemctl enable --now caddy.service
+## Layout
+
+```text
+/home/kyin/ProteomicsViz/               # administrator checkout; deployment entry point
+/home/proteomicsviz/
+|-- source/                             # service-account Git checkout used by deploy.sh
+|-- current -> releases/<full-sha>/
+|-- releases/<full-sha>/                # immutable application releases
+|-- data/
+|   |-- sessions/
+|   |-- reports/
+|   |-- file-library/
+|   |-- protein-database/
+|   `-- runtime/
+`-- R/library/                          # persistent R library
+/etc/proteomicsviz/backend.env
+/etc/proteomicsviz/frontend.env
 ```
 
-The application services cannot start until the first release creates the
-`current` link, so enable them after that deployment succeeds. The deployment
-script runs `systemd-analyze verify` after creating that link, allowing systemd
-to validate the release-specific executable paths as well as the unit syntax.
+The earlier bootstrap directory names ending in `-bootstrap` or `-bootstrap-source` are not part of the final layout. The administrative checkout is `/home/kyin/ProteomicsViz`; the deployment script intentionally maintains `/home/proteomicsviz/source` separately under the service account.
 
-## Deploy a release
+## Release workflow
 
-From a trusted checkout, deploy `origin/main` interactively:
+Development stays on Windows. `main` is the production branch, but a push does not automatically restart the server.
 
-```bash
-sudo bash ./deploy/deploy.sh origin/main
-```
+1. Develop and verify on a feature/fix branch.
+2. Merge into `main` and push GitHub.
+3. Resolve and record the exact 40-character commit SHA.
+4. Confirm no pipeline or report computation is queued or running.
+5. SSH to the server and run the deploy script from the administrative checkout.
+6. Verify private and public behavior; retain the previous release and all sessions/reports.
 
-The script:
-
-1. Fetches GitHub and resolves the requested ref to one full commit SHA.
-2. Builds in a new staging directory.
-3. Creates a release-specific Python virtual environment with `pip`.
-4. Installs the locked Node tree with `npm ci` and builds Next.js with the
-   production environment.
-5. Verifies the R packages, backend import, and Caddy configuration.
-6. Refuses activation if the installed systemd units differ from the release.
-7. Requires confirmation that no analysis or report computation is active.
-8. Switches the `current` symlink and verifies/restarts the application services.
-9. Checks backend, private frontend, and public route-denial behavior.
-10. Restores the previous release if activation or health checks fail.
-
-For a reviewed non-interactive invocation, `--yes` skips only the idle-server
-confirmation:
+Recommended deployment:
 
 ```bash
-sudo bash ./deploy/deploy.sh --yes origin/main
+sudo bash /home/kyin/ProteomicsViz/deploy/deploy.sh --yes <FULL_40_CHARACTER_SHA>
 ```
 
-Do not use `--yes` until another mechanism has established that no task is
-queued or running.
+Use `--yes` only after independently confirming the server is idle. Interactive deployment without `--yes` asks for that confirmation. `origin/main` is accepted, but an exact SHA provides a clearer audit and eliminates movement between review and deployment.
+
+The script fetches GitHub, resolves the ref, archives it into a new staging release, builds isolated Python and Node artifacts, verifies R packages/backend import/Caddy/systemd, switches `current`, restarts services, performs health and route-denial checks, and restores the prior release if activation fails.
+
+An abbreviated or mistyped SHA produces `Cannot resolve Git ref`. Copy the exact SHA returned after the push; do not assume a locally anticipated hash equals the remote commit.
+
+## First activation
 
 After the first successful release:
 
@@ -144,41 +93,21 @@ sudo systemctl enable proteomicsviz-backend.service
 sudo systemctl enable proteomicsviz-frontend.service
 ```
 
-Inspect service output with:
+Validate service and gateway state:
 
 ```bash
-sudo journalctl -u proteomicsviz-backend.service -u proteomicsviz-frontend.service
-```
-
-Uvicorn access logging is disabled because shared report tokens appear in URL
-paths. Application errors and R output remain available through journald.
-
-## Roll back a release
-
-Use this only when the selected release uses the currently installed systemd
-units, environment files, and Caddy configuration. Replace `<PREVIOUS_SHA>`
-with a full commit SHA already present under `/home/proteomicsviz/releases`:
-
-```bash
-sudo bash -c '
-set -Eeuo pipefail
-release=/home/proteomicsviz/releases/<PREVIOUS_SHA>
-test -d "$release"
-link=/home/proteomicsviz/.current.rollback.$$
-ln -s "$release" "$link"
-mv -Tf -- "$link" /home/proteomicsviz/current
-systemctl restart proteomicsviz-backend.service proteomicsviz-frontend.service
+sudo systemctl status proteomicsviz-backend.service proteomicsviz-frontend.service caddy.service
+sudo journalctl -u proteomicsviz-backend.service -u proteomicsviz-frontend.service --since today
 curl --fail http://127.0.0.1:8100/health
 curl --fail http://127.0.0.1:8001/ >/dev/null
-'
+sudo caddy validate --config /etc/caddy/Caddyfile
 ```
 
-If a release changes deployment configuration, review and install its systemd,
-environment, and Caddy files before switching to it.
+One or two initial `curl: (7)` messages during deployment can occur while systemd starts the backend; deployment is successful only if the script’s later health checks pass and it prints `Deployment succeeded` with the selected commit and release path.
 
-## Private application access
+## Private access
 
-Keep port 8001 closed in firewalld. From Windows, create the two tunnels:
+Keep server port 8001 closed. From Windows:
 
 ```powershell
 ssh -N `
@@ -187,4 +116,10 @@ ssh -N `
   kyin@10.202.25.39
 ```
 
-Open `http://127.0.0.1:8001` while the SSH session remains connected.
+Open `http://127.0.0.1:8001`.
+
+## Rollback
+
+Prefer redeploying a known-good full SHA through `deploy.sh`; it verifies the release against current deployment files. If an urgent manual symlink rollback is required, first verify the target directory is an existing full-SHA release and that its systemd/environment/Caddy contract matches the installed configuration. Persistent data is not rolled back with application code.
+
+Do not delete old releases, sessions, or reports while validating a deployment. Establish a separately reviewed retention and backup policy before cleanup.

@@ -1,11 +1,14 @@
-# Test Suite
+# Test suite
 
-The canonical testing principles, layer definitions, commands, isolation rules,
-and suite health targets are documented in
-[`AGENTS/07-testing.md`](../AGENTS/07-testing.md).
+The authoritative testing standard is
+[docs/engineering/TESTING.md](../docs/engineering/TESTING.md), and runnable
+commands are summarized in [docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md).
 
-The default `pytest` selection is the hermetic backend PR suite. Frontend unit,
-component, and browser tests live with the frontend toolchain. Browser and live
-scientific tests start isolated services automatically. Tests that need R or
-representative large data are explicit opt-in lanes and must never mutate normal
-runtime data. Release-quality claims cover TMT and DIA only; PTM is omitted.
+- `Tests/backend/unit/`: hermetic backend behavior and regression tests.
+- `Tests/backend/integration/routes/`: API/store/filesystem contracts.
+- `Tests/backend/integration/pipeline/`: R smoke and live scientific workflows.
+- `Tests/fixtures/`: committed isolated fixtures.
+- `frontend/src/**/*.test.ts(x)`: frontend unit/component tests.
+- `frontend/e2e/`: Playwright critical journeys.
+
+Tests must use isolated runtime roots and must not read real user samples or mutate normal sessions, reports, or file-library data. TMT and DIA have committed representative known-answer integration lanes. PTM is supported and has backend/frontend regression coverage plus real-data end-to-end verification; a comparable committed PTM known-answer lane remains a testing gap.

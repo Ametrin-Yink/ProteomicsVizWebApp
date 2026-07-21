@@ -1,155 +1,94 @@
-# Proteomics Visualization Web App
+# ProteomicsViz
 
-Full-stack scientific web application for proteomics data analysis and visualization.
+ProteomicsViz is an internal web application for end-to-end proteomics analysis. It supports TMT protein, DIA protein, and PTM TMT workflows, then presents interactive results and publishable capability-link reports.
 
-## Features
+## What it does
 
-- **File Library:** Centralized file management with DuckDB-backed indexing. Create folders, upload/manage `.txt` and `.csv` files, then select from the library when creating analyses — no re-uploading needed.
-- **Data Input:** Upload TMT or DIA proteomics data files (tab-delimited `.txt` or `.csv`), or select from the File Library
-- **Processing Pipeline:** 6-stage analysis pipeline with TMT→MSstats or DIA→msqrob2 paths
-- **Visualization:** Interactive volcano plots, QC metrics, GSEA enrichment, BioNet networks
-- **Session Management:** Persistent sessions that survive server restarts
-- **Shared Reports:** Generate opaque links to self-contained interactive report snapshots; recipients can view results and run report-scoped GSEA, BioNet, and Compare analyses
+- Uploads local files or reuses files from the server file library.
+- Configures sample/channel metadata, comparisons, filtering, normalization, and modeling.
+- Runs six-stage pipelines with persistent status, logs, cancellation, and retry.
+- Visualizes differential abundance, quality control, protein details, enrichment, networks, and comparisons where supported.
+- Publishes completed sessions as immutable report snapshots. A report recipient can access only the report identified by the opaque link.
 
-## Prerequisites
+## Supported workflows
 
-- **Python 3.12+**
-- **Node.js 20+**
-- **R 4.5+** with bioinformatics packages (msqrob2, QFeatures, limma, MSstats)
+| Workflow | Pipeline key | Statistical engine | Primary results |
+|---|---|---|---|
+| TMT protein | `msstats` | MSstats | Protein differential abundance and QC |
+| DIA protein | `msqrob2` | msqrob2/QFeatures | Protein differential abundance and QC |
+| PTM TMT | `ptm` | MSstatsPTM | PTM sites, protein results when supplied, protein-adjusted PTM, and QC |
 
-## Installation
+See [Pipeline workflows](docs/PIPELINES.md) for inputs, stages, and output behavior.
 
-### 1. Install R Packages
+## Runtime requirements
 
-```bash
-Rscript backend/scripts/install_r_packages.R
+- Python 3.12+
+- Node.js 22+
+- R 4.5+
+- The Python packages in `backend/requirements.txt`
+- The Node packages locked by `frontend/package-lock.json`
+- The R packages installed by `backend/scripts/install_r_packages.R`
+
+## Local development on Windows
+
+Create the backend environment from the repository root:
+
+```powershell
+py -3.12 -m venv backend\.venv
+backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+Rscript backend\scripts\install_r_packages.R
+npm --prefix frontend ci
 ```
 
-### 2. Install Dependencies
+Start the backend:
 
-```bash
-# Backend (from project root)
-backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
-
-# Frontend
-cd frontend && npm install
+```powershell
+backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 
-## Running the App
+In a second PowerShell window, start the frontend:
 
-Start the backend and frontend in separate terminals:
-
-```bash
-# Terminal 1 - Backend
-cd backend
-.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
-
-# Terminal 2 - Frontend
-cd frontend
-npm run dev
+```powershell
+npm --prefix frontend run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000). Runtime data defaults to `backend/sessions`, `backend/reports`, and `backend/file_library`; these directories are not source-controlled.
 
-## How to Use
+## Production
 
-### 1. Create a Session
+Production runs natively on AlmaLinux as separate FastAPI and Next.js systemd services behind Caddy. Development remains on Windows, verified work is merged to `main`, and the server deploys one exact Git commit into an immutable release directory.
 
-From the welcome page, create a new analysis session and give it a name.
+- Shared reports: `http://10.202.25.39:8000/reports/<share_token>`
+- Full private application: `http://127.0.0.1:8001` through the documented SSH tunnel
+- Deployment runbook: [deploy/README.md](deploy/README.md)
+- Security and port contract: [docs/REPORT_SHARING.md](docs/REPORT_SHARING.md)
 
-### 2. Manage Files (Optional)
+Do not edit production releases in place and do not deploy an abbreviated commit hash copied before a push completes. Use the full 40-character commit SHA shown by GitHub or `git rev-parse origin/main`.
 
-Use the **Files** tab to upload and organize your proteomics data files. Create folders, upload `.txt`/`.csv` files, rename, move, or delete them. The file library is indexed by DuckDB and survives across sessions.
+## Verification
 
-### 3. Create a Session and Select Files
+The normal development gate is:
 
-From the Home page, click a workflow card (TMT, DIA, or PTM) to create a new analysis session. On the upload step, click **Browse File Library** to select files from your library instead of uploading them each time. Files are copied into the session for processing.
-
-For TMT data, you can also import a channel design CSV from the file library on the Metadata page.
-
-### 3. Configure and Process
-
-Set your analysis options (e.g., which conditions to compare), then start the processing pipeline. Progress is shown in real time.
-
-### 4. View Results
-
-Once processing completes, explore your results through interactive visualizations:
-
-- **Volcano Plot** — Click, box-select, or lasso-select proteins of interest
-- **QC Plots** — PCA, p-value distribution, coefficient of variation, intensity distributions
-- **GSEA** — Gene Set Enrichment Analysis results with leading edge gene details
-
-### 5. Share or Export
-
-Download results as CSV or generate an interactive shared report. Shared links
-grant access to one report only; they do not expose uploads, session creation,
-report management, or the rest of the application.
-
-## Processing Pipeline
-
-Six-stage symmetric pipeline. TMT data uses MSstats; DIA data uses msqrob2.
-
-| Step | TMT (MSstats) | DIA (msqrob2) |
-|------|--------------|----------------|
-| 1 | Prepare/filter PSMs, apply TMT quality filters, melt and map channels | Prepare/filter PSMs, rename Quan Value, join metadata |
-| 2 | Resolve shared PSMs to the best-supported protein (optional) | Same |
-| 3 | Filter per-condition coverage and minimum distinct PSMs/protein | Same |
-| 4 | MSstats protein abundance (R) | msqrob2 protein abundance (R) |
-| 5 | MSstats group comparison (R) | msqrob2 DE contrasts (R) |
-| 6 | QC metrics (PCA, CV, distributions) | Same |
-
-On-demand analysis: GSEA (enrichment), BioNet (INDRA subnetworks), Compare (PCA/UMAP/t-SNE clustering).
-
-## Project Structure
-
+```powershell
+backend\.venv\Scripts\python.exe -m ruff check backend Tests
+backend\.venv\Scripts\python.exe backend\scripts\generate_openapi.py --check
+backend\.venv\Scripts\python.exe -m pytest
+npm --prefix frontend run lint
+npm --prefix frontend run typecheck
+npm --prefix frontend test
+npm --prefix frontend run build
 ```
-ProteomicsVizWebApp/
-├── backend/            # FastAPI server + R pipeline scripts
-├── frontend/           # Next.js web application
-├── deploy/             # Production gateway configuration
-├── Tests/              # All test files (unit + integration, organized by domain)
-├── AGENTS/             # Developer documentation
-└── docs/               # API specification + design specs
-```
+
+R-backed and browser suites are explicit additional gates; see [Development and verification](docs/DEVELOPMENT.md).
 
 ## Documentation
 
-- **[AGENTS/](AGENTS/)** — Developer guides covering architecture, coding standards, API contract, and more
-- **[docs/api/openapi.yaml](docs/api/openapi.yaml)** — Full API specification
-- **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** — Contributor guidelines
-- **[docs/REPORT_SHARING.md](docs/REPORT_SHARING.md)** — Shared-link security model, port allocation, limitations, and deployment checks
-
-## Testing
-
-```bash
-# Hermetic backend PR suite (from project root)
-backend/.venv/Scripts/python.exe -m pytest
-
-# Frontend unit/component tests
-npm --prefix frontend test
-
-# Browser critical journeys (starts an isolated backend)
-npm --prefix frontend run test:e2e
-
-# Mandatory TMT/DIA scientific release gate
-backend/.venv/Scripts/python.exe -m pytest -m r Tests/backend/integration/pipeline
-```
-
-R-backed live scientific pipelines and representative-data performance checks are
-explicit opt-in lanes. TMT/DIA releases require the scientific gate above; PTM is
-outside the release-quality scope. See `AGENTS/07-testing.md` for the test quality
-standard, layer definitions, and commands.
-
-## Tech Stack
-
-- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Plotly.js
-- **Backend:** FastAPI, Python 3.12+, Pydantic, asyncio
-- **Analysis:** R 4.5+, msqrob2, QFeatures, limma, MSstats, gseapy
-
-## Contact
-
-[Ametrin-Yink](https://github.com/Ametrin-Yink)
-
-## License
-
-MIT License — see LICENSE file for details.
+- [Documentation index](docs/README.md)
+- [Contributing](docs/CONTRIBUTING.md)
+- [Development and verification](docs/DEVELOPMENT.md)
+- [Server access and development cycle](docs/SERVER_ACCESS_AND_DEV_CYCLE.md)
+- [Pipeline workflows](docs/PIPELINES.md)
+- [Shared reports](docs/REPORT_SHARING.md)
+- [Generated OpenAPI contract](docs/api/openapi.yaml)
+- [Repository instructions](AGENTS.md)
+- [Engineering architecture](docs/engineering/ARCHITECTURE.md)
