@@ -45,7 +45,7 @@ export default function GSEAPlot({ pathway, database, comparison, onPathwayUpdat
         ]);
         if (!cancelled) {
           setPlotData(plot);
-          setHeatmapData(heatmap.genes?.length ? heatmap : null);
+          setHeatmapData(heatmap);
           // Only update parent if pathway_gene_set_size wasn't already set
           // to prevent infinite re-render loop
           if (plot.pathway_gene_set_size && onPathwayUpdated && currentPathway && !currentPathway.pathway_gene_set_size) {
@@ -200,10 +200,14 @@ export default function GSEAPlot({ pathway, database, comparison, onPathwayUpdat
     ];
 
     if (hasHeatmap) {
+      const hoverData = heatmapData!.log2_abundances.map((row) =>
+        row.map((value, index) => [value, heatmapData!.conditions[index]]),
+      );
       traces.push({
         z: heatmapData!.z_scores,
         x: heatmapData!.samples,
         y: heatmapData!.genes,
+        customdata: hoverData,
         type: 'heatmap',
         colorscale: 'RdBu',
         zmid: 0,
@@ -213,7 +217,7 @@ export default function GSEAPlot({ pathway, database, comparison, onPathwayUpdat
         colorbar: { title: 'Z-score', titleside: 'right', thickness: 15, len: 0.5, y: 0.5, x: 1.02 },
         yaxis: 'y3',
         xaxis: 'x2',
-        hovertemplate: 'Gene: %{y}<br>Sample: %{x}<br>Z-score: %{z:.2f}<extra></extra>',
+        hovertemplate: 'Gene: %{y}<br>Sample: %{x}<br>Condition: %{customdata[1]}<br>Processed log2 abundance: %{customdata[0]:.3f}<br>Row Z-score: %{z:.2f}<extra></extra>',
       });
     }
 
@@ -238,7 +242,7 @@ export default function GSEAPlot({ pathway, database, comparison, onPathwayUpdat
       annotations: [
         ...(hasHeatmap ? [{
           x: 0.875, y: 1.05, xref: 'paper', yref: 'paper',
-          text: 'Leading Edge Genes (Z-score)', showarrow: false,
+          text: 'Leading Edge Genes (processed log2; row Z-score color)', showarrow: false,
           font: { size: 11, color: '#111827' },
         }] : []),
       ],
@@ -298,6 +302,11 @@ export default function GSEAPlot({ pathway, database, comparison, onPathwayUpdat
           />
         )}
       </div>
+      {heatmapData && heatmapData.genes.length === 0 && (
+        <div data-testid="gsea-heatmap-empty" className="mt-3 rounded-lg border border-border bg-surface p-3 text-sm text-text-muted">
+          No leading-edge genes could be mapped to processed protein abundance for this comparison.
+        </div>
+      )}
     </div>
   );
 }

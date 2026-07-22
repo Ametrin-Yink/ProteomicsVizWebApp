@@ -30,6 +30,8 @@ New configuration fields must exist in `SessionConfig` and `AnalysisConfig`, be 
 
 Key PTM routes provide result layers, ZIP download, comparison summaries, site evidence/abundance, and QC below both live session and copied shared-report prefixes. `/qc/plots` is the canonical QC suffix; do not introduce `/qc/data`.
 
+The PTM protein layer uses the shared protein information panel. Protein and peptide abundance loaders accept PTM's long-form summarized artifacts, and comparison-scoped plots include only the two complete condition groups in the active contrast.
+
 ## Zustand ownership
 
 | Store | Ownership |
@@ -40,6 +42,8 @@ Key PTM routes provide result layers, ZIP download, comparison summaries, site e
 | `ui-store.ts` | Toasts, dialogs, and transient UI state |
 
 Components select only the state they need and mutate through store actions. Do not duplicate derived values or mix domains. Page reload and session switching must recover from persisted backend/session state rather than assume an uninterrupted wizard.
+
+Visualization pages synchronize the sidebar's current session and Active/Completed tab from the `session_id` (or legacy `session`) query parameter. QC views initialize an empty comparison selection from the first comparison returned by the session configuration.
 
 Abort or disregard stale requests so an old session/report response cannot overwrite the current selection. WebSocket consumers must handle reconnects, status reconciliation, completion, error, and cancellation without duplicating events.
 

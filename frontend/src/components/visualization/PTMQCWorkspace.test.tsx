@@ -64,7 +64,7 @@ describe('PTMQCWorkspace', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('QC Summary Statistics');
+    expect(container.textContent).toContain('Analysis Summary');
     expect(container.textContent).toContain('Total Unique PTM PSMs');
     expect(container.textContent).toContain('Avg PTM Site CV');
     expect(container.textContent).toContain('PTM PSM plots Â· PTM Site plots');

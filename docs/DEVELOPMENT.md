@@ -15,6 +15,22 @@ Rscript backend\scripts\verify_r_packages.R
 
 Local runtime roots default below `backend/`. Tests replace them with isolated temporary directories and must never read from `SampleData/`, `real_sample_files/`, or production data.
 
+## Local development ports
+
+Run the Windows development frontend on `127.0.0.1:3000` and its FastAPI backend on `127.0.0.1:8002`:
+
+```powershell
+# PowerShell window 1
+backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload --port 8002
+
+# PowerShell window 2
+$env:BACKEND_URL = "http://127.0.0.1:8002"
+$env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:8002"
+npm --prefix frontend run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+These per-process environment variables override any production-tunnel URL in `frontend/.env.local`. Ports `8000` and `8001` on Windows belong to the optional production SSH tunnel and are not local-development backend ports. See [Server access and development cycle](SERVER_ACCESS_AND_DEV_CYCLE.md#port-ownership) for the complete mapping.
+
 ## Required development gate
 
 Run from the repository root:

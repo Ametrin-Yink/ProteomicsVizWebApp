@@ -7,13 +7,11 @@ Plot data endpoints for results, QC, and GSEA.
 import asyncio
 import json
 import logging
-import math
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -24,9 +22,6 @@ from app.api.routes.visualization_shared import (
     create_response,
 )
 from app.api.routes.visualization_shared import (
-    build_sample_filter as _build_sample_filter,
-)
-from app.api.routes.visualization_shared import (
     cache_key as _cache_key,
 )
 from app.api.routes.visualization_shared import (
@@ -34,9 +29,9 @@ from app.api.routes.visualization_shared import (
 )
 from app.core.config import settings
 from app.db.session_store import SessionStore
-from app.models.session import Session
+from app.services.abundance_repository import AbundanceRepository
+from app.services.differential_repository import DifferentialRepository
 from app.services.gsea_service import gsea_service
-from app.services.ptm_tmt_processor import read_fasta_subset
 from app.services.task_manager import (
     TaskCancelledError,
     TaskKind,
@@ -97,144 +92,6 @@ def _get_pathway_genes(database: str, term: str) -> set[str]:
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
-
-
-def _resolve_de_file(results_dir: Path) -> Path | None:
-    """Resolve the differential expression results file.
-
-    Checks for the default name first, then falls back to the first
-    per-comparison file (used by multi-condition pipelines).
-    """
-    default = results_dir / "Diff_Expression.tsv"
-    if default.exists():
-        return default
-    candidates = sorted(results_dir.glob("Diff_Expression_*.tsv"))
-    return candidates[0] if candidates else None
-
-
-async def load_diff_expression_results(
-    results_dir: Path,
-    session_id: str = "",
-    comparison: str = "",
-) -> list[dict[str, Any]]:
-    """Load differential expression results from TSV file.
-
-    Args:
-        results_dir: Path to session results directory
-        session_id: Session ID for cache keying
-        comparison: Optional comparison name (e.g., 'A_vs_B').
-                   If empty, loads default Diff_Expression.tsv.
-
-    Returns:
-        List of protein results dictionaries
-    """
-    cache_key = _cache_key(
-        session_id, f"diff_expression_{comparison}" if comparison else "diff_expression"
-    )
-    cached = viz_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    if comparison:
-        diff_file = results_dir / f"Diff_Expression_{comparison}.tsv"
-        if not diff_file.exists():
-            return []
-    else:
-        diff_file = _resolve_de_file(results_dir)
-        if diff_file is None:
-            return []
-
-    try:
-        df = await asyncio.to_thread(pd.read_csv, diff_file, sep="\t")
-
-        # Convert to list of dictionaries
-        # Field names must match frontend DEResult interface
-        results = []
-        any_psm_nonzero = False
-        for _, row in df.iterrows():
-            # Handle NaN values - convert to None for JSON serialization
-            log_fc = row.get("logFC", 0)
-            pval = row.get("pval", 1)
-            adj_pval = row.get("adjPval", 1)
-            psm_count = row.get("PSM_Count", row.get("psm_count", 0))
-
-            # Convert NaN/Inf to None for JSON — include rows even with NA values
-            # so the UI shows the full protein count (frontend displays "N/A" for None)
-            if pd.isna(log_fc) or (isinstance(log_fc, float) and math.isinf(log_fc)):
-                log_fc = None
-            if pd.isna(pval) or (isinstance(pval, float) and math.isinf(pval)):
-                pval = None
-            if pd.isna(adj_pval) or (
-                isinstance(adj_pval, float) and math.isinf(adj_pval)
-            ):
-                adj_pval = None
-            if pd.isna(psm_count):
-                psm_count = 0
-            elif int(psm_count) > 0:
-                any_psm_nonzero = True
-
-            se = row.get("se", None)
-            if pd.isna(se) if se is not None else True:
-                se = None
-
-            t_stat = row.get("t", None)
-            if pd.isna(t_stat) if t_stat is not None else True:
-                t_stat = None
-
-            result = {
-                "master_protein_accessions": str(
-                    row.get("Master_Protein_Accessions", "")
-                ),
-                "gene_name": str(row.get("Gene_Name", "")),
-                "log_fc": float(log_fc) if log_fc is not None else 0,
-                "pval": float(pval) if pval is not None else 1,
-                "adj_pval": float(adj_pval) if adj_pval is not None else 1,
-                "se": float(se) if se is not None else None,
-                "t_statistic": float(t_stat) if t_stat is not None else None,
-                "significant": bool((adj_pval if adj_pval is not None else 1) < 0.05),
-                "psm_count": int(psm_count) if psm_count is not None else 0,
-            }
-            results.append(result)
-
-        # Fallback: if all PSM_Count values are 0 (MSstats pipeline doesn't populate them),
-        # count unique PSMs per protein from the PSM abundance file
-        if results and not any_psm_nonzero:
-            psm_parquet = results_dir / "PSM_Abundances.parquet"
-            psm_tsv = results_dir / "PSM_Abundances.tsv"
-            try:
-                if psm_parquet.exists():
-                    psm_df = await asyncio.to_thread(
-                        pd.read_parquet,
-                        psm_parquet,
-                        columns=["Master_Protein_Accessions", "Unique_PSM"],
-                    )
-                elif psm_tsv.exists():
-                    psm_df = await asyncio.to_thread(
-                        pd.read_csv,
-                        psm_tsv,
-                        sep="\t",
-                        usecols=["Master_Protein_Accessions", "Unique_PSM"],
-                    )
-                else:
-                    psm_df = None
-
-                if psm_df is not None:
-                    psm_counts = psm_df.groupby("Master_Protein_Accessions")[
-                        "Unique_PSM"
-                    ].nunique()
-                    for r in results:
-                        acc = r["master_protein_accessions"]
-                        if acc in psm_counts.index:
-                            r["psm_count"] = int(psm_counts[acc])
-            except Exception as e:
-                logger.warning(f"Could not compute PSM counts from PSM file: {e}")
-
-        viz_cache.set(cache_key, results)
-        return results
-    except Exception as e:
-        # Log error but return empty list
-        logger.error(f"Error loading diff expression results: {e}")
-        return []
 
 
 def load_qc_results(results_dir: Path) -> dict[str, Any]:
@@ -430,58 +287,28 @@ async def get_results(
     # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
 
-    # Load results from file (supports per-comparison files)
-    all_results = await load_diff_expression_results(
-        results_dir, session_id, comparison
-    )
-
-    # Apply filters
-    if significant_only:
-        all_results = [r for r in all_results if r["significant"]]
-
-    if search:
-        search_lower = search.lower()
-        all_results = [
-            r
-            for r in all_results
-            if search_lower in r.get("master_protein_accessions", "").lower()
-            or search_lower in r.get("gene_name", "").lower()
-        ]
-
-    # Sort results
-    reverse = sort_order.lower() == "desc"
-    all_results.sort(key=lambda x: x.get(sort_by, 0) or 0, reverse=reverse)
-
-    # Calculate summary statistics
-    total_proteins = len(all_results)
-    significant_proteins = sum(1 for r in all_results if r.get("significant", False))
-    upregulated = sum(
-        1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) > 0
-    )
-    downregulated = sum(
-        1 for r in all_results if r.get("significant", False) and r.get("log_fc", 0) < 0
-    )
-
-    # Paginate
-    total = len(all_results)
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    paginated_results = all_results[start_idx:end_idx]
-
-    return create_response(
-        {
-            "results": paginated_results,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size,
-            "total_proteins": total_proteins,
-            "significant_proteins": significant_proteins,
-            "upregulated": upregulated,
-            "downregulated": downregulated,
-            "pipeline": session.pipeline,
-        }
-    )
+    try:
+        repository = await asyncio.to_thread(DifferentialRepository, results_dir)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Visualization data must be reprocessed for this session",
+        ) from error
+    try:
+        payload = await asyncio.to_thread(
+            repository.list_results,
+            comparison,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            significant_only=significant_only,
+            search=search,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    payload["pipeline"] = session.pipeline
+    return create_response(payload)
 
 
 @router.get("/{session_id}/qc/plots")
@@ -619,54 +446,31 @@ async def get_gsea_plot_data(
     # Fallback: reconstruct ranked list from Diff_Expression*.tsv.
     # Use base_results_dir — DE files live in the session results dir,
     # not under gsea/<comparison>/.
+    effective_comparison = comparison
+    if not effective_comparison:
+        try:
+            abundance_repository = await asyncio.to_thread(
+                AbundanceRepository, base_results_dir
+            )
+            effective_comparison = await asyncio.to_thread(
+                abundance_repository.first_comparison_id
+            )
+        except ValueError:
+            effective_comparison = ""
+
     if not ranked_genes:
-        de_file = _resolve_de_file(base_results_dir)
-        if de_file and de_file.exists():
-            try:
-                de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
-                gene_col = next(
-                    (
-                        c
-                        for c in de_df.columns
-                        if "gene" in c.lower() or "symbol" in c.lower()
-                    ),
-                    None,
-                )
-                pval_col = next(
-                    (
-                        c
-                        for c in de_df.columns
-                        if "pval" in c.lower() and "adj" not in c.lower()
-                    ),
-                    None,
-                )
-                logfc_col = next(
-                    (
-                        c
-                        for c in de_df.columns
-                        if "logfc" in c.lower() or "log2fc" in c.lower()
-                    ),
-                    None,
-                )
-                if gene_col and pval_col and logfc_col:
-                    valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
-                    valid["metric"] = -np.log10(valid[pval_col]) * np.sign(
-                        valid[logfc_col]
-                    )
-                    valid = valid.sort_values("metric", ascending=False)
-                    valid["gene"] = (
-                        valid[gene_col]
-                        .str.split(";")
-                        .str[0]
-                        .str.strip()
-                        .str.replace(r"-\d+$", "", regex=True)
-                    )
-                    ranked_genes = valid["gene"].tolist()
-                    ranked_metrics = valid["metric"].tolist()
-            except Exception as e:
-                logger.warning(
-                    f"Could not reconstruct ranked list from DE results: {e}"
-                )
+        try:
+            differential_repository = await asyncio.to_thread(
+                DifferentialRepository, base_results_dir
+            )
+            ranking = await asyncio.to_thread(
+                differential_repository.get_ranked_genes,
+                effective_comparison,
+            )
+            ranked_genes = [row["gene"] for row in ranking]
+            ranked_metrics = [row["metric"] for row in ranking]
+        except ValueError as error:
+            logger.warning("Could not load canonical GSEA ranking: %s", error)
 
     if not ranked_genes:
         return create_response(
@@ -683,7 +487,9 @@ async def get_gsea_plot_data(
     nes = pathway.get("nes", 0)
 
     # Check cache first
-    cache_key = _cache_key(session_id, "gsea_plot", database, term)
+    cache_key = _cache_key(
+        session_id, "gsea_plot", database, term, effective_comparison
+    )
     cached = viz_cache.get(cache_key)
     if cached is not None and "pathway_gene_set_size" in cached:
         return create_response(cached)
@@ -779,121 +585,52 @@ async def get_gsea_heatmap_data(
             detail=f"Pathway '{term}' not found in {database}",
         )
 
-    # Check cache first
-    cache_key = _cache_key(session_id, "gsea_heatmap", database, term)
+    try:
+        abundance_repository = await asyncio.to_thread(
+            AbundanceRepository, base_results_dir
+        )
+        effective_comparison = comparison or await asyncio.to_thread(
+            abundance_repository.first_comparison_id
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+
+    # Heatmaps from different comparisons have different sample matrices.
+    cache_key = _cache_key(
+        session_id, "gsea_heatmap", database, term, effective_comparison
+    )
     cached = viz_cache.get(cache_key)
     if cached is not None:
         return create_response(cached)
 
     lead_genes = pathway.get("lead_genes", [])
     if not lead_genes:
-        return create_response({"genes": [], "samples": [], "z_scores": []})
-
-    # Build ranked gene list to order heatmap genes by rank position.
-    # DE files live in the session results dir, not under gsea/<comparison>/.
-    de_file = _resolve_de_file(base_results_dir)
-    gene_rank_map: dict[str, int] = {}
-    if de_file and de_file.exists():
-        try:
-            de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
-            gene_col = next(
-                (
-                    c
-                    for c in de_df.columns
-                    if "gene" in c.lower() or "symbol" in c.lower()
-                ),
-                None,
-            )
-            pval_col = next(
-                (
-                    c
-                    for c in de_df.columns
-                    if "pval" in c.lower() and "adj" not in c.lower()
-                ),
-                None,
-            )
-            logfc_col = next(
-                (
-                    c
-                    for c in de_df.columns
-                    if "logfc" in c.lower() or "log2fc" in c.lower()
-                ),
-                None,
-            )
-            if gene_col and pval_col and logfc_col:
-                valid = de_df[(de_df[pval_col] > 0) & (de_df[pval_col] <= 1)].copy()
-                valid["metric"] = -np.log10(valid[pval_col]) * np.sign(valid[logfc_col])
-                valid = valid.sort_values("metric", ascending=False)
-                valid["gene"] = (
-                    valid[gene_col]
-                    .str.split(";")
-                    .str[0]
-                    .str.strip()
-                    .str.replace(r"-\d+$", "", regex=True)
-                )
-                for rank, gene in enumerate(valid["gene"].tolist()):
-                    gene_rank_map[gene.upper()] = rank
-        except Exception as e:
-            logger.debug(f"Could not build gene rank map: {e}")
-
-    # Load protein abundance data from session results dir (not comparison subdir)
-    protein_file = base_results_dir / "Protein_Abundances.tsv"
-    if not protein_file.exists():
-        return create_response({"genes": [], "samples": [], "z_scores": []})
+        return create_response(
+            {
+                "genes": [],
+                "protein_accessions": [],
+                "samples": [],
+                "conditions": [],
+                "replicates": [],
+                "z_scores": [],
+                "log2_abundances": [],
+            }
+        )
 
     try:
-        protein_df = await asyncio.to_thread(pd.read_csv, protein_file, sep="\t")
-    except Exception as e:
-        logger.warning(f"Could not load protein abundance for heatmap: {e}")
-        return create_response({"genes": [], "samples": [], "z_scores": []})
-
-    # Filter to only comparison-relevant sample columns
-    sample_filter = _build_sample_filter(session, comparison)
-    if sample_filter and not protein_df.empty:
-        _metadata_cols = {
-            "Master_Protein_Accessions",
-            "Master Protein Accessions",
-            "Gene_Name",
-            "Gene",
-            "Protein",
-            "PSM_Count",
-            "psm_count",
-        }
-        keep_cols = [
-            c
-            for c in protein_df.columns
-            if c in _metadata_cols
-            or any(c.startswith(prefix) for prefix in sample_filter)
-        ]
-        protein_df = protein_df[keep_cols]
-
-    # Use existing method to generate heatmap data (PSM_Count already excluded)
-    heatmap_data = gsea_service.generate_heatmap_data(protein_df, lead_genes)
-
-    if heatmap_data is None:
-        return create_response({"genes": [], "samples": [], "z_scores": []})
-
-    # Reorder genes and z_scores by rank position if rank info is available
-    if gene_rank_map and heatmap_data.get("genes"):
-        genes_with_rank = []
-        z_scores_by_gene = dict(
-            zip(heatmap_data["genes"], heatmap_data["z_scores"], strict=False)
+        heatmap_data = await asyncio.to_thread(
+            abundance_repository.get_gene_heatmap,
+            genes=lead_genes,
+            comparison_id=effective_comparison,
         )
-        for gene in heatmap_data["genes"]:
-            genes_with_rank.append(
-                (
-                    gene,
-                    gene_rank_map.get(
-                        gene.upper(), gene_rank_map.get(gene, float("inf"))
-                    ),
-                )
-            )
-        genes_with_rank.sort(key=lambda x: x[1])
-        heatmap_data["genes"] = [g for g, _ in genes_with_rank]
-        heatmap_data["z_scores"] = [z_scores_by_gene[g] for g in heatmap_data["genes"]]
-
-    if heatmap_data is None:
-        return create_response({"genes": [], "samples": [], "z_scores": []})
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
 
     # Cache the result
     viz_cache.set(cache_key, heatmap_data)
@@ -928,129 +665,8 @@ class BioNetRunRequest(BaseModel):
     sources_filter: list[str] | None = None
 
 
-async def _resolve_protein_analysis_file(
-    session: Session,
-    session_id: str,
-    results_dir: Path,
-    comparison: str,
-) -> Path:
-    """Return a protein-level DE table compatible with GSEA and BioNet."""
-    if session.pipeline != "ptm":
-        return results_dir / f"Diff_Expression_{comparison}.tsv"
-
-    protein_results = results_dir / "protein_results.tsv"
-    if not protein_results.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="PTM protein results were not found",
-        )
-
-    frame = await asyncio.to_thread(pd.read_csv, protein_results, sep="\t")
-    if "Comparison" in frame.columns:
-        frame = frame[frame["Comparison"].astype(str) == comparison].copy()
-    if frame.empty:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"PTM protein comparison not found: {comparison}",
-        )
-
-    accession_column = (
-        "ProteinAccession" if "ProteinAccession" in frame.columns else "Protein"
-    )
-    accessions = set(frame[accession_column].dropna().astype(str))
-    fasta_source = session.config.ptm_fasta_source if session.config else None
-    if fasta_source == "custom" and session.files.fasta:
-        fasta_path = (
-            settings.sessions_dir
-            / session_id
-            / "uploads"
-            / session.files.fasta[0].filename
-        )
-    else:
-        fasta_name = (
-            "Mouse_Sequence.fasta"
-            if fasta_source == "mouse"
-            else "Human_Sequence.fasta"
-        )
-        fasta_path = settings.protein_database_dir / fasta_name
-    if not fasta_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Protein annotation FASTA not found: {fasta_path.name}",
-        )
-
-    fasta = await asyncio.to_thread(read_fasta_subset, fasta_path, accessions)
-
-    def gene_name(accession: object) -> str:
-        value = str(accession)
-        match = fasta.get(value) or fasta.get(value.split("-")[0])
-        return match["gene"] if match and match["gene"] else value.split("-")[0]
-
-    frame["Master_Protein_Accessions"] = frame[accession_column].astype(str)
-    frame["Gene_Name"] = frame[accession_column].map(gene_name)
-    frame["logFC"] = pd.to_numeric(frame["log2FC"], errors="coerce")
-    frame["pval"] = pd.to_numeric(frame["pvalue"], errors="coerce")
-    frame["adjPval"] = pd.to_numeric(frame["adj.pvalue"], errors="coerce")
-
-    safe_comparison = "".join(
-        character if character.isalnum() or character in "-_" else "_"
-        for character in comparison
-    )
-    output_dir = results_dir / "ptm_protein_analysis"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"Diff_Expression_{safe_comparison}.tsv"
-    await asyncio.to_thread(frame.to_csv, output_path, sep="\t", index=False)
-    return output_path
-
-
-async def _resolve_protein_abundance_file(
-    session: Session,
-    results_dir: Path,
-    de_file: Path,
-) -> Path:
-    """Return a wide protein abundance matrix for GSEA heatmaps."""
-    output_path = results_dir / "Protein_Abundances.tsv"
-    if output_path.exists() or session.pipeline != "ptm":
-        return output_path
-
-    summarized_path = results_dir / "protein_summarized.tsv"
-    if not summarized_path.exists():
-        return output_path
-
-    summarized, annotations = await asyncio.gather(
-        asyncio.to_thread(pd.read_csv, summarized_path, sep="\t"),
-        asyncio.to_thread(pd.read_csv, de_file, sep="\t"),
-    )
-    required_columns = {"Protein", "BioReplicate", "Abundance"}
-    if not required_columns.issubset(summarized.columns):
-        return output_path
-
-    matrix = summarized.pivot_table(
-        index="Protein",
-        columns="BioReplicate",
-        values="Abundance",
-        aggfunc="mean",
-    ).reset_index()
-    matrix = matrix.rename(columns={"Protein": "Master_Protein_Accessions"})
-    annotation_columns = ["Master_Protein_Accessions", "Gene_Name"]
-    if set(annotation_columns).issubset(annotations.columns):
-        gene_names = annotations[annotation_columns].drop_duplicates(
-            "Master_Protein_Accessions"
-        )
-        matrix = matrix.merge(gene_names, on="Master_Protein_Accessions", how="left")
-        ordered_columns = annotation_columns + [
-            column for column in matrix.columns if column not in annotation_columns
-        ]
-        matrix = matrix[ordered_columns]
-
-    await asyncio.to_thread(matrix.to_csv, output_path, sep="\t", index=False)
-    return output_path
-
-
-# Strong references to prevent background task GC
+# Keep strong references to prevent background task garbage collection.
 _background_tasks: set[asyncio.Task] = set()
-
-# Per-kind locks for status file writes (prevents interleaving from concurrent on_db_done callbacks)
 _on_demand_status_locks: dict[str, threading.Lock] = {}
 
 
@@ -1316,7 +932,7 @@ async def _background_gsea_run(
     request: GseaRunRequest,
     results_dir: Path,
     de_file: Path,
-    protein_file: Path,
+    protein_file: Path | None,
     gsea_output_dir: Path,
 ) -> None:
     """Background GSEA run dispatched through TaskManager."""
@@ -1349,7 +965,7 @@ async def _background_gsea_run(
                 comparison_name=comparison,
                 output_dir=gsea_output_dir,
                 databases=request.databases,
-                protein_abundance_path=protein_file if protein_file.exists() else None,
+                protein_abundance_path=protein_file,
                 min_size=request.min_size,
                 max_size=request.max_size,
                 permutations=request.permutations,
@@ -1392,6 +1008,8 @@ async def _background_gsea_run(
         status_data["status"] = "error"
         status_data["error"] = str(e)
         await _write_on_demand_status(session_id, "gsea", status_data)
+    finally:
+        de_file.unlink(missing_ok=True)
 
 
 @router.post("/{session_id}/gsea/run")
@@ -1407,19 +1025,6 @@ async def run_gsea_on_demand(
             detail=f"Session {session_id} not found",
         )
 
-    results_dir = settings.sessions_dir / session_id / "results"
-    de_file = await _resolve_protein_analysis_file(
-        session,
-        session_id,
-        results_dir,
-        request.comparison,
-    )
-    if not de_file.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Differential expression file not found: {de_file.name}",
-        )
-
     # Check if GSEA is already running for this session
     gsea_running = task_manager.has_active_task(session_id, TaskKind.GSEA)
     if gsea_running:
@@ -1428,8 +1033,21 @@ async def run_gsea_on_demand(
             detail="A GSEA run is already in progress for this session",
         )
 
-    protein_file = await _resolve_protein_abundance_file(session, results_dir, de_file)
+    results_dir = settings.sessions_dir / session_id / "results"
     gsea_output_dir = results_dir / "gsea" / request.comparison
+    try:
+        differential_repository = await asyncio.to_thread(
+            DifferentialRepository, results_dir
+        )
+        de_file = await asyncio.to_thread(
+            differential_repository.export_comparison_tsv,
+            request.comparison,
+            gsea_output_dir / ".differential_input.tsv",
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+        ) from error
 
     # Write initial "running" status before spawning background task so the
     # frontend sees it immediately on first poll (avoids a 2-second dead gap).
@@ -1453,7 +1071,7 @@ async def run_gsea_on_demand(
             request=request,
             results_dir=results_dir,
             de_file=de_file,
-            protein_file=protein_file,
+            protein_file=None,
             gsea_output_dir=gsea_output_dir,
         )
     )
@@ -1624,6 +1242,8 @@ async def _background_bionet_run(
         status_data["status"] = "error"
         status_data["error"] = str(e)
         await _write_on_demand_status(session_id, "bionet", status_data)
+    finally:
+        de_file.unlink(missing_ok=True)
 
 
 @router.post("/{session_id}/bionet/run")
@@ -1639,19 +1259,6 @@ async def run_bionet_on_demand(
             detail=f"Session {session_id} not found",
         )
 
-    results_dir = settings.sessions_dir / session_id / "results"
-    de_file = await _resolve_protein_analysis_file(
-        session,
-        session_id,
-        results_dir,
-        request.comparison,
-    )
-    if not de_file.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Differential expression file not found: {de_file.name}",
-        )
-
     # Check if BioNet already running for this session
     bionet_active = task_manager.has_active_task(session_id, TaskKind.BIONET)
     if bionet_active:
@@ -1659,6 +1266,21 @@ async def run_bionet_on_demand(
             status_code=status.HTTP_409_CONFLICT,
             detail="A BioNet run is already in progress for this session",
         )
+
+    results_dir = settings.sessions_dir / session_id / "results"
+    try:
+        differential_repository = await asyncio.to_thread(
+            DifferentialRepository, results_dir
+        )
+        de_file = await asyncio.to_thread(
+            differential_repository.export_comparison_tsv,
+            request.comparison,
+            _bionet_output_dir(session_id) / ".differential_input.tsv",
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+        ) from error
 
     # Write initial "running" status before spawning background task so the
     # frontend sees it immediately on first poll (avoids a 2-second dead gap).

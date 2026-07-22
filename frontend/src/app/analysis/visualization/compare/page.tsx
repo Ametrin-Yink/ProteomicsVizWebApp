@@ -4,29 +4,29 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import PTMCompare from '@/components/visualization/PTMCompare';
 import ProteinCompareWorkspace from '@/components/visualization/compare/ProteinCompareWorkspace';
-import { getDataSource } from '@/lib/api-client';
+import { visualizationApi } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
-import { formatGroup } from '@/lib/utils';
 import { VisualizationPipelineWorkspace } from '@/components/visualization/VisualizationPipelineWorkspace';
+import { useDebounce } from '@/hooks/use-debounce';
 
 function CompareContent() {
   const { apiPrefix } = useApi();
 
   const [comparisons, setComparisons] = useState<Array<{ value: string; label: string }>>([]);
+  const [comparisonSearch, setComparisonSearch] = useState('');
+  const debouncedComparisonSearch = useDebounce(comparisonSearch, 250);
 
   useEffect(() => {
     if (!apiPrefix) return;
-    getDataSource(apiPrefix).then((session) => {
-      const comps = session?.config?.comparisons;
-      if (comps && comps.length > 0) {
-        const list = comps.map((c) => ({
-          value: `${formatGroup(c.group1)}_vs_${formatGroup(c.group2)}`,
-          label: `${formatGroup(c.group1)} vs ${formatGroup(c.group2)}`,
-        }));
-        setComparisons(list);
-      }
-    }).catch(() => {});
-  }, [apiPrefix]);
+    const controller = new AbortController();
+    visualizationApi.getComparisonCatalog(apiPrefix, debouncedComparisonSearch, undefined, controller.signal)
+      .then((page) => setComparisons(page.items.map((comparison) => ({
+        value: comparison.comparison_id,
+        label: comparison.display_label,
+      }))))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [apiPrefix, debouncedComparisonSearch]);
 
   if (!apiPrefix) {
     return (
@@ -46,7 +46,7 @@ function CompareContent() {
           <h1 className="font-semibold text-text-primary">Compare Analysis</h1>
         </div>
 
-        <ProteinCompareWorkspace comparisons={comparisons} />
+        <ProteinCompareWorkspace comparisons={comparisons} scalableComparison onComparisonSearch={setComparisonSearch} />
       </div>
     </div>
   );

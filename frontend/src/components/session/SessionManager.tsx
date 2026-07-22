@@ -75,7 +75,21 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ className }) => 
   const [isSelectMode, setIsSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState('');
+  const pageSessionId = getPageSessionId();
   const currentSessionStatus = currentSession?.status;
+
+  React.useEffect(() => {
+    if (!pageSessionId) return;
+
+    const pageSession = sessionsList.find((session) => session.id === pageSessionId);
+    if (!pageSession) return;
+
+    if (currentSession?.id !== pageSession.id) {
+      setCurrentSession(pageSession);
+    }
+    setActiveTab(pageSession.status === 'completed' ? 'completed' : 'active');
+  }, [currentSession?.id, pageSessionId, sessionsList, setCurrentSession]);
+
   // Sync active tab to the current session's status
   React.useEffect(() => {
     if (!currentSessionStatus) return;

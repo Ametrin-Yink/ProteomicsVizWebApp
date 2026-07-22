@@ -23,6 +23,13 @@ export interface VisualizationManifest {
   pipeline: string;
   default_module: string;
   modules: VisualizationModuleCapability[];
+  schema_version: number | null;
+  current_schema_version: number;
+  supported: boolean;
+  requires_reprocessing: boolean;
+  normalization_method: string | null;
+  imputation_method: string | null;
+  abundance_scale: 'log2' | null;
 }
 
 export type PTMResultLayer = 'ptm' | 'protein' | 'adjusted';
@@ -177,8 +184,12 @@ export interface GSEAPlotData {
 
 export interface GSEAHeatmapData {
   genes: string[];
+  protein_accessions: string[];
   samples: string[];
-  z_scores: number[][];
+  conditions: string[];
+  replicates: Array<string | null>;
+  z_scores: Array<Array<number | null>>;
+  log2_abundances: Array<Array<number | null>>;
 }
 
 export type GSEADatabase = 'go_bp' | 'go_mf' | 'go_cc' | 'kegg' | 'reactome';
@@ -199,24 +210,122 @@ export const GSEADatabaseLabels: Record<GSEADatabase, string> = {
   reactome: 'Reactome',
 };
 
-// Protein Abundance
-export interface ProteinAbundance {
-  samples: string[];
-  abundances: number[];
-  conditions: string[];
+export interface AbundanceGroup {
+  condition: string;
+  observation_count: number;
+  q1: number;
+  median: number;
+  q3: number;
+  lower_fence: number;
+  upper_fence: number;
+  observed_count: number;
+  imputed_count: number;
+  model_estimated_count: number;
+  imputation_fraction: number;
 }
 
-// Peptide Abundance
-export interface PeptideAbundance {
-  peptide_id: string;
-  sequence: string;
-  abundances: number[];
-  samples: string[];
+export interface VisualizationComparisonCatalogItem {
+  comparison_id: string;
+  display_label: string;
+  group1_label: string;
+  group2_label: string;
+  group1_sample_count: number;
+  group2_sample_count: number;
+  result_status: string;
+  tested_count: number;
+  significant_count: number;
 }
 
-export interface PeptideAbundanceData {
-  peptides: PeptideAbundance[];
+export interface CursorPage<T> {
+  items: T[];
+  next_cursor: string | null;
 }
+
+export interface QCGroupSummary {
+  group_by: string;
+  group_value: string;
+  sample_count: number;
+  observation_count: number;
+  q1: number;
+  median: number;
+  q3: number;
+  observed_count: number;
+  imputed_count: number;
+  missing_count: number;
+  protein_cv_count?: number | null;
+  protein_cv_q1?: number | null;
+  protein_cv_median?: number | null;
+  protein_cv_q3?: number | null;
+  peptide_cv_count?: number | null;
+  peptide_cv_q1?: number | null;
+  peptide_cv_median?: number | null;
+  peptide_cv_q3?: number | null;
+}
+
+export interface QCOverviewData {
+  group_by: string;
+  groups: QCGroupSummary[];
+  next_cursor: string | null;
+  group_count: number;
+  matching_group_count: number;
+  pca: Array<{
+    sample_id: string;
+    pc1: number;
+    pc2: number;
+    condition: string;
+  }>;
+  normalization_method: string;
+  imputation_method: string;
+  abundance_scale: 'log2';
+}
+
+export interface QCSampleMetric {
+  sample_id: string;
+  condition: string;
+  replicate: string | null;
+  batch: string | null;
+  total_feature_count: number;
+  present_count: number;
+  missing_count: number;
+  observed_feature_count: number;
+  imputed_feature_count: number;
+  imputation_fraction: number | null;
+  median_log2_abundance: number | null;
+}
+
+export interface QCDifferentialData {
+  comparison_id: string;
+  tested_count: number;
+  significant_count: number;
+  failed_count: number;
+  pvalue_distribution: PValueDistribution;
+}
+
+export interface AbundancePoint {
+  sample_id: string;
+  condition: string;
+  replicate: string | null;
+  batch: string | null;
+  peptide_id?: string;
+  processed_log2_abundance: number;
+  provenance: 'observed' | 'imputed' | 'model_estimated';
+}
+
+export interface ProcessedAbundanceData {
+  protein_accession: string;
+  comparison_id: string;
+  result_layer: string;
+  scale: 'log2';
+  normalization_method: string;
+  imputation_method: string;
+  groups: AbundanceGroup[];
+  points: AbundancePoint[];
+  point_count: number;
+  points_truncated: boolean;
+}
+
+export type ProteinAbundance = ProcessedAbundanceData;
+export type PeptideAbundanceData = ProcessedAbundanceData;
 
 // Volcano Plot Filters
 export interface VolcanoFilters {
@@ -310,10 +419,11 @@ export type WebSocketMessageUnion =
 export type ClusterMethod = 'pca' | 'umap' | 'tsne';
 
 export interface CompareRunStatus {
-  status: 'idle' | 'running' | 'completed' | 'error';
+  status: 'idle' | 'running' | 'completed' | 'error' | 'cancelled';
   error?: string;
   started_at?: string;
   completed_at?: string;
+  progress?: { completed: number; total: number };
 }
 
 export interface ProteinFCResult {
@@ -385,6 +495,59 @@ export interface ComparisonCorrelationData {
   comparison_similarities: Array<{ comparison: string; similarity: number }>;
   cluster_coords: ComparisonClusterPoint[];
   cluster_var_explained?: number[];
+}
+
+export interface ComparisonCorrelationMetadata {
+  schema_version: number;
+  cache_key: string;
+  status: 'completed';
+  method: 'pearson';
+  min_support: number;
+  comparison_count: number;
+  feature_count: number;
+  block_size: number;
+  tile_size: number;
+  max_level: number;
+  embedding: Array<{ comparison_id: string; x: number; y: number }>;
+}
+
+export interface ComparisonCorrelationTile {
+  level: number;
+  row: number;
+  column: number;
+  factor: number;
+  aggregation: 'exact' | 'mean';
+  row_start: number;
+  column_start: number;
+  correlations: Array<Array<number | null>>;
+  support_counts: number[][];
+}
+
+export interface ComparisonCorrelationLookupItem {
+  comparison_id: string;
+  correlation: number;
+  support_count: number;
+}
+
+export interface ComparisonCorrelationLookup {
+  comparison_id: string;
+  nearest: ComparisonCorrelationLookupItem[];
+  least_correlated: ComparisonCorrelationLookupItem[];
+}
+
+export interface ComparisonSpearmanResult {
+  left_comparison: string;
+  right_comparison: string;
+  method: 'spearman';
+  correlation: number | null;
+  support_count: number;
+  sufficient_support: boolean;
+}
+
+export interface ComparisonFoldChangeDetail {
+  proteins: Array<{ accession: string; gene_name: string | null }>;
+  comparisons: string[];
+  fold_changes: Array<Array<number | null>>;
 }
 
 /** Protein list entry for selector dropdowns */

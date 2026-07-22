@@ -52,6 +52,8 @@ The protein and adjusted layers are disabled when no compatible global-proteome 
 
 Protein sessions provide Volcano, QC, GSEA, BioNet, and Compare modules. GSEA, BioNet, and Compare are on-demand analyses, not pipeline stages.
 
+The planned versioned processed-abundance artifacts, QC scopes, GSEA heatmap behavior, and in-place session reprocessing contract are specified in [Visualization data and reprocessing plan](engineering/VISUALIZATION_DATA_REWORK_PLAN.md).
+
 PTM sessions provide PTM/Protein/Adjusted volcano layers, site tables and evidence, QC at PTM and protein levels, and comparison views when multiple comparisons exist.
 
 `Download Results` belongs to the PTM result table and downloads the full immutable PTM result archive. `Export` in the application navigation publishes the entire completed session as a report. These actions are intentionally different.

@@ -1,16 +1,22 @@
-"""Session visualization capability manifest routes."""
+"""Session visualization capability, catalog, and QC routes."""
 
+import asyncio
 import csv
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import get_session_store
 from app.api.routes.visualization_shared import create_response
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.models.session import Session
+from app.services.visualization_artifacts import (
+    VISUALIZATION_SCHEMA_VERSION,
+    load_visualization_artifact_manifest,
+)
+from app.services.visualization_repository import VisualizationRepository
 
 router = APIRouter()
 
@@ -29,8 +35,9 @@ def _result_comparison_count(path: Path) -> int:
 
 def build_visualization_manifest(session: Session, results_dir: Path) -> dict[str, Any]:
     """Describe which visualization modules and data scopes a session supports."""
+    artifact_manifest = load_visualization_artifact_manifest(results_dir)
     if session.pipeline != "ptm":
-        return {
+        manifest = {
             "pipeline": session.pipeline,
             "default_module": "volcano",
             "modules": [
@@ -44,65 +51,97 @@ def build_visualization_manifest(session: Session, results_dir: Path) -> dict[st
                 for module_id in ("volcano", "qc", "gsea", "compare", "bionet")
             ],
         }
-
-    has_ptm = (results_dir / "ptm_site_results.tsv").exists()
-    has_protein = (results_dir / "protein_results.tsv").exists()
-    has_adjusted_ptm = (results_dir / "adjusted_ptm_results.tsv").exists()
-    comparison_count = _result_comparison_count(results_dir / "ptm_site_results.tsv")
-
-    ptm_scopes = ["ptm"] if has_ptm else []
-    protein_scopes = ["protein"] if has_protein else []
-    adjusted_scopes = ["adjusted_ptm"] if has_adjusted_ptm else []
-    volcano_scopes = ptm_scopes + protein_scopes + adjusted_scopes
-    compare_enabled = has_ptm and comparison_count >= 2
-    if not has_ptm:
-        compare_reason = "PTM results are not available"
-    elif comparison_count < 2:
-        compare_reason = "At least two comparisons are required"
     else:
-        compare_reason = None
+        has_ptm = (results_dir / "ptm_site_results.tsv").exists()
+        has_protein = (results_dir / "protein_results.tsv").exists()
+        has_adjusted_ptm = (results_dir / "adjusted_ptm_results.tsv").exists()
+        comparison_count = _result_comparison_count(
+            results_dir / "ptm_site_results.tsv"
+        )
 
-    return {
-        "pipeline": "ptm",
-        "default_module": "volcano",
-        "modules": [
-            {
-                "id": "volcano",
-                "visible": True,
-                "enabled": has_ptm,
-                "disabled_reason": None if has_ptm else "PTM results are not available",
-                "data_scopes": volcano_scopes,
-            },
-            {
-                "id": "qc",
-                "visible": True,
-                "enabled": has_ptm,
-                "disabled_reason": None if has_ptm else "PTM results are not available",
-                "data_scopes": ptm_scopes + protein_scopes,
-            },
-            {
-                "id": "compare",
-                "visible": True,
-                "enabled": compare_enabled,
-                "disabled_reason": compare_reason,
-                "data_scopes": volcano_scopes,
-            },
-            {
-                "id": "gsea",
-                "visible": has_protein,
-                "enabled": has_protein,
-                "disabled_reason": None,
-                "data_scopes": protein_scopes,
-            },
-            {
-                "id": "bionet",
-                "visible": has_protein,
-                "enabled": has_protein,
-                "disabled_reason": None,
-                "data_scopes": protein_scopes,
-            },
-        ],
-    }
+        ptm_scopes = ["ptm"] if has_ptm else []
+        protein_scopes = ["protein"] if has_protein else []
+        adjusted_scopes = ["adjusted_ptm"] if has_adjusted_ptm else []
+        volcano_scopes = ptm_scopes + protein_scopes + adjusted_scopes
+        compare_enabled = has_ptm and comparison_count >= 2
+        if not has_ptm:
+            compare_reason = "PTM results are not available"
+        elif comparison_count < 2:
+            compare_reason = "At least two comparisons are required"
+        else:
+            compare_reason = None
+
+        manifest = {
+            "pipeline": "ptm",
+            "default_module": "volcano",
+            "modules": [
+                {
+                    "id": "volcano",
+                    "visible": True,
+                    "enabled": has_ptm,
+                    "disabled_reason": (
+                        None if has_ptm else "PTM results are not available"
+                    ),
+                    "data_scopes": volcano_scopes,
+                },
+                {
+                    "id": "qc",
+                    "visible": True,
+                    "enabled": has_ptm,
+                    "disabled_reason": (
+                        None if has_ptm else "PTM results are not available"
+                    ),
+                    "data_scopes": ptm_scopes + protein_scopes,
+                },
+                {
+                    "id": "compare",
+                    "visible": True,
+                    "enabled": compare_enabled,
+                    "disabled_reason": compare_reason,
+                    "data_scopes": volcano_scopes,
+                },
+                {
+                    "id": "gsea",
+                    "visible": has_protein,
+                    "enabled": has_protein,
+                    "disabled_reason": None,
+                    "data_scopes": protein_scopes,
+                },
+                {
+                    "id": "bionet",
+                    "visible": has_protein,
+                    "enabled": has_protein,
+                    "disabled_reason": None,
+                    "data_scopes": protein_scopes,
+                },
+            ],
+        }
+
+    supported = artifact_manifest is not None
+    manifest.update(
+        {
+            "schema_version": (
+                artifact_manifest["schema_version"] if supported else None
+            ),
+            "current_schema_version": VISUALIZATION_SCHEMA_VERSION,
+            "supported": supported,
+            "requires_reprocessing": not supported,
+            "normalization_method": (
+                artifact_manifest.get("normalization_method") if supported else None
+            ),
+            "imputation_method": (
+                artifact_manifest.get("imputation_method") if supported else None
+            ),
+            "abundance_scale": (
+                artifact_manifest.get("abundance_scale") if supported else None
+            ),
+        }
+    )
+    if not supported:
+        for module in manifest["modules"]:
+            module["enabled"] = False
+            module["disabled_reason"] = "Results require reprocessing"
+    return manifest
 
 
 @router.get("/{session_id}/visualization/manifest")
@@ -118,3 +157,125 @@ async def get_visualization_manifest(
         )
     results_dir = settings.sessions_dir / session_id / "results"
     return create_response(build_visualization_manifest(session, results_dir))
+
+
+def _repository_or_conflict(session_id: str) -> VisualizationRepository:
+    try:
+        return VisualizationRepository(settings.sessions_dir / session_id / "results")
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.get("/{session_id}/visualization/comparisons")
+async def get_visualization_comparisons(
+    session_id: str,
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Search the comparison catalog without returning every comparison."""
+    if not await store.get(session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    repository = _repository_or_conflict(session_id)
+    try:
+        data = await asyncio.to_thread(
+            repository.list_comparisons,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return create_response(data)
+
+
+@router.get("/{session_id}/visualization/samples")
+async def get_visualization_samples(
+    session_id: str,
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Search the sample catalog without returning every sample."""
+    if not await store.get(session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    repository = _repository_or_conflict(session_id)
+    try:
+        data = await asyncio.to_thread(
+            repository.list_samples,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return create_response(data)
+
+
+@router.get("/{session_id}/visualization/qc/overview")
+async def get_visualization_qc_overview(
+    session_id: str,
+    group_by: str = Query("condition"),
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=50),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Return bounded experiment-wide processed-input QC summaries."""
+    if not await store.get(session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    repository = _repository_or_conflict(session_id)
+    try:
+        data = await asyncio.to_thread(
+            repository.get_qc_overview,
+            group_by=group_by,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return create_response(data)
+
+
+@router.get("/{session_id}/visualization/qc/samples")
+async def get_visualization_qc_samples(
+    session_id: str,
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Return a bounded page of per-sample QC metrics."""
+    if not await store.get(session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    repository = _repository_or_conflict(session_id)
+    try:
+        data = await asyncio.to_thread(
+            repository.list_qc_samples,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return create_response(data)
+
+
+@router.get("/{session_id}/visualization/qc/differential")
+async def get_visualization_qc_differential(
+    session_id: str,
+    comparison: str = Query(..., min_length=1, max_length=200),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Return differential-result QC for exactly one comparison."""
+    if not await store.get(session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    repository = _repository_or_conflict(session_id)
+    try:
+        data = await asyncio.to_thread(repository.get_qc_differential, comparison)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return create_response(data)

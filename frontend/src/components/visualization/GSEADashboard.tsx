@@ -91,6 +91,10 @@ export default function GSEADashboard({
     }
   };
 
+  if (!hasValidData) {
+    return null;
+  }
+
   return (
     <div data-testid="gsea-overview" className="space-y-6">
       {/* Overview Panel */}

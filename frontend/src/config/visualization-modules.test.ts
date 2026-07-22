@@ -15,9 +15,16 @@ describe('PTM visualization routing', () => {
 
   it('uses the manifest to hide unavailable modules and disable unavailable actions', () => {
     const manifest: VisualizationManifest = {
-      pipeline: 'ptm',
-      default_module: 'volcano',
-      modules: [
+    pipeline: 'ptm',
+    default_module: 'volcano',
+    schema_version: 1,
+    current_schema_version: 1,
+    supported: true,
+    requires_reprocessing: false,
+    normalization_method: 'background_peptide',
+    imputation_method: 'none',
+    abundance_scale: 'log2',
+    modules: [
         { id: 'volcano', visible: true, enabled: true, disabled_reason: null, data_scopes: ['ptm'] },
         { id: 'qc', visible: true, enabled: true, disabled_reason: null, data_scopes: ['ptm'] },
         {

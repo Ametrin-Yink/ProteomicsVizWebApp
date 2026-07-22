@@ -67,6 +67,7 @@ class TestBuildMsqrob2BatchCmd:
         assert parsed["numberOfCores"] == 2
         assert parsed["ridge"] is False
         assert parsed["adjust_method"] == "BH"
+        assert parsed["output_shard"] == 0
 
     def test_comparisons_serialized_as_json(self):
         """batch_items should be serialized as JSON and passed as a positional arg."""

@@ -47,6 +47,20 @@ export function VisualizationModuleBoundary({
 
   const moduleId = getActiveModuleId(pathname);
   const capability = state.manifest.modules.find((module) => module.id === moduleId);
+  if (state.manifest.requires_reprocessing) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8" data-testid="visualization-reprocess-required">
+        <div className="max-w-lg rounded-lg border border-warning/20 bg-warning/5 p-8 text-center">
+          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-warning" />
+          <h2 className="text-lg font-semibold text-text-primary">Results require reprocessing</h2>
+          <p className="mt-2 text-sm text-text-secondary">
+            This completed session predates the current processed-abundance and QC contract.
+            Use Reprocess above to run the saved configuration with the current workflow.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (!capability?.visible || !capability.enabled) {
     const reason = capability?.disabled_reason
       || 'This visualization is not available for the selected session.';

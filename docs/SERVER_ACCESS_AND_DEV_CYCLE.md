@@ -17,6 +17,28 @@ This guide covers the normal path from Windows development to the AlmaLinux prod
 
 Do not edit `/home/proteomicsviz/current`, a release directory, or the deployment source checkout manually. Do not store runtime data inside a release.
 
+## Port ownership
+
+`127.0.0.1` always identifies the machine on which the URL is opened. The port determines which listener receives the request. On the Windows development PC, use these ports:
+
+| Windows URL | Owner | Purpose |
+|---|---|---|
+| `http://127.0.0.1:3000` | Local Next.js development process | Development UI for the current checkout |
+| `http://127.0.0.1:8002` | Local FastAPI development process | Development API and local runtime data |
+| `http://127.0.0.1:8000` | SSH forward to server `127.0.0.1:8100` | Production FastAPI traffic used by the tunneled production UI |
+| `http://127.0.0.1:8001` | SSH forward to server `127.0.0.1:8001` | Complete private production application |
+
+The corresponding AlmaLinux listeners are:
+
+| Server listener | Owner | Exposure |
+|---|---|---|
+| `127.0.0.1:3000` | Production Next.js service | Loopback only, behind Caddy |
+| `127.0.0.1:8100` | Production FastAPI service | Loopback only, reached by Caddy and the Windows `8000` tunnel |
+| `127.0.0.1:8001` | Private Caddy listener | Loopback only, reached by the Windows `8001` tunnel |
+| `0.0.0.0:8000` | Public Caddy listener | Shared-report capability surface only |
+
+Normal development pairs Windows frontend `3000` with Windows backend `8002`. Do not point the local development frontend at Windows ports `8000` or `8001`; doing so mixes code from the current checkout with production APIs and production data.
+
 ## Verify SSH access
 
 Passwordless SSH is configured with the Windows Ed25519 key. Verify it without allowing a password prompt:

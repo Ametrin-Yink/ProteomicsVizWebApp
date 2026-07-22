@@ -1,7 +1,9 @@
 """Unit tests for GSEA API routes — run, status, data, plot, heatmap."""
 
+import json
 from unittest.mock import AsyncMock
 
+import pandas as pd
 import pytest
 from app.main import app
 from fastapi.testclient import TestClient
@@ -90,3 +92,124 @@ class TestGseaHeatmap:
             "?term=nonexistent"
         )
         assert response.status_code == 404
+
+    def test_returns_comparison_scoped_processed_heatmap(
+        self, client, tmp_path, monkeypatch
+    ):
+        from app.api.routes import visualization
+
+        results_dir = tmp_path / "550e8400-e29b-41d4-a716-446655440000" / "results"
+        results_dir.mkdir(parents=True)
+        pd.DataFrame(
+            [
+                {
+                    "protein_accession": "P1",
+                    "gene_name": "GENE1",
+                    "sample_id": sample,
+                    "condition": condition,
+                    "replicate": replicate,
+                    "batch": None,
+                    "processed_log2_abundance": value,
+                    "provenance": "model_estimated",
+                    "observed_feature_count": 0,
+                    "imputed_feature_count": 0,
+                    "imputation_fraction": None,
+                    "pipeline": "msqrob2",
+                    "result_layer": "protein",
+                    "sample_order": order,
+                    "condition_order": 0 if condition == "A" else 1,
+                }
+                for order, (sample, condition, replicate, value) in enumerate(
+                    [
+                        ("A_1", "A", "1", 12.0),
+                        ("A_2", "A", "2", 14.0),
+                        ("B_1", "B", "1", 10.0),
+                    ]
+                )
+            ]
+        ).to_parquet(results_dir / "protein_abundance_long.parquet", index=False)
+        pd.DataFrame(
+            columns=[
+                "protein_accession",
+                "gene_name",
+                "peptide_id",
+                "sample_id",
+                "condition",
+                "replicate",
+                "batch",
+                "processed_log2_abundance",
+                "provenance",
+                "pipeline",
+                "result_layer",
+                "sample_order",
+                "condition_order",
+            ]
+        ).to_parquet(results_dir / "peptide_abundance_long.parquet", index=False)
+        pd.DataFrame(
+            {
+                "sample_id": ["A_1", "A_2", "B_1"],
+                "condition": ["A", "A", "B"],
+                "replicate": ["1", "2", "1"],
+                "batch": [None, None, None],
+                "sample_order": [0, 1, 2],
+                "condition_order": [0, 0, 1],
+            }
+        ).to_parquet(results_dir / "sample_catalog.parquet", index=False)
+        pd.DataFrame(
+            {
+                "comparison_id": ["A_vs_B"],
+                "group1_label": ["A"],
+                "group2_label": ["B"],
+                "comparison_order": [0],
+            }
+        ).to_parquet(results_dir / "comparison_catalog.parquet", index=False)
+        pd.DataFrame(
+            {
+                "comparison_id": ["A_vs_B"],
+                "protein_accession": ["P1"],
+                "gene_name": ["GENE1"],
+                "log2_fold_change": [2.0],
+                "p_value": [0.01],
+                "adjusted_p_value": [0.02],
+                "standard_error": [0.1],
+                "statistic": [4.0],
+                "result_layer": ["protein"],
+                "pipeline": ["msqrob2"],
+            }
+        ).to_parquet(results_dir / "differential_results.parquet", index=False)
+        (results_dir / "visualization_artifacts.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "abundance_scale": "log2",
+                    "normalization_method": "center.median",
+                    "imputation_method": "none",
+                    "artifacts": {
+                        "protein_abundance": "protein_abundance_long.parquet",
+                        "peptide_abundance": "peptide_abundance_long.parquet",
+                        "samples": "sample_catalog.parquet",
+                        "comparisons": "comparison_catalog.parquet",
+                        "differential_results": "differential_results.parquet",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            visualization,
+            "load_gsea_results",
+            lambda *_args, **_kwargs: {
+                "results": [{"term": "pathway", "lead_genes": ["GENE1"]}]
+            },
+        )
+
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/go_bp/heatmap"
+            "?term=pathway&comparison=A_vs_B"
+        )
+
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["samples"] == ["A_1", "A_2", "B_1"]
+        assert data["conditions"] == ["A", "A", "B"]
+        assert data["log2_abundances"] == [[12.0, 14.0, 10.0]]

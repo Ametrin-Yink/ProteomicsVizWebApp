@@ -50,6 +50,7 @@ def _build_msqrob2_batch_cmd(
     comparisons_json = _json.dumps(batch_items)
     cfg = _json.loads(config_json_str)
     cfg["numberOfCores"] = n_cores_per
+    cfg["output_shard"] = batch_idx
     config_json = _json.dumps(cfg)
     cmd = [
         r_executable,

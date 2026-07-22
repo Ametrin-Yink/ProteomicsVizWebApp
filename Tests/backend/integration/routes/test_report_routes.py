@@ -73,9 +73,9 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
 
     results_dir = session_dir / "results"
     results_dir.mkdir(parents=True)
-    (results_dir / "Diff_Expression_Trt_vs_Ctrl.tsv").write_text(
-        "Master_Protein_Accessions\tGene_Name\tlogFC\tpval\tadjPval\tPSM_Count\n"
-        "P12345\tGENE1\t2.5\t0.001\t0.01\t10\n"
+    (results_dir / "Differential_Results_Long.tsv").write_text(
+        "Label\tMaster_Protein_Accessions\tGene_Name\tlogFC\tpval\tadjPval\tPSM_Count\n"
+        "Trt_vs_Ctrl\tP12345\tGENE1\t2.5\t0.001\t0.01\t10\n"
     )
     (results_dir / "Protein_Abundances.tsv").write_text(
         "Master_Protein_Accessions\tGene_Name\tPSM_Count\tS1\tS2\n"
@@ -84,6 +84,24 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
     (results_dir / "QC_Results.json").write_text('{"pca": {"pc1": [1,2,3]}}')
     (results_dir / "PSM_Abundances.tsv").write_text(
         "Sequence\tS1\tS2\nPEPTIDE\t100\t200\n"
+    )
+
+    from app.models.analysis import AnalysisConfig, PipelineTool
+    from app.services.visualization_artifacts import (
+        materialize_visualization_artifacts,
+    )
+
+    materialize_visualization_artifacts(
+        results_dir,
+        config=AnalysisConfig(
+            pipeline=PipelineTool.MSQROB2,
+            comparisons=[{"group1": {"C": "Trt"}, "group2": {"C": "Ctrl"}}],
+            metadata={
+                "S1": {"C": "Ctrl", "replicate": "1"},
+                "S2": {"C": "Trt", "replicate": "1"},
+            },
+        ),
+        pipeline="msqrob2",
     )
 
     gsea_dir = results_dir / "gsea" / "Trt_vs_Ctrl"

@@ -112,6 +112,29 @@ def test_get_report_dir_nonexistent(temp_reports_dir):
     assert get_report_dir("rpt_nonexistent") is None
 
 
+def test_replace_report_atomically_publishes_existing_id(temp_reports_dir):
+    from app.services.report_store import (
+        create_report,
+        get_report_dir,
+        get_report_staging_dir,
+        publish_report,
+        replace_report,
+    )
+
+    metadata = create_report("R", "s1", "E1")
+    staging = get_report_staging_dir(metadata["report_id"])
+    (staging / "value.txt").write_text("old", encoding="utf-8")
+    publish_report(metadata["report_id"])
+
+    staging.mkdir()
+    (staging / "report.json").write_text(json.dumps(metadata), encoding="utf-8")
+    (staging / "value.txt").write_text("new", encoding="utf-8")
+    replace_report(metadata["report_id"])
+
+    report_dir = get_report_dir(metadata["report_id"])
+    assert (report_dir / "value.txt").read_text(encoding="utf-8") == "new"
+
+
 def test_delete_report(temp_reports_dir):
     from app.services.report_store import (
         create_report,

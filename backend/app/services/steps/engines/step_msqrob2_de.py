@@ -6,15 +6,15 @@ Moved from steps/multi_condition_de.py — unchanged behavior.
 import asyncio
 import logging
 
-import pandas as pd
-
 from app.core.config import settings
 from app.services.msqrob2_wrapper import msqrob2_wrapper
 from app.services.pipeline_engine import StepContext
 from app.services.steps._helpers import (
-    build_comparison_pair_label,
+    count_significant_differential,
     create_log_callback,
+    differential_output_paths,
     get_gene_mapping,
+    primary_differential_output,
 )
 
 logger = logging.getLogger("proteomics")
@@ -25,7 +25,7 @@ async def step_multi_condition_de(ctx: StepContext) -> None:
 
     Loads MSqRob2_Processed.rds (QFeatures object) from step 6, runs
     msqrob() + makeContrast() + hypothesisTest() for all contrasts,
-    writes per-comparison Diff_Expression_*.tsv files.
+    writes consolidated differential-result TSV shards.
 
     Batches comparisons when exceeding settings.msqrob2_batch_size.
     """
@@ -47,7 +47,8 @@ async def step_multi_condition_de(ctx: StepContext) -> None:
 
     gene_mapping = get_gene_mapping(ctx.config.organism)
 
-    if len(comparisons) > settings.msqrob2_batch_size:
+    is_batched = len(comparisons) > settings.msqrob2_batch_size
+    if is_batched:
         logger.info(
             "Step %d: Using batched DE for %d comparisons",
             current_step,
@@ -72,22 +73,15 @@ async def step_multi_condition_de(ctx: StepContext) -> None:
             timeout_multiplier=ctx.timeout_multiplier,
         )
 
-    if comparisons:
-        first = comparisons[0]
-        label = build_comparison_pair_label(first)
-        ctx.result.diff_expression_path = str(
-            ctx.results_dir / f"Diff_Expression_{label}.tsv"
-        )
+    ctx.result.diff_expression_path = str(
+        primary_differential_output(ctx.results_dir, batched=is_batched)
+    )
 
     ctx.step_outputs[current_step] = ctx.results_dir
 
-    total_sig = 0
-    for comp in comparisons:
-        label = build_comparison_pair_label(comp)
-        de_file = ctx.results_dir / f"Diff_Expression_{label}.tsv"
-        if de_file.exists():
-            de_df = await asyncio.to_thread(pd.read_csv, de_file, sep="\t")
-            sig_count = len(de_df[de_df["adjPval"] < ctx.config.pvalue_threshold])
-            total_sig += sig_count
-
-    ctx.result.significant_proteins = total_sig
+    de_paths = differential_output_paths(ctx.results_dir)
+    ctx.result.significant_proteins = await asyncio.to_thread(
+        count_significant_differential,
+        de_paths,
+        ctx.config.pvalue_threshold,
+    )

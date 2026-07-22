@@ -1,12 +1,14 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import QCPlots from '@/components/visualization/QCPlots';
-import type { QCData } from '@/types/api';
+import type { QCData, QCDifferentialData, QCOverviewData } from '@/types/api';
 
 interface QCWorkspaceProps {
   data: QCData | null;
+  overview?: QCOverviewData | null;
+  differential?: QCDifferentialData | null;
   labels: {
     psm: string;
     entity: string;
@@ -16,6 +18,11 @@ interface QCWorkspaceProps {
   selectedComparison: string;
   onComparisonChange: (value: string) => void;
   comparisonOptions: Array<{ value: string; label: string }>;
+  onComparisonSearch?: (value: string) => void;
+  groupBy?: 'condition' | 'batch';
+  onGroupByChange?: (value: 'condition' | 'batch') => void;
+  groupSearch?: string;
+  onGroupSearch?: (value: string) => void;
   scopeTabs?: ReactNode;
 }
 
@@ -29,13 +36,28 @@ function formatPercent(value: number | undefined): string {
 
 export default function QCWorkspace({
   data,
+  overview,
+  differential,
   labels,
   conditionList,
   selectedComparison,
   onComparisonChange,
   comparisonOptions,
+  onComparisonSearch,
+  groupBy = 'condition',
+  onGroupByChange,
+  groupSearch = '',
+  onGroupSearch,
   scopeTabs,
 }: QCWorkspaceProps) {
+  const effectiveSelectedComparison = selectedComparison || comparisonOptions[0]?.value || '';
+
+  useEffect(() => {
+    if (!selectedComparison && effectiveSelectedComparison) {
+      onComparisonChange(effectiveSelectedComparison);
+    }
+  }, [effectiveSelectedComparison, onComparisonChange, selectedComparison]);
+
   if (!data) {
     return (
       <div className="rounded-lg border border-border bg-surface p-5 text-center">
@@ -46,9 +68,9 @@ export default function QCWorkspace({
 
   const summaryCards = [
     { label: `Total Unique ${labels.psm}s`, value: formatCount(data.total_psms) },
-    { label: `Avg Unique ${labels.psm}s/Sample`, value: formatCount(data.avg_psms_per_sample) },
+    { label: `Avg Detected ${labels.psm}s/Sample`, value: formatCount(data.avg_psms_per_sample) },
     { label: `Total ${labels.entityPlural}`, value: formatCount(data.total_proteins) },
-    { label: `Avg ${labels.entityPlural}/Sample`, value: formatCount(data.avg_proteins_per_sample) },
+    { label: `Avg Detected ${labels.entityPlural}/Sample`, value: formatCount(data.avg_proteins_per_sample) },
     {
       label: `Avg ${labels.entity} CV`,
       value: formatPercent(data.average_protein_cv ?? data.average_cv),
@@ -60,7 +82,19 @@ export default function QCWorkspace({
     <div className="space-y-6">
       {scopeTabs}
       <div data-testid="qc-summary" className="rounded-lg border border-border bg-background p-4">
-        <h2 className="mb-4 text-base font-semibold text-text-primary">QC Summary Statistics</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-text-primary">Analysis Summary</h2>
+            <p className="mt-1 text-xs text-text-muted">Experiment-wide quality metrics</p>
+          </div>
+          {overview && (
+            <div className="flex flex-wrap gap-1.5 text-xs text-text-secondary">
+              <span className="rounded-full bg-surface px-2 py-1">{overview.normalization_method}</span>
+              <span className="rounded-full bg-surface px-2 py-1">Imputation: {overview.imputation_method}</span>
+              <span className="rounded-full bg-surface px-2 py-1">Processed log2</span>
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {summaryCards.map((card) => (
             <div key={card.label} className="rounded-lg bg-surface p-3">
@@ -73,9 +107,16 @@ export default function QCWorkspace({
 
       <QCPlots
         data={data}
+        overview={overview}
+        differential={differential}
         conditionList={conditionList}
-        selectedComparison={selectedComparison}
+        groupBy={groupBy}
+        onGroupByChange={onGroupByChange}
+        groupSearch={groupSearch}
+        onGroupSearch={onGroupSearch}
+        selectedComparison={effectiveSelectedComparison}
         onComparisonChange={onComparisonChange}
+        onComparisonSearch={onComparisonSearch}
         comparisonOptions={comparisonOptions}
         labels={{ psm: labels.psm, entity: labels.entity }}
       />

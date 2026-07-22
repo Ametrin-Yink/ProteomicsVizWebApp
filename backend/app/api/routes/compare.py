@@ -10,7 +10,7 @@ from typing import Literal
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.api.deps import get_session_store
@@ -29,6 +29,10 @@ from app.services.compare_service import (
     compute_venn_data,
     load_pvalues_for_protein,
     run_cluster,
+)
+from app.services.comparison_correlation import (
+    ComparisonCorrelationArtifact,
+    build_comparison_correlation_artifact,
 )
 from app.services.task_manager import TaskCancelledError, TaskKind, task_manager
 from app.utils.json_io import read_json_file
@@ -68,6 +72,12 @@ class VennRequest(BaseModel):
     comparisons: list[str]
     pvalue_threshold: float = 0.05
     logfc_threshold: float = 1.0
+
+
+class ComparisonDetailRequest(BaseModel):
+    comparisons: list[str]
+    proteins: list[str] | None = None
+    max_proteins: int = 100
 
 
 def _get_comparisons_from_session(session_id: str) -> list[str]:
@@ -204,7 +214,6 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
         matrix, accessions, gene_names = build_fold_change_matrix(
             session_dir, all_comparisons
         )
-
         # Similarity matrix: Euclidean distance between comparisons (columns)
         sim_matrix = compute_similarity_matrix(matrix.T)
         similarity = {
@@ -337,6 +346,61 @@ def _run_comparison_correlation(session_id: str, req: ComparisonCorrelationReque
 # ── Protein Correlation Endpoints ──
 
 
+def _run_scalable_comparison_correlation(
+    session_id: str, _req: ComparisonCorrelationRequest
+) -> None:
+    """Build the complete versioned Pearson artifact in resumable blocks."""
+    compute_type = "comparison-correlation"
+    results_dir = settings.sessions_dir / session_id / "results"
+    started_at = _read_status(session_id, compute_type).get("started_at")
+
+    def update_progress(completed: int, total: int) -> None:
+        _write_status(
+            session_id,
+            compute_type,
+            {
+                "status": "running",
+                "method": "pearson",
+                "started_at": started_at,
+                "progress": {"completed": completed, "total": total},
+                "error": None,
+            },
+        )
+
+    try:
+        metadata = build_comparison_correlation_artifact(
+            results_dir,
+            progress_callback=update_progress,
+            cancel_requested=lambda: task_manager.is_cancel_requested(session_id),
+        )
+        _write_status(
+            session_id,
+            compute_type,
+            {
+                "status": "completed",
+                "method": "pearson",
+                "comparison_count": metadata["comparison_count"],
+                "feature_count": metadata["feature_count"],
+                "started_at": started_at,
+                "completed_at": datetime.now(UTC).isoformat(),
+            },
+        )
+    except Exception as error:
+        cancelled = task_manager.is_cancel_requested(session_id)
+        _write_status(
+            session_id,
+            compute_type,
+            {
+                "status": "cancelled" if cancelled else "error",
+                "error": "Task cancelled" if cancelled else str(error),
+                "started_at": started_at,
+                "completed_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        if not cancelled:
+            raise
+
+
 @router.post("/{session_id}/compare/protein-correlation")
 async def trigger_protein_correlation(
     session_id: str,
@@ -447,22 +511,33 @@ async def trigger_comparison_correlation(
             "error": None,
         },
     )
-    _schedule_background_task(_run_comparison_correlation_task(session_id, req))
+    _schedule_background_task(
+        _run_comparison_correlation_task(
+            session_id,
+            req,
+            scalable=session.pipeline != "ptm",
+        )
+    )
     return {"status": "running"}
 
 
 async def _run_comparison_correlation_task(
-    session_id: str, req: ComparisonCorrelationRequest
+    session_id: str,
+    req: ComparisonCorrelationRequest,
+    *,
+    scalable: bool,
 ):
     try:
         await task_manager.submit(
             session_id,
             TaskKind.COMPUTE,
-            _run_comparison_correlation,
+            _run_scalable_comparison_correlation
+            if scalable
+            else _run_comparison_correlation,
             session_id,
             req,
             label=f"Compare: {req.primary_comparison}",
-            timeout_seconds=10 * 60,
+            timeout_seconds=24 * 60 * 60 if scalable else 10 * 60,
         )
     except TaskCancelledError:
         logger.info(f"Comparison correlation cancelled for {session_id}")
@@ -489,6 +564,15 @@ async def get_comparison_correlation_data(
     session = await store.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    if session.pipeline != "ptm":
+        try:
+            artifact = await asyncio.to_thread(
+                ComparisonCorrelationArtifact,
+                settings.sessions_dir / session_id / "results",
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        return artifact.public_metadata()
     rp = _result_path(session_id, "comparison-correlation")
     if not rp.exists():
         raise HTTPException(
@@ -496,6 +580,107 @@ async def get_comparison_correlation_data(
             detail="No results found — run comparison correlation first",
         )
     return await read_json_file(rp)
+
+
+async def _correlation_artifact_or_404(
+    session_id: str, store: SessionStore
+) -> ComparisonCorrelationArtifact:
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.pipeline == "ptm":
+        raise HTTPException(
+            status_code=404, detail="PTM Compare uses its existing workflow"
+        )
+    try:
+        return await asyncio.to_thread(
+            ComparisonCorrelationArtifact,
+            settings.sessions_dir / session_id / "results",
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.get("/{session_id}/compare/comparison-correlation/tile")
+async def get_comparison_correlation_tile(
+    session_id: str,
+    level: int = Query(..., ge=0),
+    row: int = Query(..., ge=0),
+    column: int = Query(..., ge=0),
+    store: SessionStore = Depends(get_session_store),
+):
+    artifact = await _correlation_artifact_or_404(session_id, store)
+    try:
+        return await asyncio.to_thread(
+            artifact.get_tile,
+            level=level,
+            row=row,
+            column=column,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/{session_id}/compare/comparison-correlation/cell")
+async def get_comparison_correlation_cell(
+    session_id: str,
+    row: int = Query(..., ge=0),
+    column: int = Query(..., ge=0),
+    store: SessionStore = Depends(get_session_store),
+):
+    artifact = await _correlation_artifact_or_404(session_id, store)
+    try:
+        return await asyncio.to_thread(artifact.get_cell, row, column)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/{session_id}/compare/comparison-correlation/lookup")
+async def lookup_comparison_correlation(
+    session_id: str,
+    comparison: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(20, ge=1, le=100),
+    store: SessionStore = Depends(get_session_store),
+):
+    artifact = await _correlation_artifact_or_404(session_id, store)
+    try:
+        return await asyncio.to_thread(
+            artifact.lookup_reference, comparison, limit=limit
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/{session_id}/compare/comparison-correlation/spearman")
+async def get_comparison_spearman(
+    session_id: str,
+    left: str = Query(..., min_length=1, max_length=200),
+    right: str = Query(..., min_length=1, max_length=200),
+    store: SessionStore = Depends(get_session_store),
+):
+    artifact = await _correlation_artifact_or_404(session_id, store)
+    try:
+        return await asyncio.to_thread(artifact.get_spearman, left, right)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/{session_id}/compare/comparison-correlation/detail")
+async def get_comparison_fold_change_detail(
+    session_id: str,
+    request: ComparisonDetailRequest,
+    store: SessionStore = Depends(get_session_store),
+):
+    artifact = await _correlation_artifact_or_404(session_id, store)
+    try:
+        return await asyncio.to_thread(
+            artifact.get_fold_change_detail,
+            request.comparisons,
+            protein_ids=request.proteins,
+            max_proteins=request.max_proteins,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 # ── Protein List Endpoint ──

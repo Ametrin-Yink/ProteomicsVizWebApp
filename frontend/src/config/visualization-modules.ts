@@ -186,14 +186,14 @@ export function getModuleById(id: string): VisualizationModule | undefined {
 export const PTM_VISUALIZATION_MODULES: VisualizationModule[] = [
   {
     id: 'volcano',
-    label: 'Volcano',
+    label: 'Volcano Plot',
     href: '/analysis/visualization?pipeline=ptm',
     icon: ChartScatter,
     description: 'PTM differential expression volcano plot',
   },
   {
     id: 'qc',
-    label: 'QC',
+    label: 'QC Plots',
     href: '/analysis/visualization/qc?pipeline=ptm',
     icon: Activity,
     description: 'PTM quality control plots',

@@ -252,6 +252,57 @@ run_col <- if ("originalRUN" %in% names(protein_level)) "originalRUN" else
 cat("Using abundance column:", abundance_col, "\n")
 cat("Using run column:", run_col, "\n")
 
+# Export the exact processed feature layer for canonical peptide visualization.
+# Python only validates and converts this R-owned output to Parquet.
+feature_level <- processed$FeatureLevelData
+if (!is.null(feature_level) && nrow(feature_level) > 0) {
+    feature_protein_col <- if ("ProteinName" %in% names(feature_level)) "ProteinName" else
+                           if ("Protein" %in% names(feature_level)) "Protein" else
+                           stop("No protein column found in FeatureLevelData")
+    feature_peptide_col <- if ("PeptideSequence" %in% names(feature_level)) "PeptideSequence" else
+                           if ("Feature" %in% names(feature_level)) "Feature" else
+                           if ("PSM" %in% names(feature_level)) "PSM" else
+                           stop("No peptide identifier found in FeatureLevelData")
+    feature_run_col <- if ("originalRUN" %in% names(feature_level)) "originalRUN" else
+                       if ("BioReplicate" %in% names(feature_level)) "BioReplicate" else
+                       if ("RUN" %in% names(feature_level)) "RUN" else
+                       stop("No sample column found in FeatureLevelData")
+    feature_condition_col <- if ("GROUP" %in% names(feature_level)) "GROUP" else
+                             if ("Condition" %in% names(feature_level)) "Condition" else NULL
+    feature_abundance_col <- if ("LogIntensities" %in% names(feature_level)) "LogIntensities" else
+                             if ("log2Intensity" %in% names(feature_level)) "log2Intensity" else
+                             stop("No processed abundance found in FeatureLevelData")
+    feature_replicate_col <- if ("SUBJECT" %in% names(feature_level)) "SUBJECT" else
+                             if ("BioReplicate" %in% names(feature_level)) "BioReplicate" else NULL
+
+    predicted <- if ("predicted" %in% names(feature_level)) !is.na(feature_level$predicted) else
+                 rep(FALSE, nrow(feature_level))
+    censored <- if ("censored" %in% names(feature_level)) {
+        values <- feature_level$censored
+        !is.na(values) & as.logical(values)
+    } else rep(FALSE, nrow(feature_level))
+    abundance <- suppressWarnings(as.numeric(feature_level[[feature_abundance_col]]))
+    provenance <- ifelse(is.na(abundance), "missing",
+                         ifelse(predicted | censored, "imputed", "observed"))
+    processed_features <- data.frame(
+        ProteinAccession = as.character(feature_level[[feature_protein_col]]),
+        GeneName = NA_character_,
+        PeptideId = as.character(feature_level[[feature_peptide_col]]),
+        SampleId = as.character(feature_level[[feature_run_col]]),
+        Condition = if (!is.null(feature_condition_col))
+                        as.character(feature_level[[feature_condition_col]]) else NA_character_,
+        Replicate = if (!is.null(feature_replicate_col))
+                        as.character(feature_level[[feature_replicate_col]]) else NA_character_,
+        ProcessedLog2Abundance = abundance,
+        Provenance = provenance,
+        ResultLayer = "protein",
+        stringsAsFactors = FALSE
+    )
+    feature_output <- file.path(dirname(output_file), "peptide_processed_long.tsv")
+    fwrite(processed_features, feature_output, sep = "\t", na = "NA")
+    cat("Processed feature visualization export saved:", nrow(processed_features), "rows\n")
+}
+
 # Pivot to wide format
 protein_wide <- dcast(as.data.table(protein_level),
                        Protein ~ get(run_col),

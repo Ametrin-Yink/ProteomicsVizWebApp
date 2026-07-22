@@ -11,6 +11,33 @@ from app.models.session import Session, SessionConfig, SessionFiles, SessionStat
 from fastapi.testclient import TestClient
 
 
+def _write_supported_visualization_manifest(results_dir, pipeline: str) -> None:
+    from app.services.visualization_artifacts import VISUALIZATION_SCHEMA_VERSION
+
+    artifacts = {
+        "protein_abundance": "protein_abundance_long.parquet",
+        "peptide_abundance": "peptide_abundance_long.parquet",
+        "samples": "sample_catalog.parquet",
+        "comparisons": "comparison_catalog.parquet",
+        "differential_results": "differential_results.parquet",
+    }
+    for filename in artifacts.values():
+        (results_dir / filename).touch()
+    (results_dir / "visualization_artifacts.json").write_text(
+        __import__("json").dumps(
+            {
+                "schema_version": VISUALIZATION_SCHEMA_VERSION,
+                "pipeline": pipeline,
+                "normalization_method": "test",
+                "imputation_method": "none",
+                "abundance_scale": "log2",
+                "artifacts": artifacts,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     from datetime import UTC, datetime
@@ -35,6 +62,21 @@ def client(tmp_path, monkeypatch):
         }
     )
     de_df.to_csv(results_dir / "Diff_Expression.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "comparison_id": ["DrugA_vs_DMSO"] * 3,
+            "protein_accession": ["P001", "P002", "P003"],
+            "gene_name": ["GENE1", "GENE2", "GENE3"],
+            "log2_fold_change": [2.5, -1.8, 0.3],
+            "p_value": [0.001, 0.01, 0.5],
+            "adjusted_p_value": [0.005, 0.05, 0.6],
+            "standard_error": [0.1, 0.2, 0.3],
+            "statistic": [25.0, -9.0, 1.0],
+            "psm_count": [10, 5, 2],
+            "result_layer": ["protein"] * 3,
+            "pipeline": ["msqrob2"] * 3,
+        }
+    ).to_parquet(results_dir / "differential_results.parquet", index=False)
 
     pd.DataFrame(
         {
@@ -240,8 +282,104 @@ class TestGetQCPlots:
         assert "pvalue_distribution" in data
 
 
+class TestCanonicalAbundanceRoutes:
+    def test_returns_processed_log2_data_scoped_to_selected_comparison(self, client):
+        from app.core.config import settings
+        from app.models.analysis import AnalysisConfig, PipelineTool
+        from app.services.visualization_artifacts import (
+            materialize_visualization_artifacts,
+        )
+
+        results_dir = (
+            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
+        )
+        pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["P1"],
+                "Gene_Name": ["GENE1"],
+                "DMSO_1": [10.0],
+                "DrugA_1": [14.0],
+                "Other_1": [30.0],
+            }
+        ).to_csv(results_dir / "Protein_Abundances.tsv", sep="\t", index=False)
+        pd.DataFrame(
+            {
+                "ProteinAccession": ["P1", "P1"],
+                "GeneName": ["GENE1", "GENE1"],
+                "PeptideId": ["PEP", "PEP"],
+                "SampleId": ["DMSO_1", "DrugA_1"],
+                "Condition": ["DMSO", "DrugA"],
+                "Replicate": ["1", "1"],
+                "ProcessedLog2Abundance": [9.0, 13.0],
+                "Provenance": ["observed", "imputed"],
+                "ResultLayer": ["protein", "protein"],
+            }
+        ).to_csv(results_dir / "peptide_processed_long.tsv", sep="\t", index=False)
+        pd.DataFrame(
+            {
+                "Master_Protein_Accessions": ["P1"],
+                "Gene_Name": ["GENE1"],
+                "logFC": [1.0],
+                "pval": [0.01],
+                "adjPval": [0.02],
+            }
+        ).to_csv(
+            results_dir / "Diff_Expression_DrugA_vs_DMSO.tsv",
+            sep="\t",
+            index=False,
+        )
+        config = AnalysisConfig(
+            pipeline=PipelineTool.MSQROB2,
+            comparisons=[{"group1": {"C": "DrugA"}, "group2": {"C": "DMSO"}}],
+        )
+        materialize_visualization_artifacts(
+            results_dir, config=config, pipeline="msqrob2"
+        )
+
+        protein = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/protein/P1/abundance",
+            params={"comparison": "DrugA_vs_DMSO"},
+        )
+        peptide = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/protein/P1/peptide",
+            params={"comparison": "DrugA_vs_DMSO"},
+        )
+
+        assert protein.status_code == 200
+        assert protein.json()["data"]["scale"] == "log2"
+        assert [point["sample_id"] for point in protein.json()["data"]["points"]] == [
+            "DrugA_1",
+            "DMSO_1",
+        ]
+        assert [
+            point["processed_log2_abundance"]
+            for point in peptide.json()["data"]["points"]
+        ] == [
+            13.0,
+            9.0,
+        ]
+
+    def test_rejects_legacy_abundance_without_current_artifacts(self, client):
+        from app.core.config import settings
+
+        results_dir = (
+            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
+        )
+        (results_dir / "visualization_artifacts.json").unlink(missing_ok=True)
+
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/protein/P1/abundance",
+            params={"comparison": "DrugA_vs_DMSO"},
+        )
+
+        assert response.status_code == 409
+        assert "reprocessing" in response.json()["detail"].lower()
+
+
 class TestVisualizationManifest:
-    def test_standard_pipeline_preserves_all_modules(self, client):
+    def test_standard_pipeline_requires_reprocessing_without_current_artifacts(
+        self, client
+    ):
         response = client.get(
             "/api/sessions/550e8400-e29b-41d4-a716-446655440000/visualization/manifest"
         )
@@ -249,6 +387,8 @@ class TestVisualizationManifest:
         assert response.status_code == 200
         manifest = response.json()["data"]
         assert manifest["pipeline"] == "msqrob2"
+        assert manifest["supported"] is False
+        assert manifest["requires_reprocessing"] is True
         assert [module["id"] for module in manifest["modules"]] == [
             "volcano",
             "qc",
@@ -257,7 +397,10 @@ class TestVisualizationManifest:
             "bionet",
         ]
         assert all(module["visible"] for module in manifest["modules"])
-        assert all(module["enabled"] for module in manifest["modules"])
+        assert not any(module["enabled"] for module in manifest["modules"])
+        assert {module["disabled_reason"] for module in manifest["modules"]} == {
+            "Results require reprocessing"
+        }
 
     def test_ptm_pipeline_reports_result_layers_and_compare_requirement(self, client):
         from app.api.deps import get_session_store
@@ -279,6 +422,12 @@ class TestVisualizationManifest:
         mock_store.get = AsyncMock(return_value=ptm_session)
         previous_override = app.dependency_overrides[get_session_store]
         app.dependency_overrides[get_session_store] = lambda: mock_store
+        from app.core.config import settings
+
+        _write_supported_visualization_manifest(
+            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results",
+            "ptm",
+        )
 
         try:
             response = client.get(
@@ -315,6 +464,7 @@ class TestVisualizationManifest:
                 "Protein": ["P1_C1", "P1_C1"],
             }
         ).to_csv(results_dir / "ptm_site_results.tsv", sep="\t", index=False)
+        _write_supported_visualization_manifest(results_dir, "ptm")
         session = Session(
             id="ptm-without-protein",
             name="PTM without protein",
@@ -343,6 +493,7 @@ class TestVisualizationManifest:
         pd.DataFrame({"Comparison": ["Drug_vs_DMSO"], "Protein": ["P1_C1"]}).to_csv(
             results_dir / "ptm_site_results.tsv", sep="\t", index=False
         )
+        _write_supported_visualization_manifest(results_dir, "ptm")
         session = Session(
             id="ptm-stale-config",
             name="PTM stale config",
@@ -474,36 +625,23 @@ class TestPTMVisualization:
         assert abundance.json()["data"]["samples"][0]["Abundance"] == 12.5
 
 
-@pytest.mark.asyncio
-async def test_protein_abundance_uses_exact_accession_match(tmp_path):
-    from app.api.routes.visualization_proteins import load_protein_abundance
+def test_comparison_sample_filter_uses_complete_condition_groups():
+    from app.api.routes.visualization_shared import build_sample_filter
 
-    pd.DataFrame(
-        {
-            "Master_Protein_Accessions": ["P10", "P2; P1"],
-            "Gene_Name": ["Wrong", "Right"],
-            "Sample1": [9.0, 3.0],
-        }
-    ).to_csv(tmp_path / "Protein_Abundances.tsv", sep="\t", index=False)
+    session = Session(
+        id="filter-session",
+        name="Filter",
+        config=SessionConfig(
+            comparisons=[
+                {
+                    "group1": {"Treatment": "Drug", "Time": "24h"},
+                    "group2": {"Treatment": "DMSO", "Time": "24h"},
+                }
+            ]
+        ),
+    )
 
-    result = await load_protein_abundance(tmp_path, "P1", session_id=str(tmp_path))
-
-    assert result["abundances"] == [8.0]
-
-
-@pytest.mark.asyncio
-async def test_peptide_abundance_uses_exact_accession_match(tmp_path):
-    from app.api.routes.visualization_proteins import load_peptide_abundance
-
-    pd.DataFrame(
-        {
-            "Master_Protein_Accessions": ["P10", "P2; P1"],
-            "Sequence": ["WRONG", "RIGHT"],
-            "Sample_Origination": ["Sample1", "Sample1"],
-            "Abundance": [100.0, 5.0],
-        }
-    ).to_csv(tmp_path / "PSM_Abundances.tsv", sep="\t", index=False)
-
-    result = await load_peptide_abundance(tmp_path, "P1", session_id=str(tmp_path))
-
-    assert [peptide["sequence"] for peptide in result["peptides"]] == ["RIGHT"]
+    assert build_sample_filter(session, "Drug+24h_vs_DMSO+24h") == [
+        "Drug_24h",
+        "DMSO_24h",
+    ]

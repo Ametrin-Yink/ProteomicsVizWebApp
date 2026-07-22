@@ -43,6 +43,8 @@ The backend owns validation, persistence, task scheduling, scientific orchestrat
 
 The registered pipelines are `msstats`, `msqrob2`, and `ptm`. GSEA, BioNet, and Compare are on-demand analyses, not pipeline stages. Detailed data ownership and stage contracts are in [Pipeline workflows](../PIPELINES.md).
 
+The approved processed-abundance, QC, GSEA heatmap, and transactional reprocessing design is documented in [Visualization data and reprocessing plan](VISUALIZATION_DATA_REWORK_PLAN.md).
+
 Reports separate internal management IDs from random bearer tokens. Protein reports can run bounded snapshot-scoped analyses; PTM shared reports are read-only. Caddy enforces the same boundary at the network edge. See [Shared report security](../REPORT_SHARING.md).
 
 ## Production topology

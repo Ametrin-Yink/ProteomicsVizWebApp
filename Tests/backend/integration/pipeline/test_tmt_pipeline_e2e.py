@@ -334,68 +334,40 @@ class TestTMTPipelineE2E:
 
     # ── Results validation ──
 
-    def test_four_comparison_files_exist(self, tmt_session):
-        """All 4 DE comparison TSV files are generated on disk."""
+    def test_four_comparisons_exist_in_canonical_results(self, tmt_session):
+        """All four comparisons are materialized in canonical Parquet."""
         from app.core.config import settings
 
         sid = tmt_session["id"]
         result_dir = settings.sessions_dir / sid / "results"
-        for comparison in [
+        expected = {
             "INCB224525_4h_vs_DMSO_24h",
             "INCB231845_4h_vs_DMSO_24h",
             "INCB224525_24h_vs_DMSO_24h",
             "INCB231845_24h_vs_DMSO_24h",
-        ]:
-            fpath = result_dir / f"Diff_Expression_{comparison}.tsv"
-            assert fpath.exists(), f"Missing comparison file: {fpath}"
+        }
+        frame = pd.read_parquet(result_dir / "differential_results.parquet")
+        assert set(frame["comparison_id"]) == expected
 
     def test_each_comparison_has_de_proteins(self, tmt_session):
-        """Each comparison file contains DE proteins with real p-values."""
-        import os
-
+        """Each comparison contains proteins with real p-values."""
         from app.core.config import settings
 
         sid = tmt_session["id"]
         result_dir = settings.sessions_dir / sid / "results"
+        frame = pd.read_parquet(result_dir / "differential_results.parquet")
         de_counts = {}
-        for fname in sorted(os.listdir(str(result_dir))):
-            if not fname.startswith("Diff_Expression_"):
-                continue
-            fpath = result_dir / fname
-            with open(fpath) as f:
-                header = f.readline().strip().split("\t")
-                # Find adjPval column
-                adjp_idx = None
-                for i, h in enumerate(header):
-                    if h.lower() == "adjpval":
-                        adjp_idx = i
-                        break
-                total = 0
-                sig = 0
-                has_pval = 0
-                first_non_na = None
-                for line in f:
-                    total += 1
-                    cols = line.strip().split("\t")
-                    if adjp_idx is not None:
-                        try:
-                            p = float(cols[adjp_idx])
-                            has_pval += 1
-                            if p < 0.05:
-                                sig += 1
-                            if first_non_na is None:
-                                first_non_na = p
-                        except (ValueError, IndexError):
-                            pass
-                comp_name = fname.replace("Diff_Expression_", "").replace(".tsv", "")
-                de_counts[comp_name] = sig
-                assert (
-                    has_pval > 0
-                ), f"{comp_name}: no proteins with numeric p-values (all NA)"
-                assert has_pval >= total * 0.9, (
-                    f"{comp_name}: only {has_pval}/{total} proteins have p-values "
-                    f"(expected >= 90%)"
-                )
+        for comp_name, comparison_frame in frame.groupby("comparison_id"):
+            has_pval = int(comparison_frame["adjusted_p_value"].notna().sum())
+            total = len(comparison_frame)
+            de_counts[comp_name] = int(
+                (comparison_frame["adjusted_p_value"] < 0.05).sum()
+            )
+            assert has_pval > 0, f"{comp_name}: no numeric p-values"
+            assert has_pval >= total * 0.9, (
+                f"{comp_name}: only {has_pval}/{total} proteins have p-values "
+                f"(expected >= 90%)"
+            )
 
         # At least one comparison should have >= 1 DE protein
         total_de = sum(de_counts.values())
@@ -409,23 +381,18 @@ class TestTMTPipelineE2E:
         from app.core.config import settings
 
         result_dir = settings.sessions_dir / tmt_session["id"] / "results"
-        for result_path in result_dir.glob("Diff_Expression_*.tsv"):
-            frame = pd.read_csv(result_path, sep="\t")
-            required = {
-                "Master_Protein_Accessions",
-                "logFC",
-                "pval",
-                "adjPval",
-            }
-            assert required <= set(frame.columns), result_path.name
-            assert frame["Master_Protein_Accessions"].is_unique, result_path.name
-
-            estimable = frame.dropna(subset=["logFC", "pval", "adjPval"])
-            assert not estimable.empty, result_path.name
-            assert np.isfinite(estimable[["logFC", "pval", "adjPval"]]).all().all()
-            assert estimable["pval"].between(0, 1).all()
-            assert estimable["adjPval"].between(0, 1).all()
-            assert (estimable["adjPval"] + 1e-12 >= estimable["pval"]).all()
+        frame = pd.read_parquet(result_dir / "differential_results.parquet")
+        for comparison, comparison_frame in frame.groupby("comparison_id"):
+            assert comparison_frame["protein_accession"].is_unique, comparison
+            estimable = comparison_frame.dropna(
+                subset=["log2_fold_change", "p_value", "adjusted_p_value"]
+            )
+            assert not estimable.empty, comparison
+            columns = ["log2_fold_change", "p_value", "adjusted_p_value"]
+            assert np.isfinite(estimable[columns]).all().all()
+            assert estimable["p_value"].between(0, 1).all()
+            assert estimable["adjusted_p_value"].between(0, 1).all()
+            assert (estimable["adjusted_p_value"] + 1e-12 >= estimable["p_value"]).all()
 
     def test_known_answer_preserves_both_effect_directions(
         self, tmt_session, file_library_dir
@@ -468,16 +435,17 @@ class TestTMTPipelineE2E:
             settings.sessions_dir
             / tmt_session["id"]
             / "results"
-            / "Diff_Expression_INCB224525_4h_vs_DMSO_24h.tsv"
+            / "differential_results.parquet"
         )
-        frame = pd.read_csv(result_path, sep="\t").set_index(
-            "Master_Protein_Accessions"
+        frame = pd.read_parquet(result_path)
+        frame = frame[frame["comparison_id"] == "INCB224525_4h_vs_DMSO_24h"].set_index(
+            "protein_accession"
         )
         anchors = frame.loc[["P00352", "P25815"]]
-        effects = anchors["logFC"].astype(float)
+        effects = anchors["log2_fold_change"].astype(float)
         assert 1 < effects["P00352"] < 10, effects.to_dict()
         assert -10 < effects["P25815"] < -1, effects.to_dict()
-        assert (anchors["adjPval"].astype(float) < 0.05).all()
+        assert (anchors["adjusted_p_value"].astype(float) < 0.05).all()
 
     def test_de_results_paginated_endpoint(self, tmt_session):
         """Results endpoint returns paginated DE data with summary stats."""

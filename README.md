@@ -45,16 +45,20 @@ npm --prefix frontend ci
 Start the backend:
 
 ```powershell
-backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload --port 8000
+backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload --port 8002
 ```
 
-In a second PowerShell window, start the frontend:
+In a second PowerShell window, point the frontend at the local backend and start it:
 
 ```powershell
-npm --prefix frontend run dev
+$env:BACKEND_URL = "http://127.0.0.1:8002"
+$env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:8002"
+npm --prefix frontend run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Runtime data defaults to `backend/sessions`, `backend/reports`, and `backend/file_library`; these directories are not source-controlled.
+
+Port `8002` is reserved for the Windows development backend because local ports `8000` and `8001` may be occupied by the production SSH tunnel. Normal local development is always frontend `3000` to backend `8002`; do not point the development frontend at the production tunnel. See [Server access and development cycle](docs/SERVER_ACCESS_AND_DEV_CYCLE.md#port-ownership).
 
 ## Production
 

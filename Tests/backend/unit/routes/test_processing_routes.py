@@ -234,6 +234,46 @@ class TestRetryProcessing:
         assert response.status_code == 404
 
 
+class TestReprocess:
+    def test_requires_completed_session(self, client, mock_store):
+        mock_store.get.return_value.state = SessionState.ERROR
+        response = client.post(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/reprocess",
+            json={"confirm_replace": True},
+        )
+        assert response.status_code == 400
+
+    def test_requires_explicit_replace_confirmation(self, client, mock_store):
+        mock_store.get.return_value.state = SessionState.COMPLETED
+        response = client.post(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/reprocess",
+            json={"confirm_replace": False},
+        )
+        assert response.status_code == 400
+
+    def test_schedules_confirmed_reprocess(self, client, mock_store):
+        from app.api.routes import processing
+
+        mock_store.get.return_value.state = SessionState.COMPLETED
+        with (
+            patch.object(processing, "_schedule_background_task") as schedule,
+            patch.object(
+                processing,
+                "run_reprocess_pipeline_async",
+                new=MagicMock(return_value=None),
+            ),
+        ):
+            response = client.post(
+                "/api/sessions/550e8400-e29b-41d4-a716-446655440000/reprocess",
+                json={"confirm_replace": True},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["data"]["status"] == "started"
+        schedule.assert_called_once()
+        processing._cancel_events.pop(mock_store.get.return_value.id, None)
+
+
 class TestGetLogs:
     def test_returns_logs(self, client, mock_store):
         response = client.get("/api/sessions/550e8400-e29b-41d4-a716-446655440000/logs")

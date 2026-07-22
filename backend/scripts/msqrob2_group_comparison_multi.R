@@ -46,6 +46,7 @@ ridge         <- if (!is.null(config$ridge)) isTRUE(as.logical(config$ridge)) el
 maxitRob      <- if (!is.null(config$maxitRob)) as.integer(config$maxitRob) else 10L
 adjust_method <- if (!is.null(config$adjust_method)) as.character(config$adjust_method) else "BH"
 n_cores       <- if (!is.null(config$numberOfCores)) as.integer(config$numberOfCores) else 1L
+output_shard  <- if (!is.null(config$output_shard)) as.integer(config$output_shard) else NULL
 batch_column  <- if (!is.null(config$batch_column) && nzchar(config$batch_column)) config$batch_column else NULL
 metadata      <- if (!is.null(config$metadata)) config$metadata else list()
 
@@ -316,6 +317,14 @@ cat("Zero-variance proteins:", length(zero_var_ids), "\n")
 cat("\nRunning comparisons...\n")
 flush.console()
 
+output_name <- if (is.null(output_shard)) {
+    "Differential_Results_Long.tsv"
+} else {
+    sprintf("Differential_Results_Shard_%05d.tsv", output_shard)
+}
+output_file <- file.path(output_dir, output_name)
+if (file.exists(output_file)) file.remove(output_file)
+
 for (i in seq_along(comparisons)) {
     comp <- comparisons[[i]]
     g1_values <- as.character(unlist(comp$group1))
@@ -379,9 +388,11 @@ for (i in seq_along(comparisons)) {
         }
     }
 
-    output_file <- file.path(output_dir, paste0("Diff_Expression_", label, ".tsv"))
+    results_out$Label <- label
+    write_header <- !file.exists(output_file)
     write.table(results_out, file = output_file, sep = "\t",
-                row.names = FALSE, quote = FALSE, na = "NA")
+                row.names = FALSE, quote = FALSE, na = "NA",
+                append = !write_header, col.names = write_header)
 
     sig_count <- sum(results_out$adjPval < 0.05, na.rm = TRUE)
     cat("    ", label, ":", nrow(results_out), "proteins,", sig_count, "significant\n")

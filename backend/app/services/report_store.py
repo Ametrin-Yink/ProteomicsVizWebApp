@@ -132,6 +132,41 @@ def publish_report(report_id: str) -> Path:
     return report_dir
 
 
+def _replace_directory_with_retry(source: Path, destination: Path) -> None:
+    """Retry a directory rename briefly while Windows scanners release handles."""
+    for attempt in range(5):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.05)
+
+
+def replace_report(report_id: str) -> Path:
+    """Replace an existing report with its complete staged successor."""
+    if not REPORT_ID_RE.fullmatch(report_id):
+        raise ValueError("Invalid report ID")
+    staging_dir = get_report_staging_dir(report_id)
+    report_dir = _reports_dir() / report_id
+    if not staging_dir.is_dir() or not (staging_dir / "report.json").is_file():
+        raise ValueError(f"Staged report not found: {report_id}")
+    if not report_dir.is_dir():
+        raise ValueError(f"Published report not found: {report_id}")
+
+    backup_dir = _reports_dir() / f".{report_id}.{uuid.uuid4().hex}.backup"
+    _replace_directory_with_retry(report_dir, backup_dir)
+    try:
+        _replace_directory_with_retry(staging_dir, report_dir)
+    except Exception:
+        _replace_directory_with_retry(backup_dir, report_dir)
+        raise
+    else:
+        shutil.rmtree(backup_dir)
+    return report_dir
+
+
 def discard_staged_report(report_id: str) -> None:
     """Remove an incomplete staged report."""
     staging_dir = get_report_staging_dir(report_id)

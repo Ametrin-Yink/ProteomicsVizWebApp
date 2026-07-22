@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import ExportButton from '@/components/visualization/ExportButton';
+import ReprocessButton from '@/components/visualization/ReprocessButton';
 import {
   getActiveModuleId,
   getModulesForManifest,
@@ -70,7 +71,10 @@ export function VisualizationNavigation({
               );
             })}
           </div>
-          <ExportButton sessionId={sessionId} pipeline={manifest.pipeline} />
+          <div className="flex items-center gap-2">
+            <ReprocessButton sessionId={sessionId} />
+            <ExportButton sessionId={sessionId} pipeline={manifest.pipeline} />
+          </div>
         </div>
       </div>
     </div>

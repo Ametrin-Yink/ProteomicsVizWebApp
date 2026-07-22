@@ -31,7 +31,18 @@ describe('VisualizationPipelineWorkspace', () => {
     act(() => root.render(
       <VisualizationManifestProvider state={{
         status: 'ready',
-        manifest: { pipeline, default_module: 'volcano', modules: [] },
+        manifest: {
+          pipeline,
+          default_module: 'volcano',
+          schema_version: 1,
+          current_schema_version: 1,
+          supported: true,
+          requires_reprocessing: false,
+          normalization_method: 'test',
+          imputation_method: 'none',
+          abundance_scale: 'log2',
+          modules: [],
+        },
       }}>
         <VisualizationPipelineWorkspace
           renderPTM={(id) => <div data-testid="ptm">{id}</div>}

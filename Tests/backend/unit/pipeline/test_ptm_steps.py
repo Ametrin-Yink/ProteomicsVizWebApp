@@ -127,6 +127,14 @@ def test_ptm_qc_logs_success_with_step(tmp_path):
             "Status": ["Estimated", "Estimated"],
         }
     ).to_csv(de_file, sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "Protein": ["P1"],
+            "BioReplicate": ["Drug_1"],
+            "Condition": ["Drug"],
+            "Abundance": [12.0],
+        }
+    ).to_csv(tmp_path / "protein_summarized.tsv", sep="\t", index=False)
     ctx.step_outputs["ptm_results_path"] = de_file
     ctx.current_step_number = 6
 

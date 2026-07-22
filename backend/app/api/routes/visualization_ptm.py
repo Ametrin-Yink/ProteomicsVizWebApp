@@ -14,6 +14,7 @@ from app.api.deps import get_session_store
 from app.api.routes.visualization_shared import create_response
 from app.core.config import settings
 from app.db.session_store import SessionStore
+from app.services.ptm_tmt_processor import read_fasta_subset
 from app.utils.json_io import read_json_file, write_json_file
 
 router = APIRouter()
@@ -48,7 +49,77 @@ _VISUALIZATION_RESULT_COLUMNS = {
     "adj.pvalue",
     "Status",
     "issue",
+    "PSM_Count",
 }
+
+
+async def _enrich_protein_results(
+    frame: pd.DataFrame,
+    results_dir: Path,
+    fasta_path: Path | None,
+) -> pd.DataFrame:
+    """Add display-only gene annotations and distinct PSM counts."""
+    if frame.empty:
+        return frame
+    frame = frame.copy()
+    accession_column = (
+        "ProteinAccession" if "ProteinAccession" in frame.columns else "Protein"
+    )
+
+    gene_names: dict[str, str] = {}
+    existing_gene_column = next(
+        (column for column in ("Gene_Name", "Gene") if column in frame.columns),
+        None,
+    )
+    if existing_gene_column:
+        gene_names.update(
+            frame.dropna(subset=[accession_column])
+            .drop_duplicates(accession_column)
+            .set_index(accession_column)[existing_gene_column]
+            .fillna("")
+            .astype(str)
+            .to_dict()
+        )
+    metadata_path = results_dir / "ptm_site_metadata.tsv"
+    if metadata_path.exists():
+        metadata = await asyncio.to_thread(pd.read_csv, metadata_path, sep="\t")
+        if {"ProteinAccession", "Gene"}.issubset(metadata.columns):
+            gene_names.update(
+                metadata.dropna(subset=["ProteinAccession"])
+                .drop_duplicates("ProteinAccession")
+                .set_index("ProteinAccession")["Gene"]
+                .fillna("")
+                .astype(str)
+                .to_dict()
+            )
+
+    accessions = set(frame[accession_column].dropna().astype(str))
+    if fasta_path is not None and fasta_path.exists():
+        fasta = await asyncio.to_thread(read_fasta_subset, fasta_path, accessions)
+        for accession in accessions:
+            match = fasta.get(accession) or fasta.get(accession.split("-")[0])
+            if match and match["gene"]:
+                gene_names[accession] = match["gene"]
+    frame["Gene_Name"] = frame[accession_column].map(gene_names).fillna("")
+
+    counts: dict[str, int] = {}
+    psm_path = results_dir / "protein_msstats_input.tsv"
+    if psm_path.exists():
+        psms = await asyncio.to_thread(
+            pd.read_csv,
+            psm_path,
+            sep="\t",
+            usecols=lambda column: column in {"ProteinName", "PSM"},
+        )
+        if {"ProteinName", "PSM"}.issubset(psms.columns):
+            counts = psms.groupby("ProteinName")["PSM"].nunique().astype(int).to_dict()
+    mapped_counts = frame[accession_column].map(counts)
+    if "PSM_Count" in frame.columns:
+        mapped_counts = mapped_counts.fillna(
+            pd.to_numeric(frame["PSM_Count"], errors="coerce")
+        )
+    frame["PSM_Count"] = mapped_counts.fillna(0).astype(int)
+    return frame
 
 
 def _json_safe_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
@@ -62,6 +133,7 @@ async def load_ptm_results(
     *,
     comparison: str | None = None,
     layer: PTMResultLayer | None = None,
+    fasta_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Load requested PTM result rows, preserving the existing grouped response."""
     stable_paths = {
@@ -83,6 +155,10 @@ async def load_ptm_results(
                     path,
                     **read_options,
                 )
+                if model == "protein_model":
+                    frames[model] = await _enrich_protein_results(
+                        frames[model], results_dir, fasta_path
+                    )
         discovery = frames.get("ptm_model")
         if discovery is None and frames:
             discovery = next(iter(frames.values()))
@@ -330,10 +406,28 @@ async def get_ptm_results(
 
     results_dir = settings.sessions_dir / session_id / "results"
 
+    fasta_path = None
+    if session.config:
+        if session.config.ptm_fasta_source == "custom" and session.files.fasta:
+            fasta_path = (
+                settings.sessions_dir
+                / session_id
+                / "uploads"
+                / session.files.fasta[0].filename
+            )
+        elif session.config.ptm_fasta_source in {"human", "mouse"}:
+            fasta_name = (
+                "Mouse_Sequence.fasta"
+                if session.config.ptm_fasta_source == "mouse"
+                else "Human_Sequence.fasta"
+            )
+            fasta_path = settings.protein_database_dir / fasta_name
+
     comparisons = await load_ptm_results(
         results_dir,
         comparison=comparison,
         layer=layer,
+        fasta_path=fasta_path,
     )
 
     return create_response({"comparisons": comparisons})

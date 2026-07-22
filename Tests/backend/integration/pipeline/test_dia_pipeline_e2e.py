@@ -241,15 +241,18 @@ class TestDIAPipelineE2E:
             6,
         ], f"Expected all 6 stages completed, got {completed}"
 
-    def test_three_comparison_files_exist(self, dia_session):
-        """All 3 DE comparison files are generated on disk."""
+    def test_three_comparisons_exist_in_canonical_results(self, dia_session):
+        """All three comparisons are materialized in canonical Parquet."""
         from app.core.config import settings
 
         sid = dia_session["id"]
         result_dir = settings.sessions_dir / sid / "results"
-        for comparison in ["Drug1_vs_DMSO", "Drug2_vs_DMSO", "Drug3_vs_DMSO"]:
-            fpath = result_dir / f"Diff_Expression_{comparison}.tsv"
-            assert fpath.exists(), f"Missing comparison file: {fpath}"
+        frame = pd.read_parquet(result_dir / "differential_results.parquet")
+        assert set(frame["comparison_id"]) == {
+            "Drug1_vs_DMSO",
+            "Drug2_vs_DMSO",
+            "Drug3_vs_DMSO",
+        }
 
     def test_protein_abundances_produced(self, dia_session):
         """Pipeline returns protein counts via results endpoint."""
@@ -312,23 +315,18 @@ class TestDIAPipelineE2E:
         from app.core.config import settings
 
         result_dir = settings.sessions_dir / dia_session["id"] / "results"
-        for result_path in result_dir.glob("Diff_Expression_*.tsv"):
-            frame = pd.read_csv(result_path, sep="\t")
-            required = {
-                "Master_Protein_Accessions",
-                "logFC",
-                "pval",
-                "adjPval",
-            }
-            assert required <= set(frame.columns), result_path.name
-            assert frame["Master_Protein_Accessions"].is_unique, result_path.name
-
-            estimable = frame.dropna(subset=["logFC", "pval", "adjPval"])
-            assert not estimable.empty, result_path.name
-            assert np.isfinite(estimable[["logFC", "pval", "adjPval"]]).all().all()
-            assert estimable["pval"].between(0, 1).all()
-            assert estimable["adjPval"].between(0, 1).all()
-            assert (estimable["adjPval"] + 1e-12 >= estimable["pval"]).all()
+        frame = pd.read_parquet(result_dir / "differential_results.parquet")
+        for comparison, comparison_frame in frame.groupby("comparison_id"):
+            assert comparison_frame["protein_accession"].is_unique, comparison
+            estimable = comparison_frame.dropna(
+                subset=["log2_fold_change", "p_value", "adjusted_p_value"]
+            )
+            assert not estimable.empty, comparison
+            columns = ["log2_fold_change", "p_value", "adjusted_p_value"]
+            assert np.isfinite(estimable[columns]).all().all()
+            assert estimable["p_value"].between(0, 1).all()
+            assert estimable["adjusted_p_value"].between(0, 1).all()
+            assert (estimable["adjusted_p_value"] + 1e-12 >= estimable["p_value"]).all()
 
     def test_known_answer_drug2_has_both_effect_directions(self, dia_session):
         """Protect two input-derived DIA effects against sign or scale regressions."""
@@ -372,13 +370,14 @@ class TestDIAPipelineE2E:
             settings.sessions_dir
             / dia_session["id"]
             / "results"
-            / "Diff_Expression_Drug2_vs_DMSO.tsv"
+            / "differential_results.parquet"
         )
-        frame = pd.read_csv(result_path, sep="\t").set_index(
-            "Master_Protein_Accessions"
+        frame = pd.read_parquet(result_path)
+        frame = frame[frame["comparison_id"] == "Drug2_vs_DMSO"].set_index(
+            "protein_accession"
         )
         anchors = frame.loc[["P13010", "P62424"]]
-        effects = anchors["logFC"].astype(float)
+        effects = anchors["log2_fold_change"].astype(float)
         assert 1 < effects["P13010"] < 10, effects.to_dict()
         assert -10 < effects["P62424"] < -1, effects.to_dict()
-        assert (anchors["adjPval"].astype(float) < 0.05).all()
+        assert (anchors["adjusted_p_value"].astype(float) < 0.05).all()
