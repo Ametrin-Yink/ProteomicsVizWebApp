@@ -145,42 +145,6 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
           />
         </label>
 
-        {/* Censored Intensity */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-text mb-2">
-            Censored Intensity
-            <HelpTooltip text="The value used to represent censored (missing) intensities in the MSstats model. 'NA' treats missing values as censored with unknown intensity. '0' treats them as censored at zero. NA is recommended as it provides more accurate variance estimation." />
-          </label>
-          <select
-            data-testid="msstats-censored-select"
-            value={config.msstats_censored_int ?? 'NA'}
-            onChange={(e) => setConfig({ msstats_censored_int: e.target.value })}
-            className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
-              focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-          >
-            <option value="NA">NA</option>
-            <option value="0">0</option>
-          </select>
-        </div>
-
-        {/* Max Quantile */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-text mb-2">
-            Maximum Quantile for Censored Intensities: {config.msstats_max_quantile ?? 0.999}
-            <HelpTooltip text="MSstats uses this quantile threshold during censored-value handling and model-based imputation. It does not control normalization." />
-          </label>
-          <input
-            type="range"
-            min="0.9"
-            max="1.0"
-            step="0.001"
-            data-testid="msstats-maxquantile-slider"
-            value={config.msstats_max_quantile ?? 0.999}
-            onChange={(e) => setConfig({ msstats_max_quantile: parseFloat(e.target.value) })}
-            className="w-full h-2 bg-surface rounded-full appearance-none cursor-pointer accent-primary"
-          />
-        </div>
-
       </div>
 
       {/* Advanced Section Toggle */}
@@ -354,6 +318,48 @@ export default function MsstatsConfigForm({ config, setConfig }: MsstatsConfigFo
               peer-checked:after:translate-x-5"
             />
           </label>
+
+          {/* Censored Intensity */}
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Censored Intensity
+              <HelpTooltip text="How MSstats treats missing intensity values. 'NA' treats missing values as censored (below detection limit). '0' treats zero intensities as censored. NA is recommended for most datasets." />
+            </label>
+            <select
+              data-testid="msstats-censored-select"
+              value={config.msstats_censored_int ?? 'NA'}
+              onChange={(e) => setConfig({ msstats_censored_int: e.target.value })}
+              className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text text-sm
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+            >
+              <option value="NA">NA</option>
+              <option value="0">0</option>
+            </select>
+            <p className="text-xs text-text-muted mt-1">
+              Use NA unless your instrument software outputs 0 for undetected peaks
+            </p>
+          </div>
+
+          {/* Max Quantile for Censored */}
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Maximum Quantile for Censored Intensities: {config.msstats_max_quantile ?? 1.0}
+              <HelpTooltip text="Intensity values below this quantile are treated as censored (below detection limit). Default 1.0 disables additional censoring — the pipeline already handles missing values via the per-condition missingness filter and model-based imputation. Lower values (e.g., 0.999) apply stricter censoring to the lowest-intensity features." />
+            </label>
+            <input
+              type="range"
+              min="0.9"
+              max="1.0"
+              step="0.001"
+              data-testid="msstats-maxquantile-slider"
+              value={config.msstats_max_quantile ?? 1.0}
+              onChange={(e) => setConfig({ msstats_max_quantile: parseFloat(e.target.value) })}
+              className="w-full h-2 bg-surface rounded-full appearance-none cursor-pointer accent-primary"
+            />
+            <p className="text-xs text-text-muted mt-1">
+              Default 1.0 = no additional censoring beyond the missing-value filter
+            </p>
+          </div>
         </div>
       )}
     </div>

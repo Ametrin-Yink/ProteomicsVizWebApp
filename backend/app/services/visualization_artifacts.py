@@ -558,6 +558,23 @@ def _column_sql(column: str | None, cast: str) -> str:
     return f"TRY_CAST({_sql_identifier(column)} AS {cast})"
 
 
+def _finite_double_sql(column: str | None) -> str:
+    """Cast a column to DOUBLE, replacing non-finite values with NULL.
+
+    MSstats groupComparison can produce inf/-inf/NaN in log2FC and p-value
+    columns for proteins with complete group separation (all values censored
+    in one condition).  These are not JSON-compliant and must be sanitised
+    before reaching the API response layer.
+    """
+    if column is None:
+        return "CAST(NULL AS DOUBLE)"
+    col = _sql_identifier(column)
+    return (
+        f"CASE WHEN isfinite(TRY_CAST({col} AS DOUBLE)) "
+        f"THEN TRY_CAST({col} AS DOUBLE) ELSE NULL END"
+    )
+
+
 def _materialize_differential_results(
     connection: duckdb.DuckDBPyConnection,
     results_dir: Path,
@@ -610,11 +627,11 @@ def _materialize_differential_results(
                 {comparison_sql},
                 {_column_sql(columns['protein'], 'VARCHAR')},
                 {_column_sql(columns['gene'], 'VARCHAR')},
-                {_column_sql(columns['logfc'], 'DOUBLE')},
-                {_column_sql(columns['pvalue'], 'DOUBLE')},
-                {_column_sql(columns['adjusted'], 'DOUBLE')},
-                {_column_sql(columns['se'], 'DOUBLE')},
-                {_column_sql(columns['statistic'], 'DOUBLE')},
+                {_finite_double_sql(columns['logfc'])},
+                {_finite_double_sql(columns['pvalue'])},
+                {_finite_double_sql(columns['adjusted'])},
+                {_finite_double_sql(columns['se'])},
+                {_finite_double_sql(columns['statistic'])},
                 {_column_sql(columns['psm_count'], 'BIGINT')},
                 {_sql_literal(result_layer)},
                 {_sql_literal(pipeline)}

@@ -126,7 +126,7 @@ class AnalysisConfig(BaseModel):
     msstats_impute: bool = Field(default=True)
     msstats_log_base: int = Field(default=2)
     msstats_censored_int: str = Field(default="NA")
-    msstats_max_quantile: float = Field(default=0.999)
+    msstats_max_quantile: float = Field(default=1.0)
     msstats_remove50missing: bool = Field(default=False)
 
     # MSstats advanced parameters (new in 4.16.1)
