@@ -111,7 +111,7 @@ const defaultConfig: SessionConfig = {
   msstats_impute: true,
   msstats_log_base: 2,
   msstats_censored_int: 'NA',
-  msstats_max_quantile: 0.999,
+  msstats_max_quantile: 1.0,
   msstats_n_top_feature: 3,
   msstats_min_feature_count: 2,
   msstats_remove_uninformative_feature_outlier: false,

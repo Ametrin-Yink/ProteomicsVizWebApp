@@ -421,7 +421,7 @@ function SummaryContent() {
                 </div>
                 <div className="bg-surface rounded-lg p-3">
                   <span className="text-text-muted block text-xs">Censored-Value Max Quantile</span>
-                  <span className="text-text-primary font-medium">{config.msstats_max_quantile ?? 0.999}</span>
+                  <span className="text-text-primary font-medium">{config.msstats_max_quantile ?? 1.0}</span>
                 </div>
                 {config.msstats_feature_selection === 'topN' && (
                 <div className="bg-surface rounded-lg p-3">

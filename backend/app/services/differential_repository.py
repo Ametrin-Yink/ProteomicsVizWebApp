@@ -17,6 +17,22 @@ def _sql_literal(value: object) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def _sanitize_float(value: object) -> float | None:
+    """Cast to float, returning None for non-finite values (inf, -inf, NaN).
+
+    Exists as defence-in-depth alongside the parquet-materialisation fix in
+    ``visualization_artifacts._finite_double_sql``, so that sessions built
+    before the fix can still be loaded.
+    """
+    if value is None:
+        return None
+    try:
+        f = float(value)
+    except (ValueError, TypeError):
+        return None
+    return f if math.isfinite(f) else None
+
+
 class DifferentialRepository:
     """Read one immutable canonical differential-result artifact."""
 
@@ -179,11 +195,11 @@ class DifferentialRepository:
             {
                 "master_protein_accessions": str(row[0]),
                 "gene_name": str(row[1]),
-                "log_fc": float(row[2]),
-                "pval": float(row[3]),
-                "adj_pval": float(row[4]),
-                "se": float(row[5]) if row[5] is not None else None,
-                "t_statistic": float(row[6]) if row[6] is not None else None,
+                "log_fc": _sanitize_float(row[2]),
+                "pval": _sanitize_float(row[3]),
+                "adj_pval": _sanitize_float(row[4]),
+                "se": _sanitize_float(row[5]),
+                "t_statistic": _sanitize_float(row[6]),
                 "significant": bool(row[7]),
                 "psm_count": int(row[8]),
             }
