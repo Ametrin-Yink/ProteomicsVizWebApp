@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from pathlib import Path
 from typing import Any
 
@@ -211,6 +212,13 @@ class VisualizationRepository:
             ).fetchdf()
         finally:
             connection.close()
+        qc_summary: dict[str, Any] = {}
+        qc_summary_path = self.results_dir / "QC_Results.json"
+        if qc_summary_path.is_file():
+            try:
+                qc_summary = json.loads(qc_summary_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                qc_summary = {}
         page = self._page(groups, offset=offset, limit=limit)
         return {
             "group_by": group_by,
@@ -222,6 +230,9 @@ class VisualizationRepository:
             "normalization_method": self.manifest["normalization_method"],
             "imputation_method": self.manifest["imputation_method"],
             "abundance_scale": self.manifest["abundance_scale"],
+            "pca_method": qc_summary.get("pca_method"),
+            "pc1_variance": qc_summary.get("pc1_variance"),
+            "pc2_variance": qc_summary.get("pc2_variance"),
         }
 
     def get_qc_differential(self, comparison_id: str) -> dict[str, Any]:

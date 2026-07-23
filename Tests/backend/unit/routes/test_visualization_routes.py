@@ -272,14 +272,48 @@ class TestGetResults:
 
 
 class TestGetQCPlots:
-    def test_returns_defaults_when_no_qc_file(self, client):
+    def test_requires_reprocessing_without_canonical_manifest(self, client):
         response = client.get(
             "/api/sessions/550e8400-e29b-41d4-a716-446655440000/qc/plots"
         )
+
+        assert response.status_code == 409
+
+    def test_returns_only_compact_summary_for_supported_session(self, client):
+        from app.core.config import settings
+
+        results_dir = (
+            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
+        )
+        _write_supported_visualization_manifest(results_dir, "msqrob2")
+        (results_dir / "QC_Results.json").write_text(
+            __import__("json").dumps(
+                {
+                    "pca": {"samples": ["S1"]},
+                    "data_completeness": [{"sample": "S1"}],
+                    "total_psms": 10,
+                    "avg_psms_per_sample": 5.0,
+                    "total_proteins": 3,
+                    "avg_proteins_per_sample": 2.5,
+                    "average_cv": 12.0,
+                    "average_protein_cv": 12.0,
+                    "average_psm_cv": 14.0,
+                    "completeness_rate": 90.0,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        response = client.get(
+            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/qc/plots"
+        )
+
         assert response.status_code == 200
         data = response.json()["data"]
-        assert "pca" in data
-        assert "pvalue_distribution" in data
+        assert data["total_psms"] == 10
+        assert data["completeness_rate"] == 90.0
+        assert "pca" not in data
+        assert "data_completeness" not in data
 
 
 class TestCanonicalAbundanceRoutes:

@@ -246,8 +246,10 @@ def tmt_session(live_server, channel_mapping, file_library_dir):
 
     # 6. Wait for completion
     state = wait_for_completion(api_url, sid)
+    failed_session = requests.get(f"{api_url}/{sid}").json()
     assert state == "completed", (
-        f"Pipeline ended with state '{state}', expected 'completed'. " f"Session: {sid}"
+        f"Pipeline ended with state '{state}', expected 'completed'. "
+        f"Session: {sid}. Error: {failed_session.get('error_message')}"
     )
 
     # 7. Yield session data for assertions
@@ -471,18 +473,18 @@ class TestTMTPipelineE2E:
         qc = r.json()
         assert "pca" in qc or "data" in qc, "QC data missing PCA"
 
-    def test_protein_abundances_tsv_exists(self, tmt_session):
-        """Protein abundances TSV file is generated on disk."""
+    def test_canonical_protein_abundance_exists(self, tmt_session):
+        """Processed protein abundance is retained only as canonical Parquet."""
         from app.core.config import settings
 
         sid = tmt_session["id"]
-        fpath = settings.sessions_dir / sid / "results" / "Protein_Abundances.tsv"
+        results_dir = settings.sessions_dir / sid / "results"
+        fpath = results_dir / "protein_abundance_long.parquet"
         assert fpath.exists(), f"Missing: {fpath}"
-        with open(fpath) as f:
-            header = f.readline()
-            assert "Master_Protein_Accessions" in header
-            line_count = sum(1 for _ in f)
-            assert line_count > 100, f"Expected >100 proteins, got {line_count}"
+        assert not (results_dir / "Protein_Abundances.tsv").exists()
+        abundance = pd.read_parquet(fpath)
+        assert abundance["protein_accession"].nunique() > 100
+        assert abundance["processed_log2_abundance"].notna().any()
 
     def test_file_library_select_used(self, tmt_session):
         """File was selected from the file library (not direct upload)."""

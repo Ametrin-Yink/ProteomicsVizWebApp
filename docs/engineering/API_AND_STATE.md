@@ -57,3 +57,9 @@ Reusable visualization components consume data source and permissions from `ApiP
 - Permission checks use `canPersistVisualizationState`; they never parse pathname or identifier shape.
 
 The visualization manifest and pipeline determine navigation. Protein shared reports may expose bounded on-demand modules. PTM shared reports expose Volcano and QC, while read-only endpoints also provide layers, site details, and downloads.
+
+Current visualization sessions and reports are manifest-gated. Protein abundance, peptide abundance, differential results, QC catalogs, GSEA heatmaps, BioNet inputs, and DIA/TMT comparison correlation read canonical Parquet through bounded repositories. There is no runtime fallback to pre-contract abundance, differential-result, or QC TSV/JSON payloads; the API returns `409` and the UI offers Reprocess.
+
+`/qc/plots` returns scalar analysis-summary fields only. `/visualization/qc/overview` returns at most 50 searched condition or batch groups plus precomputed PCA coordinates; `/visualization/qc/samples` is cursor-paginated; `/visualization/qc/differential` scopes its histogram and counts to one comparison. The 50-group maximum is a chart viewport limit, not a condition limit. Every condition remains in the artifact and is available through server search.
+
+Volcano requests accept up to 100,000 rows for one comparison and render with WebGL. Comparison selectors remain cursor-paginated rather than embedding all 10,000 options. DIA/TMT comparison correlation exposes metadata, bounded tiles, exact cells, reference lookups, and selected detail instead of one full JSON matrix. PTM Compare retains its existing workflow in this implementation cycle.

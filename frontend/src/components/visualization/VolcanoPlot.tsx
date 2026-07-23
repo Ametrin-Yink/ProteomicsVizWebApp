@@ -91,12 +91,12 @@ export default function VolcanoPlot({
         `Adj P-value: ${(d.adj_pval ?? 1).toExponential(2)}`;
     });
 
-    // Use Canvas scatter (not WebGL) for reliable click/hover hit detection
+    // WebGL keeps the complete interactive volcano responsive at DIA scale.
     const mainTrace = {
       x: points.map((p) => p.x),
       y: points.map((p) => p.y),
       mode: 'markers' as const,
-      type: 'scatter' as const,
+      type: 'scattergl' as const,
       marker: {
         color: points.map((p) => p.color),
         size: points.map((p) => p.size),
@@ -121,7 +121,7 @@ export default function VolcanoPlot({
         x: markedPoints.map((p) => p.x),
         y: markedPoints.map((p) => p.y),
         mode: 'markers' as const,
-        type: 'scatter' as const,
+        type: 'scattergl' as const,
         marker: {
           color: markedPoints.map((p) => p.color),
           size: 10,

@@ -52,7 +52,11 @@ The protein and adjusted layers are disabled when no compatible global-proteome 
 
 Protein sessions provide Volcano, QC, GSEA, BioNet, and Compare modules. GSEA, BioNet, and Compare are on-demand analyses, not pipeline stages.
 
-The planned versioned processed-abundance artifacts, QC scopes, GSEA heatmap behavior, and in-place session reprocessing contract are specified in [Visualization data and reprocessing plan](engineering/VISUALIZATION_DATA_REWORK_PLAN.md).
+Completed DIA and TMT pipelines retain versioned Parquet visualization artifacts rather than runtime result TSVs. The R-generated wide protein abundance, consolidated differential result, and processed-peptide TSVs are transient materialization inputs and are removed after their canonical Parquet replacements validate. Result, abundance, QC, GSEA, BioNet, and scalable Compare reads use the canonical repositories; unsupported sessions require Reprocess.
+
+QC finalization reads canonical Parquet and writes compact scalar `QC_Results.json`, queryable sample/group/comparison Parquet summaries, and `qc_pca.parquet`. PCA retains complete proteins, standardizes each protein across samples, and uses exact PCA through 5,000,000 sample-by-protein elements. Larger matrices use disk-backed incremental PCA in sample batches of 1,024, with the method recorded in the QC summary.
+
+The complete processed-abundance, QC, GSEA heatmap, scalable comparison, and in-place reprocessing contract is specified in [Visualization data and reprocessing plan](engineering/VISUALIZATION_DATA_REWORK_PLAN.md).
 
 PTM sessions provide PTM/Protein/Adjusted volcano layers, site tables and evidence, QC at PTM and protein levels, and comparison views when multiple comparisons exist.
 

@@ -1,10 +1,12 @@
 # Visualization data and reprocessing plan
 
-Status: approved for implementation on 2026-07-22, including the large-DIA scale requirements.
+Status: implementation in progress. The canonical visualization-data checkpoint was committed as `52fc42a` on 2026-07-22; final QC scale and verification work continued on 2026-07-23.
 
 This plan aligns abundance plots, QC, GSEA heatmaps, and downstream protein analyses with the normalized and optionally imputed data used by the statistical pipelines. It also defines how completed sessions are reprocessed when their result artifacts predate the new visualization contract.
 
 PTM Compare is explicitly outside this implementation cycle because it requires a separate redesign.
+
+Implemented behavior includes canonical Parquet abundance and differential repositories, comparison-scoped log2 boxplots, queryable QC artifacts, a functional comparison-scoped GSEA heatmap, transactional in-place Reprocess with report refresh, and blockwise DIA/TMT comparison correlation. Runtime compatibility loading for pre-contract abundance, differential-result, and QC artifacts has been removed; those sessions must be reprocessed.
 
 ## Goals
 

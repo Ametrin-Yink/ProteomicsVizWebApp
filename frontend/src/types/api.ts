@@ -277,6 +277,9 @@ export interface QCOverviewData {
   normalization_method: string;
   imputation_method: string;
   abundance_scale: 'log2';
+  pca_method?: 'exact' | 'incremental' | 'unavailable' | null;
+  pc1_variance?: number | null;
+  pc2_variance?: number | null;
 }
 
 export interface QCSampleMetric {

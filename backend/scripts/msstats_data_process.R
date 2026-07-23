@@ -258,9 +258,11 @@ feature_level <- processed$FeatureLevelData
 if (!is.null(feature_level) && nrow(feature_level) > 0) {
     feature_protein_col <- if ("ProteinName" %in% names(feature_level)) "ProteinName" else
                            if ("Protein" %in% names(feature_level)) "Protein" else
+                           if ("PROTEIN" %in% names(feature_level)) "PROTEIN" else
                            stop("No protein column found in FeatureLevelData")
     feature_peptide_col <- if ("PeptideSequence" %in% names(feature_level)) "PeptideSequence" else
                            if ("Feature" %in% names(feature_level)) "Feature" else
+                           if ("FEATURE" %in% names(feature_level)) "FEATURE" else
                            if ("PSM" %in% names(feature_level)) "PSM" else
                            stop("No peptide identifier found in FeatureLevelData")
     feature_run_col <- if ("originalRUN" %in% names(feature_level)) "originalRUN" else
@@ -271,6 +273,7 @@ if (!is.null(feature_level) && nrow(feature_level) > 0) {
                              if ("Condition" %in% names(feature_level)) "Condition" else NULL
     feature_abundance_col <- if ("LogIntensities" %in% names(feature_level)) "LogIntensities" else
                              if ("log2Intensity" %in% names(feature_level)) "log2Intensity" else
+                             if ("ABUNDANCE" %in% names(feature_level)) "ABUNDANCE" else
                              stop("No processed abundance found in FeatureLevelData")
     feature_replicate_col <- if ("SUBJECT" %in% names(feature_level)) "SUBJECT" else
                              if ("BioReplicate" %in% names(feature_level)) "BioReplicate" else NULL

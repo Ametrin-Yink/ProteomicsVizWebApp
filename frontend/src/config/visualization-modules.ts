@@ -67,7 +67,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     getExportState: async (sessionId, session) => {
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       const comp = firstComparison(s?.config);
-      const deData = await visualizationApi.getDEResults(sessionApiPrefix(sessionId), { per_page: 20000, comparison: comp.key || undefined });
+      const deData = await visualizationApi.getDEResults(sessionApiPrefix(sessionId), { per_page: 100000, comparison: comp.key || undefined });
 
       let filters: VolcanoFilters = { foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 };
       if (s?.volcano_filters) {

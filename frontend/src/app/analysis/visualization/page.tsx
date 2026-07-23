@@ -63,7 +63,7 @@ function ResultsContent() {
       try {
         const results = await visualizationApi.getDEResults(apiPrefix, {
           page: 1,
-          per_page: 20000,
+          per_page: 100000,
           comparison: selectedComparison || undefined,
         });
         setData(results);
@@ -235,7 +235,7 @@ function ResultsContent() {
       for (const comp of batchMarkComparisons) {
         const results = await visualizationApi.getDEResults(apiPrefix, {
           comparison: comp,
-          per_page: 20000,
+          per_page: 100000,
         });
         const significant = results.results
           .filter((r) => isSignificantVolcano(r.log_fc, r.pval, r.adj_pval, debouncedFilters))

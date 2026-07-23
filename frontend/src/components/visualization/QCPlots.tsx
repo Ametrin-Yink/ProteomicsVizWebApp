@@ -214,8 +214,16 @@ export default function QCPlots({
         traces,
         layout: {
           title: { text: 'PCA of processed model input', font: { size: 14, color: '#111827' } },
-          xaxis: { title: { text: 'PC1' }, gridcolor: '#E5E7EB', zeroline: true },
-          yaxis: { title: { text: 'PC2' }, gridcolor: '#E5E7EB', zeroline: true },
+          xaxis: {
+            title: { text: overview.pc1_variance == null ? 'PC1' : `PC1 (${overview.pc1_variance.toFixed(1)}%)` },
+            gridcolor: '#E5E7EB',
+            zeroline: true,
+          },
+          yaxis: {
+            title: { text: overview.pc2_variance == null ? 'PC2' : `PC2 (${overview.pc2_variance.toFixed(1)}%)` },
+            gridcolor: '#E5E7EB',
+            zeroline: true,
+          },
           showlegend: true,
           plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
           margin: { l: 50, r: 30, t: 50, b: 70 },

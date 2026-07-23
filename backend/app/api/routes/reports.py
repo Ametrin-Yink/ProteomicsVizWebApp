@@ -161,6 +161,31 @@ def _report_task_key(report_id: str) -> str:
     return f"report:{report_id}"
 
 
+def _report_pipeline(report_dir: Path) -> str:
+    """Resolve the snapshotted pipeline without consulting the source session."""
+    session_path = report_dir / "session.json"
+    if session_path.is_file():
+        try:
+            pipeline = json.loads(session_path.read_text(encoding="utf-8")).get(
+                "pipeline"
+            )
+            if pipeline:
+                return str(pipeline)
+        except (OSError, json.JSONDecodeError):
+            pass
+    manifest_path = report_dir / "results" / "visualization_artifacts.json"
+    if manifest_path.is_file():
+        try:
+            pipeline = json.loads(manifest_path.read_text(encoding="utf-8")).get(
+                "pipeline"
+            )
+            if pipeline:
+                return str(pipeline)
+        except (OSError, json.JSONDecodeError):
+            pass
+    return ""
+
+
 def _report_task_recently_started(data: dict, grace_seconds: int = 10) -> bool:
     """Avoid declaring a just-scheduled task stale before TaskManager sees it."""
     started_at = data.get("started_at")
@@ -552,7 +577,7 @@ async def get_report_results(
     share_token: str,
     comparison: str = Query(""),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=20000),
+    page_size: int = Query(50, ge=1, le=100000),
     sort_by: str = Query("adj_pvalue"),
     sort_order: str = Query("asc"),
     significant_only: bool = Query(False),
@@ -597,13 +622,19 @@ async def get_report_results(
 
 @shared_router.get("/shared-reports/{share_token}/qc/plots")
 async def get_report_qc_plots(share_token: str):
-    """Get QC plot data."""
+    """Get the compact experiment-wide QC summary."""
     _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     results_dir = report_dir / "results"
 
-    from app.api.routes.visualization import create_response, load_qc_results
+    from app.api.routes.visualization import create_response, load_qc_summary
 
-    qc_data = await asyncio.to_thread(load_qc_results, results_dir)
+    try:
+        qc_data = await asyncio.to_thread(load_qc_summary, results_dir)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Visualization data must be reprocessed for this report",
+        ) from error
     return create_response(qc_data)
 
 
@@ -1600,6 +1631,7 @@ async def _run_report_compute_task(
     """Run one report comparison job through the global compute queue."""
     scalable = (
         compute_type == "comparison-correlation"
+        and _report_pipeline(report_dir) in {"msstats", "msqrob2"}
         and (report_dir / "results" / "differential_results.parquet").is_file()
         and (report_dir / "results" / "comparison_catalog.parquet").is_file()
     )
@@ -1796,28 +1828,40 @@ async def get_report_comparison_correlation_status(share_token: str):
 async def get_report_comparison_correlation_results(share_token: str):
     """Return comparison-correlation results."""
     _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    pipeline = _report_pipeline(report_dir)
+    if pipeline == "ptm":
+        rp = _report_compare_result_path(report_dir, "comparison-correlation")
+        if not rp.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="No comparison correlation results available",
+            )
+        return await read_json_file(rp)
+    if pipeline not in {"msstats", "msqrob2"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Visualization data must be reprocessed for this report",
+        )
     from app.services.comparison_correlation import ComparisonCorrelationArtifact
 
     try:
         artifact = await asyncio.to_thread(
             ComparisonCorrelationArtifact, report_dir / "results"
         )
-    except ValueError:
-        artifact = None
-    if artifact is not None:
-        return artifact.public_metadata()
-    rp = _report_compare_result_path(report_dir, "comparison-correlation")
-    if not rp.exists():
-        raise HTTPException(
-            status_code=404, detail="No comparison correlation results available"
-        )
-    return await read_json_file(rp)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return artifact.public_metadata()
 
 
 async def _report_correlation_artifact_or_404(
     share_token: str,
 ):
     _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if _report_pipeline(report_dir) == "ptm":
+        raise HTTPException(
+            status_code=404,
+            detail="PTM Compare uses its existing workflow",
+        )
     from app.services.comparison_correlation import ComparisonCorrelationArtifact
 
     try:

@@ -369,6 +369,59 @@ def test_shared_compute_requests_are_bounded_and_report_scoped(client):
     assert response.status_code == 400
 
 
+def test_non_ptm_report_does_not_fallback_to_legacy_comparison_json(client):
+    from app.services.report_store import get_report_dir
+
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
+    session_id = str(uuid.uuid4())
+    make_completed_session_with_files(sessions_dir, session_id)
+    generated = client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "Canonical Compare Report"},
+    ).json()
+    report_dir = get_report_dir(generated["report_id"])
+    assert report_dir is not None
+    compare_dir = report_dir / "results" / "compare"
+    compare_dir.mkdir(parents=True, exist_ok=True)
+    (compare_dir / "comparison-correlation_result.json").write_text(
+        '{"legacy": true}', encoding="utf-8"
+    )
+
+    response = client.get(
+        f"/api/shared-reports/{generated['share_token']}"
+        "/compare/comparison-correlation"
+    )
+
+    assert response.status_code == 404
+
+
+def test_ptm_report_keeps_existing_comparison_workflow(client):
+    from app.services.report_store import get_report_dir
+
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
+    session_id = str(uuid.uuid4())
+    make_completed_ptm_session(sessions_dir, session_id)
+    generated = client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "PTM Compare Report"},
+    ).json()
+    report_dir = get_report_dir(generated["report_id"])
+    assert report_dir is not None
+    compare_dir = report_dir / "results" / "compare"
+    compare_dir.mkdir(parents=True, exist_ok=True)
+    (compare_dir / "comparison-correlation_result.json").write_text(
+        '{"workflow": "ptm"}', encoding="utf-8"
+    )
+
+    response = client.get(
+        f"/api/shared-reports/{generated['share_token']}"
+        "/compare/comparison-correlation"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"workflow": "ptm"}
+
+
 def test_report_survives_session_deletion(client):
     sessions_dir = client.app.state.session_manager.session_store.sessions_dir
 

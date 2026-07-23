@@ -38,6 +38,9 @@ from app.services.task_manager import (
     TaskTimeoutError,
     task_manager,
 )
+from app.services.visualization_artifacts import (
+    load_visualization_artifact_manifest,
+)
 from app.utils.json_io import read_json_file
 
 VALID_GSEA_DATABASES = {"go_bp", "go_mf", "go_cc", "kegg", "reactome"}
@@ -94,75 +97,30 @@ router = APIRouter()
 logger = logging.getLogger("proteomics")
 
 
-def load_qc_results(results_dir: Path) -> dict[str, Any]:
-    """Load QC results from JSON file.
+QC_SUMMARY_FIELDS = (
+    "total_psms",
+    "avg_psms_per_sample",
+    "total_proteins",
+    "avg_proteins_per_sample",
+    "average_cv",
+    "average_protein_cv",
+    "average_psm_cv",
+    "completeness_rate",
+)
 
-    Args:
-        results_dir: Path to session results directory
 
-    Returns:
-        QC results dictionary with summary statistics
-    """
+def load_qc_summary(results_dir: Path) -> dict[str, Any]:
+    """Load only compact scalar QC fields for a current artifact snapshot."""
+    if load_visualization_artifact_manifest(results_dir) is None:
+        raise ValueError("Visualization artifacts require reprocessing")
     qc_file = results_dir / "QC_Results.json"
-
-    # Default empty structure with all required fields
-    default_result = {
-        "pca": {
-            "samples": [],
-            "pc1": [],
-            "pc2": [],
-            "conditions": [],
-            "pc1_variance": 0,
-            "pc2_variance": 0,
-        },
-        "pvalue_distribution": {"bins": [], "counts": []},
-        "psm_cv": {},
-        "protein_cv": {},
-        "intensity_distributions": {"psm_boxplot": {}, "protein_boxplot": {}},
-        "data_completeness": [],
-        "psm_completeness": [],
-        # Summary statistics - will be populated from data or set to None
-        "total_psms": None,
-        "avg_psms_per_sample": None,
-        "total_proteins": None,
-        "avg_proteins_per_sample": None,
-        "average_cv": None,
-        "completeness_rate": None,
-    }
-
     if not qc_file.exists():
-        return default_result
-
+        return {field: None for field in QC_SUMMARY_FIELDS}
     try:
-        with open(qc_file) as f:
-            data = json.load(f)
-
-        # Merge with defaults to ensure all fields exist
-        result = {**default_result, **data}
-
-        # MAJ-005: Correct total_psms if it was calculated as total rows instead of unique PSMs
-        # The bug showed ~49,000 (total rows) instead of ~4,600 (unique PSMs)
-        # If total_psms is unreasonably high (>20,000), flag it as potentially wrong
-        if result.get("total_psms") and result.get("total_psms") > 20000:
-            # This is likely the bug - total rows were counted instead of unique PSMs
-            # We can't fix it without re-reading the PSM file, but we can add a note
-            # or try to estimate from psm_completeness if available
-            psm_completeness = result.get("psm_completeness", [])
-            if psm_completeness and len(psm_completeness) > 0:
-                # Estimate from first sample's present count
-                first_sample = psm_completeness[0]
-                if hasattr(first_sample, "get"):
-                    estimated_unique = first_sample.get("present", 0)
-                    if estimated_unique > 0 and estimated_unique < result["total_psms"]:
-                        # Use the estimated unique count as a hint
-                        result["total_psms_note"] = (
-                            f"Estimated ~{estimated_unique:,} unique PSMs (cached value may include duplicates)"
-                        )
-
-        return result
-    except Exception as e:
-        logger.error(f"Error loading QC results: {e}")
-        return default_result
+        data = json.loads(qc_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("QC summary is unreadable") from error
+    return {field: data.get(field) for field in QC_SUMMARY_FIELDS}
 
 
 # Global cache for loaded GSEA results (session_path -> dict of database -> list of results)
@@ -268,7 +226,7 @@ def load_gsea_results(
 async def get_results(
     session_id: str,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=20000),
+    page_size: int = Query(50, ge=1, le=100000),
     sort_by: str = Query("adj_pvalue"),
     sort_order: str = Query("asc"),
     significant_only: bool = Query(False),
@@ -314,12 +272,9 @@ async def get_results(
 @router.get("/{session_id}/qc/plots")
 async def get_qc_plots(
     session_id: str,
-    comparison: str = Query(
-        "", description="Comparison label for per-comparison p-value distribution"
-    ),
     store: SessionStore = Depends(get_session_store),
 ):
-    """Get QC plot data."""
+    """Get the compact experiment-wide QC summary."""
     session = await store.get(session_id)
     if not session:
         raise HTTPException(
@@ -327,31 +282,14 @@ async def get_qc_plots(
             detail=f"Session {session_id} not found",
         )
 
-    # Get results directory
     results_dir = settings.sessions_dir / session_id / "results"
-
-    # Load QC results from file (off-thread to avoid blocking event loop)
-    qc_data = await asyncio.to_thread(load_qc_results, results_dir)
-
-    # Filter p-value distribution to requested comparison
-    if comparison and qc_data.get("pvalue_distributions"):
-        dist = qc_data["pvalue_distributions"].get(comparison)
-        if dist:
-            qc_data["pvalue_distribution"] = dist
-
-    # MAJ-005: Recalculate total_psms from PSM file if cached value looks wrong
-    # The bug showed total rows (~49k) instead of unique PSMs (~4k)
-    if qc_data.get("total_psms") and qc_data.get("total_psms") > 20000:
-        psm_file = results_dir / "PSM_Abundances.tsv"
-        if psm_file.exists():
-            try:
-                psm_df = await asyncio.to_thread(pd.read_csv, psm_file, sep="\t")
-                if "Unique_PSM" in psm_df.columns:
-                    correct_total = psm_df["Unique_PSM"].nunique()
-                    qc_data["total_psms"] = int(correct_total)
-            except Exception as e:
-                logger.error(f"Error recalculating total_psms: {e}")
-
+    try:
+        qc_data = await asyncio.to_thread(load_qc_summary, results_dir)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Visualization data must be reprocessed for this session",
+        ) from error
     return create_response(qc_data)
 
 
