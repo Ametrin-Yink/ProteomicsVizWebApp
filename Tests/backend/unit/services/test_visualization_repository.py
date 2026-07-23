@@ -3,7 +3,13 @@
 import pandas as pd
 import pytest
 from app.models.analysis import AnalysisConfig, PipelineTool
-from app.services.visualization_artifacts import materialize_visualization_artifacts
+from app.services.visualization_artifacts import (
+    COMPARISON_CATALOG,
+    QC_GROUP_METRICS,
+    QC_PCA,
+    SAMPLE_CATALOG,
+    materialize_visualization_artifacts,
+)
 
 
 def _materialize(results_dir):
@@ -109,7 +115,6 @@ def test_qc_sample_health_is_searchable_and_cursor_paginated(tmp_path):
 
 
 def test_qc_group_search_can_reach_groups_beyond_the_first_viewport(tmp_path):
-    from app.services.visualization_artifacts import QC_GROUP_METRICS
     from app.services.visualization_repository import VisualizationRepository
 
     _materialize(tmp_path)
@@ -145,6 +150,108 @@ def test_qc_group_search_can_reach_groups_beyond_the_first_viewport(tmp_path):
     assert overview["group_count"] == 63
     assert overview["matching_group_count"] == 1
     assert [group["group_value"] for group in overview["groups"]] == ["Condition_0059"]
+
+
+@pytest.mark.performance
+def test_large_catalogs_remain_searchable_beyond_fifty_group_viewport(tmp_path):
+    from app.services.visualization_repository import VisualizationRepository
+
+    _materialize(tmp_path)
+    sample_count = 30_000
+    comparison_count = 10_000
+    sample_indexes = range(sample_count)
+    comparison_indexes = range(comparison_count)
+    pd.DataFrame(
+        {
+            "sample_id": [f"Sample_{index:05d}" for index in sample_indexes],
+            "condition": [
+                f"Condition_{index % comparison_count:04d}" for index in sample_indexes
+            ],
+            "replicate": [
+                str(index // comparison_count + 1) for index in sample_indexes
+            ],
+            "batch": [f"Batch_{index % 10}" for index in sample_indexes],
+            "sample_order": sample_indexes,
+        }
+    ).to_parquet(tmp_path / SAMPLE_CATALOG, index=False)
+    pd.DataFrame(
+        {
+            "comparison_id": [
+                f"Condition_{index:04d}_vs_Control" for index in comparison_indexes
+            ],
+            "display_label": [
+                f"Condition {index:04d} vs Control" for index in comparison_indexes
+            ],
+            "group1_label": [f"Condition_{index:04d}" for index in comparison_indexes],
+            "group2_label": ["Control"] * comparison_count,
+            "group1_sample_count": [3] * comparison_count,
+            "group2_sample_count": [3] * comparison_count,
+            "result_status": ["available"] * comparison_count,
+            "tested_count": [20_000] * comparison_count,
+            "significant_count": [100] * comparison_count,
+            "comparison_order": comparison_indexes,
+        }
+    ).to_parquet(tmp_path / COMPARISON_CATALOG, index=False)
+    pd.DataFrame(
+        {
+            "group_by": ["condition"] * comparison_count,
+            "group_value": [f"Condition_{index:04d}" for index in comparison_indexes],
+            "sample_count": [3] * comparison_count,
+            "observation_count": [60_000] * comparison_count,
+            "q1": [10.0] * comparison_count,
+            "median": [11.0] * comparison_count,
+            "q3": [12.0] * comparison_count,
+            "observed_count": [60_000] * comparison_count,
+            "imputed_count": [0] * comparison_count,
+            "missing_count": [0] * comparison_count,
+            "protein_cv_count": [20_000] * comparison_count,
+            "protein_cv_q1": [0.1] * comparison_count,
+            "protein_cv_median": [0.2] * comparison_count,
+            "protein_cv_q3": [0.3] * comparison_count,
+            "peptide_cv_count": [100_000] * comparison_count,
+            "peptide_cv_q1": [0.1] * comparison_count,
+            "peptide_cv_median": [0.2] * comparison_count,
+            "peptide_cv_q3": [0.3] * comparison_count,
+            "group_order": comparison_indexes,
+        }
+    ).to_parquet(tmp_path / QC_GROUP_METRICS, index=False)
+    pd.DataFrame(
+        {
+            "sample_id": [f"Sample_{index:05d}" for index in sample_indexes],
+            "pc1": [float(index % 100) for index in sample_indexes],
+            "pc2": [float(index % 50) for index in sample_indexes],
+            "condition": [
+                f"Condition_{index % comparison_count:04d}" for index in sample_indexes
+            ],
+        }
+    ).to_parquet(tmp_path / QC_PCA, index=False)
+
+    repository = VisualizationRepository(tmp_path)
+    comparison_page = repository.list_comparisons(
+        search="Condition_9999", cursor=None, limit=50
+    )
+    sample_page = repository.list_samples(search="Sample_29999", cursor=None, limit=500)
+    overview = repository.get_qc_overview(
+        group_by="condition", search=None, cursor=None, limit=50
+    )
+    searched_overview = repository.get_qc_overview(
+        group_by="condition",
+        search="Condition_9999",
+        cursor=None,
+        limit=50,
+    )
+
+    assert [item["comparison_id"] for item in comparison_page["items"]] == [
+        "Condition_9999_vs_Control"
+    ]
+    assert [item["sample_id"] for item in sample_page["items"]] == ["Sample_29999"]
+    assert overview["group_count"] == comparison_count
+    assert len(overview["groups"]) == 50
+    assert overview["next_cursor"] is not None
+    assert len(overview["pca"]) == sample_count
+    assert [group["group_value"] for group in searched_overview["groups"]] == [
+        "Condition_9999"
+    ]
 
 
 def test_qc_differential_is_comparison_specific(tmp_path):

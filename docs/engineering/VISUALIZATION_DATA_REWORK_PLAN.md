@@ -1,6 +1,6 @@
 # Visualization data and reprocessing plan
 
-Status: implementation in progress. The canonical visualization-data checkpoint was committed as `52fc42a` on 2026-07-22; final QC scale and verification work continued on 2026-07-23.
+Status: implementation complete as of 2026-07-23. The canonical visualization-data checkpoint is `52fc42a`; the compact QC and canonical-runtime checkpoint is `3dcf762`. Populated-page screenshot review remains a manual verification item when current local TMT, DIA, and PTM sessions are available.
 
 This plan aligns abundance plots, QC, GSEA heatmaps, and downstream protein analyses with the normalized and optionally imputed data used by the statistical pipelines. It also defines how completed sessions are reprocessed when their result artifacts predate the new visualization contract.
 
@@ -297,6 +297,8 @@ Required evidence includes:
 - frontend tests for boxplots, colors, scope labels, dropdown behavior, confirmation consequences, and GSEA heatmaps;
 - browser screenshots for every affected TMT, DIA, and PTM page at supported viewports;
 - the standard Ruff, OpenAPI, pytest, frontend lint, typecheck, test, and production-build gates.
+
+Automated verification completed on 2026-07-23 includes the standard repository gates, isolated real-stack browser journeys, the committed DIA and TMT R-backed known-answer lanes, and a synthetic repository-scale contract with 30,000 samples, 10,000 comparisons, and a 50-group QC viewport. The scale fixture verifies that the last sample, comparison, and condition remain searchable rather than being excluded by the viewport limit.
 
 Performance verification must demonstrate that a single-protein abundance request uses a predicate-scoped Parquet query rather than reading a complete feature table.
 
