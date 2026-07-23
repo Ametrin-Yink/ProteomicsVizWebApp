@@ -9,7 +9,7 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 interface Props {
   proteins: Array<{ accession: string; gene_name: string }>;
   comparisons: string[];
-  foldChanges: number[][];
+  foldChanges: Array<Array<number | null>>;
 }
 
 export default function ComparisonHeatmap({ proteins, comparisons, foldChanges }: Props) {

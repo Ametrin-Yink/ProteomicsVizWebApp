@@ -5,6 +5,8 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+import duckdb
+
 from app.core.config import settings
 from app.core.exceptions import ProcessingError
 from app.models.analysis import Organism
@@ -48,6 +50,36 @@ def build_comparison_pair_label(comparison: dict) -> str:
     if "treatment" in comparison and "control" in comparison:
         return f"{comparison['treatment']}_vs_{comparison['control']}"
     raise ValueError("Comparison must define group1/group2 or treatment/control")
+
+
+def differential_output_paths(results_dir: Path) -> list[Path]:
+    """Return the consolidated differential outputs produced by current R jobs."""
+    return sorted(results_dir.glob("Differential_Results_*.tsv"))
+
+
+def primary_differential_output(results_dir: Path, *, batched: bool) -> Path:
+    filename = (
+        "Differential_Results_Shard_00000.tsv"
+        if batched
+        else "Differential_Results_Long.tsv"
+    )
+    return results_dir / filename
+
+
+def count_significant_differential(paths: list[Path], threshold: float) -> int:
+    """Count significant rows without materializing differential tables in Python."""
+    if not paths:
+        return 0
+    connection = duckdb.connect()
+    try:
+        row = connection.execute(
+            "SELECT count(*) FROM read_csv_auto(?, delim='\\t', header=true, "
+            "union_by_name=true, nullstr=['NA', 'NaN']) WHERE adjPval < ?",
+            [[str(path) for path in paths], threshold],
+        ).fetchone()
+    finally:
+        connection.close()
+    return int(row[0]) if row else 0
 
 
 def create_log_callback(ctx, step: int) -> Callable:

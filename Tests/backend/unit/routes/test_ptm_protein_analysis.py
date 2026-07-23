@@ -1,123 +1,57 @@
 """Tests for the PTM optional-protein downstream analysis adapter."""
 
 import asyncio
-from datetime import UTC, datetime
 
 import pandas as pd
-import pytest
-from app.api.routes.visualization import (
-    _resolve_protein_abundance_file,
-    _resolve_protein_analysis_file,
-)
+from app.api.routes.visualization_ptm import load_ptm_results
 from app.core.config import settings
-from app.models.session import (
-    ProteomicsFileInfo,
-    Session,
-    SessionConfig,
-    SessionFiles,
-)
-from fastapi import HTTPException
 
 
-def _ptm_session(*, with_protein: bool) -> Session:
-    protein_files = []
-    if with_protein:
-        protein_files.append(
-            ProteomicsFileInfo(
-                filename="protein_psms.txt",
-                size=1,
-                uploaded_at=datetime.now(UTC),
-            )
-        )
-    return Session(
-        id="550e8400-e29b-41d4-a716-446655440000",
-        name="PTM",
-        pipeline="ptm",
-        config=SessionConfig(ptm_fasta_source="human"),
-        files=SessionFiles(global_proteome=protein_files),
-    )
-
-
-def test_builds_protein_analysis_table_for_requested_comparison(tmp_path, monkeypatch):
+def test_ptm_protein_results_include_fasta_gene_and_distinct_psm_count(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(settings, "protein_database_dir", tmp_path)
     (tmp_path / "Human_Sequence.fasta").write_text(
-        ">sp|P1|PROTEIN_ONE GN=GENE1\nMPEPTIDE\n"
-        ">sp|P2|PROTEIN_TWO GN=GENE2\nMPEPTIDE\n",
+        ">sp|P1|PROTEIN_ONE GN=GENE1\nMPEPTIDE\n",
         encoding="utf-8",
     )
     results_dir = tmp_path / "results"
     results_dir.mkdir()
     pd.DataFrame(
         {
-            "Protein": ["P1", "P2"],
-            "ProteinAccession": ["P1", "P2"],
-            "Comparison": ["Drug_vs_DMSO", "Other_vs_DMSO"],
-            "log2FC": [1.2, -0.4],
-            "pvalue": [0.01, 0.2],
-            "adj.pvalue": [0.02, 0.3],
+            "Protein": ["P1"],
+            "ProteinAccession": ["P1"],
+            "Comparison": ["Drug_vs_DMSO"],
+            "log2FC": [1.2],
+            "pvalue": [0.01],
+            "adj.pvalue": [0.02],
         }
     ).to_csv(results_dir / "protein_results.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "ProteinName": ["P1", "P1", "P1"],
+            "PSM": ["PSM1", "PSM1", "PSM2"],
+        }
+    ).to_csv(results_dir / "protein_msstats_input.tsv", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "Protein": ["SITE"],
+            "Comparison": ["Drug_vs_DMSO"],
+            "log2FC": [1.0],
+            "pvalue": [0.01],
+            "adj.pvalue": [0.02],
+        }
+    ).to_csv(results_dir / "ptm_site_results.tsv", sep="\t", index=False)
 
-    output_path = asyncio.run(
-        _resolve_protein_analysis_file(
-            _ptm_session(with_protein=False),
-            "550e8400-e29b-41d4-a716-446655440000",
+    comparisons = asyncio.run(
+        load_ptm_results(
             results_dir,
-            "Drug_vs_DMSO",
+            comparison="Drug_vs_DMSO",
+            layer="protein",
+            fasta_path=tmp_path / "Human_Sequence.fasta",
         )
     )
 
-    output = pd.read_csv(output_path, sep="\t")
-    assert output["Master_Protein_Accessions"].tolist() == ["P1"]
-    assert output["Gene_Name"].tolist() == ["GENE1"]
-    assert output["logFC"].tolist() == [1.2]
-    assert output["pval"].tolist() == [0.01]
-    assert output["adjPval"].tolist() == [0.02]
-
-
-def test_rejects_ptm_protein_analysis_without_result_artifact(tmp_path):
-    with pytest.raises(HTTPException) as error:
-        asyncio.run(
-            _resolve_protein_analysis_file(
-                _ptm_session(with_protein=False),
-                "550e8400-e29b-41d4-a716-446655440000",
-                tmp_path,
-                "Drug_vs_DMSO",
-            )
-        )
-
-    assert error.value.status_code == 404
-
-
-def test_builds_ptm_protein_abundance_matrix_for_gsea_heatmaps(tmp_path):
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-    de_file = results_dir / "ptm_protein_analysis.tsv"
-    pd.DataFrame(
-        {
-            "Master_Protein_Accessions": ["P1", "P2"],
-            "Gene_Name": ["GENE1", "GENE2"],
-        }
-    ).to_csv(de_file, sep="\t", index=False)
-    pd.DataFrame(
-        {
-            "Protein": ["P1", "P1", "P2", "P2"],
-            "BioReplicate": ["Drug_1", "DMSO_1", "Drug_1", "DMSO_1"],
-            "Abundance": [12.0, 10.0, 7.0, 8.0],
-        }
-    ).to_csv(results_dir / "protein_summarized.tsv", sep="\t", index=False)
-
-    output_path = asyncio.run(
-        _resolve_protein_abundance_file(
-            _ptm_session(with_protein=True), results_dir, de_file
-        )
-    )
-
-    output = pd.read_csv(output_path, sep="\t")
-    assert output.columns.tolist() == [
-        "Master_Protein_Accessions",
-        "Gene_Name",
-        "DMSO_1",
-        "Drug_1",
-    ]
-    assert output.loc[output["Gene_Name"] == "GENE1", "Drug_1"].item() == 12.0
+    protein = comparisons[0]["protein_model"][0]
+    assert protein["Gene_Name"] == "GENE1"
+    assert protein["PSM_Count"] == 2

@@ -383,6 +383,7 @@ export interface SearchableSelectProps {
   searchPlaceholder?: string;
   className?: string;
   disabled?: boolean;
+  onSearchChange?: (value: string) => void;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -393,6 +394,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   searchPlaceholder = 'Search...',
   className,
   disabled,
+  onSearchChange,
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -484,7 +486,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               ref={searchInputRef}
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                onSearchChange?.(e.target.value);
+              }}
               placeholder={searchPlaceholder}
               className="w-full h-8 px-2 rounded-md border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
             />

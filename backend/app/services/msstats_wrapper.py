@@ -50,6 +50,7 @@ def _build_msstats_batch_cmd(
         "log_base": log_base,
         "save_fitted_models": save_fitted_models,
         "numberOfCores": n_cores_per,
+        "output_shard": batch_idx,
     }
     config_json = json.dumps(cfg)
     cmd = [

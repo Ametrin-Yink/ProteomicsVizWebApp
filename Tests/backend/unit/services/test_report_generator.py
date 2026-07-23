@@ -158,3 +158,39 @@ def test_generate_rejects_non_completed_session(temp_dirs):
 
     with pytest.raises(ValueError, match="not completed"):
         generate_report(session_id, "rpt_whatever")
+
+
+def test_refresh_reports_replaces_contents_and_preserves_capability(temp_dirs):
+    from app.services.report_generator import (
+        generate_report,
+        refresh_reports_for_session,
+    )
+    from app.services.report_store import (
+        create_report,
+        get_report_dir,
+        publish_report,
+    )
+
+    sessions_dir, _reports_dir = temp_dirs
+    session_id = "refresh-session"
+    session_dir = make_completed_session(sessions_dir, session_id)
+    metadata = create_report("Stable report", session_id, "Test Experiment")
+    generate_report(session_id, metadata["report_id"])
+    publish_report(metadata["report_id"])
+
+    result_path = session_dir / "results" / "QC_Results.json"
+    result_path.write_text('{"version": "new"}', encoding="utf-8")
+
+    failures = refresh_reports_for_session(session_id)
+
+    assert failures == []
+    report_dir = get_report_dir(metadata["report_id"])
+    refreshed = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert refreshed["report_id"] == metadata["report_id"]
+    assert refreshed["name"] == metadata["name"]
+    assert refreshed["created_at"] == metadata["created_at"]
+    assert refreshed["share_token"] == metadata["share_token"]
+    assert "refreshed_at" in refreshed
+    assert json.loads(
+        (report_dir / "results" / "QC_Results.json").read_text(encoding="utf-8")
+    ) == {"version": "new"}

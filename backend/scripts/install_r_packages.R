@@ -22,14 +22,43 @@ if (!requireNamespace("log4r", quietly = TRUE)) {
 if (!requireNamespace("log4r", quietly = TRUE))
     stop("log4r installation failed; install Rtools and rerun this script")
 
+# ── Rtools (Windows) ─────────────────────────────────────────────────────
+# MSstatsPTM and MSstatsConvert must be installed from GitHub devel because
+# the Bioconductor release lacks ptm_label_type / protein_label_type /
+# save_fitted_models parameters required by ptm_group_comparison.R.
+# Building from source on Windows requires Rtools 4.5+ installed at C:\rtools45.
+# Download from https://cran.r-project.org/bin/windows/Rtools/rtools45/rtools.html
+
+if (.Platform$OS.type == "windows") {
+    make_path <- Sys.which("make")
+    if (!nzchar(make_path) || !file.exists(make_path)) {
+        stop(
+            "Rtools is required to build MSstatsPTM from source.\n",
+            "Download from https://cran.r-project.org/bin/windows/Rtools/rtools45/rtools.html"
+        )
+    }
+}
+
+if (!requireNamespace("remotes", quietly = TRUE))
+    install.packages("remotes", repos = "https://cloud.r-project.org/")
+
+if (!requireNamespace("MSstatsConvert", quietly = TRUE) ||
+    packageVersion("MSstatsConvert") < "1.19") {
+    remotes::install_github("Vitek-Lab/MSstatsConvert", ref = "devel",
+                            upgrade = "never", quiet = FALSE)
+}
+if (!requireNamespace("MSstatsPTM", quietly = TRUE) ||
+    packageVersion("MSstatsPTM") < "2.14") {
+    remotes::install_github("Vitek-Lab/MSstatsPTM", ref = "devel",
+                            upgrade = "never", quiet = FALSE)
+}
+
 # ── Bioconductor packages ──────────────────────────────────────────────────
 bioc_packages <- c(
     "msqrob2",
     "QFeatures",
     "limma",
     "MSstats",
-    "MSstatsConvert",
-    "MSstatsPTM",
     "MSstatsBioNet",
     "Biostrings",
     "BiocParallel",

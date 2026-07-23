@@ -62,6 +62,7 @@ class TestBuildMsstatsBatchCmd:
         assert config["numberOfCores"] == 16
         assert config["log_base"] == 2
         assert config["save_fitted_models"] is False
+        assert config["output_shard"] == 0
 
     def test_build_cmd_includes_covariates(self):
         """Covariates JSON is passed as positional arg."""

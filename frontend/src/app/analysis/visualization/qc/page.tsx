@@ -4,11 +4,16 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import QCWorkspace from '@/components/visualization/QCWorkspace';
 import PTMQCWorkspace from '@/components/visualization/PTMQCWorkspace';
-import type { QCData } from '@/types/api';
-import { visualizationApi, getDataSource } from '@/lib/api-client';
+import type {
+  QCData,
+  QCDifferentialData,
+  QCOverviewData,
+} from '@/types/api';
+import { visualizationApi } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
-import { formatGroup } from '@/lib/utils';
 import { VisualizationPipelineWorkspace } from '@/components/visualization/VisualizationPipelineWorkspace';
+import { useDebounce } from '@/hooks/use-debounce';
+import QCSampleHealthTable from '@/components/visualization/QCSampleHealthTable';
 
 function QCContent() {
   const { apiPrefix } = useApi();
@@ -16,9 +21,15 @@ function QCContent() {
   const [data, setData] = useState<QCData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [conditionList, setConditionList] = useState<string[]>([]);
-  const [comparisons, setComparisons] = useState<Array<{ group1: Record<string, string>; group2: Record<string, string> }>>([]);
+  const [overview, setOverview] = useState<QCOverviewData | null>(null);
+  const [differential, setDifferential] = useState<QCDifferentialData | null>(null);
+  const [groupBy, setGroupBy] = useState<'condition' | 'batch'>('condition');
+  const [groupSearch, setGroupSearch] = useState('');
+  const [comparisonOptions, setComparisonOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [comparisonSearch, setComparisonSearch] = useState('');
   const [selectedComparison, setSelectedComparison] = useState<string>('');
+  const debouncedComparisonSearch = useDebounce(comparisonSearch, 250);
+  const debouncedGroupSearch = useDebounce(groupSearch, 250);
 
   useEffect(() => {
     if (!apiPrefix) return;
@@ -26,27 +37,19 @@ function QCContent() {
       setLoading(true);
       setError(null);
       try {
-        const [qcData, session] = await Promise.all([
+        const [qcData, overviewData, comparisonPage] = await Promise.all([
           visualizationApi.getQCData(apiPrefix),
-          getDataSource(apiPrefix),
+          visualizationApi.getQCOverview(apiPrefix, 'condition'),
+          visualizationApi.getComparisonCatalog(apiPrefix),
         ]);
         setData(qcData);
-        if (session?.config) {
-          const config = session.config;
-          const conditions = new Set<string>();
-          if (config.comparisons && config.comparisons.length > 0) {
-            config.comparisons.forEach((comp) => {
-              conditions.add(formatGroup(comp.group1));
-              conditions.add(formatGroup(comp.group2));
-            });
-          }
-          if (config.treatment) conditions.add(config.treatment);
-          if (config.control) conditions.add(config.control);
-          setConditionList(Array.from(conditions));
-          if (config.comparisons && config.comparisons.length > 0) {
-            setComparisons(config.comparisons);
-          }
-        }
+        setOverview(overviewData);
+        const options = comparisonPage.items.map((comparison) => ({
+          value: comparison.comparison_id,
+          label: comparison.display_label,
+        }));
+        setComparisonOptions(options);
+        setSelectedComparison((current) => current || options[0]?.value || '');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load QC data');
       } finally {
@@ -56,6 +59,62 @@ function QCContent() {
 
     fetchData();
   }, [apiPrefix]);
+
+  useEffect(() => {
+    if (!apiPrefix) return;
+    const controller = new AbortController();
+    visualizationApi.getQCOverview(
+      apiPrefix,
+      groupBy,
+      debouncedGroupSearch,
+      undefined,
+      controller.signal,
+    )
+      .then(setOverview)
+      .catch((caught: unknown) => {
+        if (caught instanceof Error && caught.name === 'AbortError') return;
+        setError(caught instanceof Error ? caught.message : 'Failed to load QC overview');
+      });
+    return () => controller.abort();
+  }, [apiPrefix, debouncedGroupSearch, groupBy]);
+
+  useEffect(() => {
+    if (!apiPrefix || !selectedComparison) return;
+    const controller = new AbortController();
+    visualizationApi.getQCDifferential(apiPrefix, selectedComparison, controller.signal)
+      .then(setDifferential)
+      .catch((caught: unknown) => {
+        if (caught instanceof Error && caught.name === 'AbortError') return;
+        setError(caught instanceof Error ? caught.message : 'Failed to load differential QC');
+      });
+    return () => controller.abort();
+  }, [apiPrefix, selectedComparison]);
+
+  useEffect(() => {
+    if (!apiPrefix) return;
+    const controller = new AbortController();
+    visualizationApi.getComparisonCatalog(
+      apiPrefix,
+      debouncedComparisonSearch,
+      undefined,
+      controller.signal,
+    ).then((page) => {
+      const next = page.items.map((comparison) => ({
+        value: comparison.comparison_id,
+        label: comparison.display_label,
+      }));
+      setComparisonOptions((current) => {
+        const selected = current.find((option) => option.value === selectedComparison);
+        return selected && !next.some((option) => option.value === selected.value)
+          ? [selected, ...next]
+          : next;
+      });
+    }).catch((caught: unknown) => {
+      if (caught instanceof Error && caught.name === 'AbortError') return;
+      setError(caught instanceof Error ? caught.message : 'Failed to search comparisons');
+    });
+    return () => controller.abort();
+  }, [apiPrefix, debouncedComparisonSearch, selectedComparison]);
 
   if (!apiPrefix) {
     return (
@@ -116,16 +175,23 @@ function QCContent() {
 
         <QCWorkspace
           data={data}
+          overview={overview}
+          differential={differential}
           labels={{ psm: 'PSM', entity: 'Protein', entityPlural: 'Proteins' }}
-          conditionList={conditionList.length > 0 ? conditionList : undefined}
+          conditionList={overview?.groups.map((group) => group.group_value)}
+          groupBy={groupBy}
+          onGroupByChange={(value) => {
+            setGroupBy(value);
+            setGroupSearch('');
+          }}
+          groupSearch={groupSearch}
+          onGroupSearch={setGroupSearch}
           selectedComparison={selectedComparison}
           onComparisonChange={setSelectedComparison}
-          comparisonOptions={comparisons.map((comparison) => {
-            const group1 = formatGroup(comparison.group1);
-            const group2 = formatGroup(comparison.group2);
-            return { value: `${group1}_vs_${group2}`, label: `${group1} vs ${group2}` };
-          })}
+          onComparisonSearch={setComparisonSearch}
+          comparisonOptions={comparisonOptions}
         />
+        <QCSampleHealthTable apiPrefix={apiPrefix} />
       </div>
     </div>
   );

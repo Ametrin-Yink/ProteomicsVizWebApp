@@ -36,6 +36,11 @@ import type {
   CompareRunStatus,
   ProteinCorrelationData,
   ComparisonCorrelationData,
+  ComparisonCorrelationMetadata,
+  ComparisonCorrelationTile,
+  ComparisonCorrelationLookup,
+  ComparisonSpearmanResult,
+  ComparisonFoldChangeDetail,
   VennData,
   ProteinListEntry,
   ClusterMethod,
@@ -47,6 +52,11 @@ import type {
   PTMComparisonSummary,
   PTMResultLayer,
   VisualizationManifest,
+  VisualizationComparisonCatalogItem,
+  CursorPage,
+  QCOverviewData,
+  QCDifferentialData,
+  QCSampleMetric,
 } from '@/types/api';
 
 // ---- File Library Types ----
@@ -765,6 +775,16 @@ export const processingApi = {
     return handleResponse<{ success: boolean; message: string }>(response);
   },
 
+  /** Replace a completed session with a checkpoint-free current pipeline run. */
+  reprocess: async (sessionId: string): Promise<{ status: string }> => {
+    const response = await fetch(apiUrl(`/sessions/${sessionId}/reprocess`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm_replace: true }),
+    });
+    return handleResponse<{ status: string }>(response);
+  },
+
   /**
    * Cancel processing
    */
@@ -806,6 +826,52 @@ export const visualizationApi = {
     signal?: AbortSignal
   ): Promise<VisualizationManifest> => {
     return fetchApi<VisualizationManifest>(`${apiPrefix}/visualization/manifest`, { signal });
+  },
+
+  getComparisonCatalog: (
+    apiPrefix: string,
+    search = '',
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<CursorPage<VisualizationComparisonCatalogItem>> => {
+    const query = new URLSearchParams({ limit: '50' });
+    if (search) query.set('search', search);
+    if (cursor) query.set('cursor', cursor);
+    return fetchApi(`${apiPrefix}/visualization/comparisons?${query}`, { signal });
+  },
+
+  getQCOverview: (
+    apiPrefix: string,
+    groupBy: 'condition' | 'batch',
+    search = '',
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<QCOverviewData> => {
+    const query = new URLSearchParams({ group_by: groupBy, limit: '50' });
+    if (search) query.set('search', search);
+    if (cursor) query.set('cursor', cursor);
+    return fetchApi(`${apiPrefix}/visualization/qc/overview?${query}`, { signal });
+  },
+
+  getQCSamples: (
+    apiPrefix: string,
+    search = '',
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<CursorPage<QCSampleMetric>> => {
+    const query = new URLSearchParams({ limit: '100' });
+    if (search) query.set('search', search);
+    if (cursor) query.set('cursor', cursor);
+    return fetchApi(`${apiPrefix}/visualization/qc/samples?${query}`, { signal });
+  },
+
+  getQCDifferential: (
+    apiPrefix: string,
+    comparison: string,
+    signal?: AbortSignal,
+  ): Promise<QCDifferentialData> => {
+    const query = new URLSearchParams({ comparison });
+    return fetchApi(`${apiPrefix}/visualization/qc/differential?${query}`, { signal });
   },
 
   getPTMResults: (
@@ -944,7 +1010,7 @@ export const visualizationApi = {
     signal?: AbortSignal
   ): Promise<ProteinAbundance> => {
     const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
-    return fetchApi<ProteinAbundance>(`${apiPrefix}/protein/${proteinId}/abundance${compParam}`, { signal });
+    return fetchApi<ProteinAbundance>(`${apiPrefix}/protein/${encodeURIComponent(proteinId)}/abundance${compParam}`, { signal });
   },
 
   /** Peptide abundance for a protein */
@@ -955,7 +1021,7 @@ export const visualizationApi = {
     signal?: AbortSignal
   ): Promise<PeptideAbundanceData> => {
     const compParam = comparison ? `?comparison=${encodeURIComponent(comparison)}` : '';
-    return fetchApi<PeptideAbundanceData>(`${apiPrefix}/protein/${proteinId}/peptide${compParam}`, { signal });
+    return fetchApi<PeptideAbundanceData>(`${apiPrefix}/protein/${encodeURIComponent(proteinId)}/peptide${compParam}`, { signal });
   },
 
   // ── BioNet ──
@@ -1029,6 +1095,57 @@ export const visualizationApi = {
   /** Get cached comparison correlation results */
   getComparisonCorrelationData: (apiPrefix: string, signal?: AbortSignal): Promise<ComparisonCorrelationData> => {
     return fetchApi<ComparisonCorrelationData>(`${apiPrefix}/compare/comparison-correlation`, { signal });
+  },
+
+  getComparisonCorrelationMetadata: (apiPrefix: string, signal?: AbortSignal): Promise<ComparisonCorrelationMetadata> => {
+    return fetchApi<ComparisonCorrelationMetadata>(`${apiPrefix}/compare/comparison-correlation`, { signal });
+  },
+
+  getComparisonCorrelationTile: (
+    apiPrefix: string,
+    level: number,
+    row: number,
+    column: number,
+    signal?: AbortSignal,
+  ): Promise<ComparisonCorrelationTile> => {
+    const query = new URLSearchParams({
+      level: String(level),
+      row: String(row),
+      column: String(column),
+    });
+    return fetchApi<ComparisonCorrelationTile>(`${apiPrefix}/compare/comparison-correlation/tile?${query}`, { signal });
+  },
+
+  lookupComparisonCorrelation: (
+    apiPrefix: string,
+    comparison: string,
+    signal?: AbortSignal,
+  ): Promise<ComparisonCorrelationLookup> => {
+    const query = new URLSearchParams({ comparison, limit: '20' });
+    return fetchApi<ComparisonCorrelationLookup>(`${apiPrefix}/compare/comparison-correlation/lookup?${query}`, { signal });
+  },
+
+  getComparisonSpearman: (
+    apiPrefix: string,
+    left: string,
+    right: string,
+    signal?: AbortSignal,
+  ): Promise<ComparisonSpearmanResult> => {
+    const query = new URLSearchParams({ left, right });
+    return fetchApi<ComparisonSpearmanResult>(`${apiPrefix}/compare/comparison-correlation/spearman?${query}`, { signal });
+  },
+
+  getComparisonFoldChangeDetail: (
+    apiPrefix: string,
+    comparisons: string[],
+    signal?: AbortSignal,
+  ): Promise<ComparisonFoldChangeDetail> => {
+    return fetchApi<ComparisonFoldChangeDetail>(`${apiPrefix}/compare/comparison-correlation/detail`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comparisons, max_proteins: 100 }),
+      signal,
+    });
   },
 
   /** Compute Venn diagram data (synchronous, returns result directly) */

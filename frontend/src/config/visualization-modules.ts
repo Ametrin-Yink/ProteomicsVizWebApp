@@ -67,7 +67,7 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     getExportState: async (sessionId, session) => {
       const s = session || await getDataSource(sessionApiPrefix(sessionId));
       const comp = firstComparison(s?.config);
-      const deData = await visualizationApi.getDEResults(sessionApiPrefix(sessionId), { per_page: 20000, comparison: comp.key || undefined });
+      const deData = await visualizationApi.getDEResults(sessionApiPrefix(sessionId), { per_page: 100000, comparison: comp.key || undefined });
 
       let filters: VolcanoFilters = { foldChange: 1, pValue: 0.05, adjPValue: 1, s0: 0.1 };
       if (s?.volcano_filters) {
@@ -186,14 +186,14 @@ export function getModuleById(id: string): VisualizationModule | undefined {
 export const PTM_VISUALIZATION_MODULES: VisualizationModule[] = [
   {
     id: 'volcano',
-    label: 'Volcano',
+    label: 'Volcano Plot',
     href: '/analysis/visualization?pipeline=ptm',
     icon: ChartScatter,
     description: 'PTM differential expression volcano plot',
   },
   {
     id: 'qc',
-    label: 'QC',
+    label: 'QC Plots',
     href: '/analysis/visualization/qc?pipeline=ptm',
     icon: Activity,
     description: 'PTM quality control plots',

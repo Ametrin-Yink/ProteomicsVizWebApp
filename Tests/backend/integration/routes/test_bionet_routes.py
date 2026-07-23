@@ -35,14 +35,14 @@ def test_status_is_idle_before_a_run(client):
     assert response.json()["data"]["status"] == "idle"
 
 
-def test_run_requires_differential_expression_results(client):
+def test_run_requires_current_visualization_artifacts(client):
     session_id = _create_session(client)
     response = client.post(
         f"/api/sessions/{session_id}/bionet/run",
         json={"comparison": "Drug_vs_Control"},
     )
-    assert response.status_code == 404
-    assert "Diff_Expression_Drug_vs_Control.tsv" in response.json()["detail"]
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Visualization artifacts require reprocessing"
 
 
 def test_subnetwork_returns_persisted_result(client):

@@ -6,6 +6,7 @@ import { Microscope } from 'lucide-react';
 import VolcanoPlot from '@/components/visualization/VolcanoPlot';
 import { FilterPanel } from '@/components/visualization/FilterPanel';
 import PTMResultTable, { type PTMResultRow } from '@/components/visualization/PTMResultTable';
+import ProteinInfo from '@/components/visualization/ProteinInfo';
 import {
   VolcanoSummaryBar,
   VolcanoWorkspace,
@@ -103,6 +104,7 @@ function toDEResult(row: PTMResultRow, filters: VolcanoFilters): DEResult {
       row.adjPValue ?? 1,
       filters,
     ),
+    psm_count: numeric(row.raw.PSM_Count) ?? 0,
   };
 }
 
@@ -557,13 +559,23 @@ export default function PTMVolcano({
             </div>
           </div>
         ) : (
-          <PTMInfoPanel
-            key={`${layer}:${selectedId ?? ''}`}
-            apiPrefix={resolvedApiPrefix}
-            row={selectedRow}
-            layer={layer}
-            filters={filters}
-          />
+          layer === 'protein' ? (
+            <ProteinInfo
+              key={`${layer}:${selectedId ?? ''}`}
+              apiPrefix={resolvedApiPrefix}
+              protein={selectedRow ? toDEResult(selectedRow, filters) : null}
+              filters={filters}
+              comparison={comparison.label}
+            />
+          ) : (
+            <PTMInfoPanel
+              key={`${layer}:${selectedId ?? ''}`}
+              apiPrefix={resolvedApiPrefix}
+              row={selectedRow}
+              layer={layer}
+              filters={filters}
+            />
+          )
         )}
       >
           <VolcanoPlot

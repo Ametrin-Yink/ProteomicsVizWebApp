@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Proteomics Visualization API
   description: Proteomics Visualization Web App API
-  version: 0.1.0
+  version: 0.1.1
 paths:
   /health:
     get:
@@ -133,6 +133,64 @@ paths:
         \    202 Accepted with WebSocket URL\n\nRaises:\n    HTTPException: 404 if session not found,\
         \ 400 if validation fails, 409 if already processing"
       operationId: start_processing_api_sessions__session_id__process_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/reprocess:
+    post:
+      tags:
+      - processing
+      summary: Start Reprocess
+      description: Re-run a completed session into staging, then replace results in place.
+      operationId: start_reprocess_api_sessions__session_id__reprocess_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReprocessRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/reprocess/status:
+    get:
+      tags:
+      - processing
+      summary: Get Reprocess Status
+      description: Return the last staged reprocess and report-refresh outcome.
+      operationId: get_reprocess_status_api_sessions__session_id__reprocess_status_get
       parameters:
       - name: session_id
         in: path
@@ -371,7 +429,7 @@ paths:
         required: false
         schema:
           type: integer
-          maximum: 20000
+          maximum: 100000
           minimum: 1
           default: 50
           title: Page Size
@@ -427,7 +485,7 @@ paths:
       tags:
       - visualization
       summary: Get Qc Plots
-      description: Get QC plot data.
+      description: Get the compact experiment-wide QC summary.
       operationId: get_qc_plots_api_sessions__session_id__qc_plots_get
       parameters:
       - name: session_id
@@ -436,15 +494,6 @@ paths:
         schema:
           type: string
           title: Session Id
-      - name: comparison
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comparison label for per-comparison p-value distribution
-          default: ''
-          title: Comparison
-        description: Comparison label for per-comparison p-value distribution
       responses:
         '200':
           description: Successful Response
@@ -866,6 +915,255 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization/comparisons:
+    get:
+      tags:
+      - visualization
+      summary: Get Visualization Comparisons
+      description: Search the comparison catalog without returning every comparison.
+      operationId: get_visualization_comparisons_api_sessions__session_id__visualization_comparisons_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization/samples:
+    get:
+      tags:
+      - visualization
+      summary: Get Visualization Samples
+      description: Search the sample catalog without returning every sample.
+      operationId: get_visualization_samples_api_sessions__session_id__visualization_samples_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization/qc/overview:
+    get:
+      tags:
+      - visualization
+      summary: Get Visualization Qc Overview
+      description: Return bounded experiment-wide processed-input QC summaries.
+      operationId: get_visualization_qc_overview_api_sessions__session_id__visualization_qc_overview_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: group_by
+        in: query
+        required: false
+        schema:
+          type: string
+          default: condition
+          title: Group By
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization/qc/samples:
+    get:
+      tags:
+      - visualization
+      summary: Get Visualization Qc Samples
+      description: Return a bounded page of per-sample QC metrics.
+      operationId: get_visualization_qc_samples_api_sessions__session_id__visualization_qc_samples_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization/qc/differential:
+    get:
+      tags:
+      - visualization
+      summary: Get Visualization Qc Differential
+      description: Return differential-result QC for exactly one comparison.
+      operationId: get_visualization_qc_differential_api_sessions__session_id__visualization_qc_differential_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: comparison
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/sessions/{session_id}/protein/{protein_id}/abundance:
     get:
       tags:
@@ -895,6 +1193,24 @@ paths:
           default: ''
           title: Comparison
         description: Comparison name to filter samples
+      - name: layer
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Processed result layer
+          default: protein
+          title: Layer
+        description: Processed result layer
+      - name: point_budget
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500000
+          minimum: 0
+          default: 100000
+          title: Point Budget
       responses:
         '200':
           description: Successful Response
@@ -936,6 +1252,148 @@ paths:
           default: ''
           title: Comparison
         description: Comparison name to filter samples
+      - name: layer
+        in: query
+        required: false
+        schema:
+          type: string
+          description: Processed result layer
+          default: protein
+          title: Layer
+        description: Processed result layer
+      - name: point_budget
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500000
+          minimum: 0
+          default: 100000
+          title: Point Budget
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/protein/{protein_id}/abundance/detail:
+    get:
+      tags:
+      - visualization
+      summary: Get Protein Abundance Detail
+      description: Return a bounded page of processed protein/sample observations.
+      operationId: get_protein_abundance_detail_api_sessions__session_id__protein__protein_id__abundance_detail_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: protein_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protein Id
+      - name: comparison
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Comparison
+      - name: layer
+        in: query
+        required: false
+        schema:
+          type: string
+          default: protein
+          title: Layer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1000
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/protein/{protein_id}/peptide/detail:
+    get:
+      tags:
+      - visualization
+      summary: Get Protein Peptide Detail
+      description: Return a bounded page of processed peptide/sample observations.
+      operationId: get_protein_peptide_detail_api_sessions__session_id__protein__protein_id__peptide_detail_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: protein_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protein Id
+      - name: comparison
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Comparison
+      - name: layer
+        in: query
+        required: false
+        schema:
+          type: string
+          default: protein
+          title: Layer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10000
+          minimum: 1
+          default: 1000
+          title: Limit
       responses:
         '200':
           description: Successful Response
@@ -1336,6 +1794,255 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/visualization/comparisons:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Visualization Comparisons
+      description: Capability-scoped, cursor-paginated comparison catalog.
+      operationId: get_report_visualization_comparisons_api_shared_reports__share_token__visualization_comparisons_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/visualization/qc/overview:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Visualization Qc Overview
+      description: Capability-scoped bounded QC overview.
+      operationId: get_report_visualization_qc_overview_api_shared_reports__share_token__visualization_qc_overview_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: group_by
+        in: query
+        required: false
+        schema:
+          type: string
+          default: condition
+          title: Group By
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/visualization/samples:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Visualization Samples
+      description: Capability-scoped, cursor-paginated sample catalog.
+      operationId: get_report_visualization_samples_api_shared_reports__share_token__visualization_samples_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/visualization/qc/differential:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Visualization Qc Differential
+      description: Capability-scoped differential QC for one comparison.
+      operationId: get_report_visualization_qc_differential_api_shared_reports__share_token__visualization_qc_differential_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: comparison
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/visualization/qc/samples:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Visualization Qc Samples
+      description: Capability-scoped, bounded per-sample QC table.
+      operationId: get_report_visualization_qc_samples_api_shared_reports__share_token__visualization_qc_samples_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/shared-reports/{share_token}/ptm/results:
     get:
       tags:
@@ -1569,7 +2276,7 @@ paths:
         required: false
         schema:
           type: integer
-          maximum: 20000
+          maximum: 100000
           minimum: 1
           default: 50
           title: Page Size
@@ -1618,7 +2325,7 @@ paths:
       tags:
       - shared-reports
       summary: Get Report Qc Plots
-      description: Get QC plot data.
+      description: Get the compact experiment-wide QC summary.
       operationId: get_report_qc_plots_api_shared_reports__share_token__qc_plots_get
       parameters:
       - name: share_token
@@ -1982,6 +2689,22 @@ paths:
           type: string
           default: ''
           title: Comparison
+      - name: layer
+        in: query
+        required: false
+        schema:
+          type: string
+          default: protein
+          title: Layer
+      - name: point_budget
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500000
+          minimum: 0
+          default: 100000
+          title: Point Budget
       responses:
         '200':
           description: Successful Response
@@ -2021,6 +2744,22 @@ paths:
           type: string
           default: ''
           title: Comparison
+      - name: layer
+        in: query
+        required: false
+        schema:
+          type: string
+          default: protein
+          title: Layer
+      - name: point_budget
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500000
+          minimum: 0
+          default: 100000
+          title: Point Budget
       responses:
         '200':
           description: Successful Response
@@ -2187,6 +2926,205 @@ paths:
         schema:
           type: string
           title: Share Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/compare/comparison-correlation/tile:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Comparison Correlation Tile
+      operationId: get_report_comparison_correlation_tile_api_shared_reports__share_token__compare_comparison_correlation_tile_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: level
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Level
+      - name: row
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Row
+      - name: column
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Column
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/compare/comparison-correlation/cell:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Comparison Correlation Cell
+      operationId: get_report_comparison_correlation_cell_api_shared_reports__share_token__compare_comparison_correlation_cell_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: row
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Row
+      - name: column
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Column
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/compare/comparison-correlation/lookup:
+    get:
+      tags:
+      - shared-reports
+      summary: Lookup Report Comparison Correlation
+      operationId: lookup_report_comparison_correlation_api_shared_reports__share_token__compare_comparison_correlation_lookup_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: comparison
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Comparison
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/compare/comparison-correlation/spearman:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Comparison Spearman
+      operationId: get_report_comparison_spearman_api_shared_reports__share_token__compare_comparison_correlation_spearman_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: left
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Left
+      - name: right
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Right
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/compare/comparison-correlation/detail:
+    post:
+      tags:
+      - shared-reports
+      summary: Get Report Comparison Fold Change Detail
+      operationId: get_report_comparison_fold_change_detail_api_shared_reports__share_token__compare_comparison_correlation_detail_post
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportComparisonDetailRequest'
       responses:
         '200':
           description: Successful Response
@@ -2405,6 +3343,205 @@ paths:
         schema:
           type: string
           title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/comparison-correlation/tile:
+    get:
+      tags:
+      - compare
+      summary: Get Comparison Correlation Tile
+      operationId: get_comparison_correlation_tile_api_sessions__session_id__compare_comparison_correlation_tile_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: level
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Level
+      - name: row
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Row
+      - name: column
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Column
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/comparison-correlation/cell:
+    get:
+      tags:
+      - compare
+      summary: Get Comparison Correlation Cell
+      operationId: get_comparison_correlation_cell_api_sessions__session_id__compare_comparison_correlation_cell_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: row
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Row
+      - name: column
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          title: Column
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/comparison-correlation/lookup:
+    get:
+      tags:
+      - compare
+      summary: Lookup Comparison Correlation
+      operationId: lookup_comparison_correlation_api_sessions__session_id__compare_comparison_correlation_lookup_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: comparison
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Comparison
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/comparison-correlation/spearman:
+    get:
+      tags:
+      - compare
+      summary: Get Comparison Spearman
+      operationId: get_comparison_spearman_api_sessions__session_id__compare_comparison_correlation_spearman_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: left
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Left
+      - name: right
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+          title: Right
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/compare/comparison-correlation/detail:
+    post:
+      tags:
+      - compare
+      summary: Get Comparison Fold Change Detail
+      operationId: get_comparison_fold_change_detail_api_sessions__session_id__compare_comparison_correlation_detail_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonDetailRequest'
       responses:
         '200':
           description: Successful Response
@@ -3097,6 +4234,28 @@ components:
       - selected_comparisons
       - marked_proteins
       title: ComparisonCorrelationRequest
+    ComparisonDetailRequest:
+      properties:
+        comparisons:
+          items:
+            type: string
+          type: array
+          title: Comparisons
+        proteins:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Proteins
+        max_proteins:
+          type: integer
+          title: Max Proteins
+          default: 100
+      type: object
+      required:
+      - comparisons
+      title: ComparisonDetailRequest
     FileInfo:
       properties:
         filename:
@@ -3469,6 +4628,35 @@ components:
       - primary_comparison
       - selected_comparisons
       title: ReportComparisonCorrelationRequest
+    ReportComparisonDetailRequest:
+      properties:
+        comparisons:
+          items:
+            type: string
+            maxLength: 200
+            minLength: 1
+          type: array
+          maxItems: 50
+          minItems: 1
+          title: Comparisons
+        proteins:
+          items:
+            type: string
+            maxLength: 500
+            minLength: 1
+          type: array
+          maxItems: 500
+          title: Proteins
+        max_proteins:
+          type: integer
+          maximum: 500.0
+          minimum: 1.0
+          title: Max Proteins
+          default: 100
+      type: object
+      required:
+      - comparisons
+      title: ReportComparisonDetailRequest
     ReportGseaRunRequest:
       properties:
         comparison:
@@ -3573,6 +4761,16 @@ components:
       required:
       - comparisons
       title: ReportVennRequest
+    ReprocessRequest:
+      properties:
+        confirm_replace:
+          type: boolean
+          title: Confirm Replace
+      type: object
+      required:
+      - confirm_replace
+      title: ReprocessRequest
+      description: Explicit acknowledgement for destructive successful replacement.
     Session:
       properties:
         id:

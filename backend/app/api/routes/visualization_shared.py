@@ -64,7 +64,7 @@ def build_sample_filter(session: Any, comparison: str) -> list[str] | None:
         group1_label = "+".join(group1.values())
         group2_label = "+".join(group2.values())
         if f"{group1_label}_vs_{group2_label}" == comparison:
-            return list(group1.values()) + list(group2.values())
+            return ["_".join(group1.values()), "_".join(group2.values())]
     return None
 
 

@@ -6,17 +6,29 @@ Processing status and control endpoints.
 
 import asyncio
 import logging
+import shutil
 import traceback
+import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
 from app.api.deps import get_session_store
-from app.core.config import MIN_DIA_FILES, MIN_PROTEOMICS_FILES
+from app.api.routes.visualization_shared import visualization_cache
+from app.core.config import MIN_DIA_FILES, MIN_PROTEOMICS_FILES, settings
 from app.core.exceptions import ProcessingError
 from app.db.session_store import SessionStore
 from app.models.analysis import AnalysisConfig, AnalysisTemplate, Organism, PipelineTool
 from app.models.session import ProcessingStatus, Session, SessionState
 from app.services.processing_orchestrator import ProcessingOrchestrator
+from app.services.report_generator import refresh_reports_for_session
+from app.services.reprocess_service import (
+    clear_saved_analysis_state,
+    commit_staged_results,
+    preflight_reprocess_space,
+    write_reprocess_status,
+)
 from app.services.session_manager import session_manager
 from app.services.task_manager import (
     TaskCancelledError,
@@ -24,6 +36,7 @@ from app.services.task_manager import (
     TaskTimeoutError,
     task_manager,
 )
+from app.services.visualization_artifacts import load_visualization_artifact_manifest
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
@@ -33,6 +46,12 @@ _cancel_events: dict[str, asyncio.Event] = {}
 
 # Store background task references to prevent GC
 _background_tasks: set[asyncio.Task] = set()
+
+
+class ReprocessRequest(BaseModel):
+    """Explicit acknowledgement for destructive successful replacement."""
+
+    confirm_replace: bool
 
 
 def _reserve_processing(session_id: str, session: Session) -> None:
@@ -361,6 +380,156 @@ async def start_processing(
             "websocket_url": f"ws://localhost:8000/ws/sessions/{session_id}",
         }
     }
+
+
+@router.post("/{session_id}/reprocess")
+async def start_reprocess(
+    session_id: str,
+    request: ReprocessRequest,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Re-run a completed session into staging, then replace results in place."""
+    session = await store.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    if session.state != SessionState.COMPLETED:
+        raise HTTPException(
+            status_code=400, detail="Only completed sessions can be reprocessed"
+        )
+    if not request.confirm_replace:
+        raise HTTPException(
+            status_code=400,
+            detail="Explicit confirmation is required to replace session results",
+        )
+    if not session.config:
+        raise HTTPException(status_code=400, detail="Session configuration is required")
+    try:
+        _validate_processing_inputs(session)
+        _build_analysis_config(session)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    _reserve_processing(session_id, session)
+    session.state = SessionState.PROCESSING
+    session.error_message = None
+    try:
+        await store.save(session)
+    except Exception:
+        _cancel_events.pop(session_id, None)
+        raise
+
+    _schedule_background_task(run_reprocess_pipeline_async(session_id, session))
+    return {"data": {"status": "started"}}
+
+
+async def run_reprocess_pipeline_async(session_id: str, session: Session) -> None:
+    """Run a checkpoint-free pipeline and transactionally publish its output."""
+    session_dir = settings.sessions_dir / session_id
+    staging_root = session_dir / f".reprocess-{uuid.uuid4().hex}"
+    staged_results = staging_root / "results"
+    committed = False
+    started_at = datetime.now(UTC).isoformat()
+    try:
+        await asyncio.to_thread(preflight_reprocess_space, session_dir)
+        await asyncio.to_thread(staged_results.mkdir, parents=True)
+        await asyncio.to_thread(
+            write_reprocess_status,
+            session_dir,
+            {"status": "running", "started_at": started_at},
+        )
+        config = _build_analysis_config(session)
+        orchestrator = ProcessingOrchestrator(session_id=session_id)
+        cancel_event = _cancel_events.get(session_id)
+        if cancel_event:
+            orchestrator.set_cancel_event(cancel_event)
+
+        def _run_pipeline():
+            return asyncio.run(
+                orchestrator.process_session(
+                    config=config,
+                    results_dir_override=staged_results,
+                    manage_session_state=False,
+                )
+            )
+
+        await task_manager.submit(
+            session_id,
+            TaskKind.PIPELINE,
+            _run_pipeline,
+            label=f"Reprocess pipeline ({config.pipeline.value})",
+            cancel_event=cancel_event,
+            timeout_seconds=12 * 60 * 60,
+        )
+        if (
+            await asyncio.to_thread(
+                load_visualization_artifact_manifest, staged_results
+            )
+            is None
+        ):
+            raise ValueError("Reprocessed results failed visualization validation")
+
+        await asyncio.to_thread(commit_staged_results, session_dir, staged_results)
+        committed = True
+        await asyncio.to_thread(clear_saved_analysis_state, session_dir)
+        visualization_cache.invalidate(session_id)
+        await session_manager.update_session_state(session_id, SessionState.COMPLETED)
+
+        report_failures = await asyncio.to_thread(
+            refresh_reports_for_session, session_id
+        )
+        await asyncio.to_thread(
+            write_reprocess_status,
+            session_dir,
+            {
+                "status": "completed",
+                "started_at": started_at,
+                "completed_at": datetime.now(UTC).isoformat(),
+                "report_refresh_failures": report_failures,
+            },
+        )
+    except TaskCancelledError:
+        await session_manager.update_session_state(session_id, SessionState.COMPLETED)
+        await asyncio.to_thread(
+            write_reprocess_status,
+            session_dir,
+            {
+                "status": "cancelled",
+                "started_at": started_at,
+                "results_replaced": committed,
+            },
+        )
+    except Exception as error:
+        logger.exception("Reprocessing failed for session %s", session_id)
+        await session_manager.update_session_state(session_id, SessionState.COMPLETED)
+        await asyncio.to_thread(
+            write_reprocess_status,
+            session_dir,
+            {
+                "status": "error",
+                "started_at": started_at,
+                "error": str(error),
+                "results_replaced": committed,
+            },
+        )
+    finally:
+        await asyncio.to_thread(shutil.rmtree, staging_root, ignore_errors=True)
+        _cancel_events.pop(session_id, None)
+
+
+@router.get("/{session_id}/reprocess/status")
+async def get_reprocess_status(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+):
+    """Return the last staged reprocess and report-refresh outcome."""
+    if not await store.get(session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    path = settings.sessions_dir / session_id / "reprocess_status.json"
+    if not path.exists():
+        return {"data": {"status": "idle"}}
+    from app.utils.json_io import read_json_file
+
+    return {"data": await read_json_file(path)}
 
 
 async def run_processing_pipeline_async(session_id: str, session: Session):

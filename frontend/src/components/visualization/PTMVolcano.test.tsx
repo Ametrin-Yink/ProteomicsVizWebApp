@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PTMVolcano from './PTMVolcano';
 
+let proteinAvailable = false;
+
 vi.mock('next/dynamic', () => ({
   default: () => () => <div data-testid="plot" />,
 }));
@@ -11,11 +13,27 @@ vi.mock('@/components/visualization/FilterPanel', () => ({
   FilterPanel: () => <div data-testid="filters" />,
 }));
 
+vi.mock('@/components/visualization/ProteinInfo', () => ({
+  default: ({ protein, comparison }: { protein: { gene_name?: string } | null; comparison?: string }) => (
+    <div data-testid="shared-protein-info">{protein?.gene_name ?? 'none'}:{comparison}</div>
+  ),
+}));
+
+vi.mock('@/lib/visualization-context', () => ({
+  useVisualizationManifest: () => ({
+    modules: [{
+      id: 'volcano',
+      data_scopes: proteinAvailable ? ['ptm', 'protein'] : ['ptm'],
+    }],
+  }),
+}));
+
 describe('PTMVolcano', () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
+    proteinAvailable = false;
     global.fetch = vi.fn(async (input) => {
       const url = String(input);
       const response = (body: unknown) => ({
@@ -35,6 +53,24 @@ describe('PTMVolcano', () => {
         });
       }
       if (url.includes('/ptm/results?')) {
+        if (url.includes('layer=protein')) {
+          return response({
+            data: { comparisons: [{
+              label: 'Drug_vs_DMSO',
+              ptm_model: [],
+              protein_model: [{
+                Protein: 'P1',
+                ProteinAccession: 'P1',
+                Gene_Name: 'GENE1',
+                PSM_Count: 2,
+                log2FC: 1,
+                pvalue: 0.01,
+                'adj.pvalue': 0.02,
+              }],
+              adjusted_model: [],
+            }] },
+          });
+        }
         return response({
           data: { comparisons: [{
             label: 'Drug_vs_DMSO',
@@ -118,5 +154,31 @@ describe('PTMVolcano', () => {
     expect(
       container.querySelector('a[download="ptm_results.zip"]')?.getAttribute('href'),
     ).toBe('/api/shared-reports/share-token/ptm/results/download');
+  });
+
+  it('uses the shared protein information panel for the protein layer', async () => {
+    proteinAvailable = true;
+    await act(async () => {
+      root.render(<PTMVolcano sessionId="session-id" />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const proteinButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Protein');
+    await act(async () => {
+      proteinButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="shared-protein-info"]')).not.toBeNull();
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('layer=protein'),
+      expect.anything(),
+    );
   });
 });

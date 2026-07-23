@@ -16,6 +16,13 @@ const readyState: VisualizationManifestState = {
   manifest: {
     pipeline: 'ptm',
     default_module: 'volcano',
+    schema_version: 1,
+    current_schema_version: 1,
+    supported: true,
+    requires_reprocessing: false,
+    normalization_method: 'background_peptide',
+    imputation_method: 'none',
+    abundance_scale: 'log2',
     modules: [
       { id: 'volcano', visible: true, enabled: true, disabled_reason: null, data_scopes: ['ptm'] },
       { id: 'compare', visible: true, enabled: false, disabled_reason: 'At least two comparisons are required', data_scopes: ['ptm'] },

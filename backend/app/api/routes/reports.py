@@ -117,6 +117,12 @@ class ReportComparisonCorrelationRequest(BaseModel):
         return self
 
 
+class ReportComparisonDetailRequest(BaseModel):
+    comparisons: list[ComparisonName] = Field(min_length=1, max_length=50)
+    proteins: list[ProteinIdentifier] = Field(default_factory=list, max_length=500)
+    max_proteins: int = Field(default=100, ge=1, le=500)
+
+
 class ReportVennRequest(BaseModel):
     comparisons: list[ComparisonName] = Field(min_length=2, max_length=3)
     pvalue_threshold: float = Field(default=0.05, ge=0, le=1)
@@ -155,6 +161,31 @@ def _report_task_key(report_id: str) -> str:
     return f"report:{report_id}"
 
 
+def _report_pipeline(report_dir: Path) -> str:
+    """Resolve the snapshotted pipeline without consulting the source session."""
+    session_path = report_dir / "session.json"
+    if session_path.is_file():
+        try:
+            pipeline = json.loads(session_path.read_text(encoding="utf-8")).get(
+                "pipeline"
+            )
+            if pipeline:
+                return str(pipeline)
+        except (OSError, json.JSONDecodeError):
+            pass
+    manifest_path = report_dir / "results" / "visualization_artifacts.json"
+    if manifest_path.is_file():
+        try:
+            pipeline = json.loads(manifest_path.read_text(encoding="utf-8")).get(
+                "pipeline"
+            )
+            if pipeline:
+                return str(pipeline)
+        except (OSError, json.JSONDecodeError):
+            pass
+    return ""
+
+
 def _report_task_recently_started(data: dict, grace_seconds: int = 10) -> bool:
     """Avoid declaring a just-scheduled task stale before TaskManager sees it."""
     started_at = data.get("started_at")
@@ -168,42 +199,28 @@ def _report_task_recently_started(data: dict, grace_seconds: int = 10) -> bool:
 
 
 def _validate_comparisons(report_dir: Path, comparisons: list[str]) -> None:
-    available = set(_get_comparisons(report_dir / "results"))
-    invalid = set(comparisons) - available
+    from app.services.differential_repository import DifferentialRepository
+
+    try:
+        repository = DifferentialRepository(report_dir / "results")
+        invalid = repository.validate_comparisons(comparisons)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Visualization data must be reprocessed for this report",
+        ) from error
     if invalid:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown report comparisons: {sorted(invalid)}",
+            detail=f"Unknown report comparisons: {sorted(set(invalid))}",
         )
 
 
 def _get_comparisons(results_dir: Path) -> list[str]:
-    """Discover comparisons from per-comparison DE result files."""
-    comps: list[str] = []
-    if results_dir.is_dir():
-        for f in sorted(results_dir.glob("Diff_Expression_*.tsv")):
-            stem = f.stem
-            c = stem.replace("Diff_Expression_", "")
-            if c:
-                comps.append(c)
-    return comps
+    """Read comparison identifiers from canonical differential Parquet."""
+    from app.services.differential_repository import DifferentialRepository
 
-
-def _build_sample_filter_from_session(
-    session_data: dict | None, comparison: str
-) -> list[str] | None:
-    """Replicate visualization._build_sample_filter logic."""
-    if not session_data or not comparison:
-        return None
-    comparisons = (session_data.get("config") or {}).get("comparisons", [])
-    for comp in comparisons:
-        g1 = comp.get("group1", {})
-        g2 = comp.get("group2", {})
-        g1_str = "+".join(g1.values())
-        g2_str = "+".join(g2.values())
-        if f"{g1_str}_vs_{g2_str}" == comparison:
-            return list(g1.values()) + list(g2.values())
-    return None
+    return DifferentialRepository(results_dir).list_comparison_ids()
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +318,137 @@ async def get_report_visualization_manifest(share_token: str):
     session = SimpleNamespace(pipeline=session_data.get("pipeline", ""))
     manifest = build_visualization_manifest(session, report_dir / "results")
     return create_response(manifest)
+
+
+@shared_router.get("/shared-reports/{share_token}/visualization/comparisons")
+async def get_report_visualization_comparisons(
+    share_token: str,
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """Capability-scoped, cursor-paginated comparison catalog."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_shared import create_response
+    from app.services.visualization_repository import VisualizationRepository
+
+    try:
+        repository = await asyncio.to_thread(
+            VisualizationRepository, report_dir / "results"
+        )
+        data = await asyncio.to_thread(
+            repository.list_comparisons,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return create_response(data)
+
+
+@shared_router.get("/shared-reports/{share_token}/visualization/qc/overview")
+async def get_report_visualization_qc_overview(
+    share_token: str,
+    group_by: str = Query("condition"),
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=50),
+):
+    """Capability-scoped bounded QC overview."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_shared import create_response
+    from app.services.visualization_repository import VisualizationRepository
+
+    try:
+        repository = await asyncio.to_thread(
+            VisualizationRepository, report_dir / "results"
+        )
+        data = await asyncio.to_thread(
+            repository.get_qc_overview,
+            group_by=group_by,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return create_response(data)
+
+
+@shared_router.get("/shared-reports/{share_token}/visualization/samples")
+async def get_report_visualization_samples(
+    share_token: str,
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Capability-scoped, cursor-paginated sample catalog."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_shared import create_response
+    from app.services.visualization_repository import VisualizationRepository
+
+    try:
+        repository = await asyncio.to_thread(
+            VisualizationRepository, report_dir / "results"
+        )
+        data = await asyncio.to_thread(
+            repository.list_samples,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return create_response(data)
+
+
+@shared_router.get("/shared-reports/{share_token}/visualization/qc/differential")
+async def get_report_visualization_qc_differential(
+    share_token: str,
+    comparison: ComparisonName,
+):
+    """Capability-scoped differential QC for one comparison."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    _validate_comparisons(report_dir, [comparison])
+    from app.api.routes.visualization_shared import create_response
+    from app.services.visualization_repository import VisualizationRepository
+
+    try:
+        repository = await asyncio.to_thread(
+            VisualizationRepository, report_dir / "results"
+        )
+        data = await asyncio.to_thread(repository.get_qc_differential, comparison)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return create_response(data)
+
+
+@shared_router.get("/shared-reports/{share_token}/visualization/qc/samples")
+async def get_report_visualization_qc_samples(
+    share_token: str,
+    search: str | None = Query(None, max_length=200),
+    cursor: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Capability-scoped, bounded per-sample QC table."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_shared import create_response
+    from app.services.visualization_repository import VisualizationRepository
+
+    try:
+        repository = await asyncio.to_thread(
+            VisualizationRepository, report_dir / "results"
+        )
+        data = await asyncio.to_thread(
+            repository.list_qc_samples,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return create_response(data)
 
 
 @shared_router.get("/shared-reports/{share_token}/ptm/results")
@@ -429,67 +577,42 @@ async def get_report_results(
     share_token: str,
     comparison: str = Query(""),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=20000),
+    page_size: int = Query(50, ge=1, le=100000),
     sort_by: str = Query("adj_pvalue"),
     sort_order: str = Query("asc"),
     significant_only: bool = Query(False),
     search: str = Query(""),
 ):
     """Get paginated DE results from a report."""
-    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     if comparison:
         _validate_comparisons(report_dir, [comparison])
     results_dir = report_dir / "results"
 
-    from app.api.routes.visualization import (
-        create_response,
-        load_diff_expression_results,
-    )
+    from app.api.routes.visualization_shared import create_response
+    from app.services.differential_repository import DifferentialRepository
 
-    all_results = await load_diff_expression_results(results_dir, report_id, comparison)
-
-    if significant_only:
-        all_results = [r for r in all_results if r["significant"]]
-
-    if search:
-        q = search.lower()
-        all_results = [
-            r
-            for r in all_results
-            if q in r.get("master_protein_accessions", "").lower()
-            or q in r.get("gene_name", "").lower()
-        ]
-
-    reverse = sort_order.lower() == "desc"
-    all_results.sort(key=lambda x: x.get(sort_by, 0) or 0, reverse=reverse)
-
-    total = len(all_results)
-    start = (page - 1) * page_size
-    end = start + page_size
-
-    return create_response(
-        {
-            "results": all_results[start:end],
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size if total else 0,
-            "total_proteins": total,
-            "significant_proteins": sum(
-                1 for r in all_results if r.get("significant", False)
-            ),
-            "upregulated": sum(
-                1
-                for r in all_results
-                if r.get("significant", False) and r.get("log_fc", 0) > 0
-            ),
-            "downregulated": sum(
-                1
-                for r in all_results
-                if r.get("significant", False) and r.get("log_fc", 0) < 0
-            ),
-        }
-    )
+    try:
+        repository = await asyncio.to_thread(DifferentialRepository, results_dir)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Visualization data must be reprocessed for this report",
+        ) from error
+    try:
+        payload = await asyncio.to_thread(
+            repository.list_results,
+            comparison,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            significant_only=significant_only,
+            search=search,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return create_response(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -499,13 +622,19 @@ async def get_report_results(
 
 @shared_router.get("/shared-reports/{share_token}/qc/plots")
 async def get_report_qc_plots(share_token: str):
-    """Get QC plot data."""
+    """Get the compact experiment-wide QC summary."""
     _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     results_dir = report_dir / "results"
 
-    from app.api.routes.visualization import create_response, load_qc_results
+    from app.api.routes.visualization import create_response, load_qc_summary
 
-    qc_data = await asyncio.to_thread(load_qc_results, results_dir)
+    try:
+        qc_data = await asyncio.to_thread(load_qc_summary, results_dir)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Visualization data must be reprocessed for this report",
+        ) from error
     return create_response(qc_data)
 
 
@@ -558,14 +687,14 @@ async def _report_background_gsea_run(
     min_size: int,
     max_size: int,
     permutations: int,
+    de_file: Path,
+    temporary_input: bool,
     lock: asyncio.Lock,
 ) -> None:
     from app.api.routes.visualization import VALID_GSEA_DATABASES
     from app.services.gsea_service import gsea_service
 
     results_dir = report_dir / "results"
-    de_file = results_dir / f"Diff_Expression_{comparison}.tsv"
-    protein_file = results_dir / "Protein_Abundances.tsv"
     gsea_output_dir = results_dir / "gsea" / comparison
 
     status_data: dict = {
@@ -591,9 +720,7 @@ async def _report_background_gsea_run(
                     comparison_name=comparison,
                     output_dir=gsea_output_dir,
                     databases=databases,
-                    protein_abundance_path=(
-                        protein_file if protein_file.exists() else None
-                    ),
+                    protein_abundance_path=None,
                     min_size=min_size,
                     max_size=max_size,
                     permutations=permutations,
@@ -632,6 +759,8 @@ async def _report_background_gsea_run(
         status_data["error"] = str(e)
         await _report_write_gsea_status(report_dir, status_data)
     finally:
+        if temporary_input:
+            de_file.unlink(missing_ok=True)
         lock.release()
         _report_gsea_locks.pop(str(report_dir), None)
 
@@ -647,14 +776,6 @@ async def run_report_gsea(share_token: str, request: ReportGseaRunRequest):
     permutations = request.permutations
     _validate_comparisons(report_dir, [comparison])
 
-    results_dir = report_dir / "results"
-    de_file = results_dir / f"Diff_Expression_{comparison}.tsv"
-    if not de_file.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Differential expression file not found: {de_file.name}",
-        )
-
     lock_key = str(report_dir)
     if lock_key not in _report_gsea_locks:
         _report_gsea_locks[lock_key] = asyncio.Lock()
@@ -665,6 +786,21 @@ async def run_report_gsea(share_token: str, request: ReportGseaRunRequest):
             status_code=409,
             detail="A GSEA run is already in progress for this report",
         )
+
+    results_dir = report_dir / "results"
+    gsea_output_dir = results_dir / "gsea" / comparison
+    from app.services.differential_repository import DifferentialRepository
+
+    try:
+        repository = await asyncio.to_thread(DifferentialRepository, results_dir)
+        de_file = await asyncio.to_thread(
+            repository.export_comparison_tsv,
+            comparison,
+            gsea_output_dir / ".differential_input.tsv",
+        )
+        temporary_input = True
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
     await run_lock.acquire()
 
@@ -677,6 +813,8 @@ async def run_report_gsea(share_token: str, request: ReportGseaRunRequest):
             min_size=min_size,
             max_size=max_size,
             permutations=permutations,
+            de_file=de_file,
+            temporary_input=temporary_input,
             lock=run_lock,
         )
     )
@@ -828,9 +966,9 @@ async def get_report_gsea_heatmap(
     from app.api.routes.visualization import (
         VALID_GSEA_DATABASES,
         create_response,
-        gsea_service,
         load_gsea_results,
     )
+    from app.services.abundance_repository import AbundanceRepository
 
     if database not in VALID_GSEA_DATABASES:
         raise HTTPException(
@@ -856,22 +994,30 @@ async def get_report_gsea_heatmap(
 
     lead_genes = pathway.get("lead_genes", [])
     if not lead_genes:
-        return create_response({"genes": [], "samples": [], "z_scores": []})
-
-    import pandas as pd
-
-    protein_file = base_results_dir / "Protein_Abundances.tsv"
-    if not protein_file.exists():
-        return create_response({"genes": [], "samples": [], "z_scores": []})
+        return create_response(
+            {
+                "genes": [],
+                "protein_accessions": [],
+                "samples": [],
+                "conditions": [],
+                "replicates": [],
+                "z_scores": [],
+                "log2_abundances": [],
+            }
+        )
 
     try:
-        protein_df = await asyncio.to_thread(pd.read_csv, protein_file, sep="\t")
-    except Exception:
-        return create_response({"genes": [], "samples": [], "z_scores": []})
-
-    heatmap_data = gsea_service.generate_heatmap_data(protein_df, lead_genes)
-    if heatmap_data is None:
-        return create_response({"genes": [], "samples": [], "z_scores": []})
+        repository = await asyncio.to_thread(AbundanceRepository, base_results_dir)
+        effective_comparison = comparison or await asyncio.to_thread(
+            repository.first_comparison_id
+        )
+        heatmap_data = await asyncio.to_thread(
+            repository.get_gene_heatmap,
+            genes=lead_genes,
+            comparison_id=effective_comparison,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
     return create_response(heatmap_data)
 
@@ -886,6 +1032,7 @@ async def _report_background_bionet_run(
     report_dir: Path,
     request_body: dict,
     de_file: Path,
+    temporary_input: bool,
     lock: asyncio.Lock,
 ) -> None:
     from app.services.bionet_service import bionet_service
@@ -950,6 +1097,8 @@ async def _report_background_bionet_run(
         status_data["error"] = str(e)
         await write_json_file(status_file, status_data, indent=2, default=str)
     finally:
+        if temporary_input:
+            de_file.unlink(missing_ok=True)
         lock.release()
         _report_bionet_locks.pop(str(report_dir), None)
 
@@ -962,14 +1111,6 @@ async def run_report_bionet(share_token: str, request: ReportBioNetRunRequest):
     comparison = request.comparison
     _validate_comparisons(report_dir, [comparison])
 
-    results_dir = report_dir / "results"
-    de_file = results_dir / f"Diff_Expression_{comparison}.tsv"
-    if not de_file.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Differential expression file not found: {de_file.name}",
-        )
-
     lock_key = str(report_dir)
     if lock_key not in _report_bionet_locks:
         _report_bionet_locks[lock_key] = asyncio.Lock()
@@ -981,6 +1122,20 @@ async def run_report_bionet(share_token: str, request: ReportBioNetRunRequest):
             detail="A BioNet analysis is already running for this report",
         )
 
+    results_dir = report_dir / "results"
+    from app.services.differential_repository import DifferentialRepository
+
+    try:
+        repository = await asyncio.to_thread(DifferentialRepository, results_dir)
+        de_file = await asyncio.to_thread(
+            repository.export_comparison_tsv,
+            comparison,
+            report_dir / "bionet" / ".differential_input.tsv",
+        )
+        temporary_input = True
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
     await run_lock.acquire()
 
     task = asyncio.create_task(
@@ -989,6 +1144,7 @@ async def run_report_bionet(share_token: str, request: ReportBioNetRunRequest):
             report_dir=report_dir,
             request_body=body,
             de_file=de_file,
+            temporary_input=temporary_input,
             lock=run_lock,
         )
     )
@@ -1039,24 +1195,35 @@ async def get_report_protein_abundance(
     share_token: str,
     protein_id: str,
     comparison: str = Query(""),
+    layer: str = Query("protein"),
+    point_budget: int = Query(100_000, ge=0, le=500_000),
 ):
     """Get protein abundance data, optionally filtered by comparison."""
-    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     if comparison:
         _validate_comparisons(report_dir, [comparison])
     results_dir = report_dir / "results"
-    session_data = await asyncio.to_thread(get_report_session, report_id)
-    sample_filter = _build_sample_filter_from_session(session_data, comparison)
-
     from app.api.routes.visualization import create_response
-    from app.api.routes.visualization_proteins import load_protein_abundance
+    from app.services.abundance_repository import AbundanceRepository
 
-    data = await load_protein_abundance(
-        results_dir,
-        protein_id,
-        report_id,
-        sample_filter=sample_filter,
+    try:
+        repository = await asyncio.to_thread(AbundanceRepository, results_dir)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    effective_comparison = comparison or await asyncio.to_thread(
+        repository.first_comparison_id
     )
+    try:
+        data = await asyncio.to_thread(
+            repository.get_summary,
+            entity="protein",
+            protein_accession=protein_id,
+            comparison_id=effective_comparison,
+            result_layer=layer,
+            point_budget=point_budget,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return create_response(data)
 
 
@@ -1065,24 +1232,35 @@ async def get_report_protein_peptide(
     share_token: str,
     protein_id: str,
     comparison: str = Query(""),
+    layer: str = Query("protein"),
+    point_budget: int = Query(100_000, ge=0, le=500_000),
 ):
     """Get peptide abundance data for a protein."""
-    report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
     if comparison:
         _validate_comparisons(report_dir, [comparison])
     results_dir = report_dir / "results"
-    session_data = await asyncio.to_thread(get_report_session, report_id)
-    sample_filter = _build_sample_filter_from_session(session_data, comparison)
-
     from app.api.routes.visualization import create_response
-    from app.api.routes.visualization_proteins import load_peptide_abundance
+    from app.services.abundance_repository import AbundanceRepository
 
-    data = await load_peptide_abundance(
-        results_dir,
-        protein_id,
-        report_id,
-        sample_filter=sample_filter,
+    try:
+        repository = await asyncio.to_thread(AbundanceRepository, results_dir)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    effective_comparison = comparison or await asyncio.to_thread(
+        repository.first_comparison_id
     )
+    try:
+        data = await asyncio.to_thread(
+            repository.get_summary,
+            entity="peptide",
+            protein_accession=protein_id,
+            comparison_id=effective_comparison,
+            result_layer=layer,
+            point_budget=point_budget,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return create_response(data)
 
 
@@ -1393,6 +1571,50 @@ def _run_report_comparison_correlation(report_dir: Path, body: dict) -> None:
         )
 
 
+def _run_report_scalable_comparison_correlation(
+    report_id: str, report_dir: Path, _body: dict
+) -> None:
+    """Build the report snapshot's complete resumable Pearson artifact."""
+    from app.services.comparison_correlation import (
+        build_comparison_correlation_artifact,
+    )
+
+    compute_type = "comparison-correlation"
+    started_at = _report_compare_read_status(report_dir, compute_type).get("started_at")
+
+    def update_progress(completed: int, total: int) -> None:
+        _report_compare_write_status(
+            report_dir,
+            compute_type,
+            {
+                "status": "running",
+                "method": "pearson",
+                "started_at": started_at,
+                "progress": {"completed": completed, "total": total},
+            },
+        )
+
+    metadata = build_comparison_correlation_artifact(
+        report_dir / "results",
+        progress_callback=update_progress,
+        cancel_requested=lambda: task_manager.is_cancel_requested(
+            _report_task_key(report_id)
+        ),
+    )
+    _report_compare_write_status(
+        report_dir,
+        compute_type,
+        {
+            "status": "completed",
+            "method": "pearson",
+            "comparison_count": metadata["comparison_count"],
+            "feature_count": metadata["feature_count"],
+            "started_at": started_at,
+            "completed_at": datetime.now(UTC).isoformat(),
+        },
+    )
+
+
 async def _schedule_report_background(coro) -> asyncio.Task:
     task = asyncio.create_task(coro)
     _report_background_tasks.add(task)
@@ -1407,20 +1629,29 @@ async def _run_report_compute_task(
     body: dict,
 ) -> None:
     """Run one report comparison job through the global compute queue."""
-    runner = (
-        _run_report_protein_correlation
-        if compute_type == "protein-correlation"
-        else _run_report_comparison_correlation
+    scalable = (
+        compute_type == "comparison-correlation"
+        and _report_pipeline(report_dir) in {"msstats", "msqrob2"}
+        and (report_dir / "results" / "differential_results.parquet").is_file()
+        and (report_dir / "results" / "comparison_catalog.parquet").is_file()
     )
+    if scalable:
+        runner = _run_report_scalable_comparison_correlation
+        runner_args = (report_id, report_dir, body)
+    elif compute_type == "protein-correlation":
+        runner = _run_report_protein_correlation
+        runner_args = (report_dir, body)
+    else:
+        runner = _run_report_comparison_correlation
+        runner_args = (report_dir, body)
     try:
         await task_manager.submit(
             _report_task_key(report_id),
             TaskKind.COMPUTE,
             runner,
-            report_dir,
-            body,
+            *runner_args,
             label=f"Shared report: {compute_type}",
-            timeout_seconds=10 * 60,
+            timeout_seconds=24 * 60 * 60 if scalable else 10 * 60,
         )
     except TaskCancelledError:
         await asyncio.to_thread(
@@ -1597,12 +1828,133 @@ async def get_report_comparison_correlation_status(share_token: str):
 async def get_report_comparison_correlation_results(share_token: str):
     """Return comparison-correlation results."""
     _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
-    rp = _report_compare_result_path(report_dir, "comparison-correlation")
-    if not rp.exists():
+    pipeline = _report_pipeline(report_dir)
+    if pipeline == "ptm":
+        rp = _report_compare_result_path(report_dir, "comparison-correlation")
+        if not rp.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="No comparison correlation results available",
+            )
+        return await read_json_file(rp)
+    if pipeline not in {"msstats", "msqrob2"}:
         raise HTTPException(
-            status_code=404, detail="No comparison correlation results available"
+            status_code=409,
+            detail="Visualization data must be reprocessed for this report",
         )
-    return await read_json_file(rp)
+    from app.services.comparison_correlation import ComparisonCorrelationArtifact
+
+    try:
+        artifact = await asyncio.to_thread(
+            ComparisonCorrelationArtifact, report_dir / "results"
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return artifact.public_metadata()
+
+
+async def _report_correlation_artifact_or_404(
+    share_token: str,
+):
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    if _report_pipeline(report_dir) == "ptm":
+        raise HTTPException(
+            status_code=404,
+            detail="PTM Compare uses its existing workflow",
+        )
+    from app.services.comparison_correlation import ComparisonCorrelationArtifact
+
+    try:
+        return await asyncio.to_thread(
+            ComparisonCorrelationArtifact, report_dir / "results"
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@shared_router.get("/shared-reports/{share_token}/compare/comparison-correlation/tile")
+async def get_report_comparison_correlation_tile(
+    share_token: str,
+    level: int = Query(..., ge=0),
+    row: int = Query(..., ge=0),
+    column: int = Query(..., ge=0),
+):
+    artifact = await _report_correlation_artifact_or_404(share_token)
+    try:
+        return await asyncio.to_thread(
+            artifact.get_tile, level=level, row=row, column=column
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@shared_router.get("/shared-reports/{share_token}/compare/comparison-correlation/cell")
+async def get_report_comparison_correlation_cell(
+    share_token: str,
+    row: int = Query(..., ge=0),
+    column: int = Query(..., ge=0),
+):
+    artifact = await _report_correlation_artifact_or_404(share_token)
+    try:
+        return await asyncio.to_thread(artifact.get_cell, row, column)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@shared_router.get(
+    "/shared-reports/{share_token}/compare/comparison-correlation/lookup"
+)
+async def lookup_report_comparison_correlation(
+    share_token: str,
+    comparison: ComparisonName,
+    limit: int = Query(20, ge=1, le=100),
+):
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    _validate_comparisons(report_dir, [comparison])
+    artifact = await _report_correlation_artifact_or_404(share_token)
+    try:
+        return await asyncio.to_thread(
+            artifact.lookup_reference, comparison, limit=limit
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@shared_router.get(
+    "/shared-reports/{share_token}/compare/comparison-correlation/spearman"
+)
+async def get_report_comparison_spearman(
+    share_token: str,
+    left: ComparisonName,
+    right: ComparisonName,
+):
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    _validate_comparisons(report_dir, [left, right])
+    artifact = await _report_correlation_artifact_or_404(share_token)
+    try:
+        return await asyncio.to_thread(artifact.get_spearman, left, right)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@shared_router.post(
+    "/shared-reports/{share_token}/compare/comparison-correlation/detail"
+)
+async def get_report_comparison_fold_change_detail(
+    share_token: str, request: ReportComparisonDetailRequest
+):
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    _validate_comparisons(report_dir, request.comparisons)
+    artifact = await _report_correlation_artifact_or_404(share_token)
+    try:
+        return await asyncio.to_thread(
+            artifact.get_fold_change_detail,
+            request.comparisons,
+            protein_ids=request.proteins,
+            max_proteins=request.max_proteins,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @shared_router.post("/shared-reports/{share_token}/compare/venn")

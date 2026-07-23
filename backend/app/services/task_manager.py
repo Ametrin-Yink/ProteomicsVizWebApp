@@ -332,6 +332,11 @@ class TaskManager:
         self._write_task_status(session_id)
         return cancelled
 
+    def is_cancel_requested(self, session_id: str) -> bool:
+        """Let cooperative worker code stop between bounded compute blocks."""
+        event = self._cancel_events.get(session_id)
+        return bool(event and event.is_set())
+
     def _kill_r_processes(self, session_id: str) -> None:
         """Kill only the R subprocesses owned by one session."""
         try:

@@ -112,7 +112,7 @@ class TestStepMsstatsBatched:
             mock_msstats.group_comparison_multi.assert_called_once()
             mock_msstats.group_comparison_batched.assert_not_called()
 
-    def test_legacy_treatment_control_comparison_records_result(
+    def test_treatment_control_comparison_records_consolidated_result(
         self, mock_msstats, tmp_path
     ):
         """Legacy treatment/control config completes without group-key errors."""
@@ -125,6 +125,4 @@ class TestStepMsstatsBatched:
 
             asyncio.run(step_msstats_group_comparison(ctx))
 
-        assert ctx.result.diff_expression_path.endswith(
-            "Diff_Expression_Drug_vs_Control.tsv"
-        )
+        assert ctx.result.diff_expression_path.endswith("Differential_Results_Long.tsv")

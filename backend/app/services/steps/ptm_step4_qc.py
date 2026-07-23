@@ -12,6 +12,19 @@ from app.services.ptm_qc_calculator import (
     calculate_protein_qc_plots,
     calculate_ptm_qc_plots,
 )
+from app.services.visualization_artifacts import (
+    COMPARISON_CATALOG,
+    DIFFERENTIAL_ARTIFACT,
+    PEPTIDE_ARTIFACT,
+    PROTEIN_ARTIFACT,
+    QC_COMPARISON_METRICS,
+    QC_GROUP_METRICS,
+    QC_PCA,
+    QC_SAMPLE_METRICS,
+    SAMPLE_CATALOG,
+    VISUALIZATION_MANIFEST,
+    materialize_visualization_artifacts,
+)
 
 
 def _load_json(path: Path | None) -> dict:
@@ -98,6 +111,13 @@ async def step_ptm_qc_metrics(ctx: StepContext) -> None:
         [{"Parameter": key, "Value": value} for key, value in parameters.items()]
     ).to_csv(parameters_tsv, sep="\t", index=False)
 
+    await asyncio.to_thread(
+        materialize_visualization_artifacts,
+        ctx.results_dir,
+        config=ctx.config,
+        pipeline=ctx.config.pipeline.value,
+    )
+
     candidates = [
         ctx.step_outputs.get("ptm_results_path"),
         ctx.step_outputs.get("protein_results_path"),
@@ -108,6 +128,16 @@ async def step_ptm_qc_metrics(ctx: StepContext) -> None:
         ctx.step_outputs.get("abundance_path"),
         ctx.results_dir / "ptm_site_summarized.tsv",
         ctx.results_dir / "protein_summarized.tsv",
+        ctx.results_dir / PROTEIN_ARTIFACT,
+        ctx.results_dir / PEPTIDE_ARTIFACT,
+        ctx.results_dir / SAMPLE_CATALOG,
+        ctx.results_dir / COMPARISON_CATALOG,
+        ctx.results_dir / DIFFERENTIAL_ARTIFACT,
+        ctx.results_dir / QC_SAMPLE_METRICS,
+        ctx.results_dir / QC_GROUP_METRICS,
+        ctx.results_dir / QC_COMPARISON_METRICS,
+        ctx.results_dir / QC_PCA,
+        ctx.results_dir / VISUALIZATION_MANIFEST,
         qc_tsv,
         parameters_tsv,
     ]

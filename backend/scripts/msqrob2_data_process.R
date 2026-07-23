@@ -214,6 +214,61 @@ if (tolower(config$imputation) != "none") {
 cat(sprintf("[TIMING] impute_done %s", Sys.time()), "\n", file=stderr())
 flush.console()
 
+# Export the exact processed peptide assay before optional intermediate assays
+# are removed. Write one sample at a time to keep peak memory bounded.
+original_peptide_matrix <- assay(pe[["peptideLog"]])
+processed_peptide_matrix <- assay(pe[[agg_input]])
+peptide_proteins <- as.character(rowData(pe[[agg_input]])$Proteins)
+peptide_ids <- rownames(pe[[agg_input]])
+processed_samples <- colnames(processed_peptide_matrix)
+processed_feature_output <- file.path(dirname(output_file), "peptide_processed_long.tsv")
+if (file.exists(processed_feature_output)) file.remove(processed_feature_output)
+
+sample_condition <- function(sample_name, metadata) {
+    for (fname in names(metadata)) {
+        entry <- metadata[[fname]]
+        condition_keys <- grep("^condition_", names(entry), value = TRUE)
+        condition_values <- as.character(unlist(entry[condition_keys]))
+        condition_values <- condition_values[nzchar(condition_values)]
+        if (length(condition_values) > 0 &&
+            all(vapply(condition_values, function(value) {
+                grepl(paste0("(^|_)", value, "($|_)"), sample_name)
+            }, logical(1)))) {
+            return(paste(condition_values, collapse = "+"))
+        }
+    }
+    sub("_[^_]+$", "", sample_name)
+}
+
+for (sample_index in seq_along(processed_samples)) {
+    sample_name <- processed_samples[sample_index]
+    processed_values <- processed_peptide_matrix[, sample_index]
+    observed_values <- original_peptide_matrix[, sample_index]
+    provenance <- ifelse(is.na(processed_values), "missing",
+                         ifelse(is.na(observed_values), "imputed", "observed"))
+    feature_chunk <- data.table(
+        ProteinAccession = peptide_proteins,
+        GeneName = NA_character_,
+        PeptideId = peptide_ids,
+        SampleId = sample_name,
+        Condition = sample_condition(sample_name, metadata),
+        Replicate = sub("^.*_", "", sample_name),
+        ProcessedLog2Abundance = as.numeric(processed_values),
+        Provenance = provenance,
+        ResultLayer = "protein"
+    )
+    fwrite(
+        feature_chunk,
+        processed_feature_output,
+        sep = "\t",
+        na = "NA",
+        append = sample_index > 1,
+        col.names = sample_index == 1
+    )
+}
+cat("Processed peptide visualization export saved\n")
+flush.console()
+
 # ==========================================================================
 # Aggregate peptides to protein
 # ==========================================================================

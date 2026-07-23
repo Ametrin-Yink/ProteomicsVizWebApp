@@ -3,8 +3,7 @@
 # MSstats Multi-Condition Group Comparison (Step 7 - MSstats multi-condition pipeline)
 #
 # Loads processed data from dataProcess step, builds full contrast matrix,
-# runs groupComparison, and outputs one Diff_Expression_<treatment>_vs_<control>.tsv
-# per comparison.
+# runs groupComparison, and outputs one long differential-result table per R job.
 #
 # Usage: Rscript msstats_group_comparison_multi.R <rds_file> <output_dir>
 #        <comparisons_json> <covariates_json> <gene_mapping_file> <config_json>
@@ -37,6 +36,7 @@ config <- fromJSON(config_json)
 log_base        <- if (!is.null(config$log_base)) as.numeric(config$log_base) else 2
 num_cores       <- if (!is.null(config$numberOfCores)) as.integer(config$numberOfCores) else 1
 save_fitted_models <- if (!is.null(config$save_fitted_models)) as.logical(config$save_fitted_models) else TRUE
+output_shard <- if (!is.null(config$output_shard)) as.integer(config$output_shard) else NULL
 
 cat("Step 7: Running multi-condition differential expression with MSstats\n")
 cat("Arguments received:", length(args), "\n")
@@ -442,7 +442,7 @@ if (!is.null(converted$quantificationData) && "ProteinName" %in% names(converted
 }
 
 # Reorder columns
-col_order <- c("Master_Protein_Accessions", "Gene_Name", "PSM_Count", "logFC", "pval", "adjPval", "se")
+col_order <- c("Label", "Master_Protein_Accessions", "Gene_Name", "PSM_Count", "logFC", "pval", "adjPval", "se")
 cols_present <- intersect(col_order, names(comparison_result))
 other_cols <- setdiff(names(comparison_result), cols_present)
 comparison_result <- comparison_result[, c(cols_present, other_cols)]
@@ -450,37 +450,21 @@ comparison_result <- comparison_result[, c(cols_present, other_cols)]
 # Ensure output directory exists
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
-# Split results by Label (comparison name) and write per-comparison files
-cat("\nWriting per-comparison results...\n")
-labels <- unique(comparison_result$Label)
-for (label in labels) {
-    subset_result <- comparison_result[comparison_result$Label == label, ]
-    # Build output filename: Diff_Expression_<treatment>_vs_<control>.tsv
-    out_file <- file.path(output_dir, paste0("Diff_Expression_", label, ".tsv"))
-
-    # Remove the Label column from output (redundant with filename)
-    if ("Label" %in% names(subset_result)) {
-        subset_result$Label <- NULL
-    }
-
-    cat("Writing:", out_file, "(", nrow(subset_result), "proteins)\n")
-    write.table(
-        subset_result,
-        file = out_file,
-        sep = "\t",
-        row.names = FALSE,
-        quote = FALSE
-    )
-
-    # Print summary
-    cat("  Total proteins:", nrow(subset_result), "\n")
-    if ("adjPval" %in% names(subset_result)) {
-        cat("  Significant (adjPval < 0.05):", sum(subset_result$adjPval < 0.05, na.rm = TRUE), "\n")
-    }
-    if ("logFC" %in% names(subset_result)) {
-        cat("  Upregulated:", sum(subset_result$logFC > 0 & subset_result$adjPval < 0.05, na.rm = TRUE), "\n")
-        cat("  Downregulated:", sum(subset_result$logFC < 0 & subset_result$adjPval < 0.05, na.rm = TRUE), "\n")
-    }
+# Keep comparison rows consolidated so 10,000 comparisons do not create 10,000 files.
+out_name <- if (is.null(output_shard)) {
+    "Differential_Results_Long.tsv"
+} else {
+    sprintf("Differential_Results_Shard_%05d.tsv", output_shard)
 }
+out_file <- file.path(output_dir, out_name)
+cat("\nWriting consolidated results:", out_file, "(", nrow(comparison_result), "rows)\n")
+write.table(
+    comparison_result,
+    file = out_file,
+    sep = "\t",
+    row.names = FALSE,
+    quote = FALSE,
+    na = "NA"
+)
 
 cat("\nStep 7 complete: MSstats multi-condition differential expression analysis finished successfully\n")

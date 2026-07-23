@@ -36,9 +36,10 @@ def _write_protein_abundance_tsv(results_dir: Path) -> pd.DataFrame:
 
 
 def _write_diff_expression_tsv(results_dir: Path, label: str) -> pd.DataFrame:
-    """Write a realistic Diff_Expression_*.tsv for R step mock."""
+    """Write a realistic consolidated differential table for the R step mock."""
     df = pd.DataFrame(
         {
+            "Label": [label, label],
             "Master_Protein_Accessions": ["P00001", "P00003"],
             "Gene_Name": ["GENE1", "GENE3"],
             "logFC": [2.0, 0.0],
@@ -46,7 +47,7 @@ def _write_diff_expression_tsv(results_dir: Path, label: str) -> pd.DataFrame:
             "adjPval": [0.005, 0.6],
         }
     )
-    out = results_dir / f"Diff_Expression_{label}.tsv"
+    out = results_dir / "Differential_Results_Long.tsv"
     df.to_csv(out, sep="\t", index=False)
     return df
 
@@ -166,7 +167,7 @@ class TestTMTFullChainDuckDB:
             await step_msstats_group_comparison(ctx)
 
         assert ctx.result.significant_proteins > 0
-        assert (results_dir / f"Diff_Expression_{_COMPARISON_LABEL}.tsv").exists()
+        assert (results_dir / "Differential_Results_Long.tsv").exists()
 
         # Stage 6: QC metrics
         await step_qc_metrics(ctx)

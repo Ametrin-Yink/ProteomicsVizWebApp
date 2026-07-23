@@ -30,6 +30,8 @@ New configuration fields must exist in `SessionConfig` and `AnalysisConfig`, be 
 
 Key PTM routes provide result layers, ZIP download, comparison summaries, site evidence/abundance, and QC below both live session and copied shared-report prefixes. `/qc/plots` is the canonical QC suffix; do not introduce `/qc/data`.
 
+The PTM protein layer uses the shared protein information panel. Protein and peptide abundance loaders accept PTM's long-form summarized artifacts, and comparison-scoped plots include only the two complete condition groups in the active contrast.
+
 ## Zustand ownership
 
 | Store | Ownership |
@@ -40,6 +42,8 @@ Key PTM routes provide result layers, ZIP download, comparison summaries, site e
 | `ui-store.ts` | Toasts, dialogs, and transient UI state |
 
 Components select only the state they need and mutate through store actions. Do not duplicate derived values or mix domains. Page reload and session switching must recover from persisted backend/session state rather than assume an uninterrupted wizard.
+
+Visualization pages synchronize the sidebar's current session and Active/Completed tab from the `session_id` (or legacy `session`) query parameter. QC views initialize an empty comparison selection from the first comparison returned by the session configuration.
 
 Abort or disregard stale requests so an old session/report response cannot overwrite the current selection. WebSocket consumers must handle reconnects, status reconciliation, completion, error, and cancellation without duplicating events.
 
@@ -53,3 +57,9 @@ Reusable visualization components consume data source and permissions from `ApiP
 - Permission checks use `canPersistVisualizationState`; they never parse pathname or identifier shape.
 
 The visualization manifest and pipeline determine navigation. Protein shared reports may expose bounded on-demand modules. PTM shared reports expose Volcano and QC, while read-only endpoints also provide layers, site details, and downloads.
+
+Current visualization sessions and reports are manifest-gated. Protein abundance, peptide abundance, differential results, QC catalogs, GSEA heatmaps, BioNet inputs, and DIA/TMT comparison correlation read canonical Parquet through bounded repositories. There is no runtime fallback to pre-contract abundance, differential-result, or QC TSV/JSON payloads; the API returns `409` and the UI offers Reprocess.
+
+`/qc/plots` returns scalar analysis-summary fields only. `/visualization/qc/overview` returns at most 50 searched condition or batch groups plus precomputed PCA coordinates; `/visualization/qc/samples` is cursor-paginated; `/visualization/qc/differential` scopes its histogram and counts to one comparison. The 50-group maximum is a chart viewport limit, not a condition limit. Every condition remains in the artifact and is available through server search.
+
+Volcano requests accept up to 100,000 rows for one comparison and render with WebGL. Comparison selectors remain cursor-paginated rather than embedding all 10,000 options. DIA/TMT comparison correlation exposes metadata, bounded tiles, exact cells, reference lookups, and selected detail instead of one full JSON matrix. PTM Compare retains its existing workflow in this implementation cycle.

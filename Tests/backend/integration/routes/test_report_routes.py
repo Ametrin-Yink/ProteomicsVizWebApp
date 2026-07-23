@@ -73,9 +73,9 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
 
     results_dir = session_dir / "results"
     results_dir.mkdir(parents=True)
-    (results_dir / "Diff_Expression_Trt_vs_Ctrl.tsv").write_text(
-        "Master_Protein_Accessions\tGene_Name\tlogFC\tpval\tadjPval\tPSM_Count\n"
-        "P12345\tGENE1\t2.5\t0.001\t0.01\t10\n"
+    (results_dir / "Differential_Results_Long.tsv").write_text(
+        "Label\tMaster_Protein_Accessions\tGene_Name\tlogFC\tpval\tadjPval\tPSM_Count\n"
+        "Trt_vs_Ctrl\tP12345\tGENE1\t2.5\t0.001\t0.01\t10\n"
     )
     (results_dir / "Protein_Abundances.tsv").write_text(
         "Master_Protein_Accessions\tGene_Name\tPSM_Count\tS1\tS2\n"
@@ -84,6 +84,24 @@ def make_completed_session_with_files(sessions_dir: Path, session_id: str):
     (results_dir / "QC_Results.json").write_text('{"pca": {"pc1": [1,2,3]}}')
     (results_dir / "PSM_Abundances.tsv").write_text(
         "Sequence\tS1\tS2\nPEPTIDE\t100\t200\n"
+    )
+
+    from app.models.analysis import AnalysisConfig, PipelineTool
+    from app.services.visualization_artifacts import (
+        materialize_visualization_artifacts,
+    )
+
+    materialize_visualization_artifacts(
+        results_dir,
+        config=AnalysisConfig(
+            pipeline=PipelineTool.MSQROB2,
+            comparisons=[{"group1": {"C": "Trt"}, "group2": {"C": "Ctrl"}}],
+            metadata={
+                "S1": {"C": "Ctrl", "replicate": "1"},
+                "S2": {"C": "Trt", "replicate": "1"},
+            },
+        ),
+        pipeline="msqrob2",
     )
 
     gsea_dir = results_dir / "gsea" / "Trt_vs_Ctrl"
@@ -349,6 +367,59 @@ def test_shared_compute_requests_are_bounded_and_report_scoped(client):
         },
     )
     assert response.status_code == 400
+
+
+def test_non_ptm_report_does_not_fallback_to_legacy_comparison_json(client):
+    from app.services.report_store import get_report_dir
+
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
+    session_id = str(uuid.uuid4())
+    make_completed_session_with_files(sessions_dir, session_id)
+    generated = client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "Canonical Compare Report"},
+    ).json()
+    report_dir = get_report_dir(generated["report_id"])
+    assert report_dir is not None
+    compare_dir = report_dir / "results" / "compare"
+    compare_dir.mkdir(parents=True, exist_ok=True)
+    (compare_dir / "comparison-correlation_result.json").write_text(
+        '{"legacy": true}', encoding="utf-8"
+    )
+
+    response = client.get(
+        f"/api/shared-reports/{generated['share_token']}"
+        "/compare/comparison-correlation"
+    )
+
+    assert response.status_code == 404
+
+
+def test_ptm_report_keeps_existing_comparison_workflow(client):
+    from app.services.report_store import get_report_dir
+
+    sessions_dir = client.app.state.session_manager.session_store.sessions_dir
+    session_id = str(uuid.uuid4())
+    make_completed_ptm_session(sessions_dir, session_id)
+    generated = client.post(
+        f"/api/sessions/{session_id}/reports/generate",
+        json={"name": "PTM Compare Report"},
+    ).json()
+    report_dir = get_report_dir(generated["report_id"])
+    assert report_dir is not None
+    compare_dir = report_dir / "results" / "compare"
+    compare_dir.mkdir(parents=True, exist_ok=True)
+    (compare_dir / "comparison-correlation_result.json").write_text(
+        '{"workflow": "ptm"}', encoding="utf-8"
+    )
+
+    response = client.get(
+        f"/api/shared-reports/{generated['share_token']}"
+        "/compare/comparison-correlation"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"workflow": "ptm"}
 
 
 def test_report_survives_session_deletion(client):

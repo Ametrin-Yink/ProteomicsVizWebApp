@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import type { QCData } from '@/types/api';
+import type { QCData, QCDifferentialData, QCOverviewData } from '@/types/api';
 import { transformPCARowBased } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { Maximize2, Download } from 'lucide-react';
@@ -38,10 +38,17 @@ function LazyPlot({ plotId, ...plotProps }: React.ComponentProps<typeof Plot> & 
 
 interface QCPlotsProps {
   data: QCData;
+  overview?: QCOverviewData | null;
+  differential?: QCDifferentialData | null;
   conditionList?: string[];
   selectedComparison: string;
   onComparisonChange: (value: string) => void;
   comparisonOptions: Array<{ value: string; label: string }>;
+  onComparisonSearch?: (value: string) => void;
+  groupBy: 'condition' | 'batch';
+  onGroupByChange?: (value: 'condition' | 'batch') => void;
+  groupSearch?: string;
+  onGroupSearch?: (value: string) => void;
   labels?: {
     psm: string;
     entity: string;
@@ -155,10 +162,17 @@ function normalizeBoxData(
 
 export default function QCPlots({
   data,
+  overview,
+  differential,
   conditionList,
   selectedComparison,
   onComparisonChange,
   comparisonOptions,
+  onComparisonSearch,
+  groupBy,
+  onGroupByChange,
+  groupSearch = '',
+  onGroupSearch,
   labels = { psm: 'PSM', entity: 'Protein' },
 }: QCPlotsProps) {
   // Build a deterministic condition→color map from the condition list
@@ -181,6 +195,41 @@ export default function QCPlots({
   }, [conditionColors]);
 
   const pcaPlot = useMemo(() => {
+    if (overview?.pca.length) {
+      const conditionGroups: Record<string, typeof overview.pca> = {};
+      overview.pca.forEach((point) => {
+        (conditionGroups[point.condition] ??= []).push(point);
+      });
+      const traces = Object.entries(conditionGroups).map(([condition, points]) => ({
+        x: points.map((point) => point.pc1),
+        y: points.map((point) => point.pc2),
+        mode: 'markers' as const,
+        type: 'scattergl' as const,
+        name: condition,
+        text: points.map((point) => point.sample_id),
+        marker: { size: 8, color: getConditionColor(condition) },
+        hovertemplate: '<b>%{text}</b><br>PC1: %{x:.3f}<br>PC2: %{y:.3f}<extra></extra>',
+      }));
+      return {
+        traces,
+        layout: {
+          title: { text: 'PCA of processed model input', font: { size: 14, color: '#111827' } },
+          xaxis: {
+            title: { text: overview.pc1_variance == null ? 'PC1' : `PC1 (${overview.pc1_variance.toFixed(1)}%)` },
+            gridcolor: '#E5E7EB',
+            zeroline: true,
+          },
+          yaxis: {
+            title: { text: overview.pc2_variance == null ? 'PC2' : `PC2 (${overview.pc2_variance.toFixed(1)}%)` },
+            gridcolor: '#E5E7EB',
+            zeroline: true,
+          },
+          showlegend: true,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 50, r: 30, t: 50, b: 70 },
+        },
+      };
+    }
     if (!data.pca) return null;
 
     const rowData = transformPCARowBased(
@@ -239,18 +288,18 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.pca, getConditionColor]);
+  }, [data.pca, getConditionColor, overview]);
 
   const pvalueDistPlot = useMemo(() => {
-    const pvDist = selectedComparison && data.pvalue_distributions
+    const pvDist = differential?.pvalue_distribution ?? (selectedComparison && data.pvalue_distributions
       ? data.pvalue_distributions[selectedComparison]
-      : data.pvalue_distribution;
+      : data.pvalue_distribution);
     if (!pvDist) return null;
 
     const trace = {
-      x: pvDist.bins.slice(0, -1).map((bin, i) =>
-        (bin + pvDist.bins[i + 1]) / 2
-      ),
+      x: pvDist.bins.length === pvDist.counts.length
+        ? pvDist.bins.map((bin) => bin + 0.025)
+        : pvDist.bins.slice(0, -1).map((bin, i) => (bin + pvDist.bins[i + 1]) / 2),
       y: pvDist.counts,
       type: 'bar' as const,
       marker: {
@@ -278,9 +327,87 @@ export default function QCPlots({
     };
 
     return { traces: [trace], layout };
-  }, [data.pvalue_distribution, data.pvalue_distributions, selectedComparison]);
+  }, [data.pvalue_distribution, data.pvalue_distributions, differential, selectedComparison]);
+
+  const groupAbundancePlot = useMemo(() => {
+    if (!overview?.groups.length) return null;
+    const traces = overview.groups.map((group) => {
+      const color = getConditionColor(group.group_value);
+      return {
+        x: [group.group_value],
+        q1: [group.q1],
+        median: [group.median],
+        q3: [group.q3],
+        type: 'box' as const,
+        name: group.group_value,
+        boxpoints: false,
+        line: { color },
+        fillcolor: `${color}55`,
+        hovertemplate: '<b>%{x}</b><br>Q1: %{q1:.3f}<br>Median: %{median:.3f}<br>Q3: %{q3:.3f}<extra></extra>',
+      };
+    });
+    return {
+      traces,
+      layout: {
+        title: { text: `Processed abundance by ${overview.group_by}`, font: { size: 14, color: '#111827' } },
+        xaxis: { title: { text: overview.group_by }, automargin: true },
+        yaxis: { title: { text: 'Normalized log2 abundance' }, gridcolor: '#E5E7EB' },
+        boxmode: 'group' as const,
+        showlegend: false,
+        plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+        margin: { l: 60, r: 30, t: 50, b: 100 },
+      },
+    };
+  }, [getConditionColor, overview]);
+
+  const provenancePlot = useMemo(() => {
+    if (!overview?.groups.length) return null;
+    const groups = overview.groups.map((group) => group.group_value);
+    return {
+      traces: [
+        { x: groups, y: overview.groups.map((group) => group.observed_count), name: 'Observed', type: 'bar' as const, marker: { color: '#10B981' } },
+        { x: groups, y: overview.groups.map((group) => group.imputed_count), name: 'Imputed', type: 'bar' as const, marker: { color: '#F59E0B' } },
+        { x: groups, y: overview.groups.map((group) => group.missing_count), name: 'Missing', type: 'bar' as const, marker: { color: '#EF4444' } },
+      ],
+      layout: {
+        title: { text: `Evidence provenance by ${overview.group_by}`, font: { size: 14, color: '#111827' } },
+        xaxis: { title: { text: overview.group_by }, automargin: true },
+        yaxis: { title: { text: 'Feature count' }, gridcolor: '#E5E7EB' },
+        barmode: 'stack' as const,
+        showlegend: true,
+        plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+        margin: { l: 60, r: 30, t: 50, b: 100 },
+      },
+    };
+  }, [overview]);
 
   const psmCVPlot = useMemo(() => {
+    if (overview) {
+      const groups = overview.groups.filter((group) => group.peptide_cv_median != null);
+      if (!groups.length) return null;
+      return {
+        traces: groups.map((group) => ({
+          x: [group.group_value],
+          q1: [group.peptide_cv_q1 as number],
+          median: [group.peptide_cv_median as number],
+          q3: [group.peptide_cv_q3 as number],
+          type: 'box' as const,
+          name: group.group_value,
+          boxpoints: false,
+          line: { color: getConditionColor(group.group_value) },
+          fillcolor: `${getConditionColor(group.group_value)}55`,
+          hovertemplate: '<b>%{x}</b><br>Q1: %{q1:.1f}%<br>Median: %{median:.1f}%<br>Q3: %{q3:.1f}%<extra></extra>',
+        })),
+        layout: {
+          title: { text: `${labels.psm} CVs by ${overview.group_by}`, font: { size: 14, color: '#111827' } },
+          xaxis: { title: { text: overview.group_by }, automargin: true },
+          yaxis: { title: { text: 'Coefficient of Variation (%)' }, gridcolor: '#E5E7EB' },
+          showlegend: false,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 60, r: 30, t: 50, b: 100 },
+        },
+      };
+    }
     if (!data.psm_cv) return null;
     const traces = normalizeBoxData(
       data.psm_cv, getConditionColor,
@@ -308,9 +435,35 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.psm_cv, getConditionColor, labels.psm]);
+  }, [data.psm_cv, getConditionColor, labels.psm, overview]);
 
   const proteinCVPlot = useMemo(() => {
+    if (overview) {
+      const groups = overview.groups.filter((group) => group.protein_cv_median != null);
+      if (!groups.length) return null;
+      return {
+        traces: groups.map((group) => ({
+          x: [group.group_value],
+          q1: [group.protein_cv_q1 as number],
+          median: [group.protein_cv_median as number],
+          q3: [group.protein_cv_q3 as number],
+          type: 'box' as const,
+          name: group.group_value,
+          boxpoints: false,
+          line: { color: getConditionColor(group.group_value) },
+          fillcolor: `${getConditionColor(group.group_value)}55`,
+          hovertemplate: '<b>%{x}</b><br>Q1: %{q1:.1f}%<br>Median: %{median:.1f}%<br>Q3: %{q3:.1f}%<extra></extra>',
+        })),
+        layout: {
+          title: { text: `${labels.entity} CVs by ${overview.group_by}`, font: { size: 14, color: '#111827' } },
+          xaxis: { title: { text: overview.group_by }, automargin: true },
+          yaxis: { title: { text: 'Coefficient of Variation (%)' }, gridcolor: '#E5E7EB' },
+          showlegend: false,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 60, r: 30, t: 50, b: 100 },
+        },
+      };
+    }
     if (!data.protein_cv) return null;
     const traces = normalizeBoxData(
       data.protein_cv, getConditionColor,
@@ -338,9 +491,10 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.protein_cv, getConditionColor, labels.entity]);
+  }, [data.protein_cv, getConditionColor, labels.entity, overview]);
 
   const psmIntensityPlot = useMemo(() => {
+    if (overview) return null;
     const boxData = data.intensity_distributions?.psm_boxplot;
     if (!boxData || Object.keys(boxData).length === 0) return null;
     const traces = normalizeBoxData(
@@ -371,9 +525,10 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.intensity_distributions?.psm_boxplot, getConditionColor, labels.psm]);
+  }, [data.intensity_distributions?.psm_boxplot, getConditionColor, labels.psm, overview]);
 
   const proteinIntensityPlot = useMemo(() => {
+    if (overview) return null;
     const boxData = data.intensity_distributions?.protein_boxplot;
     if (!boxData || Object.keys(boxData).length === 0) return null;
     const traces = normalizeBoxData(
@@ -404,9 +559,10 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.intensity_distributions?.protein_boxplot, getConditionColor, labels.entity]);
+  }, [data.intensity_distributions?.protein_boxplot, getConditionColor, labels.entity, overview]);
 
   const completenessPlot = useMemo(() => {
+    if (overview) return null;
     if (!data.data_completeness) return null;
 
     const samples = Object.keys(data.data_completeness);
@@ -454,9 +610,10 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.data_completeness, labels.entity]);
+  }, [data.data_completeness, labels.entity, overview]);
 
   const psmCompletenessPlot = useMemo(() => {
+    if (overview) return null;
     if (!data.psm_completeness) return null;
 
     const samples = Object.keys(data.psm_completeness);
@@ -504,7 +661,7 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.psm_completeness, labels.psm]);
+  }, [data.psm_completeness, labels.psm, overview]);
 
   const config = {
     displayModeBar: 'hover',
@@ -515,13 +672,47 @@ export default function QCPlots({
 
   const plots = [
     { id: 'pca', data: pcaPlot, title: 'PCA Analysis' },
-    { id: 'pvalue', data: pvalueDistPlot, title: 'P-value Distribution', showComparisonDropdown: true },
+    { id: 'group-abundance', data: groupAbundancePlot, title: 'Processed Abundance Distribution' },
+    { id: 'provenance', data: provenancePlot, title: 'Observed, Imputed, and Missing Evidence' },
+    { id: 'pvalue', data: pvalueDistPlot, title: 'P-value Distribution' },
     { id: 'psm-cv', data: psmCVPlot, title: `${labels.psm} CVs` },
     { id: 'protein-cv', data: proteinCVPlot, title: `${labels.entity} CVs` },
     { id: 'psm-intensity', data: psmIntensityPlot, title: `${labels.psm} Intensity Distribution` },
     { id: 'protein-intensity', data: proteinIntensityPlot, title: `${labels.entity} Intensity Distribution` },
     { id: 'completeness', data: completenessPlot, title: `${labels.entity} Data Completeness` },
     { id: 'psm-completeness', data: psmCompletenessPlot, title: `${labels.psm} Data Completeness` },
+  ];
+  const sections = [
+    {
+      id: 'sample-relationships',
+      title: 'Sample Relationships',
+      scope: 'Experiment-wide',
+      plotIds: ['pca'],
+    },
+    {
+      id: 'abundance-distributions',
+      title: 'Abundance Distributions',
+      scope: 'Experiment-wide',
+      plotIds: ['group-abundance', 'psm-intensity', 'protein-intensity'],
+    },
+    {
+      id: 'missingness-imputation',
+      title: 'Missingness and Imputation',
+      scope: 'Experiment-wide',
+      plotIds: ['provenance', 'completeness', 'psm-completeness'],
+    },
+    {
+      id: 'reproducibility',
+      title: 'Reproducibility',
+      scope: 'Experiment-wide',
+      plotIds: ['psm-cv', 'protein-cv'],
+    },
+    {
+      id: 'differential-results',
+      title: 'Differential Results',
+      scope: 'Selected comparison',
+      plotIds: ['pvalue'],
+    },
   ];
 
   const [expandedPlot, setExpandedPlot] = useState<string | null>(null);
@@ -545,67 +736,91 @@ export default function QCPlots({
 
   return (
     <>
-      <div data-testid="qc-plots-container" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {plots.map((plot) =>
-          plot.data ? (
-            <div
-              key={plot.id}
-              data-testid={`${plot.id}-plot`}
-              className="bg-background rounded-lg border border-border p-4"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-text-primary">{plot.title}</h3>
-                <div className="flex items-center gap-2">
-                  {plot.showComparisonDropdown && comparisonOptions.length > 1 && (
+      <div data-testid="qc-plots-container" className="space-y-6">
+        {sections.map((section) => {
+          const sectionPlots = plots.filter((plot) => section.plotIds.includes(plot.id));
+          return (
+            <section key={section.id} data-testid={`qc-section-${section.id}`} className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-text-primary">{section.title}</h2>
+                  <p className="mt-1 text-xs text-text-muted">{section.scope}</p>
+                </div>
+                {section.id === 'abundance-distributions' && onGroupByChange && (
+                  <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+                    {onGroupSearch && (
+                      <label className="min-w-64 text-sm text-text-secondary">
+                        <span className="sr-only">Search {groupBy} groups</span>
+                        <input
+                          value={groupSearch}
+                          onChange={(event) => onGroupSearch(event.target.value)}
+                          placeholder={`Search ${groupBy} groups...`}
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-sm text-text-secondary">
+                      Group by
+                      <select
+                        value={groupBy}
+                        onChange={(event) => onGroupByChange(event.target.value as 'condition' | 'batch')}
+                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text-primary"
+                      >
+                        <option value="condition">Condition</option>
+                        <option value="batch">Batch</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {section.id === 'differential-results' && comparisonOptions.length > 0 && (
+                  <div className="w-full max-w-sm">
                     <SearchableSelect
                       options={comparisonOptions}
                       value={selectedComparison}
                       onChange={onComparisonChange}
+                      onSearchChange={onComparisonSearch}
                       placeholder="Select comparison..."
-                      searchPlaceholder="Filter comparisons..."
+                      searchPlaceholder="Search all comparisons..."
                     />
-                  )}
-                  <button
-                    data-testid={`expand-${plot.id}-btn`}
-                    onClick={() => setExpandedPlot(plot.id)}
-                    className="p-1.5 text-text-muted hover:text-text-primaryhover:bg-surface rounded-md transition-colors"
-                    title="Expand plot"
-                  >
-                    <Maximize2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    data-testid={`download-${plot.id}-btn`}
-                    onClick={() => handleDownload(plot.id)}
-                    className="p-1.5 text-text-muted hover:text-text-primaryhover:bg-surface rounded-md transition-colors"
-                    title="Download plot"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
+                  </div>
+                )}
+              </div>
+              {section.id === 'abundance-distributions' && overview && (
+                <p className="text-xs text-text-muted">
+                  Showing {overview.groups.length.toLocaleString()} of {overview.matching_group_count.toLocaleString()} matching {groupBy} groups
+                  {overview.group_count !== overview.matching_group_count
+                    ? ` (${overview.group_count.toLocaleString()} total)`
+                    : ''}. A chart displays at most 50 groups; search reaches every group.
+                </p>
+              )}
+              {section.id === 'differential-results' && differential && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg bg-surface p-3 text-sm"><span className="text-text-muted">Tested</span><strong className="ml-2 text-text-primary">{differential.tested_count.toLocaleString()}</strong></div>
+                  <div className="rounded-lg bg-surface p-3 text-sm"><span className="text-text-muted">Significant</span><strong className="ml-2 text-text-primary">{differential.significant_count.toLocaleString()}</strong></div>
+                  <div className="rounded-lg bg-surface p-3 text-sm"><span className="text-text-muted">Failed/non-estimable</span><strong className="ml-2 text-text-primary">{differential.failed_count.toLocaleString()}</strong></div>
                 </div>
+              )}
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {sectionPlots.map((plot) => plot.data ? (
+                  <div key={plot.id} data-testid={`${plot.id}-plot`} className="rounded-lg border border-border bg-background p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-text-primary">{plot.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <button data-testid={`expand-${plot.id}-btn`} onClick={() => setExpandedPlot(plot.id)} className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface hover:text-text-primary" title="Expand plot"><Maximize2 className="h-4 w-4" /></button>
+                        <button data-testid={`download-${plot.id}-btn`} onClick={() => handleDownload(plot.id)} className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface hover:text-text-primary" title="Download plot"><Download className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                    <div className="h-[480px]"><LazyPlot plotId={plot.id} data={plot.data.traces} layout={plot.data.layout} config={config} style={{ width: '100%', height: '100%' }} /></div>
+                  </div>
+                ) : (
+                  <div key={plot.id} data-testid={`${plot.id}-plot`} className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-surface p-4">
+                    <div data-testid="no-data" className="text-center text-text-muted"><p className="text-lg font-medium">{plot.title}</p><p className="mt-2 text-sm">No data available</p></div>
+                  </div>
+                ))}
               </div>
-              <div className="h-[480px]">
-                <LazyPlot
-                  plotId={plot.id}
-                  data={plot.data.traces}
-                  layout={plot.data.layout}
-                  config={config}
-                  style={{ width: '100%', height: '100%' }}
-                />
-              </div>
-            </div>
-          ) : (
-            <div
-              key={plot.id}
-              data-testid={`${plot.id}-plot`}
-              className="bg-surface rounded-lg border border-border p-4 flex items-center justify-center h-[480px]"
-            >
-              <div data-testid="no-data" className="text-center text-text-muted">
-                <p className="text-lg font-medium">{plot.title}</p>
-                <p className="text-sm mt-2">No data available</p>
-              </div>
-            </div>
-          )
-        )}
+            </section>
+          );
+        })}
       </div>
 
       {expandedPlot && (

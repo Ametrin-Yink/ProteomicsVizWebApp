@@ -15,6 +15,7 @@ interface ProteinInfoProps {
   isLoading?: boolean;
   filters?: VolcanoFilters;
   comparison?: string;
+  apiPrefix?: string;
 }
 
 interface ParsedProteinInfo {
@@ -46,8 +47,9 @@ function parseProteinInfo(protein: DEResult): ParsedProteinInfo {
   return { accessions, geneNames: paddedGeneNames };
 }
 
-export default function ProteinInfo({ protein, isLoading, filters, comparison }: ProteinInfoProps) {
-  const { apiPrefix } = useApi();
+export default function ProteinInfo({ protein, isLoading, filters, comparison, apiPrefix: providedApiPrefix }: ProteinInfoProps) {
+  const { apiPrefix: contextApiPrefix } = useApi();
+  const apiPrefix = providedApiPrefix ?? contextApiPrefix;
   const [proteinAbundance, setProteinAbundance] = useState<ProteinAbundance | null>(null);
   const [peptideAbundance, setPeptideAbundance] = useState<PeptideAbundanceData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -221,16 +223,26 @@ export default function ProteinInfo({ protein, isLoading, filters, comparison }:
 
       {!loading && !error && proteinAbundance && (
         <div className="mb-6">
-          <h4 className="text-sm font-medium text-text-primarymb-2">Protein Abundance</h4>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-medium text-text-primary">Protein Abundance</h4>
+            <div className="flex flex-wrap gap-1.5 text-xs text-text-secondary">
+              <span className="rounded-full bg-surface px-2 py-1">{proteinAbundance.normalization_method}</span>
+              <span className="rounded-full bg-surface px-2 py-1">Imputation: {proteinAbundance.imputation_method}</span>
+              <span className="rounded-full bg-surface px-2 py-1">Processed log2</span>
+            </div>
+          </div>
           <ProteinAbundancePlot data={proteinAbundance} />
+          <p className="mt-2 text-xs text-text-muted">
+            Hollow points are imputed or model-estimated values.
+          </p>
         </div>
       )}
 
       {/* Always show Peptide Abundance section if data exists */}
       {!loading && !error && peptideAbundance && (
         <div>
-          <h4 className="text-sm font-medium text-text-primarymb-2">Peptide Abundance</h4>
-          {peptideAbundance.peptides.length > 0 ? (
+          <h4 className="mb-2 text-sm font-medium text-text-primary">Peptide Abundance</h4>
+          {peptideAbundance.groups.length > 0 ? (
             <PeptideAbundancePlot data={peptideAbundance} />
           ) : (
             <div className="bg-surface rounded-lg p-4 text-center text-text-muted text-sm">

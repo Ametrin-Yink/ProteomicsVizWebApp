@@ -64,9 +64,10 @@ def _write_protein_abundance_tsv(results_dir: Path) -> pd.DataFrame:
 def _write_diff_expression_tsv(
     results_dir: Path, comparison_label: str
 ) -> pd.DataFrame:
-    """Write a realistic Diff_Expression_*.tsv for R step mocks."""
+    """Write a realistic consolidated differential table for R step mocks."""
     df = pd.DataFrame(
         {
+            "Label": [comparison_label] * 5,
             "Master_Protein_Accessions": [
                 "P00001",
                 "P00002",
@@ -80,7 +81,7 @@ def _write_diff_expression_tsv(
             "adjPval": [0.005, 0.05, 0.6, 0.9, 0.001],
         }
     )
-    out = results_dir / f"Diff_Expression_{comparison_label}.tsv"
+    out = results_dir / "Differential_Results_Long.tsv"
     df.to_csv(out, sep="\t", index=False)
     return df
 
@@ -416,7 +417,7 @@ class TestMSstatsFullPipeline:
             await step_msstats_group_comparison(ctx)
 
         assert ctx.result.significant_proteins > 0
-        assert (results / f"Diff_Expression_{_COMPARISON_LABEL}.tsv").exists()
+        assert (results / "Differential_Results_Long.tsv").exists()
 
         # ── Stage 6: QC metrics (real Python) ──
         await step_qc_metrics(ctx)
@@ -424,6 +425,9 @@ class TestMSstatsFullPipeline:
         qc_file = results / "QC_Results.json"
         assert qc_file.exists()
         assert ctx.result.qc_results_path == str(qc_file)
+        assert (results / "visualization_artifacts.json").exists()
+        assert (results / "protein_abundance_long.parquet").exists()
+        assert (results / "peptide_abundance_long.parquet").exists()
 
 
 class TestMsqrob2FullPipeline:
@@ -483,7 +487,7 @@ class TestMsqrob2FullPipeline:
             await step_multi_condition_de(ctx)
 
         assert ctx.result.significant_proteins > 0
-        assert (results / f"Diff_Expression_{_COMPARISON_LABEL}.tsv").exists()
+        assert (results / "Differential_Results_Long.tsv").exists()
 
         # ── Stage 6: QC metrics (real Python) ──
         await step_qc_metrics(ctx)
@@ -491,6 +495,9 @@ class TestMsqrob2FullPipeline:
         qc_file = results / "QC_Results.json"
         assert qc_file.exists()
         assert ctx.result.qc_results_path == str(qc_file)
+        assert (results / "visualization_artifacts.json").exists()
+        assert (results / "protein_abundance_long.parquet").exists()
+        assert (results / "peptide_abundance_long.parquet").exists()
 
 
 # ── Fixture helpers ─────────────────────────────────────────────────────
