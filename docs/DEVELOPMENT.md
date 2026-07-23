@@ -17,7 +17,7 @@ Local runtime roots default below `backend/`. Tests replace them with isolated t
 
 ## Local development ports
 
-Run the Windows development frontend on `127.0.0.1:3000` and its FastAPI backend on `127.0.0.1:8002`:
+Run the development frontend on `127.0.0.1:3002` and the FastAPI backend on `127.0.0.1:8002`, on both Windows and the AlmaLinux server:
 
 ```powershell
 # PowerShell window 1
@@ -26,10 +26,10 @@ backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --rel
 # PowerShell window 2
 $env:BACKEND_URL = "http://127.0.0.1:8002"
 $env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:8002"
-npm --prefix frontend run dev -- --hostname 127.0.0.1 --port 3000
+npm --prefix frontend run dev -- --hostname 127.0.0.1 --port 3002
 ```
 
-These per-process environment variables override any production-tunnel URL in `frontend/.env.local`. Ports `8000` and `8001` on Windows belong to the optional production SSH tunnel and are not local-development backend ports. See [Server access and development cycle](SERVER_ACCESS_AND_DEV_CYCLE.md#port-ownership) for the complete mapping.
+These per-process environment variables override any production-tunnel URL in `frontend/.env.local`. Port `3000` on the server belongs to the production Next.js service. Ports `8000` and `8001` belong to the optional production SSH tunnel and are not local-development ports. See [Server access and development cycle](SERVER_ACCESS_AND_DEV_CYCLE.md#port-ownership) for the complete mapping.
 
 ## Required development gate
 

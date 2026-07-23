@@ -23,10 +23,15 @@ Do not edit `/home/proteomicsviz/current`, a release directory, or the deploymen
 
 | Windows URL | Owner | Purpose |
 |---|---|---|
-| `http://127.0.0.1:3000` | Local Next.js development process | Development UI for the current checkout |
+| `http://127.0.0.1:3002` | Local Next.js development process | Development UI for the current checkout |
 | `http://127.0.0.1:8002` | Local FastAPI development process | Development API and local runtime data |
 | `http://127.0.0.1:8000` | SSH forward to server `127.0.0.1:8100` | Production FastAPI traffic used by the tunneled production UI |
 | `http://127.0.0.1:8001` | SSH forward to server `127.0.0.1:8001` | Complete private production application |
+
+Port `3002` is used for development instead of `3000` because the production
+Next.js service occupies `127.0.0.1:3000` on the AlmaLinux server. Using a
+uniform pair (`:3002` / `:8002`) on both Windows and the server keeps the
+commands identical across environments.
 
 The corresponding AlmaLinux listeners are:
 
@@ -37,7 +42,7 @@ The corresponding AlmaLinux listeners are:
 | `127.0.0.1:8001` | Private Caddy listener | Loopback only, reached by the Windows `8001` tunnel |
 | `0.0.0.0:8000` | Public Caddy listener | Shared-report capability surface only |
 
-Normal development pairs Windows frontend `3000` with Windows backend `8002`. Do not point the local development frontend at Windows ports `8000` or `8001`; doing so mixes code from the current checkout with production APIs and production data.
+Normal development pairs frontend `3002` with backend `8002` on both Windows and the AlmaLinux server. Do not point the local development frontend at Windows ports `8000` or `8001`; doing so mixes code from the current checkout with production APIs and production data.
 
 ## Verify SSH access
 

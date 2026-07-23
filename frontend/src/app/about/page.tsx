@@ -181,13 +181,13 @@ cd frontend && npm install`}
               <pre className="bg-surface rounded-lg p-4 text-sm text-text-primaryoverflow-x-auto">
 {`# Terminal 1 - Backend
 cd backend
-.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8002
 
 # Terminal 2 - Frontend
 cd frontend
 npm run dev
 
-# Access at http://localhost:3000`}
+# Access at http://localhost:3002`}
               </pre>
             </div>
           </div>
