@@ -131,11 +131,16 @@ export default function ScalableComparisonCorrelationPanel({ comparisons, onComp
 
   // Load volcano thresholds from session on mount
   useEffect(() => {
-    getDataSource(apiPrefix).then((session) => {
+    const controller = new AbortController();
+    getDataSource(apiPrefix, controller.signal).then((session) => {
       if (session.volcano_filters) {
         setVennThresholds(session.volcano_filters);
       }
-    }).catch(() => {});
+    }).catch((err: unknown) => {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      console.warn('Failed to load Venn thresholds from session, using defaults:', err);
+    });
+    return () => controller.abort();
   }, [apiPrefix]);
 
   const handleComputeVenn = async () => {

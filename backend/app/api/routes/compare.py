@@ -8,6 +8,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Literal
 
+import duckdb
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -91,8 +92,6 @@ def _get_comparisons_from_session(session_id: str) -> list[str]:
     # ── New data format: differential_results.parquet ──────────────────
     parquet_path = results_dir / "differential_results.parquet"
     if parquet_path.exists():
-        import duckdb
-
         connection = duckdb.connect()
         try:
             rows = connection.execute(
