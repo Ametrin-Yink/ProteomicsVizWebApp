@@ -44,7 +44,7 @@ function vennLayout(data: VennData): { circles: CircleSpec[]; regionLabels: Regi
     const [[c1, s1], [c2, s2]] = entries;
     const r1 = Math.max(50, Math.sqrt(Math.max(s1, 1)) * scale);
     const r2 = Math.max(50, Math.sqrt(Math.max(s2, 1)) * scale);
-    const overlapKey = [c1, c2].sort().join('+');
+    const overlapKey = [c1, c2].sort().join('\x00');
     const overlap = data.overlaps.find((o) => o.label === overlapKey)?.count ?? 0;
     const smaller = Math.min(s1, s2);
     const overlapRatio = smaller > 0 ? overlap / smaller : 0.3;
