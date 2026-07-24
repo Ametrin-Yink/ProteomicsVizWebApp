@@ -9,6 +9,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 
+import duckdb
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import leaves_list, linkage
@@ -27,8 +28,43 @@ def accession_matches(value: object, protein_id: str) -> bool:
 
 
 def _load_de_file(session_dir: str, comparison: str) -> pd.DataFrame | None:
-    """Load a single Diff_Expression file for a comparison."""
+    """Load differential expression data for a comparison.
+
+    Tries the canonical parquet artifact first (DIA / TMT post-52fc42a),
+    then falls back to legacy TSV files (PTM / pre-migration sessions).
+    """
     results_dir = Path(session_dir) / "results"
+
+    # ── New data format: differential_results.parquet ──────────────────
+    parquet_path = results_dir / "differential_results.parquet"
+    if parquet_path.exists():
+        connection = duckdb.connect()
+        try:
+            df = connection.execute(
+                """
+                SELECT
+                    protein_accession AS accession,
+                    gene_name,
+                    log2_fold_change AS log_fc,
+                    p_value         AS pval,
+                    adjusted_p_value AS adj_pval
+                FROM read_parquet(?)
+                WHERE comparison_id = ?
+                  AND result_layer = 'protein'
+                """,
+                [str(parquet_path), comparison],
+            ).df()
+        finally:
+            connection.close()
+        if df.empty:
+            return None
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(subset=["log_fc", "pval"])
+        if "adj_pval" in df.columns:
+            df["adj_pval"] = df["adj_pval"].fillna(1.0)
+        return df
+
+    # ── Legacy TSV fallback ────────────────────────────────────────────
     stable_protein_path = results_dir / "protein_results.tsv"
     if stable_protein_path.exists():
         file_path = stable_protein_path
@@ -446,12 +482,12 @@ def compute_venn_data(
 
     by_region = defaultdict(list)
     for ov in overlaps:
-        key = "+".join(ov["region"])
+        key = "\x00".join(ov["region"])
         by_region[key].append(ov["accession"])
 
     overlap_list = []
     for key, accs in sorted(by_region.items(), key=lambda x: -len(x[1])):
-        region = sorted(key.split("+"))
+        region = sorted(key.split("\x00"))
         details = []
         for acc in sorted(accs):
             pd_entry = protein_details.get(acc, {})

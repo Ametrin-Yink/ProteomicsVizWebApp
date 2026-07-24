@@ -231,8 +231,8 @@ export default function VennDiagram({ data, sideBySide }: Props) {
                       <tr className="bg-surface text-text-secondary sticky top-0">
                         <th className="text-left px-2 py-1.5 font-medium whitespace-nowrap">UniProt ID</th>
                         <th className="text-left px-2 py-1.5 font-medium whitespace-nowrap">Gene</th>
-                        {overlap.region.map((comp) => (
-                          <React.Fragment key={comp}>
+                        {overlap.region.map((comp, i) => (
+                          <React.Fragment key={`${comp}-${i}`}>
                             <th className="text-right px-2 py-1.5 font-medium whitespace-nowrap">
                               {formatComparisonKey(comp)}<br />log2 FC
                             </th>
@@ -248,8 +248,8 @@ export default function VennDiagram({ data, sideBySide }: Props) {
                         <tr key={d.accession} className="border-t border-border hover:bg-surface/30">
                           <td className="px-2 py-1 text-text-primary font-mono whitespace-nowrap">{d.accession}</td>
                           <td className="px-2 py-1 text-text-primary whitespace-nowrap">{d.gene_name}</td>
-                          {overlap.region.map((comp) => (
-                            <React.Fragment key={comp}>
+                          {overlap.region.map((comp, i) => (
+                            <React.Fragment key={`${comp}-${i}`}>
                               <td className="px-2 py-1 text-right font-medium whitespace-nowrap" style={{
                                 color: fcColor(d[`log_fc_${comp}`]),
                               }}>

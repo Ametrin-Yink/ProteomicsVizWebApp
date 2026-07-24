@@ -6,7 +6,8 @@ import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderC
 
 import { SearchableSelect, Select } from '@/components/ui/Select';
 import ComparisonHeatmap from '@/components/visualization/compare/ComparisonHeatmap';
-import { visualizationApi } from '@/lib/api-client';
+import VennDiagram from '@/components/visualization/compare/VennDiagram';
+import { visualizationApi, getDataSource } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
 import { COLORSCALE_CYAN_GREY_CORAL, formatComparisonKeyWrapped } from '@/lib/utils';
 import type {
@@ -16,6 +17,8 @@ import type {
   ComparisonCorrelationTile,
   ComparisonFoldChangeDetail,
   ComparisonSpearmanResult,
+  VennData,
+  VolcanoFilters,
 } from '@/types/api';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
@@ -42,6 +45,16 @@ export default function ScalableComparisonCorrelationPanel({ comparisons, onComp
   const [spearmanTarget, setSpearmanTarget] = useState('');
   const [spearman, setSpearman] = useState<ComparisonSpearmanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Venn state
+  const [vennComparisons, setVennComparisons] = useState<string[]>([]);
+  const [vennData, setVennData] = useState<VennData | null>(null);
+  const [vennLoading, setVennLoading] = useState(false);
+  const [vennError, setVennError] = useState<string | null>(null);
+  const [vennThresholds, setVennThresholds] = useState<VolcanoFilters>({
+    foldChange: 1, pValue: 0.05, adjPValue: 0.05, s0: 0.1,
+  });
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadMetadata = useCallback(async () => {
@@ -115,6 +128,43 @@ export default function ScalableComparisonCorrelationPanel({ comparisons, onComp
       });
     return () => controller.abort();
   }, [apiPrefix, effectivePrimary, metadata]);
+
+  // Load volcano thresholds from session on mount
+  useEffect(() => {
+    getDataSource(apiPrefix).then((session) => {
+      if (session.volcano_filters) {
+        setVennThresholds(session.volcano_filters);
+      }
+    }).catch(() => {});
+  }, [apiPrefix]);
+
+  const handleComputeVenn = async () => {
+    if (vennComparisons.length < 2) return;
+    setVennLoading(true);
+    setVennError(null);
+    try {
+      const result = await visualizationApi.computeVennData(apiPrefix, {
+        comparisons: vennComparisons,
+        pvalue_threshold: vennThresholds.adjPValue,
+        logfc_threshold: vennThresholds.foldChange,
+      });
+      setVennData(result);
+    } catch (err) {
+      setVennError(err instanceof Error ? err.message : 'Venn computation failed');
+    } finally {
+      setVennLoading(false);
+    }
+  };
+
+  const toggleVennComparison = (value: string) => {
+    setVennComparisons((prev) => {
+      if (prev.includes(value)) {
+        return prev.filter((v) => v !== value);
+      }
+      if (prev.length >= 3) return prev; // Venn max 3 sets
+      return [...prev, value];
+    });
+  };
 
   const run = async () => {
     setError(null);
@@ -300,6 +350,43 @@ export default function ScalableComparisonCorrelationPanel({ comparisons, onComp
             <ComparisonHeatmap proteins={detail.proteins.map((item) => ({ ...item, gene_name: item.gene_name || '' }))} comparisons={detail.comparisons} foldChanges={detail.fold_changes} />
           )}
         </>
+      )}
+
+      {/* Venn Diagram — independent of full correlation build */}
+      {comparisons.length >= 2 && (
+        <div className="rounded-lg border border-border bg-background p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-medium text-text-primary mb-3">Venn Diagram</h3>
+            <div className="flex items-center gap-3 flex-wrap">
+              {comparisons.slice(0, 10).map((comp) => (
+                <label
+                  key={comp.value}
+                  className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={vennComparisons.includes(comp.value)}
+                    onChange={() => toggleVennComparison(comp.value)}
+                    className="rounded border-border text-primary focus:ring-primary"
+                  />
+                  <span className="text-xs">{comp.label}</span>
+                </label>
+              ))}
+              <button
+                type="button"
+                onClick={handleComputeVenn}
+                disabled={vennComparisons.length < 2 || vennLoading}
+                className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              >
+                {vennLoading ? 'Computing...' : 'Compute Venn'}
+              </button>
+            </div>
+            {vennError && (
+              <p className="mt-2 text-xs text-error">{vennError}</p>
+            )}
+          </div>
+          <VennDiagram data={vennData} sideBySide />
+        </div>
       )}
 
       {!metadata && status.status !== 'running' && (

@@ -384,6 +384,8 @@ export interface SearchableSelectProps {
   className?: string;
   disabled?: boolean;
   onSearchChange?: (value: string) => void;
+  /** Require at least this many characters before showing results (prevents rendering thousands of options at once). */
+  minSearchLength?: number;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -395,6 +397,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   className,
   disabled,
   onSearchChange,
+  minSearchLength = 0,
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -495,7 +498,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             />
           </div>
           <div className="max-h-48 overflow-y-auto py-1" role="listbox">
-            {filtered.length === 0 ? (
+            {minSearchLength > 0 && search.length < minSearchLength ? (
+              <div className="px-3 py-4 text-sm text-text-muted text-center">
+                Type at least {minSearchLength} character{minSearchLength > 1 ? 's' : ''} to search
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="px-3 py-4 text-sm text-text-muted text-center">
                 No matches
               </div>

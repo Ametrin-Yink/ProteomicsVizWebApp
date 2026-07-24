@@ -19,19 +19,17 @@ export default function ProteinCompareWorkspace({ comparisons, scalableCompariso
   return (
     <div className="space-y-6" data-testid="protein-compare-workspace">
       <div className="flex gap-2">
-        {!scalableComparison && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('protein')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'protein'
-                ? 'bg-primary/10 text-primary'
-                : 'text-text-secondary hover:bg-surface hover:text-text-primary'
-            }`}
-          >
-            Protein Correlation
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('protein')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'protein'
+              ? 'bg-primary/10 text-primary'
+              : 'text-text-secondary hover:bg-surface hover:text-text-primary'
+          }`}
+        >
+          Protein Correlation
+        </button>
         <button
           type="button"
           onClick={() => setActiveTab('comparison')}

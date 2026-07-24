@@ -81,8 +81,32 @@ class ComparisonDetailRequest(BaseModel):
 
 
 def _get_comparisons_from_session(session_id: str) -> list[str]:
-    """Discover all comparisons from DE result files in the session."""
+    """Discover all comparisons from DE result files in the session.
+
+    Tries the canonical parquet artifact first (DIA / TMT), then falls
+    back to legacy TSV discovery (PTM / pre-migration sessions).
+    """
     results_dir = settings.sessions_dir / session_id / "results"
+
+    # ── New data format: differential_results.parquet ──────────────────
+    parquet_path = results_dir / "differential_results.parquet"
+    if parquet_path.exists():
+        import duckdb
+
+        connection = duckdb.connect()
+        try:
+            rows = connection.execute(
+                "SELECT DISTINCT comparison_id "
+                "FROM read_parquet(?) "
+                "WHERE result_layer = 'protein' "
+                "ORDER BY comparison_id",
+                [str(parquet_path)],
+            ).fetchall()
+        finally:
+            connection.close()
+        return [str(row[0]) for row in rows]
+
+    # ── Legacy TSV fallback ────────────────────────────────────────────
     stable_protein_path = results_dir / "protein_results.tsv"
     if stable_protein_path.exists():
         frame = pd.read_csv(stable_protein_path, sep="\t", usecols=["Comparison"])
@@ -726,6 +750,8 @@ async def trigger_venn(
         raise HTTPException(status_code=404, detail="Session not found")
     if len(req.comparisons) < 2 or len(req.comparisons) > 3:
         raise HTTPException(status_code=400, detail="Venn requires 2 or 3 comparisons")
+    if len(set(req.comparisons)) != len(req.comparisons):
+        raise HTTPException(status_code=400, detail="Venn requires unique comparisons")
     session_dir = str(settings.sessions_dir / session_id)
 
     result = await task_manager.submit(

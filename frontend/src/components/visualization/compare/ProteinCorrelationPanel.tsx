@@ -167,6 +167,7 @@ export default function ProteinCorrelationPanel({ comparisons }: Props) {
               onChange={setSelectedProtein}
               placeholder="Select protein..."
               searchPlaceholder="Search proteins..."
+              minSearchLength={1}
             />
           </div>
           <div>
