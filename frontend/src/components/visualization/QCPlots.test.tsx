@@ -12,6 +12,25 @@ interface PlotlyMockProps {
   layout?: Record<string, unknown>;
 }
 
+/** Plotly trace shape accessed by test assertions. */
+interface PlotTrace {
+  type?: string;
+  mode?: string;
+  name?: string;
+  x?: unknown[];
+  y?: number[];
+  q1?: number[];
+  median?: number[];
+  q3?: number[];
+  lowerfence?: number[];
+  upperfence?: number[];
+  marker?: { color?: string; size?: number; outliercolor?: string };
+  line?: { color?: string };
+  fillcolor?: string;
+  boxpoints?: unknown;
+  hovertemplate?: string;
+}
+
 // Mock next/dynamic so Plotly renders as our no-op mock immediately.
 vi.mock('next/dynamic', () => ({
   default: () => {
@@ -216,7 +235,7 @@ const differential: QCDifferentialData = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Parse traces from the plotly mock inside a specific plot container. */
-function getPlotTraces(container: HTMLElement, plotId: string): Record<string, unknown>[] | null {
+function getPlotTraces(container: HTMLElement, plotId: string): PlotTrace[] | null {
   const plotEl = container.querySelector(`[data-testid="${plotId}-plot"]`);
   if (!plotEl) return null;
   const noDataEl = plotEl.querySelector('[data-testid="no-data"]');
@@ -227,7 +246,7 @@ function getPlotTraces(container: HTMLElement, plotId: string): Record<string, u
 }
 
 /** Assert a plot has data and return its traces. */
-function expectPlotHasData(container: HTMLElement, plotId: string): Record<string, unknown>[] {
+function expectPlotHasData(container: HTMLElement, plotId: string): PlotTrace[] {
   const traces = getPlotTraces(container, plotId);
   expect(traces).not.toBeNull();
   expect(traces!.length).toBeGreaterThan(0);
