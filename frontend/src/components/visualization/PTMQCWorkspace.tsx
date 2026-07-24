@@ -36,28 +36,36 @@ export default function PTMQCWorkspace({
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
+    let cancelled = false;
 
     // PTM-specific metadata (filters, preprocessing, results)
     visualizationApi.getPTMQCPlots(apiPrefix, signal)
-      .then((response) => setMetrics(response as PTMQCMetrics))
+      .then((response) => { if (!cancelled) setMetrics(response as PTMQCMetrics); })
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) {
+        if (!cancelled && !(reason instanceof DOMException && reason.name === 'AbortError')) {
           setError(reason instanceof Error ? reason.message : 'Failed to load PTM QC metrics');
         }
       })
-      .finally(() => { if (!signal.aborted) setLoading(false); });
+      .finally(() => { if (!cancelled && !signal.aborted) setLoading(false); });
 
     // Canonical overview for group abundance, CV, PCA
     visualizationApi.getQCOverview(apiPrefix, 'condition', '', undefined, signal)
-      .then(setOverview)
-      .catch(() => setOverview(null));
+      .then((ov) => { if (!cancelled) setOverview(ov); })
+      .catch(() => { if (!cancelled) setOverview(null); });
 
-    // Per-sample intensity and completeness for the current scope
+    // Per-sample intensity and completeness for the current scope.
+    // A `cancelled` guard defends against the race where a previous
+    // scope's response lands after a newer scope's request, which can
+    // happen when AbortController hasn't fired yet (e.g. during rapid
+    // tab switching before the abort signal propagates).
     visualizationApi.getQCPerSample(apiPrefix, scope, signal)
-      .then(setPerSampleData)
-      .catch(() => setPerSampleData(null));
+      .then((ps) => { if (!cancelled) setPerSampleData(ps); })
+      .catch(() => { if (!cancelled) setPerSampleData(null); });
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [apiPrefix, scope]);
 
   if (loading) {

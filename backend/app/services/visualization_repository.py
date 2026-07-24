@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import json
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,26 @@ def _decode_cursor(cursor: str | None) -> int:
     if offset < 0:
         raise ValueError("Invalid cursor")
     return offset
+
+
+@functools.lru_cache(maxsize=128)
+def _get_parquet_columns(artifact_path: str) -> frozenset[str]:
+    """Return the column names for a Parquet artifact.
+
+    Cached because Parquet files are immutable once materialized, so
+    the column list never changes for a given session-results snapshot.
+    The cache is keyed by the absolute path string and evicts LRU.
+    """
+    conn = duckdb.connect()
+    try:
+        return frozenset(
+            row[0]
+            for row in conn.execute(
+                "DESCRIBE SELECT * FROM read_parquet(?)", [artifact_path]
+            ).fetchall()
+        )
+    finally:
+        conn.close()
 
 
 class VisualizationRepository:
@@ -195,14 +216,11 @@ class VisualizationRepository:
                 ],
             ).fetchone()
             parameters.extend([limit + 1, offset])
-            # Check if new columns exist for backward compatibility
-            columns = {
-                row[0]
-                for row in connection.execute(
-                    f"DESCRIBE SELECT * FROM read_parquet(?)",
-                    [str(self.results_dir / QC_GROUP_METRICS)],
-                ).fetchall()
-            }
+            # Check if new columns exist for backward compatibility.
+            # Cached — Parquet schemas are immutable after materialization.
+            columns = _get_parquet_columns(
+                str(self.results_dir / QC_GROUP_METRICS)
+            )
             extra_cols = ""
             if "lowerfence" in columns and "upperfence" in columns:
                 extra_cols = ", lowerfence, upperfence"
@@ -258,14 +276,11 @@ class VisualizationRepository:
         try:
             sample_metrics_path = self.results_dir / QC_SAMPLE_METRICS
             if sample_metrics_path.is_file():
-                # Check for backward compatibility with old schema
-                columns = {
-                    row[0]
-                    for row in connection.execute(
-                        f"DESCRIBE SELECT * FROM read_parquet(?)",
-                        [str(sample_metrics_path)],
-                    ).fetchall()
-                }
+                # Check for backward compatibility with old schema.
+                # Cached — Parquet schemas are immutable after materialization.
+                columns = _get_parquet_columns(
+                    str(sample_metrics_path)
+                )
                 extra_cols = ""
                 if "abundance_q1" in columns and "abundance_q3" in columns:
                     extra_cols = ", abundance_q1, abundance_q3"

@@ -535,7 +535,11 @@ export function buildQcExport(input: QcBuildInput): QcFigureExport {
   const { data: rawData, overview, perSample, differential, conditionList, selectedComparison } = input;
   const conditionColors = buildConditionColors(conditionList ?? []);
 
-  // Merge canonical data into legacy QCData if provided
+  // Merge canonical data into legacy QCData if provided.
+  // When both rawData and canonical data are present, canonical fields
+  // take precedence for overlapping keys (intentional: canonical data
+  // is fresher and richer). Callers should pass an empty QCData ({})
+  // as `data` when using the canonical path.
   const data: QCData = overview && perSample
     ? { ...rawData, ...canonicalToQCData(overview, perSample, differential) }
     : rawData;

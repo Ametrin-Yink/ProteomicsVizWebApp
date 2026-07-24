@@ -50,6 +50,11 @@ class QCData(BaseModel):
         canonical QC data shape for DIA/TMT pipelines is the combination of
         ``QCOverviewData`` + ``QCDifferentialData`` + ``QCPerSampleData``
         served through ``/visualization/qc/*`` endpoints.
+
+        **Removal plan:** Can be deleted once all pre-migration PTM
+        sessions have been reprocessed (estimated 1-2 release cycles).
+        The ``canonicalToQCData()`` bridge in the frontend already
+        converts canonical types to this shape transparently.
     """
 
     pca: PCAResult | None = None

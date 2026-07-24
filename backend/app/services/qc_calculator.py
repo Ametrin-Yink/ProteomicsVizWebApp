@@ -6,7 +6,13 @@ QC metrics calculation service (Step 8).
     The canonical QC system (``visualization_artifacts.py`` +
     ``canonical_qc.py``) replaced it with Parquet-backed scalable computation.
     This class is still used by ``ptm_qc_calculator.py`` for PTM pipeline
-    QC metadata; it may be removed once PTM is fully on the canonical system.
+    QC metadata.
+
+    **Removal plan:** This module can be removed once the PTM pipeline
+    completes its migration to the canonical QC system and all existing
+    PTM sessions have been reprocessed (estimated 1-2 release cycles).
+    After removal the legacy ``PTMQCWorkspace`` component should be
+    updated to consume canonical endpoints exclusively.
 
 Calculates quality control metrics including PCA, p-value distribution,
 CV analysis, intensity distributions, and data completeness.

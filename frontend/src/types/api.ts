@@ -344,7 +344,16 @@ export interface QCProteinIntensity {
   sample_id: string;
   /** Condition this sample belongs to */
   condition: string;
-  /** First quartile of protein log2 abundances (NULL if no data) */
+  /**
+   * First quartile of protein log2 abundances (NULL if no data).
+   *
+   * Uses the ``abundance_*`` prefix (instead of bare ``q1``/``median``/``q3``)
+   * to disambiguate from {@link QCPSMIntensity}, which uses the same Parquet
+   * column names (``q1``, ``median``, ``q3``) but sources them from a different
+   * artifact (``qc_psm_intensity.parquet`` vs ``qc_sample_metrics.parquet``).
+   * The frontend {@link buildIntensityBoxTraces} normalises both shapes into a
+   * common ``{ condition, q1, median, q3 }`` interface at the call site.
+   */
   abundance_q1: number | null;
   /** Median protein log2 abundance (NULL if no data) */
   abundance_median: number | null;

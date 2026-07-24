@@ -208,7 +208,19 @@ export default function QCPlots({
     return hashColor(condition);
   }, [conditionColors]);
 
-  /** Build box traces from perSampleData intensity rows (per-sample or per-replicate). */
+  /**
+   * Build box traces from perSampleData intensity rows (per-sample or per-replicate).
+   *
+   * Fence computation: fences are derived locally from IQR (q1/q3)
+   * rather than using the backend's clamped fences (``GREATEST/LEAST``
+   * against per-group min/max). The per-sample artifacts
+   * (``qc_sample_metrics.parquet``, ``qc_psm_intensity.parquet``) do not
+   * carry fence columns, so unclamped IQR fences are the best available
+   * option. This means whiskers can extend beyond the actual data range
+   * for individual samples — the group-abundance boxplots (which read
+   * ``lowerfence``/``upperfence`` from ``qc_group_metrics.parquet``) remain
+   * clamped.
+   */
   const buildIntensityBoxTraces = useCallback((
     rows: Array<{ condition: string; replicate?: string; sample_id?: string; q1: number | null; median: number | null; q3: number | null }>,
     labelFn: (condition: string, id: string) => string,

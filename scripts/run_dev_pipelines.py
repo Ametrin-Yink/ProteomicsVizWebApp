@@ -1,6 +1,12 @@
 """
-Script to run DIA, TMT, and PTM pipelines using SampleData files
+Dev helper: run DIA, TMT, and PTM pipelines using SampleData files
 against the dev backend at http://127.0.0.1:8002.
+
+.. warning::
+    This script is for **local development only**. It hardcodes dev-server
+    URLs, file-library paths, and experiment-specific metadata that are
+    specific to one developer's machine. It is not expected to pass on a
+    fresh checkout and is not maintained as part of the test suite.
 """
 import csv
 import io
@@ -15,7 +21,7 @@ import requests
 API = "http://127.0.0.1:8002/api"
 FILES_API = f"{API}/files"
 SESSIONS_API = f"{API}/sessions"
-BASE_DIR = Path(__file__).resolve().parent / "backend" / "file_library"
+BASE_DIR = Path(__file__).resolve().parent.parent / "backend" / "file_library"
 
 # ── Helpers ──
 

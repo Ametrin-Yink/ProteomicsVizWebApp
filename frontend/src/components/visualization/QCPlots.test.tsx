@@ -180,9 +180,9 @@ const perSampleData: QCPerSampleData = {
     },
   ] as QCPerSampleData['psm_intensity'],
   protein_intensity: [
-    { sample_id: 'Drug_1', condition: 'Drug', q1: 4, median: 5, q3: 6 },
-    { sample_id: 'DMSO_1', condition: 'DMSO', q1: 3, median: 4, q3: 5 },
-  ] as unknown as QCPerSampleData['protein_intensity'],
+    { sample_id: 'Drug_1', condition: 'Drug', abundance_q1: 4, abundance_median: 5, abundance_q3: 6 },
+    { sample_id: 'DMSO_1', condition: 'DMSO', abundance_q1: 3, abundance_median: 4, abundance_q3: 5 },
+  ] as QCPerSampleData['protein_intensity'],
   protein_completeness: [
     { sample_id: 'Drug_1', condition: 'Drug', total: 100, present: 80, missing: 20 },
     { sample_id: 'DMSO_1', condition: 'DMSO', total: 100, present: 70, missing: 30 },
