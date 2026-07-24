@@ -302,7 +302,7 @@ class VisualizationRepository:
                 # Compute q1/q3 on the fly for old sessions missing these columns
                 if not extra_cols:
                     raw_q1_q3 = connection.execute(
-                        f"""
+                        """
                         SELECT sample_id,
                                quantile_cont(processed_log2_abundance, 0.25) AS abundance_q1,
                                quantile_cont(processed_log2_abundance, 0.75) AS abundance_q3

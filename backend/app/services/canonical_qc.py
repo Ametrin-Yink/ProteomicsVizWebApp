@@ -13,8 +13,6 @@ import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA, IncrementalPCA
 
-logger = logging.getLogger(__name__)
-
 from app.services.data_processor import _sql_identifier
 from app.services.visualization_artifacts import (
     PROTEIN_ARTIFACT,
@@ -25,6 +23,8 @@ from app.services.visualization_artifacts import (
     _atomic_write_json,
     load_visualization_artifact_manifest,
 )
+
+logger = logging.getLogger(__name__)
 
 EXACT_PCA_ELEMENT_LIMIT = 5_000_000
 PCA_SAMPLE_BATCH_SIZE = 1024

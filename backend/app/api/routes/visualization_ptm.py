@@ -15,7 +15,7 @@ from app.api.routes.visualization_shared import create_response
 from app.core.config import settings
 from app.db.session_store import SessionStore
 from app.services.ptm_tmt_processor import read_fasta_subset
-from app.utils.json_io import read_json_file, write_json_file
+from app.utils.json_io import read_json_file
 
 router = APIRouter()
 logger = logging.getLogger("proteomics")
