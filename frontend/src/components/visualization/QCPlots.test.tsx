@@ -6,10 +6,16 @@ import type { QCData, QCOverviewData, QCDifferentialData, QCPerSampleData } from
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
+/** Minimal props shape for Plotly mock components. */
+interface PlotlyMockProps {
+  data?: Record<string, unknown>[];
+  layout?: Record<string, unknown>;
+}
+
 // Mock next/dynamic so Plotly renders as our no-op mock immediately.
 vi.mock('next/dynamic', () => ({
   default: () => {
-    const MockPlotly = (props: any) => (
+    const MockPlotly = (props: PlotlyMockProps) => (
       <div
         data-testid="plotly"
         data-traces={JSON.stringify(props.data || [])}
@@ -22,7 +28,7 @@ vi.mock('next/dynamic', () => ({
 
 // Mock react-plotly.js (used by dynamic import under the hood).
 vi.mock('react-plotly.js', () => ({
-  default: ({ data, layout }: any) => (
+  default: ({ data, layout }: PlotlyMockProps) => (
     <div
       data-testid="plotly"
       data-traces={JSON.stringify(data || [])}
@@ -39,13 +45,17 @@ vi.mock('lucide-react', () => ({
 
 // Mock the SearchableSelect since it has complex DOM interactions
 vi.mock('@/components/ui/Select', () => ({
-  SearchableSelect: ({ options, value, onChange }: any) => (
+  SearchableSelect: ({ options, value, onChange }: {
+    options: Array<{ value: string; label: string }>;
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
     <select
       data-testid="searchable-select"
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
-      {options.map((opt: any) => (
+      {options.map((opt) => (
         <option key={opt.value} value={opt.value}>
           {opt.label}
         </option>
@@ -85,10 +95,12 @@ class MockIntersectionObserver implements IntersectionObserver {
 }
 
 beforeAll(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).IntersectionObserver = MockIntersectionObserver;
 });
 
 afterAll(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (globalThis as any).IntersectionObserver;
 });
 
@@ -204,7 +216,7 @@ const differential: QCDifferentialData = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Parse traces from the plotly mock inside a specific plot container. */
-function getPlotTraces(container: HTMLElement, plotId: string): any[] | null {
+function getPlotTraces(container: HTMLElement, plotId: string): Record<string, unknown>[] | null {
   const plotEl = container.querySelector(`[data-testid="${plotId}-plot"]`);
   if (!plotEl) return null;
   const noDataEl = plotEl.querySelector('[data-testid="no-data"]');
@@ -215,7 +227,7 @@ function getPlotTraces(container: HTMLElement, plotId: string): any[] | null {
 }
 
 /** Assert a plot has data and return its traces. */
-function expectPlotHasData(container: HTMLElement, plotId: string): any[] {
+function expectPlotHasData(container: HTMLElement, plotId: string): Record<string, unknown>[] {
   const traces = getPlotTraces(container, plotId);
   expect(traces).not.toBeNull();
   expect(traces!.length).toBeGreaterThan(0);
@@ -262,8 +274,8 @@ describe('QCPlots', () => {
               lowerfence: 2,
               upperfence: 18,
               outliers: [99, 100],
-            } as any,
-          } as any,
+            } as Record<string, unknown>,
+          } as Record<string, unknown>,
           protein_boxplot: {},
         },
       };
@@ -304,8 +316,8 @@ describe('QCPlots', () => {
               median: 10,
               q3: 15,
               // no lowerfence / upperfence
-            } as any,
-          } as any,
+            } as Record<string, unknown>,
+          } as Record<string, unknown>,
           protein_boxplot: {},
         },
       };
@@ -352,8 +364,8 @@ describe('QCPlots', () => {
               lowerfence: 2,
               upperfence: 18,
               outliers: [99],
-            } as any,
-          } as any,
+            } as Record<string, unknown>,
+          } as Record<string, unknown>,
           protein_boxplot: {},
         },
       };
@@ -391,8 +403,8 @@ describe('QCPlots', () => {
           psm_boxplot: {
             Drug: {
               R1: [1, 2, 3, 4, 5],
-            } as any,
-          } as any,
+            } as Record<string, unknown>,
+          } as Record<string, unknown>,
           protein_boxplot: {},
         },
       };
@@ -426,7 +438,7 @@ describe('QCPlots', () => {
         total_psms: 100,
         avg_psms_per_sample: 10,
         intensity_distributions: {
-          psm_boxplot: {} as any,
+          psm_boxplot: {} as Record<string, unknown>,
           protein_boxplot: {},
         },
       };
@@ -756,11 +768,11 @@ describe('QCPlots', () => {
         protein_cv: { Drug: [8, 12, 16], DMSO: [9, 14, 17] },
         intensity_distributions: {
           psm_boxplot: {
-            Drug: { R1: [1, 2, 3, 4, 5] } as any,
-          } as any,
+            Drug: { R1: [1, 2, 3, 4, 5] } as Record<string, unknown>,
+          } as Record<string, unknown>,
           protein_boxplot: {
             Drug_1: [10, 11, 12],
-          } as any,
+          } as Record<string, unknown>,
         },
         data_completeness: {
           Drug_1: { present: 80, missing: 20 },

@@ -703,8 +703,7 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.data_completeness, labels.entity, overview]);
-
+  }, [data.data_completeness, labels.entity, overview, perSampleData?.protein_completeness]);
   const psmCompletenessPlot = useMemo(() => {
     if (perSampleData?.psm_completeness?.length) {
       const rows = perSampleData.psm_completeness;
@@ -777,7 +776,7 @@ export default function QCPlots({
     };
 
     return { traces, layout };
-  }, [data.psm_completeness, labels.psm, overview]);
+  }, [data.psm_completeness, labels.psm, overview, perSampleData?.psm_completeness]);
 
   const config = {
     displayModeBar: 'hover',

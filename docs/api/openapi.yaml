@@ -1130,6 +1130,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/sessions/{session_id}/visualization/qc/per-sample:
+    get:
+      tags:
+      - visualization
+      summary: Get Visualization Qc Per Sample
+      description: 'Return per-sample QC details: intensity distributions and completeness.'
+      operationId: get_visualization_qc_per_sample_api_sessions__session_id__visualization_qc_per_sample_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: result_layer
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 50
+          default: protein
+          title: Result Layer
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/sessions/{session_id}/visualization/qc/differential:
     get:
       tags:
@@ -1979,6 +2013,40 @@ paths:
           minLength: 1
           maxLength: 200
           title: Comparison
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/shared-reports/{share_token}/visualization/qc/per-sample:
+    get:
+      tags:
+      - shared-reports
+      summary: Get Report Visualization Qc Per Sample
+      description: Capability-scoped per-sample QC details.
+      operationId: get_report_visualization_qc_per_sample_api_shared_reports__share_token__visualization_qc_per_sample_get
+      parameters:
+      - name: share_token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share Token
+      - name: result_layer
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 50
+          default: protein
+          title: Result Layer
       responses:
         '200':
           description: Successful Response
