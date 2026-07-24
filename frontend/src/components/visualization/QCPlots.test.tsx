@@ -317,11 +317,12 @@ describe('QCPlots', () => {
 
       const traces = expectPlotHasData(container, 'psm-intensity');
       // boxStatsToValues for one condition with 2 outliers: 200 + 2 = 202
-      expect(traces[0].y).toHaveLength(202);
+      const yVals = traces[0].y!;
+      expect(yVals).toHaveLength(202);
       // First 25 values are lower fence (2)
-      expect(traces[0].y.slice(0, 25)).toEqual(Array(25).fill(2));
+      expect(yVals.slice(0, 25)).toEqual(Array(25).fill(2));
       // Last 2 values are the outliers (99, 100)
-      expect(traces[0].y.slice(-2)).toEqual([99, 100]);
+      expect(yVals.slice(-2)).toEqual([99, 100]);
     });
 
     it('computes fences from IQR when lowerfence/upperfence are missing', async () => {
@@ -358,7 +359,7 @@ describe('QCPlots', () => {
       });
 
       const traces = expectPlotHasData(container, 'psm-intensity');
-      const y = traces[0].y;
+      const y = traces[0].y!;
       expect(y).toHaveLength(200);
       // IQR = 15-5 = 10; effectiveLf = 5 - 1.5*10 = -10
       expect(y.slice(0, 25)).toEqual(Array(25).fill(-10));
@@ -758,9 +759,10 @@ describe('QCPlots', () => {
       const traces = expectPlotHasData(container, 'group-abundance');
       expect(traces).toHaveLength(2);
       for (const t of traces) {
-        expect(t.marker).toHaveProperty('color');
-        expect(typeof t.marker.color).toBe('string');
-        expect(t.line).toHaveProperty('color');
+        const marker = t.marker!;
+        expect(marker).toHaveProperty('color');
+        expect(typeof marker.color).toBe('string');
+        expect(t.line!).toHaveProperty('color');
       }
     });
   });
