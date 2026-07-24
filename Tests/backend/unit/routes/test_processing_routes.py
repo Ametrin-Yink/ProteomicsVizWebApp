@@ -6,110 +6,124 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.api.routes.processing import _build_analysis_config, _derive_pipeline
+from app.db.session_store import SessionStore
 from app.main import app
 from app.models.analysis import AnalysisConfig, Organism, PipelineTool
-from app.models.session import Session, SessionConfig, SessionFiles, SessionState
+from app.models.session import (
+    ProteomicsFileInfo, Session, SessionConfig, SessionFiles, SessionState,
+)
 from app.services.task_manager import TaskCancelledError
 from fastapi.testclient import TestClient
 
+_SESSION_ID = "550e8400-e29b-41d4-a716-446655440000"
+
 
 @pytest.fixture
-def mock_store():
-    from datetime import UTC, datetime
+def store(tmp_path, monkeypatch):
+    """Real SessionStore with isolated sessions_dir."""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "sessions_dir", tmp_path)
+    return SessionStore(sessions_dir=tmp_path)
 
-    store = AsyncMock()
-    session = Session(
-        id="550e8400-e29b-41d4-a716-446655440000",
-        name="Test",
-        template="multi_condition_comparison",
-        pipeline="msqrob2",
+
+def _make_session(**overrides):
+    kwargs = dict(
+        id=_SESSION_ID, name="Test",
+        template="multi_condition_comparison", pipeline="msqrob2",
         state=SessionState.CONFIGURING,
-        config=SessionConfig(treatment="DrugA", control="DMSO", organism="human"),
+        config=SessionConfig(
+            treatment="DrugA", control="DMSO", organism="human",
+        ),
         files=SessionFiles(),
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
     )
-    session.files.proteomics = [MagicMock() for _ in range(6)]
-    store.get = AsyncMock(return_value=session)
-    store.save = AsyncMock()
-    store.load_pipeline_state = AsyncMock(
-        return_value={
-            "logs": [{"level": "info", "message": "Step 1 done"}],
-            "completed_steps": [1],
-            "current_step": 2,
-            "completed_at": None,
-            "outputs": None,
-        }
-    )
-    return store
+    kwargs.update(overrides)
+    session = Session(**kwargs)
+    # Attach real ProteomicsFileInfo objects (JSON-serializable)
+    session.files.proteomics = [
+        ProteomicsFileInfo(filename=f"sample_{i}.txt", size=1024)
+        for i in range(1, 7)
+    ]
+    return session
 
 
 @pytest.fixture
-def client(mock_store):
+def client(store):
+    """TestClient with real SessionStore as dependency override."""
     from app.api.deps import get_session_store
 
-    app.dependency_overrides[get_session_store] = lambda: mock_store
+    session = _make_session()
+    asyncio.run(store.create(session))
+
+    app.dependency_overrides[get_session_store] = lambda: store
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    # Clean up cancel events left by processing tests
+    from app.api.routes import processing
+    processing._cancel_events.pop(_SESSION_ID, None)
 
 
 class TestStartProcessing:
-    def test_requires_config(self, client, mock_store):
-        mock_store.get.return_value.config = None
+    def test_requires_config(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.config = None
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/process"
+            f"/api/sessions/{_SESSION_ID}/process"
         )
         assert response.status_code == 400
 
-    def test_requires_files(self, client, mock_store):
-        mock_store.get.return_value.files.proteomics = []
+    def test_requires_files(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.files.proteomics = []
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/process"
+            f"/api/sessions/{_SESSION_ID}/process"
         )
         assert response.status_code == 400
 
-    def test_requires_minimum_files_dia(self, client, mock_store):
-        """DIA session with fewer than 2 files raises 400."""
-        mock_store.get.return_value.config.file_type = "dia"
-        mock_store.get.return_value.files.proteomics = [MagicMock()]  # 1 file < 2
+    def test_requires_minimum_files_dia(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.config.file_type = "dia"
+        session.files.proteomics = [ProteomicsFileInfo(filename="sample_1.txt", size=1024)]  # 1 file < 2
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/process"
+            f"/api/sessions/{_SESSION_ID}/process"
         )
         assert response.status_code == 400
 
-    def test_single_file_tmt_passes(self, client, mock_store):
-        """TMT session with 1 file passes (MIN_PROTEOMICS_FILES=1)."""
-        mock_store.get.return_value.config.file_type = "tmt"
-        mock_store.get.return_value.files.proteomics = [MagicMock()]  # 1 file >= 1
+    def test_single_file_tmt_passes(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.config.file_type = "tmt"
+        session.files.proteomics = [ProteomicsFileInfo(filename="sample_1.txt", size=1024)]  # 1 file >= 1
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/process"
+            f"/api/sessions/{_SESSION_ID}/process"
         )
-        # Should pass validation and return 200 with "started" status
         assert response.status_code == 200
         data = response.json()
         assert data["data"]["status"] == "started"
 
-    def test_session_not_found(self, client, mock_store):
-        mock_store.get.return_value = None
+    def test_session_not_found(self, client):
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/process"
+            "/api/sessions/660e8400-e29b-41d4-a716-446655440001/process"
         )
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_concurrent_requests_schedule_pipeline_once(self, mock_store):
+    async def test_concurrent_requests_schedule_pipeline_once(self, store):
         """The state transition must reject a racing duplicate request."""
         from app.api.routes import processing
 
-        session = mock_store.get.return_value.model_copy(
-            update={"id": "concurrent-process-session"}, deep=True
-        )
+        session = _make_session(id="660e8400-e29b-41d4-a716-44665544000c")
+        await store.create(session)
 
         class RacingStore:
             async def get(self, _session_id):
                 await asyncio.sleep(0)
-                return session.model_copy(deep=True)
+                s = await store.get(_session_id)
+                return s.model_copy(deep=True)
 
             async def save(self, _session):
                 await asyncio.sleep(0)
@@ -128,9 +142,9 @@ class TestStartProcessing:
                 return_exceptions=True,
             )
 
-        started = [result for result in results if isinstance(result, dict)]
+        started = [r for r in results if isinstance(r, dict)]
         conflicts = [
-            result for result in results if getattr(result, "status_code", None) == 409
+            r for r in results if getattr(r, "status_code", None) == 409
         ]
         assert len(started) == 1
         assert len(conflicts) == 1
@@ -139,50 +153,58 @@ class TestStartProcessing:
 
 
 class TestCancelProcessing:
-    def test_cancel_non_processing_fails(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.CREATED
+    def test_cancel_non_processing_fails(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.CREATED
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
+            f"/api/sessions/{_SESSION_ID}/cancel"
         )
         assert response.status_code == 400
 
-    def test_cancel_queued_succeeds(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.QUEUED
+    def test_cancel_queued_succeeds(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.QUEUED
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
+            f"/api/sessions/{_SESSION_ID}/cancel"
         )
         assert response.status_code == 200
         assert response.json()["data"]["status"] == "cancelled"
 
-    def test_cancel_processing_succeeds(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.PROCESSING
+    def test_cancel_processing_succeeds(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.PROCESSING
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
+            f"/api/sessions/{_SESSION_ID}/cancel"
         )
         assert response.status_code == 200
 
-    def test_cancel_error_state_succeeds(self, client, mock_store):
-        """Errored processing must retain an exit path for the user."""
-        mock_store.get.return_value.state = SessionState.ERROR
+    def test_cancel_error_state_succeeds(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.ERROR
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
+            f"/api/sessions/{_SESSION_ID}/cancel"
         )
         assert response.status_code == 200
         assert response.json()["data"]["status"] == "cancelled"
 
-    def test_cancel_session_not_found(self, client, mock_store):
-        mock_store.get.return_value = None
+    def test_cancel_session_not_found(self, client):
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/cancel"
+            "/api/sessions/660e8400-e29b-41d4-a716-446655440002/cancel"
         )
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_background_cancellation_preserves_cancelled_state(self, mock_store):
+    async def test_background_cancellation_preserves_cancelled_state(self, store):
         from app.api.routes import processing
 
-        session = mock_store.get.return_value
+        session = _make_session()
+        await store.create(session)
         update_state = AsyncMock()
+
         with (
             patch.object(
                 processing.task_manager,
@@ -203,58 +225,70 @@ class TestCancelProcessing:
 
 
 class TestRetryProcessing:
-    def test_retry_only_from_error_state(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.COMPLETED
+    def test_retry_only_from_error_state(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.COMPLETED
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/retry"
+            f"/api/sessions/{_SESSION_ID}/retry"
         )
         assert response.status_code == 400
 
-    def test_retry_requires_config(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.ERROR
-        mock_store.get.return_value.config = None
+    def test_retry_requires_config(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.ERROR
+        session.config = None
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/retry"
+            f"/api/sessions/{_SESSION_ID}/retry"
         )
         assert response.status_code == 400
 
-    def test_retry_requires_files(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.ERROR
-        mock_store.get.return_value.files.proteomics = []
+    def test_retry_requires_files(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.ERROR
+        session.files.proteomics = []
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/retry"
+            f"/api/sessions/{_SESSION_ID}/retry"
         )
         assert response.status_code == 400
 
-    def test_retry_session_not_found(self, client, mock_store):
-        mock_store.get.return_value = None
+    def test_retry_session_not_found(self, client):
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/retry"
+            "/api/sessions/660e8400-e29b-41d4-a716-446655440003/retry"
         )
         assert response.status_code == 404
 
 
 class TestReprocess:
-    def test_requires_completed_session(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.ERROR
+    def test_requires_completed_session(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.ERROR
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/reprocess",
+            f"/api/sessions/{_SESSION_ID}/reprocess",
             json={"confirm_replace": True},
         )
         assert response.status_code == 400
 
-    def test_requires_explicit_replace_confirmation(self, client, mock_store):
-        mock_store.get.return_value.state = SessionState.COMPLETED
+    def test_requires_explicit_replace_confirmation(self, client, store):
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.COMPLETED
+        asyncio.run(store.update(session))
         response = client.post(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/reprocess",
+            f"/api/sessions/{_SESSION_ID}/reprocess",
             json={"confirm_replace": False},
         )
         assert response.status_code == 400
 
-    def test_schedules_confirmed_reprocess(self, client, mock_store):
+    def test_schedules_confirmed_reprocess(self, client, store):
         from app.api.routes import processing
 
-        mock_store.get.return_value.state = SessionState.COMPLETED
+        session = asyncio.run(store.get(_SESSION_ID))
+        session.state = SessionState.COMPLETED
+        asyncio.run(store.update(session))
+
         with (
             patch.object(processing, "_schedule_background_task") as schedule,
             patch.object(
@@ -264,28 +298,39 @@ class TestReprocess:
             ),
         ):
             response = client.post(
-                "/api/sessions/550e8400-e29b-41d4-a716-446655440000/reprocess",
+                f"/api/sessions/{_SESSION_ID}/reprocess",
                 json={"confirm_replace": True},
             )
 
         assert response.status_code == 200
         assert response.json()["data"]["status"] == "started"
         schedule.assert_called_once()
-        processing._cancel_events.pop(mock_store.get.return_value.id, None)
+        processing._cancel_events.pop(_SESSION_ID, None)
 
 
 class TestGetLogs:
-    def test_returns_logs(self, client, mock_store):
-        response = client.get("/api/sessions/550e8400-e29b-41d4-a716-446655440000/logs")
+    def test_returns_logs(self, client, store):
+        asyncio.run(
+            store.save_pipeline_state(
+                _SESSION_ID,
+                {
+                    "logs": [{"level": "info", "message": "Step 1 done"}],
+                    "completed_steps": [1],
+                    "current_step": 2,
+                    "completed_at": None,
+                    "outputs": None,
+                },
+            )
+        )
+        response = client.get(f"/api/sessions/{_SESSION_ID}/logs")
         assert response.status_code == 200
         data = response.json()
         assert len(data["logs"]) == 1
         assert data["completed_steps"] == [1]
         assert data["is_complete"] is False
 
-    def test_no_pipeline_state_returns_defaults(self, client, mock_store):
-        mock_store.load_pipeline_state.return_value = None
-        response = client.get("/api/sessions/550e8400-e29b-41d4-a716-446655440000/logs")
+    def test_no_pipeline_state_returns_defaults(self, client):
+        response = client.get(f"/api/sessions/{_SESSION_ID}/logs")
         assert response.status_code == 200
         data = response.json()
         assert data["logs"] == []
@@ -293,19 +338,18 @@ class TestGetLogs:
 
 
 class TestGetStatus:
-    def test_returns_status(self, client, mock_store):
+    def test_returns_status(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/status"
+            f"/api/sessions/{_SESSION_ID}/status"
         )
         assert response.status_code == 200
         data = response.json()
         assert "state" in data
         assert "progress" in data
 
-    def test_status_session_not_found(self, client, mock_store):
-        mock_store.get.return_value = None
+    def test_status_session_not_found(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/status"
+            "/api/sessions/660e8400-e29b-41d4-a716-446655440004/status"
         )
         assert response.status_code == 404
 
@@ -321,48 +365,30 @@ class TestBuildAnalysisConfig:
     def test_forwards_non_default_values(self):
         metadata = {
             "sample.txt": {
-                "condition": "DrugA",
-                "replicate": "1",
-                "batch": "Plate1",
+                "condition": "DrugA", "replicate": "1", "batch": "Plate1",
             }
         }
         session_config = SessionConfig(
-            treatment="DrugA",
-            control="Vehicle",
-            organism="mouse",
+            treatment="DrugA", control="Vehicle", organism="mouse",
             resolve_shared_peptides=True,
-            max_missing_fraction_per_condition=0.25,
-            min_psms_per_protein=3,
+            max_missing_fraction_per_condition=0.25, min_psms_per_protein=3,
             comparisons=[
-                {
-                    "group1": {"condition": "DrugA"},
-                    "group2": {"condition": "Vehicle"},
-                }
+                {"group1": {"condition": "DrugA"}, "group2": {"condition": "Vehicle"}}
             ],
             metadata_columns=metadata,
-            pvalue_threshold=0.02,
-            logfc_threshold=1.5,
-            msstats_normalization="quantile",
-            msstats_feature_selection="topN",
-            msstats_summary_method="linear",
-            msstats_impute=False,
-            msstats_log_base=10,
-            msstats_censored_int="0",
-            msstats_max_quantile=0.95,
-            msstats_remove50missing=True,
-            msstats_n_top_feature=5,
-            msstats_min_feature_count=4,
+            pvalue_threshold=0.02, logfc_threshold=1.5,
+            msstats_normalization="quantile", msstats_feature_selection="topN",
+            msstats_summary_method="linear", msstats_impute=False,
+            msstats_log_base=10, msstats_censored_int="0",
+            msstats_max_quantile=0.95, msstats_remove50missing=True,
+            msstats_n_top_feature=5, msstats_min_feature_count=4,
             msstats_remove_uninformative_feature_outlier=True,
             msstats_equal_feature_var=False,
-            msstats_name_standards="P1,P2",
-            msstats_save_fitted_models=False,
+            msstats_name_standards="P1,P2", msstats_save_fitted_models=False,
             msstats_n_cores=2,
-            msqrob2_ridge=True,
-            msqrob2_normalization="quantiles",
-            msqrob2_imputation="knn",
-            msqrob2_aggregation="medianPolish",
-            msqrob2_adjust_method="holm",
-            msqrob2_n_cores=3,
+            msqrob2_ridge=True, msqrob2_normalization="quantiles",
+            msqrob2_imputation="knn", msqrob2_aggregation="medianPolish",
+            msqrob2_adjust_method="holm", msqrob2_n_cores=3,
             msqrob2_batch_column="batch",
             covariate_columns=["batch"],
             file_type="tmt",
@@ -371,11 +397,9 @@ class TestBuildAnalysisConfig:
             },
         )
         session = Session(
-            id="config-contract",
-            name="Config contract",
+            id="config-contract", name="Config contract",
             template="multi_condition_comparison",
-            state=SessionState.CONFIGURING,
-            config=session_config,
+            state=SessionState.CONFIGURING, config=session_config,
         )
 
         analysis_config = _build_analysis_config(session)
@@ -400,7 +424,6 @@ class TestBuildAnalysisConfig:
                 "min_peptides_per_protein": 3,
             }
         )
-
         assert session_config.resolve_shared_peptides is True
         assert session_config.max_missing_fraction_per_condition == 0.20
         assert session_config.min_psms_per_protein == 3
@@ -410,39 +433,30 @@ class TestDerivePipeline:
     """Test the _derive_pipeline helper function."""
 
     def test_derive_pipeline_tmt(self):
-        """file_type='tmt' returns MSSTATS."""
         session = Session(
-            id="derive-test-tmt",
-            name="TMT Test",
+            id="derive-test-tmt", name="TMT Test",
             state=SessionState.CREATED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
             config=SessionConfig(file_type="tmt"),
         )
         result = _derive_pipeline(session)
         assert result == PipelineTool.MSSTATS
 
     def test_derive_pipeline_dia(self):
-        """file_type='dia' returns MSQROB2."""
         session = Session(
-            id="derive-test-dia",
-            name="DIA Test",
+            id="derive-test-dia", name="DIA Test",
             state=SessionState.CREATED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
             config=SessionConfig(file_type="dia"),
         )
         result = _derive_pipeline(session)
         assert result == PipelineTool.MSQROB2
 
     def test_derive_pipeline_legacy(self):
-        """No file_type in config, session.pipeline='msqrob2' returns MSQROB2."""
         session = Session(
-            id="derive-test-legacy",
-            name="Legacy Test",
+            id="derive-test-legacy", name="Legacy Test",
             state=SessionState.CREATED,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
             pipeline="msqrob2",
         )
         result = _derive_pipeline(session)

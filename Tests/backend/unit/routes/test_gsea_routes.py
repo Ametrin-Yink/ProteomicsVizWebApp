@@ -1,42 +1,44 @@
 """Unit tests for GSEA API routes — run, status, data, plot, heatmap."""
 
 import json
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
-from app.main import app
+from app.db.session_store import SessionStore
+from app.models.session import Session, SessionConfig, SessionFiles, SessionState
 from fastapi.testclient import TestClient
+
+_SESSION_ID = "550e8400-e29b-41d4-a716-446655440000"
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    from datetime import UTC, datetime
-
+def store(tmp_path, monkeypatch):
+    """Real SessionStore with isolated sessions_dir."""
     from app.core import config
-
     monkeypatch.setattr(config.settings, "sessions_dir", tmp_path)
+    return SessionStore(sessions_dir=tmp_path)
 
-    from app.models.session import Session, SessionConfig, SessionFiles, SessionState
+
+@pytest.fixture
+def client(store):
+    """TestClient with real SessionStore dependency override."""
+    import asyncio
+
+    from app.api.deps import get_session_store
+    from app.main import app
 
     session = Session(
-        id="550e8400-e29b-41d4-a716-446655440000",
-        name="Test",
-        template="multi_condition_comparison",
-        pipeline="msqrob2",
+        id=_SESSION_ID, name="Test",
+        template="multi_condition_comparison", pipeline="msqrob2",
         state=SessionState.COMPLETED,
         config=SessionConfig(treatment="A", control="B", organism="human"),
         files=SessionFiles(),
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
     )
+    asyncio.run(store.create(session))
 
-    mock_store = AsyncMock()
-    mock_store.get = AsyncMock(return_value=session)
-
-    from app.api.deps import get_session_store
-
-    app.dependency_overrides[get_session_store] = lambda: mock_store
+    app.dependency_overrides[get_session_store] = lambda: store
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -45,7 +47,7 @@ def client(tmp_path, monkeypatch):
 class TestGseaStatus:
     def test_returns_idle_when_no_status(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/status"
+            f"/api/sessions/{_SESSION_ID}/gsea/status"
         )
         assert response.status_code == 200
         data = response.json()["data"]
@@ -55,7 +57,7 @@ class TestGseaStatus:
 class TestGseaData:
     def test_returns_results_structure(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/go_bp"
+            f"/api/sessions/{_SESSION_ID}/gsea/go_bp"
         )
         assert response.status_code == 200
         data = response.json()["data"]
@@ -64,7 +66,7 @@ class TestGseaData:
 
     def test_rejects_invalid_database(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/invalid_db"
+            f"/api/sessions/{_SESSION_ID}/gsea/invalid_db"
         )
         assert response.status_code == 400
 
@@ -72,14 +74,14 @@ class TestGseaData:
 class TestGseaPlot:
     def test_missing_pathway_returns_404(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/go_bp/plot"
+            f"/api/sessions/{_SESSION_ID}/gsea/go_bp/plot"
             "?term=nonexistent_pathway"
         )
         assert response.status_code == 404
 
     def test_invalid_database_returns_400(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/bad_db/plot"
+            f"/api/sessions/{_SESSION_ID}/gsea/bad_db/plot"
             "?term=test"
         )
         assert response.status_code == 400
@@ -88,33 +90,28 @@ class TestGseaPlot:
 class TestGseaHeatmap:
     def test_missing_pathway_returns_404(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/go_bp/heatmap"
+            f"/api/sessions/{_SESSION_ID}/gsea/go_bp/heatmap"
             "?term=nonexistent"
         )
         assert response.status_code == 404
 
     def test_returns_comparison_scoped_processed_heatmap(
-        self, client, tmp_path, monkeypatch
+        self, client, store, monkeypatch
     ):
         from app.api.routes import visualization
 
-        results_dir = tmp_path / "550e8400-e29b-41d4-a716-446655440000" / "results"
-        results_dir.mkdir(parents=True)
+        results_dir = store.get_session_results_dir(_SESSION_ID)
+
         pd.DataFrame(
             [
                 {
-                    "protein_accession": "P1",
-                    "gene_name": "GENE1",
-                    "sample_id": sample,
-                    "condition": condition,
-                    "replicate": replicate,
-                    "batch": None,
+                    "protein_accession": "P1", "gene_name": "GENE1",
+                    "sample_id": sample, "condition": condition,
+                    "replicate": replicate, "batch": None,
                     "processed_log2_abundance": value,
                     "provenance": "model_estimated",
-                    "observed_feature_count": 0,
-                    "imputed_feature_count": 0,
-                    "imputation_fraction": None,
-                    "pipeline": "msqrob2",
+                    "observed_feature_count": 0, "imputed_feature_count": 0,
+                    "imputation_fraction": None, "pipeline": "msqrob2",
                     "result_layer": "protein",
                     "sample_order": order,
                     "condition_order": 0 if condition == "A" else 1,
@@ -130,58 +127,41 @@ class TestGseaHeatmap:
         ).to_parquet(results_dir / "protein_abundance_long.parquet", index=False)
         pd.DataFrame(
             columns=[
-                "protein_accession",
-                "gene_name",
-                "peptide_id",
-                "sample_id",
-                "condition",
-                "replicate",
-                "batch",
-                "processed_log2_abundance",
-                "provenance",
-                "pipeline",
-                "result_layer",
-                "sample_order",
-                "condition_order",
+                "protein_accession", "gene_name", "peptide_id", "sample_id",
+                "condition", "replicate", "batch",
+                "processed_log2_abundance", "provenance",
+                "pipeline", "result_layer", "sample_order", "condition_order",
             ]
         ).to_parquet(results_dir / "peptide_abundance_long.parquet", index=False)
         pd.DataFrame(
             {
                 "sample_id": ["A_1", "A_2", "B_1"],
                 "condition": ["A", "A", "B"],
-                "replicate": ["1", "2", "1"],
-                "batch": [None, None, None],
-                "sample_order": [0, 1, 2],
-                "condition_order": [0, 0, 1],
+                "replicate": ["1", "2", "1"], "batch": [None, None, None],
+                "sample_order": [0, 1, 2], "condition_order": [0, 0, 1],
             }
         ).to_parquet(results_dir / "sample_catalog.parquet", index=False)
         pd.DataFrame(
             {
                 "comparison_id": ["A_vs_B"],
-                "group1_label": ["A"],
-                "group2_label": ["B"],
+                "group1_label": ["A"], "group2_label": ["B"],
                 "comparison_order": [0],
             }
         ).to_parquet(results_dir / "comparison_catalog.parquet", index=False)
         pd.DataFrame(
             {
                 "comparison_id": ["A_vs_B"],
-                "protein_accession": ["P1"],
-                "gene_name": ["GENE1"],
-                "log2_fold_change": [2.0],
-                "p_value": [0.01],
-                "adjusted_p_value": [0.02],
-                "standard_error": [0.1],
-                "statistic": [4.0],
-                "result_layer": ["protein"],
+                "protein_accession": ["P1"], "gene_name": ["GENE1"],
+                "log2_fold_change": [2.0], "p_value": [0.01],
+                "adjusted_p_value": [0.02], "standard_error": [0.1],
+                "statistic": [4.0], "result_layer": ["protein"],
                 "pipeline": ["msqrob2"],
             }
         ).to_parquet(results_dir / "differential_results.parquet", index=False)
         (results_dir / "visualization_artifacts.json").write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
-                    "abundance_scale": "log2",
+                    "schema_version": 1, "abundance_scale": "log2",
                     "normalization_method": "center.median",
                     "imputation_method": "none",
                     "artifacts": {
@@ -204,7 +184,7 @@ class TestGseaHeatmap:
         )
 
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/gsea/go_bp/heatmap"
+            f"/api/sessions/{_SESSION_ID}/gsea/go_bp/heatmap"
             "?term=pathway&comparison=A_vs_B"
         )
 

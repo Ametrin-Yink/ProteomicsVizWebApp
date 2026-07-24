@@ -163,3 +163,93 @@ class TestGenerateHeatmapData:
         # Should handle gracefully — either None or valid structure
         if result is not None:
             assert "genes" in result
+
+
+# ── _prepare_ranked_list ────────────────────────────────────────────────
+
+
+class TestPrepareRankedList:
+    def test_ranks_by_metric(self):
+        df = pd.DataFrame({
+            "Gene_Name": ["A", "B", "C"],
+            "pval": [0.01, 0.05, 0.5],
+            "logFC": [2.0, -1.5, 0.3],
+        })
+        result = gsea_service._prepare_ranked_list(df)
+        assert result is not None
+        assert len(result) == 3
+        # A: -log10(0.01)*sign(2.0) = 2.0, should be first (highest metric)
+        assert result.iloc[0]["gene"] == "A"
+
+    def test_cleans_gene_names(self):
+        df = pd.DataFrame({
+            "Gene_Name": ["P12345-2; P67890"],
+            "pval": [0.01],
+            "logFC": [1.0],
+        })
+        result = gsea_service._prepare_ranked_list(df)
+        assert result is not None
+        assert result.iloc[0]["gene"] == "P12345"
+
+    def test_filters_invalid_pvalues(self):
+        df = pd.DataFrame({
+            "Gene_Name": ["A", "B"],
+            "pval": [0.0, 1.5],
+            "logFC": [1.0, 1.0],
+        })
+        result = gsea_service._prepare_ranked_list(df)
+        # pval <= 0 filtered, pval > 1 filtered — both should be removed
+        assert result is None or len(result) == 0
+
+    def test_missing_columns_returns_none(self):
+        df = pd.DataFrame({"X": [1], "Y": [2]})
+        result = gsea_service._prepare_ranked_list(df)
+        assert result is None
+
+
+# ── save_results / get_results ──────────────────────────────────────────
+
+
+class TestSaveAndGetResults:
+    def test_save_writes_json(self, tmp_path):
+        from app.models.data import GSEAResult, GSEAResults
+
+        results = {
+            "go_bp": GSEAResults(
+                database="go_bp",
+                total_pathways=1,
+                significant_pathways=0,
+                overrepresented=0,
+                underrepresented=0,
+                results=[
+                    GSEAResult(
+                        term="TERM", name="Term", es=0.5, nes=1.2,
+                        pval=0.01, fdr=0.02, matched_genes=5,
+                    )
+                ],
+            )
+        }
+        path = tmp_path / "results.json"
+        gsea_service.save_results(results, path)
+        assert path.exists()
+        import json
+        data = json.loads(path.read_text())
+        assert "go_bp" in data
+
+    def test_get_results_specific_db(self):
+        from app.models.data import GSEAResult, GSEAResults
+        results = {
+            "go_bp": GSEAResults(
+                database="go_bp",
+                total_pathways=0, significant_pathways=0,
+                overrepresented=0, underrepresented=0,
+            )
+        }
+        r = gsea_service.get_results(results, "go_bp")
+        assert r is not None
+        r2 = gsea_service.get_results(results, "nonexistent")
+        assert r2 is None
+
+    def test_get_results_all(self):
+        results = {}
+        assert gsea_service.get_results(results) == {}

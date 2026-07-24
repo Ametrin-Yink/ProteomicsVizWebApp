@@ -51,3 +51,41 @@ def test_cancel_without_session_kills_all_registered_processes():
         unregister_process(first, "session-a")
         unregister_process(second, "session-b")
         cancel_processes()
+
+
+# ── Context-var session tracking ────────────────────────────────────────
+
+
+def test_set_and_get_current_session():
+    from app.services.r_process_registry import (
+        get_current_session,
+        reset_current_session,
+        set_current_session,
+    )
+
+    assert get_current_session() is None
+    token = set_current_session("session-1")
+    try:
+        assert get_current_session() == "session-1"
+    finally:
+        reset_current_session(token)
+    assert get_current_session() is None
+
+
+def test_reset_restores_previous():
+    from app.services.r_process_registry import (
+        get_current_session,
+        reset_current_session,
+        set_current_session,
+    )
+
+    token1 = set_current_session("outer")
+    assert get_current_session() == "outer"
+    token2 = set_current_session("inner")
+    assert get_current_session() == "inner"
+
+    reset_current_session(token2)
+    assert get_current_session() == "outer"
+
+    reset_current_session(token1)
+    assert get_current_session() is None

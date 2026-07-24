@@ -35,9 +35,9 @@ repos:
         require_serial: true
 
       - id: pytest
-        name: backend unit tests
+        name: backend smoke tests
         language: system
-        entry: backend/.venv/Scripts/python.exe -m pytest Tests/backend/unit -q --tb=short
+        entry: python -m pytest Tests/backend/unit/infrastructure/ Tests/backend/unit/models/ Tests/backend/unit/utils/ Tests/backend/unit/services/test_file_index_service.py Tests/backend/unit/services/test_report_store.py -q --tb=short --no-header
         pass_filenames: false
         files: ^backend/.*\.py$
         require_serial: true

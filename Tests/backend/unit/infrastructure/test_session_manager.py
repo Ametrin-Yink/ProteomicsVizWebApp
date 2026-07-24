@@ -1,57 +1,71 @@
-"""Unit tests for SessionManager — session lifecycle and WebSocket management."""
+"""Unit tests for SessionManager — session lifecycle and WebSocket management.
+
+Uses a real SessionStore backed by tmp_path so session persistence is
+exercised end-to-end. WebSocket objects remain MagicMock stubs because
+the framework does not expose a trivially constructible WebSocket.
+"""
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from app.db.session_store import SessionStore
 from app.models.session import SessionCreate, SessionState
+from app.services.session_manager import SessionManager
 
 
 @pytest.fixture
-def mock_store():
-    store = AsyncMock()
-    store.get = AsyncMock()
-    store.create = AsyncMock()
-    store.save = AsyncMock()
-    store.update = AsyncMock()
-    store.delete = AsyncMock()
-    store.list_all = AsyncMock(return_value=[])
-    store.load_pipeline_state = AsyncMock(return_value=None)
-    return store
+def store(tmp_path):
+    """Real SessionStore writing to a temp directory."""
+    return SessionStore(sessions_dir=tmp_path)
 
 
 @pytest.fixture
-def manager(mock_store):
-    from app.services.session_manager import SessionManager
+def manager(store):
+    """Real SessionManager backed by the real store."""
+    return SessionManager(store=store)
 
-    return SessionManager(store=mock_store)
+
+# ── Session Creation ────────────────────────────────────────────────────
 
 
 class TestCreateSession:
     @pytest.mark.asyncio
-    async def test_creates_session_with_valid_name(self, manager, mock_store):
+    async def test_creates_session_with_valid_name(self, manager, store, tmp_path):
         data = SessionCreate(
             name="My Experiment", template="multi_condition_comparison"
         )
-        result = await manager.create_session(data)
-        assert result is not None
-        mock_store.create.assert_awaited_once()
+        session = await manager.create_session(data)
+
+        assert session is not None
+        assert session.name == "My Experiment"
+        assert session.template == "multi_condition_comparison"
+        assert session.state == SessionState.CREATED
+
+        # Verify the session was persisted to disk
+        session_file = tmp_path / session.id / "session.json"
+        assert session_file.exists(), "Session file must be written to disk"
+
+        # Verify we can re-read it through the store
+        reloaded = await store.get(session.id)
+        assert reloaded.name == "My Experiment"
+        assert reloaded.state == SessionState.CREATED
 
     @pytest.mark.asyncio
-    async def test_rejects_empty_name(self, manager, mock_store):
+    async def test_rejects_empty_name(self, manager):
         with pytest.raises(Exception):
             await manager.create_session(
                 SessionCreate(name="", template="multi_condition_comparison")
             )
 
     @pytest.mark.asyncio
-    async def test_rejects_name_too_long(self, manager, mock_store):
+    async def test_rejects_name_too_long(self, manager):
         with pytest.raises(Exception):
             await manager.create_session(
                 SessionCreate(name="x" * 201, template="multi_condition_comparison")
             )
 
     @pytest.mark.asyncio
-    async def test_validates_name_characters(self, manager, mock_store):
+    async def test_validates_name_characters(self, manager):
         with pytest.raises(Exception):
             await manager.create_session(
                 SessionCreate(
@@ -60,36 +74,44 @@ class TestCreateSession:
             )
 
 
+# ── State Transitions ───────────────────────────────────────────────────
+
+
 class TestUpdateSessionState:
     @pytest.mark.asyncio
-    async def test_delegates_to_store(self, manager, mock_store):
-        mock_store.update_session_state = AsyncMock()
-        session = MagicMock()
-        mock_store.update_session_state.return_value = session
+    async def test_persists_state_transition_to_disk(self, manager, store):
+        """Updating session state must survive a re-read from the store."""
+        session = await manager.create_session(
+            SessionCreate(name="State test", template="multi_condition_comparison")
+        )
 
-        result = await manager.update_session_state(
-            "550e8400-e29b-41d4-a716-446655440000",
+        updated = await manager.update_session_state(
+            session.id,
             SessionState.COMPLETED,
         )
-        mock_store.update_session_state.assert_awaited_once_with(
-            "550e8400-e29b-41d4-a716-446655440000",
-            SessionState.COMPLETED,
-            None,
-        )
-        assert result is session
+
+        assert updated.state == SessionState.COMPLETED
+
+        # Re-read from disk — the state change must be durable
+        reloaded = await store.get(session.id)
+        assert reloaded.state == SessionState.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_delegates_with_error_message(self, manager, mock_store):
-        mock_store.update_session_state = AsyncMock()
-        session = MagicMock()
-        mock_store.update_session_state.return_value = session
+    async def test_persists_error_message_with_state(self, manager, store):
+        session = await manager.create_session(
+            SessionCreate(name="Error test", template="multi_condition_comparison")
+        )
 
         await manager.update_session_state(
-            "test-id", SessionState.ERROR, "R script failed"
+            session.id, SessionState.ERROR, "R script failed"
         )
-        mock_store.update_session_state.assert_awaited_once_with(
-            "test-id", SessionState.ERROR, "R script failed"
-        )
+
+        reloaded = await store.get(session.id)
+        assert reloaded.state == SessionState.ERROR
+        assert reloaded.error_message == "R script failed"
+
+
+# ── WebSocket Management ────────────────────────────────────────────────
 
 
 class TestWebSocketManagement:

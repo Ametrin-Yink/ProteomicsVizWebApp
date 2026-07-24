@@ -1,19 +1,26 @@
 """Unit tests for visualization API routes — results, QC, protein data, tasks."""
 
+import asyncio
 import io
+import json
 import zipfile
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
-from app.main import app
+from app.db.session_store import SessionStore
+from app.models.analysis import AnalysisConfig, PipelineTool
 from app.models.session import Session, SessionConfig, SessionFiles, SessionState
+from app.services.visualization_artifacts import (
+    VISUALIZATION_SCHEMA_VERSION,
+    materialize_visualization_artifacts,
+)
 from fastapi.testclient import TestClient
+
+_SESSION_ID = "550e8400-e29b-41d4-a716-446655440000"
 
 
 def _write_supported_visualization_manifest(results_dir, pipeline: str) -> None:
-    from app.services.visualization_artifacts import VISUALIZATION_SCHEMA_VERSION
-
     artifacts = {
         "protein_abundance": "protein_abundance_long.parquet",
         "peptide_abundance": "peptide_abundance_long.parquet",
@@ -24,7 +31,7 @@ def _write_supported_visualization_manifest(results_dir, pipeline: str) -> None:
     for filename in artifacts.values():
         (results_dir / filename).touch()
     (results_dir / "visualization_artifacts.json").write_text(
-        __import__("json").dumps(
+        json.dumps(
             {
                 "schema_version": VISUALIZATION_SCHEMA_VERSION,
                 "pipeline": pipeline,
@@ -39,16 +46,20 @@ def _write_supported_visualization_manifest(results_dir, pipeline: str) -> None:
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    from datetime import UTC, datetime
-
+def store(tmp_path, monkeypatch):
+    """Real SessionStore with isolated sessions_dir."""
     from app.core import config
-
     monkeypatch.setattr(config.settings, "sessions_dir", tmp_path)
+    return SessionStore(sessions_dir=tmp_path)
 
-    results_dir = tmp_path / "550e8400-e29b-41d4-a716-446655440000" / "results"
-    results_dir.mkdir(parents=True)
 
+@pytest.fixture
+def client(tmp_path, monkeypatch, store):
+    from app.api.deps import get_session_store
+    from app.main import app
+    results_dir = store.get_session_results_dir(_SESSION_ID)
+
+    # Write legacy diff expression TSV
     de_df = pd.DataFrame(
         {
             "Master_Protein_Accessions": ["P001", "P002", "P003"],
@@ -62,6 +73,8 @@ def client(tmp_path, monkeypatch):
         }
     )
     de_df.to_csv(results_dir / "Diff_Expression.tsv", sep="\t", index=False)
+
+    # Write canonical differential_results.parquet
     pd.DataFrame(
         {
             "comparison_id": ["DrugA_vs_DMSO"] * 3,
@@ -78,12 +91,12 @@ def client(tmp_path, monkeypatch):
         }
     ).to_parquet(results_dir / "differential_results.parquet", index=False)
 
+    # PTM result files
     pd.DataFrame(
         {
             "Protein": ["P1_C10", "P2_candidate_C20|C30"],
             "Comparison": ["Drug_vs_DMSO", "Drug_vs_DMSO"],
-            "log2FC": [1.2, 0.4],
-            "pvalue": [0.01, 0.2],
+            "log2FC": [1.2, 0.4], "pvalue": [0.01, 0.2],
             "adj.pvalue": [0.02, 0.3],
             "ProteinName": ["P1_C10", "P2_candidate_C20|C30"],
             "ProteinAccession": ["P1", "P2"],
@@ -95,40 +108,28 @@ def client(tmp_path, monkeypatch):
     ).to_csv(results_dir / "ptm_site_results.tsv", sep="\t", index=False)
     pd.DataFrame(
         {
-            "Protein": ["P1"],
-            "Comparison": ["Drug_vs_DMSO"],
-            "log2FC": [0.1],
-            "pvalue": [0.5],
-            "adj.pvalue": [0.5],
-            "issue": [None],
-            "UnusedMetadata": ["large metadata value"],
+            "Protein": ["P1"], "Comparison": ["Drug_vs_DMSO"],
+            "log2FC": [0.1], "pvalue": [0.5], "adj.pvalue": [0.5],
+            "issue": [None], "UnusedMetadata": ["large metadata value"],
         }
     ).to_csv(results_dir / "protein_results.tsv", sep="\t", index=False)
     pd.DataFrame(
         {
-            "Protein": ["P1_C10"],
-            "Comparison": ["Drug_vs_DMSO"],
-            "GlobalProtein": ["P1"],
-            "Adjusted": [True],
-            "log2FC": [1.1],
-            "pvalue": [0.02],
-            "adj.pvalue": [0.03],
+            "Protein": ["P1_C10"], "Comparison": ["Drug_vs_DMSO"],
+            "GlobalProtein": ["P1"], "Adjusted": [True],
+            "log2FC": [1.1], "pvalue": [0.02], "adj.pvalue": [0.03],
         }
     ).to_csv(results_dir / "adjusted_ptm_results.tsv", sep="\t", index=False)
     pd.DataFrame(
         {
-            "ProteinName": ["P1_C10"],
-            "ProteinAccession": ["P1"],
-            "SiteLabel": ["P1 · C10"],
-            "LocalizationStatus": ["Confident"],
-            "MappingStatus": ["FASTA mapped"],
-            "LocalizationSource": [None],
+            "ProteinName": ["P1_C10"], "ProteinAccession": ["P1"],
+            "SiteLabel": ["P1 · C10"], "LocalizationStatus": ["Confident"],
+            "MappingStatus": ["FASTA mapped"], "LocalizationSource": [None],
         }
     ).to_csv(results_dir / "ptm_site_metadata.tsv", sep="\t", index=False)
     pd.DataFrame(
         {
-            "ProteinName": ["P1_C10"],
-            "PeptideSequence": ["ACDK"],
+            "ProteinName": ["P1_C10"], "PeptideSequence": ["ACDK"],
             "LocalizationStatus": ["Confident"],
         }
     ).to_csv(results_dir / "ptm_localization_evidence.tsv", sep="\t", index=False)
@@ -137,45 +138,35 @@ def client(tmp_path, monkeypatch):
     ).to_csv(results_dir / "ptm_peptidoforms.tsv", sep="\t", index=False)
     pd.DataFrame(
         {
-            "Protein": ["P1_C10"],
-            "Channel": ["126"],
-            "Condition": ["Drug"],
-            "Abundance": [12.5],
+            "Protein": ["P1_C10"], "Channel": ["126"],
+            "Condition": ["Drug"], "Abundance": [12.5],
         }
     ).to_csv(results_dir / "ptm_site_summarized.tsv", sep="\t", index=False)
     with zipfile.ZipFile(results_dir / "ptm_results.zip", "w") as archive:
         archive.writestr("ptm_site_results.tsv", "Protein\tlog2FC\nP1_C10\t1.2\n")
 
     session = Session(
-        id="550e8400-e29b-41d4-a716-446655440000",
-        name="Test",
-        template="multi_condition_comparison",
-        pipeline="msqrob2",
+        id=_SESSION_ID, name="Test",
+        template="multi_condition_comparison", pipeline="msqrob2",
         state=SessionState.COMPLETED,
         config=SessionConfig(
-            treatment="DrugA",
-            control="DMSO",
-            organism="human",
+            treatment="DrugA", control="DMSO", organism="human",
             comparisons=[{"group1": {"C": "DrugA"}, "group2": {"C": "DMSO"}}],
         ),
         files=SessionFiles(),
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
     )
+    asyncio.run(store.create(session))
 
-    mock_store = AsyncMock()
-    mock_store.get = AsyncMock(return_value=session)
-    mock_store.load_pipeline_state = AsyncMock(return_value=None)
-
-    from app.api.deps import get_session_store
-
-    app.dependency_overrides[get_session_store] = lambda: mock_store
+    app.dependency_overrides[get_session_store] = lambda: store
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
 
 
 def test_modular_visualization_routes_are_registered_once():
+    from app.main import app
+
     expected = {
         "/api/sessions/{session_id}/visualization/manifest",
         "/api/sessions/{session_id}/protein/{protein_id}/abundance",
@@ -186,15 +177,12 @@ def test_modular_visualization_routes_are_registered_once():
         "/api/sessions/{session_id}/ptm/qc/plots",
     }
     registered = [route.path for route in app.routes if route.path in expected]
-
     assert sorted(registered) == sorted(expected)
 
 
 class TestGetResults:
     def test_returns_paginated_results(self, client):
-        response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/results"
-        )
+        response = client.get(f"/api/sessions/{_SESSION_ID}/results")
         assert response.status_code == 200
         data = response.json()["data"]
         assert data["total"] == 3
@@ -203,17 +191,16 @@ class TestGetResults:
 
     def test_significant_only_filter(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/results",
+            f"/api/sessions/{_SESSION_ID}/results",
             params={"significant_only": "true"},
         )
         assert response.status_code == 200
         data = response.json()["data"]
-        # Only P001 has adjPval < 0.05 (0.005); P002 has adjPval == 0.05 (not < 0.05)
         assert data["total"] == 1
 
     def test_search_by_gene_name(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/results",
+            f"/api/sessions/{_SESSION_ID}/results",
             params={"search": "GENE1"},
         )
         assert response.status_code == 200
@@ -222,7 +209,7 @@ class TestGetResults:
 
     def test_sort_by_logfc_desc(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/results",
+            f"/api/sessions/{_SESSION_ID}/results",
             params={"sort_by": "log_fc", "sort_order": "desc"},
         )
         assert response.status_code == 200
@@ -231,7 +218,7 @@ class TestGetResults:
 
     def test_pagination(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/results",
+            f"/api/sessions/{_SESSION_ID}/results",
             params={"page_size": 1, "page": 2},
         )
         assert response.status_code == 200
@@ -240,9 +227,7 @@ class TestGetResults:
         assert data["page"] == 2
 
     def test_includes_statistics(self, client):
-        response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/results"
-        )
+        response = client.get(f"/api/sessions/{_SESSION_ID}/results")
         assert response.status_code == 200
         data = response.json()["data"]
         assert "total_proteins" in data
@@ -251,43 +236,26 @@ class TestGetResults:
         assert "downregulated" in data
 
     def test_session_not_found(self, client):
-        # Override the mock store to return None for this test
-        from app.api.deps import get_session_store
-
-        none_store = AsyncMock()
-        none_store.get = AsyncMock(return_value=None)
-        app.dependency_overrides[get_session_store] = lambda: none_store
-        try:
-            response = client.get(
-                "/api/sessions/660e8400-e29b-41d4-a716-446655440001/results"
-            )
-            assert response.status_code == 404
-        finally:
-            # Restore original mock
-            from app.api.deps import get_session_store
-
-            mock_store2 = AsyncMock()
-            mock_store2.get = AsyncMock(return_value=None)
-            app.dependency_overrides.clear()
+        response = client.get(
+            "/api/sessions/660e8400-e29b-41d4-a716-446655440001/results"
+        )
+        assert response.status_code == 404
 
 
 class TestGetQCPlots:
     def test_requires_reprocessing_without_canonical_manifest(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/qc/plots"
+            f"/api/sessions/{_SESSION_ID}/qc/plots"
         )
-
         assert response.status_code == 409
 
-    def test_returns_only_compact_summary_for_supported_session(self, client):
+    def test_returns_only_compact_summary_for_supported_session(self, client, store):
         from app.core.config import settings
 
-        results_dir = (
-            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
-        )
+        results_dir = store.get_session_results_dir(_SESSION_ID)
         _write_supported_visualization_manifest(results_dir, "msqrob2")
         (results_dir / "QC_Results.json").write_text(
-            __import__("json").dumps(
+            json.dumps(
                 {
                     "pca": {"samples": ["S1"]},
                     "data_completeness": [{"sample": "S1"}],
@@ -305,7 +273,7 @@ class TestGetQCPlots:
         )
 
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/qc/plots"
+            f"/api/sessions/{_SESSION_ID}/qc/plots"
         )
 
         assert response.status_code == 200
@@ -317,33 +285,22 @@ class TestGetQCPlots:
 
 
 class TestCanonicalAbundanceRoutes:
-    def test_returns_processed_log2_data_scoped_to_selected_comparison(self, client):
-        from app.core.config import settings
-        from app.models.analysis import AnalysisConfig, PipelineTool
-        from app.services.visualization_artifacts import (
-            materialize_visualization_artifacts,
-        )
-
-        results_dir = (
-            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
-        )
+    def test_returns_processed_log2_data_scoped_to_selected_comparison(
+        self, client, store
+    ):
+        results_dir = store.get_session_results_dir(_SESSION_ID)
         pd.DataFrame(
             {
-                "Master_Protein_Accessions": ["P1"],
-                "Gene_Name": ["GENE1"],
-                "DMSO_1": [10.0],
-                "DrugA_1": [14.0],
-                "Other_1": [30.0],
+                "Master_Protein_Accessions": ["P1"], "Gene_Name": ["GENE1"],
+                "DMSO_1": [10.0], "DrugA_1": [14.0], "Other_1": [30.0],
             }
         ).to_csv(results_dir / "Protein_Abundances.tsv", sep="\t", index=False)
         pd.DataFrame(
             {
-                "ProteinAccession": ["P1", "P1"],
-                "GeneName": ["GENE1", "GENE1"],
+                "ProteinAccession": ["P1", "P1"], "GeneName": ["GENE1", "GENE1"],
                 "PeptideId": ["PEP", "PEP"],
                 "SampleId": ["DMSO_1", "DrugA_1"],
-                "Condition": ["DMSO", "DrugA"],
-                "Replicate": ["1", "1"],
+                "Condition": ["DMSO", "DrugA"], "Replicate": ["1", "1"],
                 "ProcessedLog2Abundance": [9.0, 13.0],
                 "Provenance": ["observed", "imputed"],
                 "ResultLayer": ["protein", "protein"],
@@ -351,16 +308,12 @@ class TestCanonicalAbundanceRoutes:
         ).to_csv(results_dir / "peptide_processed_long.tsv", sep="\t", index=False)
         pd.DataFrame(
             {
-                "Master_Protein_Accessions": ["P1"],
-                "Gene_Name": ["GENE1"],
-                "logFC": [1.0],
-                "pval": [0.01],
-                "adjPval": [0.02],
+                "Master_Protein_Accessions": ["P1"], "Gene_Name": ["GENE1"],
+                "logFC": [1.0], "pval": [0.01], "adjPval": [0.02],
             }
         ).to_csv(
             results_dir / "Diff_Expression_DrugA_vs_DMSO.tsv",
-            sep="\t",
-            index=False,
+            sep="\t", index=False,
         )
         config = AnalysisConfig(
             pipeline=PipelineTool.MSQROB2,
@@ -371,38 +324,30 @@ class TestCanonicalAbundanceRoutes:
         )
 
         protein = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/protein/P1/abundance",
+            f"/api/sessions/{_SESSION_ID}/protein/P1/abundance",
             params={"comparison": "DrugA_vs_DMSO"},
         )
         peptide = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/protein/P1/peptide",
+            f"/api/sessions/{_SESSION_ID}/protein/P1/peptide",
             params={"comparison": "DrugA_vs_DMSO"},
         )
 
         assert protein.status_code == 200
         assert protein.json()["data"]["scale"] == "log2"
-        assert [point["sample_id"] for point in protein.json()["data"]["points"]] == [
-            "DrugA_1",
-            "DMSO_1",
-        ]
+        assert [
+            point["sample_id"] for point in protein.json()["data"]["points"]
+        ] == ["DrugA_1", "DMSO_1"]
         assert [
             point["processed_log2_abundance"]
             for point in peptide.json()["data"]["points"]
-        ] == [
-            13.0,
-            9.0,
-        ]
+        ] == [13.0, 9.0]
 
-    def test_rejects_legacy_abundance_without_current_artifacts(self, client):
-        from app.core.config import settings
-
-        results_dir = (
-            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
-        )
+    def test_rejects_legacy_abundance_without_current_artifacts(self, client, store):
+        results_dir = store.get_session_results_dir(_SESSION_ID)
         (results_dir / "visualization_artifacts.json").unlink(missing_ok=True)
 
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/protein/P1/abundance",
+            f"/api/sessions/{_SESSION_ID}/protein/P1/abundance",
             params={"comparison": "DrugA_vs_DMSO"},
         )
 
@@ -415,7 +360,7 @@ class TestVisualizationManifest:
         self, client
     ):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/visualization/manifest"
+            f"/api/sessions/{_SESSION_ID}/visualization/manifest"
         )
 
         assert response.status_code == 200
@@ -424,11 +369,7 @@ class TestVisualizationManifest:
         assert manifest["supported"] is False
         assert manifest["requires_reprocessing"] is True
         assert [module["id"] for module in manifest["modules"]] == [
-            "volcano",
-            "qc",
-            "gsea",
-            "compare",
-            "bionet",
+            "volcano", "qc", "gsea", "compare", "bionet",
         ]
         assert all(module["visible"] for module in manifest["modules"])
         assert not any(module["enabled"] for module in manifest["modules"])
@@ -436,14 +377,16 @@ class TestVisualizationManifest:
             "Results require reprocessing"
         }
 
-    def test_ptm_pipeline_reports_result_layers_and_compare_requirement(self, client):
+    def test_ptm_pipeline_reports_result_layers_and_compare_requirement(
+        self, client, store
+    ):
         from app.api.deps import get_session_store
+        from app.core.config import settings
+        from app.main import app
 
         ptm_session = Session(
-            id="550e8400-e29b-41d4-a716-446655440000",
-            name="PTM Test",
-            template="multi_condition_comparison",
-            pipeline="ptm",
+            id=_SESSION_ID, name="PTM Test",
+            template="multi_condition_comparison", pipeline="ptm",
             state=SessionState.COMPLETED,
             config=SessionConfig(
                 comparisons=[
@@ -452,33 +395,20 @@ class TestVisualizationManifest:
             ),
             files=SessionFiles(),
         )
-        mock_store = AsyncMock()
-        mock_store.get = AsyncMock(return_value=ptm_session)
-        previous_override = app.dependency_overrides[get_session_store]
-        app.dependency_overrides[get_session_store] = lambda: mock_store
-        from app.core.config import settings
+        asyncio.run(store.create(ptm_session))
 
-        _write_supported_visualization_manifest(
-            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results",
-            "ptm",
+        results_dir = store.get_session_results_dir(_SESSION_ID)
+        _write_supported_visualization_manifest(results_dir, "ptm")
+
+        response = client.get(
+            f"/api/sessions/{_SESSION_ID}/visualization/manifest"
         )
-
-        try:
-            response = client.get(
-                "/api/sessions/550e8400-e29b-41d4-a716-446655440000/visualization/manifest"
-            )
-        finally:
-            app.dependency_overrides[get_session_store] = previous_override
 
         assert response.status_code == 200
         modules = {
             module["id"]: module for module in response.json()["data"]["modules"]
         }
-        assert modules["volcano"]["data_scopes"] == [
-            "ptm",
-            "protein",
-            "adjusted_ptm",
-        ]
+        assert modules["volcano"]["data_scopes"] == ["ptm", "protein", "adjusted_ptm"]
         assert modules["compare"]["visible"] is True
         assert modules["compare"]["enabled"] is False
         assert modules["compare"]["disabled_reason"] == (
@@ -487,7 +417,9 @@ class TestVisualizationManifest:
         assert modules["gsea"]["visible"] is True
         assert modules["bionet"]["visible"] is True
 
-    def test_ptm_pipeline_hides_protein_modules_without_protein_results(self, tmp_path):
+    def test_ptm_pipeline_hides_protein_modules_without_protein_results(
+        self, tmp_path
+    ):
         from app.api.routes.visualization_manifest import build_visualization_manifest
 
         results_dir = tmp_path / "results"
@@ -500,9 +432,7 @@ class TestVisualizationManifest:
         ).to_csv(results_dir / "ptm_site_results.tsv", sep="\t", index=False)
         _write_supported_visualization_manifest(results_dir, "ptm")
         session = Session(
-            id="ptm-without-protein",
-            name="PTM without protein",
-            pipeline="ptm",
+            id="ptm-without-protein", name="PTM without protein", pipeline="ptm",
             config=SessionConfig(
                 comparisons=[
                     {"group1": {"Condition": "Drug"}, "group2": {"Condition": "DMSO"}},
@@ -529,9 +459,7 @@ class TestVisualizationManifest:
         )
         _write_supported_visualization_manifest(results_dir, "ptm")
         session = Session(
-            id="ptm-stale-config",
-            name="PTM stale config",
-            pipeline="ptm",
+            id="ptm-stale-config", name="PTM stale config", pipeline="ptm",
             config=SessionConfig(
                 comparisons=[
                     {"group1": {"Condition": "Drug"}, "group2": {"Condition": "DMSO"}},
@@ -552,7 +480,7 @@ class TestVisualizationManifest:
 class TestPTMVisualization:
     def test_stable_results_include_all_available_layers(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results"
+            f"/api/sessions/{_SESSION_ID}/ptm/results"
         )
         assert response.status_code == 200
         comparisons = response.json()["data"]["comparisons"]
@@ -568,7 +496,7 @@ class TestPTMVisualization:
 
     def test_results_can_project_one_comparison_and_layer(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results",
+            f"/api/sessions/{_SESSION_ID}/ptm/results",
             params={"comparison": "Drug_vs_DMSO", "layer": "protein"},
         )
 
@@ -583,18 +511,16 @@ class TestPTMVisualization:
 
     def test_invalid_result_layer_is_rejected(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results",
+            f"/api/sessions/{_SESSION_ID}/ptm/results",
             params={"layer": "invalid"},
         )
 
         assert response.status_code == 422
 
-    def test_compare_summary_is_calculated_without_returning_result_rows(self, client):
-        from app.core.config import settings
-
-        results_dir = (
-            settings.sessions_dir / "550e8400-e29b-41d4-a716-446655440000" / "results"
-        )
+    def test_compare_summary_is_calculated_without_returning_result_rows(
+        self, client, store
+    ):
+        results_dir = store.get_session_results_dir(_SESSION_ID)
         frame = pd.read_csv(results_dir / "ptm_site_results.tsv", sep="\t")
         second = frame.copy()
         second["Comparison"] = "Drug2_vs_DMSO"
@@ -604,7 +530,7 @@ class TestPTMVisualization:
         )
 
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/compare",
+            f"/api/sessions/{_SESSION_ID}/ptm/compare",
             params={"layer": "ptm"},
         )
 
@@ -619,7 +545,7 @@ class TestPTMVisualization:
 
     def test_downloads_existing_ptm_result_archive(self, client):
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/results/download"
+            f"/api/sessions/{_SESSION_ID}/ptm/results/download"
         )
 
         assert response.status_code == 200
@@ -627,29 +553,23 @@ class TestPTMVisualization:
         with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
             assert archive.namelist() == ["ptm_site_results.tsv"]
 
-    def test_corrupt_ptm_qc_is_an_error(self, client):
-        from app.core.config import settings
-
-        qc_file = (
-            settings.sessions_dir
-            / "550e8400-e29b-41d4-a716-446655440000"
-            / "results"
-            / "ptm_qc.json"
-        )
+    def test_corrupt_ptm_qc_is_an_error(self, client, store):
+        results_dir = store.get_session_results_dir(_SESSION_ID)
+        qc_file = results_dir / "ptm_qc.json"
         qc_file.write_text("not json", encoding="utf-8")
 
         response = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/qc/plots"
+            f"/api/sessions/{_SESSION_ID}/ptm/qc/plots"
         )
 
         assert response.status_code == 500
 
     def test_site_details_and_abundance_are_site_centric(self, client):
         details = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/site/P1_C10"
+            f"/api/sessions/{_SESSION_ID}/ptm/site/P1_C10"
         )
         abundance = client.get(
-            "/api/sessions/550e8400-e29b-41d4-a716-446655440000/ptm/site/P1_C10/abundance"
+            f"/api/sessions/{_SESSION_ID}/ptm/site/P1_C10/abundance"
         )
         assert details.status_code == 200
         assert details.json()["data"]["site"]["LocalizationStatus"] == "Confident"
@@ -663,8 +583,7 @@ def test_comparison_sample_filter_uses_complete_condition_groups():
     from app.api.routes.visualization_shared import build_sample_filter
 
     session = Session(
-        id="filter-session",
-        name="Filter",
+        id="filter-session", name="Filter",
         config=SessionConfig(
             comparisons=[
                 {
@@ -676,6 +595,5 @@ def test_comparison_sample_filter_uses_complete_condition_groups():
     )
 
     assert build_sample_filter(session, "Drug+24h_vs_DMSO+24h") == [
-        "Drug_24h",
-        "DMSO_24h",
+        "Drug_24h", "DMSO_24h",
     ]
