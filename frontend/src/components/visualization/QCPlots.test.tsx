@@ -2,7 +2,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import QCPlots from '@/components/visualization/QCPlots';
-import type { QCData, QCOverviewData, QCDifferentialData, QCPerSampleData } from '@/types/api';
+import type { QCData, QCOverviewData, QCDifferentialData, QCPerSampleData, IntensityDistributions } from '@/types/api';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -274,8 +274,8 @@ describe('QCPlots', () => {
               lowerfence: 2,
               upperfence: 18,
               outliers: [99, 100],
-            } as Record<string, unknown>,
-          } as Record<string, unknown>,
+            } as unknown as Record<string, number[]>,
+          } as unknown as IntensityDistributions['psm_boxplot'],
           protein_boxplot: {},
         },
       };
@@ -316,8 +316,8 @@ describe('QCPlots', () => {
               median: 10,
               q3: 15,
               // no lowerfence / upperfence
-            } as Record<string, unknown>,
-          } as Record<string, unknown>,
+            } as unknown as Record<string, number[]>,
+          } as unknown as IntensityDistributions['psm_boxplot'],
           protein_boxplot: {},
         },
       };
@@ -364,8 +364,8 @@ describe('QCPlots', () => {
               lowerfence: 2,
               upperfence: 18,
               outliers: [99],
-            } as Record<string, unknown>,
-          } as Record<string, unknown>,
+            } as unknown as Record<string, number[]>,
+          } as unknown as IntensityDistributions['psm_boxplot'],
           protein_boxplot: {},
         },
       };
@@ -403,8 +403,8 @@ describe('QCPlots', () => {
           psm_boxplot: {
             Drug: {
               R1: [1, 2, 3, 4, 5],
-            } as Record<string, unknown>,
-          } as Record<string, unknown>,
+            } as unknown as Record<string, number[]>,
+          } as unknown as IntensityDistributions['psm_boxplot'],
           protein_boxplot: {},
         },
       };
@@ -438,7 +438,7 @@ describe('QCPlots', () => {
         total_psms: 100,
         avg_psms_per_sample: 10,
         intensity_distributions: {
-          psm_boxplot: {} as Record<string, unknown>,
+          psm_boxplot: {} as unknown as IntensityDistributions['psm_boxplot'],
           protein_boxplot: {},
         },
       };
@@ -768,11 +768,11 @@ describe('QCPlots', () => {
         protein_cv: { Drug: [8, 12, 16], DMSO: [9, 14, 17] },
         intensity_distributions: {
           psm_boxplot: {
-            Drug: { R1: [1, 2, 3, 4, 5] } as Record<string, unknown>,
-          } as Record<string, unknown>,
+            Drug: { R1: [1, 2, 3, 4, 5] } as unknown as Record<string, number[]>,
+          } as unknown as IntensityDistributions['psm_boxplot'],
           protein_boxplot: {
             Drug_1: [10, 11, 12],
-          } as Record<string, unknown>,
+          } as unknown as IntensityDistributions['protein_boxplot'],
         },
         data_completeness: {
           Drug_1: { present: 80, missing: 20 },
