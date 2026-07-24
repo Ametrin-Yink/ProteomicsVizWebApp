@@ -57,6 +57,7 @@ import type {
   QCOverviewData,
   QCDifferentialData,
   QCSampleMetric,
+  QCPerSampleData,
 } from '@/types/api';
 
 // ---- File Library Types ----
@@ -874,6 +875,13 @@ export const visualizationApi = {
     return fetchApi(`${apiPrefix}/visualization/qc/differential?${query}`, { signal });
   },
 
+  getPTMQCPlots: (
+    apiPrefix: string,
+    signal?: AbortSignal
+  ): Promise<Record<string, unknown>> => {
+    return fetchApi(`${apiPrefix}/ptm/qc/plots`, { signal });
+  },
+
   getPTMResults: (
     apiPrefix: string,
     comparison: string,
@@ -923,6 +931,18 @@ export const visualizationApi = {
 
   getQCData: (apiPrefix: string, signal?: AbortSignal): Promise<QCData> => {
     return fetchApi<QCData>(`${apiPrefix}/qc/plots`, { signal });
+  },
+
+  getQCPerSample: (
+    apiPrefix: string,
+    resultLayer = 'protein',
+    signal?: AbortSignal,
+  ): Promise<QCPerSampleData> => {
+    const query = new URLSearchParams({ result_layer: resultLayer });
+    return fetchApi<QCPerSampleData>(
+      `${apiPrefix}/visualization/qc/per-sample?${query}`,
+      { signal },
+    );
   },
 
   // ── GSEA ──

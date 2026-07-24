@@ -7,11 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.services.canonical_qc import generate_canonical_qc
 from app.services.pipeline_engine import StepContext
-from app.services.ptm_qc_calculator import (
-    calculate_protein_qc_plots,
-    calculate_ptm_qc_plots,
-)
 from app.services.visualization_artifacts import (
     COMPARISON_CATALOG,
     DIFFERENTIAL_ARTIFACT,
@@ -20,6 +17,8 @@ from app.services.visualization_artifacts import (
     QC_COMPARISON_METRICS,
     QC_GROUP_METRICS,
     QC_PCA,
+    QC_PSM_COMPLETENESS,
+    QC_PSM_INTENSITY,
     QC_SAMPLE_METRICS,
     SAMPLE_CATALOG,
     VISUALIZATION_MANIFEST,
@@ -61,14 +60,6 @@ async def step_ptm_qc_metrics(ctx: StepContext) -> None:
             is not None,
         },
     }
-    plot_data, protein_plot_data = await asyncio.gather(
-        calculate_ptm_qc_plots(ctx.results_dir),
-        calculate_protein_qc_plots(ctx.results_dir),
-    )
-    if plot_data is not None:
-        qc["plots"] = plot_data
-    if protein_plot_data is not None:
-        qc["protein_plots"] = protein_plot_data
     qc_json = ctx.results_dir / "ptm_qc.json"
     qc_json.write_text(json.dumps(qc, indent=2), encoding="utf-8")
 
@@ -117,6 +108,13 @@ async def step_ptm_qc_metrics(ctx: StepContext) -> None:
         config=ctx.config,
         pipeline=ctx.config.pipeline.value,
     )
+    # Generate canonical QC_Results.json so PTM sessions are visible
+    # to the /visualization/qc/* endpoints (Parquet artifacts already exist).
+    await asyncio.to_thread(
+        generate_canonical_qc,
+        ctx.results_dir,
+        psm_path=None,  # PTM PSM columns differ; counts come from ptm_qc.json
+    )
 
     candidates = [
         ctx.step_outputs.get("ptm_results_path"),
@@ -137,6 +135,8 @@ async def step_ptm_qc_metrics(ctx: StepContext) -> None:
         ctx.results_dir / QC_GROUP_METRICS,
         ctx.results_dir / QC_COMPARISON_METRICS,
         ctx.results_dir / QC_PCA,
+        ctx.results_dir / QC_PSM_COMPLETENESS,
+        ctx.results_dir / QC_PSM_INTENSITY,
         ctx.results_dir / VISUALIZATION_MANIFEST,
         qc_tsv,
         parameters_tsv,

@@ -8,6 +8,7 @@ import type {
   QCData,
   QCDifferentialData,
   QCOverviewData,
+  QCPerSampleData,
 } from '@/types/api';
 import { visualizationApi } from '@/lib/api-client';
 import { useApi } from '@/lib/api-context';
@@ -22,6 +23,7 @@ function QCContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [overview, setOverview] = useState<QCOverviewData | null>(null);
+  const [perSampleData, setPerSampleData] = useState<QCPerSampleData | null>(null);
   const [differential, setDifferential] = useState<QCDifferentialData | null>(null);
   const [groupBy, setGroupBy] = useState<'condition' | 'batch'>('condition');
   const [groupSearch, setGroupSearch] = useState('');
@@ -37,13 +39,15 @@ function QCContent() {
       setLoading(true);
       setError(null);
       try {
-        const [qcData, overviewData, comparisonPage] = await Promise.all([
+        const [qcData, overviewData, qcPerSample, comparisonPage] = await Promise.all([
           visualizationApi.getQCData(apiPrefix),
           visualizationApi.getQCOverview(apiPrefix, 'condition'),
+          visualizationApi.getQCPerSample(apiPrefix),
           visualizationApi.getComparisonCatalog(apiPrefix),
         ]);
         setData(qcData);
         setOverview(overviewData);
+        setPerSampleData(qcPerSample);
         const options = comparisonPage.items.map((comparison) => ({
           value: comparison.comparison_id,
           label: comparison.display_label,
@@ -176,6 +180,7 @@ function QCContent() {
         <QCWorkspace
           data={data}
           overview={overview}
+          perSampleData={perSampleData}
           differential={differential}
           labels={{ psm: 'PSM', entity: 'Protein', entityPlural: 'Proteins' }}
           conditionList={overview?.groups.map((group) => group.group_value)}

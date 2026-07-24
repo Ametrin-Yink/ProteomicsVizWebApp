@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import json
 from pathlib import Path
 from typing import Any
@@ -12,8 +13,11 @@ import duckdb
 from app.services.visualization_artifacts import (
     COMPARISON_CATALOG,
     DIFFERENTIAL_ARTIFACT,
+    PROTEIN_ARTIFACT,
     QC_GROUP_METRICS,
     QC_PCA,
+    QC_PSM_COMPLETENESS,
+    QC_PSM_INTENSITY,
     QC_SAMPLE_METRICS,
     SAMPLE_CATALOG,
     load_visualization_artifact_manifest,
@@ -35,6 +39,26 @@ def _decode_cursor(cursor: str | None) -> int:
     if offset < 0:
         raise ValueError("Invalid cursor")
     return offset
+
+
+@functools.lru_cache(maxsize=128)
+def _get_parquet_columns(artifact_path: str) -> frozenset[str]:
+    """Return the column names for a Parquet artifact.
+
+    Cached because Parquet files are immutable once materialized, so
+    the column list never changes for a given session-results snapshot.
+    The cache is keyed by the absolute path string and evicts LRU.
+    """
+    conn = duckdb.connect()
+    try:
+        return frozenset(
+            row[0]
+            for row in conn.execute(
+                "DESCRIBE SELECT * FROM read_parquet(?)", [artifact_path]
+            ).fetchall()
+        )
+    finally:
+        conn.close()
 
 
 class VisualizationRepository:
@@ -192,13 +216,22 @@ class VisualizationRepository:
                 ],
             ).fetchone()
             parameters.extend([limit + 1, offset])
+            # Check if new columns exist for backward compatibility.
+            # Cached — Parquet schemas are immutable after materialization.
+            columns = _get_parquet_columns(
+                str(self.results_dir / QC_GROUP_METRICS)
+            )
+            extra_cols = ""
+            if "lowerfence" in columns and "upperfence" in columns:
+                extra_cols = ", lowerfence, upperfence"
+
             groups = connection.execute(
                 f"""
                 SELECT group_by, group_value, sample_count, observation_count,
                        q1, median, q3, observed_count, imputed_count, missing_count,
                        protein_cv_count, protein_cv_q1, protein_cv_median,
                        protein_cv_q3, peptide_cv_count, peptide_cv_q1,
-                       peptide_cv_median, peptide_cv_q3
+                       peptide_cv_median, peptide_cv_q3{extra_cols}
                 FROM read_parquet(?)
                 {where}
                 ORDER BY group_order
@@ -233,6 +266,107 @@ class VisualizationRepository:
             "pca_method": qc_summary.get("pca_method"),
             "pc1_variance": qc_summary.get("pc1_variance"),
             "pc2_variance": qc_summary.get("pc2_variance"),
+        }
+
+    def get_qc_per_sample(
+        self, result_layer: str = "protein"
+    ) -> dict[str, Any]:
+        """Return per-sample QC details: intensity distributions and completeness."""
+        connection = duckdb.connect()
+        try:
+            sample_metrics_path = self.results_dir / QC_SAMPLE_METRICS
+            if sample_metrics_path.is_file():
+                # Check for backward compatibility with old schema.
+                # Cached — Parquet schemas are immutable after materialization.
+                columns = _get_parquet_columns(
+                    str(sample_metrics_path)
+                )
+                extra_cols = ""
+                if "abundance_q1" in columns and "abundance_q3" in columns:
+                    extra_cols = ", abundance_q1, abundance_q3"
+
+                sample_rows = connection.execute(
+                    f"""
+                    SELECT sample_id, condition,
+                           median_log2_abundance AS abundance_median
+                           {extra_cols},
+                           present_count AS present,
+                           missing_count AS missing,
+                           total_feature_count AS total
+                    FROM read_parquet(?)
+                    ORDER BY sample_order
+                    """,
+                    [str(sample_metrics_path)],
+                ).fetchdf()
+
+                # Compute q1/q3 on the fly for old sessions missing these columns
+                if not extra_cols:
+                    raw_q1_q3 = connection.execute(
+                        f"""
+                        SELECT sample_id,
+                               quantile_cont(processed_log2_abundance, 0.25) AS abundance_q1,
+                               quantile_cont(processed_log2_abundance, 0.75) AS abundance_q3
+                        FROM read_parquet(?)
+                        WHERE result_layer = 'protein'
+                        GROUP BY sample_id
+                        ORDER BY sample_id
+                        """,
+                        [str(self.results_dir / PROTEIN_ARTIFACT)],
+                    ).fetchdf()
+                    sample_rows = sample_rows.merge(
+                        raw_q1_q3, on="sample_id", how="left"
+                    )
+
+                intensity_cols = [
+                    "sample_id", "condition", "abundance_median"
+                ] + (["abundance_q1", "abundance_q3"] if extra_cols else [])
+                protein_intensity = sample_rows[intensity_cols].to_dict("records")
+                protein_completeness = sample_rows[
+                    ["sample_id", "condition", "present", "missing", "total"]
+                ].to_dict("records")
+            else:
+                protein_intensity = []
+                protein_completeness = []
+
+            psm_completeness_path = self.results_dir / QC_PSM_COMPLETENESS
+            if psm_completeness_path.is_file():
+                psm_completeness = connection.execute(
+                    """
+                    SELECT sample_id, condition,
+                           psm_total_count AS total,
+                           psm_present_count AS present,
+                           psm_missing_count AS missing
+                    FROM read_parquet(?)
+                    WHERE result_layer = ?
+                    ORDER BY sample_id
+                    """,
+                    [str(psm_completeness_path), result_layer],
+                ).fetchdf().to_dict("records")
+            else:
+                psm_completeness = []
+
+            psm_intensity_path = self.results_dir / QC_PSM_INTENSITY
+            if psm_intensity_path.is_file():
+                psm_intensity = connection.execute(
+                    """
+                    SELECT condition, replicate, result_layer, sample_count,
+                           q1, median, q3
+                    FROM read_parquet(?)
+                    WHERE result_layer = ?
+                    ORDER BY condition, replicate
+                    """,
+                    [str(psm_intensity_path), result_layer],
+                ).fetchdf().to_dict("records")
+            else:
+                psm_intensity = []
+        finally:
+            connection.close()
+
+        return {
+            "protein_intensity": protein_intensity,
+            "protein_completeness": protein_completeness,
+            "psm_completeness": psm_completeness,
+            "psm_intensity": psm_intensity,
         }
 
     def get_qc_differential(self, comparison_id: str) -> dict[str, Any]:

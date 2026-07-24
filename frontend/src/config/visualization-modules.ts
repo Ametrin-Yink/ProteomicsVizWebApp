@@ -93,7 +93,18 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
     description: 'Quality control plots for proteomics analysis',
     supportedTemplates: ['multi_condition_comparison'],
     getExportState: async (sessionId, session) => {
-      const [qcData, s] = await Promise.all([visualizationApi.getQCData(sessionApiPrefix(sessionId)), session || getDataSource(sessionApiPrefix(sessionId))]);
+      const apiPrefix = sessionApiPrefix(sessionId);
+      const s = session || await getDataSource(apiPrefix);
+      const [qcData, overview, perSample] = await Promise.all([
+        visualizationApi.getQCData(apiPrefix),
+        visualizationApi.getQCOverview(apiPrefix, 'condition').catch(() => null),
+        visualizationApi.getQCPerSample(apiPrefix).catch(() => null),
+      ]);
+      const comp = firstComparison(s?.config);
+      const differential = comp.key
+        ? await visualizationApi.getQCDifferential(apiPrefix, comp.key).catch(() => null)
+        : null;
+
       const conditions = new Set<string>();
       s?.config?.comparisons?.forEach(c => {
         Object.keys(c.group1 || {}).forEach(k => conditions.add(k));
@@ -101,7 +112,14 @@ export const VISUALIZATION_MODULES: VisualizationModule[] = [
       });
       if (s?.config?.treatment) conditions.add(s.config.treatment);
       if (s?.config?.control) conditions.add(s.config.control);
-      const exportData = buildQcExport({ data: qcData, conditionList: Array.from(conditions), selectedComparison: '' });
+      const exportData = buildQcExport({
+        data: qcData,
+        overview: overview ?? undefined,
+        perSample: perSample ?? undefined,
+        differential,
+        conditionList: Array.from(conditions),
+        selectedComparison: comp.key,
+      });
       return { tabId: 'qc', data: toRecord(exportData) };
     },
   },

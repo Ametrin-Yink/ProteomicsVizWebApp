@@ -1,4 +1,80 @@
-"""Materialize the versioned, pipeline-owned visualization data contract."""
+"""
+Materialize the versioned, pipeline-owned visualization data contract.
+
+This module converts raw pipeline output files (TSV/CSV) into a set of
+normalized Parquet artifacts that serve the visualization API.
+
+Produced Artifact Files (all written to results_dir/):
+    protein_abundance_long.parquet
+        Columns: protein_accession, gene_name, sample_id, condition, replicate,
+                 batch, processed_log2_abundance, provenance, observed_feature_count,
+                 imputed_feature_count, imputation_fraction, pipeline, result_layer,
+                 sample_order, condition_order
+        Description: Long-format log2 abundances for every (protein, sample) pair.
+                     Provenance distinguishes observed, imputed, model_estimated, missing.
+                     result_layer tags the pipeline layer (protein|ptm|adjusted_ptm).
+
+    peptide_abundance_long.parquet
+        Columns: protein_accession, gene_name, peptide_id, sample_id, condition,
+                 replicate, batch, processed_log2_abundance, provenance, pipeline,
+                 result_layer, sample_order, condition_order
+        Description: Long-format log2 abundances for every (peptide, sample) pair.
+                     Used for PSM-level QC (CV, intensity distributions, completeness).
+
+    sample_catalog.parquet
+        Columns: sample_id, condition, replicate, batch, sample_order, condition_order
+        Description: Indexed sample list with condition assignments derived from
+                     the analysis config.
+
+    comparison_catalog.parquet
+        Columns: comparison_id, display_label, group1_json, group2_json,
+                 group1_label, group2_label, comparison_order, tested_count,
+                 significant_count, result_status, group1_sample_count,
+                 group2_sample_count
+        Description: All pairwise comparisons with DE status and sample counts.
+
+    differential_results.parquet
+        Columns: comparison_id, protein_accession, gene_name, log2_fold_change,
+                 p_value, adjusted_p_value, standard_error, statistic, psm_count,
+                 result_layer, pipeline
+        Description: Differential expression test results. Non-finite float values
+                     (inf, -inf, NaN) are replaced with NULL for JSON compliance.
+
+    qc_sample_metrics.parquet
+        Columns: sample_id, condition, replicate, batch, sample_order,
+                 total_feature_count, present_count, missing_count,
+                 observed_feature_count, imputed_feature_count, imputation_fraction,
+                 median_log2_abundance, abundance_q1, abundance_q3,
+                 abundance_min, abundance_max
+        Description: Per-sample QC metrics derived from protein abundance data.
+
+    qc_group_metrics.parquet
+        Columns: group_by, group_value, sample_count, observation_count, q1, median,
+                 q3, observed_count, imputed_count, missing_count, protein_cv_count,
+                 protein_cv_q1, protein_cv_median, protein_cv_q3, peptide_cv_count,
+                 peptide_cv_q1, peptide_cv_median, peptide_cv_q3, lowerfence, upperfence
+        Description: Group-level (condition or batch) abundance summaries with
+                     protein/peptide CV distribution statistics and clamped IQR fences.
+
+    qc_comparison_metrics.parquet
+        Columns: comparison_id, tested_count, significant_count, result_status
+        Description: Lightweight per-comparison DE summary for the overview endpoint.
+
+    qc_pca.parquet
+        Columns: sample_id, pc1, pc2, condition
+        Description: PCA coordinates extracted from QC_Results.json (legacy MSstats)
+                     or computed by the pipeline.
+
+    qc_psm_completeness.parquet
+        Columns: sample_id, condition, result_layer, psm_total_count,
+                 psm_present_count, psm_missing_count
+        Description: Per-sample PSM detection completeness by result_layer.
+
+    qc_psm_intensity.parquet
+        Columns: result_layer, condition, replicate, sample_count, q1, median, q3
+        Description: Per-(condition, replicate, result_layer) PSM intensity
+                     boxplot statistics.
+"""
 
 from __future__ import annotations
 
@@ -28,6 +104,8 @@ QC_SAMPLE_METRICS = "qc_sample_metrics.parquet"
 QC_GROUP_METRICS = "qc_group_metrics.parquet"
 QC_COMPARISON_METRICS = "qc_comparison_metrics.parquet"
 QC_PCA = "qc_pca.parquet"
+QC_PSM_COMPLETENESS = "qc_psm_completeness.parquet"
+QC_PSM_INTENSITY = "qc_psm_intensity.parquet"
 
 
 def _sql_literal(value: object) -> str:
@@ -758,7 +836,11 @@ def _materialize_qc_artifacts(
                      THEN sum(imputed_feature_count)::DOUBLE /
                           (sum(observed_feature_count) + sum(imputed_feature_count))
                      ELSE NULL END AS imputation_fraction,
-                median(processed_log2_abundance) AS median_log2_abundance
+                median(processed_log2_abundance) AS median_log2_abundance,
+                quantile_cont(processed_log2_abundance, 0.25) AS abundance_q1,
+                quantile_cont(processed_log2_abundance, 0.75) AS abundance_q3,
+                min(processed_log2_abundance) AS abundance_min,
+                max(processed_log2_abundance) AS abundance_max
             FROM read_parquet({protein})
             WHERE result_layer = 'protein'
             GROUP BY sample_id
@@ -782,7 +864,9 @@ def _materialize_qc_artifacts(
                     sum(observed_feature_count) AS observed_count,
                     sum(imputed_feature_count) AS imputed_count,
                     count(*) FILTER (WHERE processed_log2_abundance IS NULL) AS missing_count,
-                    min(condition_order) AS group_order
+                    min(condition_order) AS group_order,
+                    min(processed_log2_abundance) AS min_val,
+                    max(processed_log2_abundance) AS max_val
                 FROM read_parquet({protein})
                 WHERE result_layer = 'protein'
                 GROUP BY condition
@@ -798,7 +882,9 @@ def _materialize_qc_artifacts(
                     sum(observed_feature_count) AS observed_count,
                     sum(imputed_feature_count) AS imputed_count,
                     count(*) FILTER (WHERE processed_log2_abundance IS NULL) AS missing_count,
-                    dense_rank() OVER (ORDER BY batch) AS group_order
+                    dense_rank() OVER (ORDER BY batch) AS group_order,
+                    min(processed_log2_abundance) AS min_val,
+                    max(processed_log2_abundance) AS max_val
                 FROM read_parquet({protein})
                 WHERE result_layer = 'protein' AND batch IS NOT NULL
                 GROUP BY batch
@@ -886,7 +972,15 @@ def _materialize_qc_artifacts(
                    peptide_cv.peptide_cv_count,
                    peptide_cv.peptide_cv_q1,
                    peptide_cv.peptide_cv_median,
-                   peptide_cv.peptide_cv_q3
+                   peptide_cv.peptide_cv_q3,
+                   GREATEST(
+                       abundance_groups.q1 - 1.5 * (abundance_groups.q3 - abundance_groups.q1),
+                       abundance_groups.min_val
+                   ) AS lowerfence,
+                   LEAST(
+                       abundance_groups.q3 + 1.5 * (abundance_groups.q3 - abundance_groups.q1),
+                       abundance_groups.max_val
+                   ) AS upperfence
             FROM abundance_groups
             LEFT JOIN protein_cv USING (group_by, group_value)
             LEFT JOIN peptide_cv USING (group_by, group_value)
@@ -900,6 +994,62 @@ def _materialize_qc_artifacts(
         f"FROM read_parquet({_sql_literal(results_dir / COMPARISON_CATALOG)}) "
         f"ORDER BY comparison_order) TO {_sql_literal(results_dir / QC_COMPARISON_METRICS)} "
         "(FORMAT PARQUET, COMPRESSION ZSTD)"
+    )
+
+    peptide = _sql_literal(results_dir / PEPTIDE_ARTIFACT)
+
+    # Per-sample PSM completeness — one row per (sample_id, result_layer)
+    connection.execute(
+        f"""
+        COPY (
+            WITH per_layer_total AS (
+                SELECT result_layer,
+                       count(DISTINCT peptide_id) AS total_psm_count
+                FROM read_parquet({peptide})
+                GROUP BY result_layer
+            )
+            SELECT
+                sample.sample_id,
+                sample.condition,
+                sample.result_layer,
+                totals.total_psm_count AS psm_total_count,
+                count(DISTINCT sample.peptide_id)
+                    FILTER (WHERE sample.processed_log2_abundance IS NOT NULL)
+                    AS psm_present_count,
+                totals.total_psm_count
+                    - count(DISTINCT sample.peptide_id)
+                        FILTER (WHERE sample.processed_log2_abundance IS NOT NULL)
+                    AS psm_missing_count
+            FROM read_parquet({peptide}) AS sample
+            JOIN per_layer_total AS totals USING (result_layer)
+            GROUP BY sample.sample_id, sample.condition, sample.result_layer,
+                     totals.total_psm_count
+            ORDER BY sample.sample_id, sample.result_layer
+        ) TO {_sql_literal(results_dir / QC_PSM_COMPLETENESS)}
+        (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
+    )
+
+    # Per-(condition, replicate, result_layer) PSM intensity boxplot stats
+    # COALESCE with sample_id ensures each sample gets its own row when replicate is NULL
+    connection.execute(
+        f"""
+        COPY (
+            SELECT
+                result_layer,
+                condition,
+                COALESCE(replicate, sample_id) AS replicate,
+                count(DISTINCT sample_id) AS sample_count,
+                quantile_cont(processed_log2_abundance, 0.25) AS q1,
+                median(processed_log2_abundance) AS median,
+                quantile_cont(processed_log2_abundance, 0.75) AS q3
+            FROM read_parquet({peptide})
+            WHERE processed_log2_abundance IS NOT NULL
+            GROUP BY result_layer, condition, COALESCE(replicate, sample_id)
+            ORDER BY result_layer, condition, COALESCE(replicate, sample_id)
+        ) TO {_sql_literal(results_dir / QC_PSM_INTENSITY)}
+        (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
     )
 
     qc_path = results_dir / "QC_Results.json"
@@ -1001,6 +1151,8 @@ def materialize_visualization_artifacts(
             "qc_group_metrics": QC_GROUP_METRICS,
             "qc_comparison_metrics": QC_COMPARISON_METRICS,
             "qc_pca": QC_PCA,
+            "qc_psm_completeness": QC_PSM_COMPLETENESS,
+            "qc_psm_intensity": QC_PSM_INTENSITY,
         },
     }
     _atomic_write_json(results_dir / VISUALIZATION_MANIFEST, manifest)

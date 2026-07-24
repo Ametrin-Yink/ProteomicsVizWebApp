@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -11,6 +12,8 @@ import duckdb
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA, IncrementalPCA
+
+logger = logging.getLogger(__name__)
 
 from app.services.data_processor import _sql_identifier
 from app.services.visualization_artifacts import (
@@ -275,13 +278,29 @@ def generate_canonical_qc(
             [str(results_dir / QC_GROUP_METRICS)],
         ).fetchone()
         total_psms, avg_psms_per_sample = _psm_summary(connection, psm_path)
+
+        present = int(sample_summary[1] or 0)
+        total = int(sample_summary[2] or 0)
+        protein_cv = (
+            round(float(cv_summary[0]), 1) if cv_summary[0] is not None else None
+        )
+        peptide_cv = (
+            round(float(cv_summary[1]), 1) if cv_summary[1] is not None else None
+        )
+        if protein_cv is None and peptide_cv is None:
+            max_samples_row = connection.execute(
+                "SELECT max(sample_count) FROM read_parquet(?) "
+                "WHERE group_by = 'condition'",
+                [str(results_dir / QC_GROUP_METRICS)],
+            ).fetchone()
+            max_samples = max_samples_row[0] if max_samples_row else None
+            if max_samples is not None and max_samples < 2:
+                logger.warning(
+                    "Cannot compute CV: max %d replicate(s) per condition (need ≥2)",
+                    max_samples,
+                )
     finally:
         connection.close()
-
-    present = int(sample_summary[1] or 0)
-    total = int(sample_summary[2] or 0)
-    protein_cv = round(float(cv_summary[0]), 1) if cv_summary[0] is not None else None
-    peptide_cv = round(float(cv_summary[1]), 1) if cv_summary[1] is not None else None
     summary: dict[str, Any] = {
         "schema_version": 1,
         "pca_method": pca_method,

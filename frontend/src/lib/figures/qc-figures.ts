@@ -11,6 +11,9 @@ import type {
   PSMCV,
   DataCompleteness,
   IntensityDistributions,
+  QCOverviewData,
+  QCPerSampleData,
+  QCDifferentialData,
 } from '@/types/api';
 
 // ---------------------------------------------------------------------------
@@ -59,8 +62,14 @@ function getConditionColor(
 // ---------------------------------------------------------------------------
 
 export interface QcBuildInput {
-  /** QC data from the API (all fields optional). */
+  /** QC data from the legacy /qc/plots endpoint. */
   data: QCData;
+  /** Canonical overview data from /visualization/qc/overview. */
+  overview?: QCOverviewData;
+  /** Canonical per-sample data from /visualization/qc/per-sample. */
+  perSample?: QCPerSampleData;
+  /** Canonical differential data from /visualization/qc/differential. */
+  differential?: QCDifferentialData | null;
   /** Ordered list of condition names for deterministic color mapping. */
   conditionList?: string[];
   /** Active comparison key used to select from pvalue_distributions. */
@@ -375,6 +384,143 @@ function completenessTracesAndLayout(
 }
 
 // ---------------------------------------------------------------------------
+// Canonical → legacy conversion
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert canonical QC data types (QCOverviewData, QCPerSampleData,
+ * QCDifferentialData) into the legacy QCData format consumed by the
+ * chart builders and by buildQcExport().
+ *
+ * Mapping rules:
+ *  - PCA: row-based array → column-based PCAData (samples/pc1/pc2/conditions vectors)
+ *  - P-value: differential.pvalue_distribution → data.pvalue_distribution
+ *    and data.pvalue_distributions[comparison_id]
+ *  - PSM/Protein CV: group peptide_cv/protein_cv quartiles → PSMCV dictionar{y,}
+ *  - PSM intensity: perSample.psm_intensity (flat) → nested psm_boxplot
+ *  - Protein intensity: perSample.protein_intensity (flat) → protein_boxplot
+ *  - Data completeness: perSample.protein_completeness → DataCompleteness dict
+ *  - PSM completeness: perSample.psm_completeness → DataCompleteness dict
+ */
+export function canonicalToQCData(
+  overview: QCOverviewData,
+  perSample: QCPerSampleData,
+  differential?: QCDifferentialData | null,
+): QCData {
+  const data: QCData = {};
+
+  // 1. PCA — row-based overview.pca → column-based PCAData
+  if (overview.pca && overview.pca.length > 0) {
+    data.pca = {
+      samples: overview.pca.map((p) => p.sample_id),
+      pc1: overview.pca.map((p) => p.pc1),
+      pc2: overview.pca.map((p) => p.pc2),
+      conditions: overview.pca.map((p) => p.condition),
+      pc1_variance: overview.pc1_variance ?? 0,
+      pc2_variance: overview.pc2_variance ?? 0,
+    };
+  }
+
+  // 2. P-value distribution — from differential data
+  if (differential?.pvalue_distribution) {
+    data.pvalue_distribution = differential.pvalue_distribution;
+    data.pvalue_distributions = {
+      [differential.comparison_id]: differential.pvalue_distribution,
+    };
+  }
+
+  // 3. PSM CV — from group peptide_cv quartiles
+  const psmCv: PSMCV = {};
+  const proteinCv: PSMCV = {};
+  for (const group of overview.groups) {
+    const { group_value: condition } = group;
+    if (
+      group.peptide_cv_q1 != null &&
+      group.peptide_cv_median != null &&
+      group.peptide_cv_q3 != null
+    ) {
+      psmCv[condition] = [
+        group.peptide_cv_q1,
+        group.peptide_cv_median,
+        group.peptide_cv_q3,
+      ];
+    }
+    if (
+      group.protein_cv_q1 != null &&
+      group.protein_cv_median != null &&
+      group.protein_cv_q3 != null
+    ) {
+      proteinCv[condition] = [
+        group.protein_cv_q1,
+        group.protein_cv_median,
+        group.protein_cv_q3,
+      ];
+    }
+  }
+  if (Object.keys(psmCv).length > 0) {
+    data.psm_cv = psmCv;
+  }
+  if (Object.keys(proteinCv).length > 0) {
+    data.protein_cv = proteinCv;
+  }
+
+  // 4. Intensity distributions
+  const psmBoxplot: IntensityDistributions['psm_boxplot'] = {};
+  for (const item of perSample.psm_intensity) {
+    const vals = [item.q1, item.median, item.q3].filter(
+      (v): v is number => v != null,
+    );
+    if (vals.length === 0) continue;
+    if (!psmBoxplot[item.condition]) {
+      psmBoxplot[item.condition] = {};
+    }
+    psmBoxplot[item.condition][item.replicate] = vals;
+  }
+
+  const proteinBoxplot: IntensityDistributions['protein_boxplot'] = {};
+  for (const item of perSample.protein_intensity) {
+    const vals = [item.abundance_q1, item.abundance_median, item.abundance_q3].filter(
+      (v): v is number => v != null,
+    );
+    if (vals.length === 0) continue;
+    proteinBoxplot[item.sample_id] = vals;
+  }
+
+  if (Object.keys(psmBoxplot).length > 0 || Object.keys(proteinBoxplot).length > 0) {
+    data.intensity_distributions = {
+      psm_boxplot: psmBoxplot,
+      protein_boxplot: proteinBoxplot,
+    };
+  }
+
+  // 5. Data completeness
+  const dataCompleteness: DataCompleteness = {};
+  for (const item of perSample.protein_completeness) {
+    dataCompleteness[item.sample_id] = {
+      present: item.present,
+      missing: item.missing,
+    };
+  }
+  if (Object.keys(dataCompleteness).length > 0) {
+    data.data_completeness = dataCompleteness;
+  }
+
+  // 6. PSM completeness
+  const psmCompleteness: DataCompleteness = {};
+  for (const item of perSample.psm_completeness) {
+    psmCompleteness[item.sample_id] = {
+      present: item.present,
+      missing: item.missing,
+    };
+  }
+  if (Object.keys(psmCompleteness).length > 0) {
+    data.psm_completeness = psmCompleteness;
+  }
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -386,8 +532,17 @@ function completenessTracesAndLayout(
  * Charts whose input data is missing will have `null` entries.
  */
 export function buildQcExport(input: QcBuildInput): QcFigureExport {
-  const { data, conditionList, selectedComparison } = input;
+  const { data: rawData, overview, perSample, differential, conditionList, selectedComparison } = input;
   const conditionColors = buildConditionColors(conditionList ?? []);
+
+  // Merge canonical data into legacy QCData if provided.
+  // When both rawData and canonical data are present, canonical fields
+  // take precedence for overlapping keys (intentional: canonical data
+  // is fresher and richer). Callers should pass an empty QCData ({})
+  // as `data` when using the canonical path.
+  const data: QCData = overview && perSample
+    ? { ...rawData, ...canonicalToQCData(overview, perSample, differential) }
+    : rawData;
 
   // 1. PCA
   let pca: QcFigureEntry | null = null;

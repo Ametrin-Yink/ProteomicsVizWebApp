@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import type { QCData, QCDifferentialData, QCOverviewData } from '@/types/api';
+import type { QCData, QCDifferentialData, QCOverviewData, QCPerSampleData } from '@/types/api';
 import { transformPCARowBased } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/Select';
 import { Maximize2, Download } from 'lucide-react';
@@ -40,6 +40,7 @@ interface QCPlotsProps {
   data: QCData;
   overview?: QCOverviewData | null;
   differential?: QCDifferentialData | null;
+  perSampleData?: QCPerSampleData | null;
   conditionList?: string[];
   selectedComparison: string;
   onComparisonChange: (value: string) => void;
@@ -75,6 +76,16 @@ function hashColor(seed: string): string {
   return `hsl(${hue}, 65%, 55%)`;
 }
 
+function isBoxStats(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v) && 'q1' in (v as object);
+}
+
+function isNestedBoxStats(v: unknown): v is Record<string, Record<string, unknown>> {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+  const first = Object.values(v as Record<string, unknown>)[0];
+  return isBoxStats(first);
+}
+
 // Reconstruct data so Plotly's percentile algorithm produces exact quartiles.
 // Plotly uses R-type-7: index = (N-1)*p + 1 with linear interpolation.
 // With 25×lf, 50×q1, 50×med, 50×q3, 25×uf (N=200), adjacent sorted
@@ -83,13 +94,14 @@ function hashColor(seed: string): string {
 // (500 outliers vs 200 synthetic points) and distort the quartiles.
 function boxStatsToValues(s: Record<string, unknown>, includeOutliers: boolean): number[] {
   const q1 = s.q1 as number, med = s.median as number, q3 = s.q3 as number;
-  const lf = s.lowerfence as number, uf = s.upperfence as number;
+  const effectiveLf = (s.lowerfence != null ? s.lowerfence : q1 - 1.5 * (q3 - q1)) as number;
+  const effectiveUf = (s.upperfence != null ? s.upperfence : q3 + 1.5 * (q3 - q1)) as number;
   const vals: number[] = [];
-  for (let i = 0; i < 25; i++) vals.push(lf);
+  for (let i = 0; i < 25; i++) vals.push(effectiveLf);
   for (let i = 0; i < 50; i++) vals.push(q1);
   for (let i = 0; i < 50; i++) vals.push(med);
   for (let i = 0; i < 50; i++) vals.push(q3);
-  for (let i = 0; i < 25; i++) vals.push(uf);
+  for (let i = 0; i < 25; i++) vals.push(effectiveUf);
   if (includeOutliers) {
     const out = (s.outliers as number[]) || [];
     vals.push(...out.slice(0, 20));  // few enough not to distort the box
@@ -111,50 +123,51 @@ function normalizeBoxData(
   const traces: Array<Record<string, unknown>> = [];
   for (const [key, val] of Object.entries(raw)) {
     const color = getColor(key);
-    if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-      const first = Object.values(val as Record<string, unknown>)[0];
-      if (typeof first === 'object' && first !== null && !Array.isArray(first) && 'q1' in (first as object)) {
-        // Nested box-stats: {condition: {replicate: stats}}
-        for (const [subKey, stats] of Object.entries(val as Record<string, unknown>)) {
-          const name = labelFn(key, subKey);
+    if (!val || typeof val !== 'object' || Array.isArray(val)) {
+      // Legacy flat list format: {condition: number[]}
+      if (Array.isArray(val) && val.length > 0) {
+        traces.push({
+          y: val, type: 'box', name: labelFn(key),
+          marker: { color, size: 3, outliercolor: color + '66' },
+          boxpoints: bp, hovertemplate,
+        });
+      }
+      continue;
+    }
+    const record = val as Record<string, unknown>;
+    if (isBoxStats(record)) {
+      // Flat box-stats: {condition: {q1, median, q3, ...}}
+      traces.push({
+        y: boxStatsToValues(record, showOutliers),
+        type: 'box', name: labelFn(key),
+        marker: { color, size: 3, outliercolor: color + '66' },
+        boxpoints: bp, hovertemplate,
+      });
+    } else if (isNestedBoxStats(record)) {
+      // Nested box-stats: {condition: {replicate: {q1, median, q3, ...}}}
+      for (const [subKey, stats] of Object.entries(record)) {
+        const name = labelFn(key, subKey);
+        if (isBoxStats(stats)) {
           traces.push({
-            y: boxStatsToValues(stats as Record<string, unknown>, showOutliers),
+            y: boxStatsToValues(stats, showOutliers),
             type: 'box', name,
             marker: { color, size: 3, outliercolor: color + '66' },
             boxpoints: bp, hovertemplate,
           });
         }
-      } else if ('q1' in (val as object)) {
-        // Flat box-stats: {condition: stats}
-        const name = labelFn(key);
-        traces.push({
-          y: boxStatsToValues(val as Record<string, unknown>, showOutliers),
-          type: 'box', name,
-          marker: { color, size: 3, outliercolor: color + '66' },
-          boxpoints: bp, hovertemplate,
-        });
-      } else if (Array.isArray(first)) {
-        // Old nested list format
-        for (const [subKey, vals] of Object.entries(val as Record<string, unknown>)) {
-          const arr = vals as number[];
-          if (arr.length > 0) {
-            traces.push({
-              y: arr, type: 'box',
-              name: labelFn(key, subKey),
-              marker: { color, size: 3, outliercolor: color + '66' },
-              boxpoints: bp, hovertemplate,
-            });
-          }
+      }
+    } else {
+      // Legacy nested list: {condition: {replicate: number[]}}
+      for (const [subKey, vals] of Object.entries(record)) {
+        const arr = vals as number[];
+        if (Array.isArray(arr) && arr.length > 0) {
+          traces.push({
+            y: arr, type: 'box', name: labelFn(key, subKey),
+            marker: { color, size: 3, outliercolor: color + '66' },
+            boxpoints: bp, hovertemplate,
+          });
         }
       }
-    } else if (Array.isArray(val)) {
-      // Old flat list format
-      const name = labelFn(key);
-      traces.push({
-        y: val, type: 'box', name,
-        marker: { color, size: 3, outliercolor: color + '66' },
-        boxpoints: bp, hovertemplate,
-      });
     }
   }
   return traces;
@@ -164,6 +177,7 @@ export default function QCPlots({
   data,
   overview,
   differential,
+  perSampleData,
   conditionList,
   selectedComparison,
   onComparisonChange,
@@ -193,6 +207,39 @@ export default function QCPlots({
     if (key) return conditionColors[key];
     return hashColor(condition);
   }, [conditionColors]);
+
+  /**
+   * Build box traces from perSampleData intensity rows (per-sample or per-replicate).
+   *
+   * Fence computation: fences are derived locally from IQR (q1/q3)
+   * rather than using the backend's clamped fences (``GREATEST/LEAST``
+   * against per-group min/max). The per-sample artifacts
+   * (``qc_sample_metrics.parquet``, ``qc_psm_intensity.parquet``) do not
+   * carry fence columns, so unclamped IQR fences are the best available
+   * option. This means whiskers can extend beyond the actual data range
+   * for individual samples — the group-abundance boxplots (which read
+   * ``lowerfence``/``upperfence`` from ``qc_group_metrics.parquet``) remain
+   * clamped.
+   */
+  const buildIntensityBoxTraces = useCallback((
+    rows: Array<{ condition: string; replicate?: string; sample_id?: string; q1: number | null; median: number | null; q3: number | null }>,
+    labelFn: (condition: string, id: string) => string,
+  ) => {
+    return rows.map((row) => {
+      const q1 = row.q1 ?? 0, med = row.median ?? 0, q3 = row.q3 ?? 0;
+      const iqr = q3 - q1;
+      const lf = q1 - 1.5 * iqr, uf = q3 + 1.5 * iqr;
+      const color = getConditionColor(row.condition);
+      const id = row.replicate ?? row.sample_id ?? '';
+      return {
+        y: boxStatsToValues({ q1, median: med, q3, lowerfence: lf, upperfence: uf }, true),
+        type: 'box' as const, name: labelFn(row.condition, id),
+        marker: { color, size: 3, outliercolor: color + '66' },
+        boxpoints: 'outliers' as const,
+        hovertemplate: `<b>${labelFn(row.condition, id)}</b><br>Log2 Intensity: %{y:.2f}<extra></extra>`,
+      };
+    });
+  }, [getConditionColor]);
 
   const pcaPlot = useMemo(() => {
     if (overview?.pca.length) {
@@ -335,14 +382,13 @@ export default function QCPlots({
       const color = getConditionColor(group.group_value);
       return {
         x: [group.group_value],
-        q1: [group.q1],
-        median: [group.median],
-        q3: [group.q3],
+        y: boxStatsToValues({ q1: group.q1, median: group.median, q3: group.q3, lowerfence: group.lowerfence, upperfence: group.upperfence }, false),
         type: 'box' as const,
         name: group.group_value,
         boxpoints: false,
         line: { color },
-        fillcolor: `${color}55`,
+        fillcolor: color + '55',
+        marker: { color, size: 3, outliercolor: color + '66' },
         hovertemplate: '<b>%{x}</b><br>Q1: %{q1:.3f}<br>Median: %{median:.3f}<br>Q3: %{q3:.3f}<extra></extra>',
       };
     });
@@ -494,74 +540,121 @@ export default function QCPlots({
   }, [data.protein_cv, getConditionColor, labels.entity, overview]);
 
   const psmIntensityPlot = useMemo(() => {
-    if (overview) return null;
-    const boxData = data.intensity_distributions?.psm_boxplot;
-    if (!boxData || Object.keys(boxData).length === 0) return null;
-    const traces = normalizeBoxData(
-      boxData, getConditionColor,
-      (c, r) => `${c} - ${r || ''}`,
-      'Log2 Intensity: %{y:.2f}<extra></extra>',
-    );
-
-    const nTraces = traces.length;
-    const layout = {
-      title: { text: `${labels.psm} Intensity Distribution`, font: { size: 14, color: '#111827' } },
-      yaxis: {
-        title: { text: 'Log2 Intensity', font: { size: 12 } },
-        gridcolor: '#E5E7EB',
-      },
-      xaxis: {
-        tickangle: nTraces > 2 ? -90 : 0,
-        tickfont: { size: 11 },
-        automargin: true,
-      },
-      boxgap: 0.3,
-      boxgroupgap: 0,
-      plot_bgcolor: '#FFFFFF',
-      paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: nTraces > 2 ? 120 : 50 },
-      showlegend: nTraces <= 12,
-      legend: { orientation: 'h' as const, y: -0.25 },
-    };
-
-    return { traces, layout };
-  }, [data.intensity_distributions?.psm_boxplot, getConditionColor, labels.psm, overview]);
+    // New canonical path: per-(condition, replicate) PSM intensity from Parquet
+    if (perSampleData?.psm_intensity?.length) {
+      const traces = buildIntensityBoxTraces(
+        perSampleData.psm_intensity as Array<{ condition: string; replicate: string; q1: number | null; median: number | null; q3: number | null }>,
+        (c, r) => `${c} - ${r}`,
+      );
+      const nTraces = traces.length;
+      return {
+        traces,
+        layout: {
+          title: { text: `${labels.psm} Intensity Distribution`, font: { size: 14, color: '#111827' } },
+          yaxis: { title: { text: 'Log2 Intensity', font: { size: 12 } }, gridcolor: '#E5E7EB' },
+          xaxis: { tickangle: nTraces > 2 ? -90 : 0, tickfont: { size: 11 }, automargin: true },
+          boxgap: 0.3, boxgroupgap: 0,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 50, r: 30, t: 50, b: nTraces > 2 ? 120 : 50 },
+          showlegend: nTraces <= 12, legend: { orientation: 'h' as const, y: -0.25 },
+        },
+      };
+    }
+    // Legacy fallback
+    if (!overview && data.intensity_distributions?.psm_boxplot) {
+      const boxData = data.intensity_distributions.psm_boxplot;
+      if (Object.keys(boxData).length === 0) return null;
+      const traces = normalizeBoxData(boxData, getConditionColor, (c, r) => `${c} - ${r || ''}`, 'Log2 Intensity: %{y:.2f}<extra></extra>');
+      const nTraces = traces.length;
+      return {
+        traces,
+        layout: {
+          title: { text: `${labels.psm} Intensity Distribution`, font: { size: 14, color: '#111827' } },
+          yaxis: { title: { text: 'Log2 Intensity', font: { size: 12 } }, gridcolor: '#E5E7EB' },
+          xaxis: { tickangle: nTraces > 2 ? -90 : 0, tickfont: { size: 11 }, automargin: true },
+          boxgap: 0.3, boxgroupgap: 0,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 50, r: 30, t: 50, b: nTraces > 2 ? 120 : 50 },
+          showlegend: nTraces <= 12, legend: { orientation: 'h' as const, y: -0.25 },
+        },
+      };
+    }
+    return null;
+  }, [perSampleData?.psm_intensity, data.intensity_distributions?.psm_boxplot, getConditionColor, labels.psm, overview, buildIntensityBoxTraces]);
 
   const proteinIntensityPlot = useMemo(() => {
-    if (overview) return null;
-    const boxData = data.intensity_distributions?.protein_boxplot;
-    if (!boxData || Object.keys(boxData).length === 0) return null;
-    const traces = normalizeBoxData(
-      boxData, getConditionColor,
-      (c) => c,
-      'Intensity: %{y:.2f}<extra></extra>',
-    );
-
-    const nSamples = traces.length;
-    const layout = {
-      title: { text: `${labels.entity} Intensity Distribution`, font: { size: 14, color: '#111827' } },
-      yaxis: {
-        title: { text: 'Intensity', font: { size: 12 } },
-        gridcolor: '#E5E7EB',
-      },
-      xaxis: {
-        tickangle: nSamples > 2 ? -90 : 0,
-        tickfont: { size: 11 },
-        automargin: true,
-      },
-      boxgap: 0.3,
-      boxgroupgap: 0,
-      plot_bgcolor: '#FFFFFF',
-      paper_bgcolor: '#FFFFFF',
-      margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
-      showlegend: nSamples <= 12,
-      legend: { orientation: 'h' as const, y: -0.25 },
-    };
-
-    return { traces, layout };
-  }, [data.intensity_distributions?.protein_boxplot, getConditionColor, labels.entity, overview]);
+    // New canonical path: per-sample protein intensity from Parquet
+    if (perSampleData?.protein_intensity?.length) {
+      const traces = buildIntensityBoxTraces(
+        perSampleData.protein_intensity.map(row => ({
+          condition: row.condition,
+          sample_id: row.sample_id,
+          q1: row.abundance_q1,
+          median: row.abundance_median,
+          q3: row.abundance_q3,
+        })),
+        (c, s) => `${s}`,
+      );
+      const nSamples = traces.length;
+      return {
+        traces,
+        layout: {
+          title: { text: `${labels.entity} Intensity Distribution`, font: { size: 14, color: '#111827' } },
+          yaxis: { title: { text: 'Intensity', font: { size: 12 } }, gridcolor: '#E5E7EB' },
+          xaxis: { tickangle: nSamples > 2 ? -90 : 0, tickfont: { size: 11 }, automargin: true },
+          boxgap: 0.3, boxgroupgap: 0,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
+          showlegend: nSamples <= 12, legend: { orientation: 'h' as const, y: -0.25 },
+        },
+      };
+    }
+    // Legacy fallback
+    if (!overview && data.intensity_distributions?.protein_boxplot) {
+      const boxData = data.intensity_distributions.protein_boxplot;
+      if (Object.keys(boxData).length === 0) return null;
+      const traces = normalizeBoxData(boxData, getConditionColor, (c) => c, 'Intensity: %{y:.2f}<extra></extra>');
+      const nSamples = traces.length;
+      return {
+        traces,
+        layout: {
+          title: { text: `${labels.entity} Intensity Distribution`, font: { size: 14, color: '#111827' } },
+          yaxis: { title: { text: 'Intensity', font: { size: 12 } }, gridcolor: '#E5E7EB' },
+          xaxis: { tickangle: nSamples > 2 ? -90 : 0, tickfont: { size: 11 }, automargin: true },
+          boxgap: 0.3, boxgroupgap: 0,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
+          showlegend: nSamples <= 12, legend: { orientation: 'h' as const, y: -0.25 },
+        },
+      };
+    }
+    return null;
+  }, [perSampleData?.protein_intensity, data.intensity_distributions?.protein_boxplot, getConditionColor, labels.entity, overview, buildIntensityBoxTraces]);
 
   const completenessPlot = useMemo(() => {
+    if (perSampleData?.protein_completeness?.length) {
+      const rows = perSampleData.protein_completeness;
+      const samples = rows.map((r) => r.sample_id);
+      const present = rows.map((r) => r.present);
+      const missing = rows.map((r) => r.missing);
+      const nSamples = samples.length;
+      const traces = [
+        { x: samples, y: present, name: 'Present', type: 'bar' as const, marker: { color: '#10B981' }, hovertemplate: 'Present: %{y}<extra></extra>' },
+        { x: samples, y: missing, name: 'Missing', type: 'bar' as const, marker: { color: '#EF4444' }, hovertemplate: 'Missing: %{y}<extra></extra>' },
+      ];
+      return {
+        traces,
+        layout: {
+          title: { text: `${labels.entity} Data Completeness by Sample`, font: { size: 14, color: '#111827' } },
+          xaxis: { tickangle: nSamples > 2 ? -90 : 0, tickfont: { size: 11 }, automargin: true, gridcolor: '#E5E7EB' },
+          yaxis: { title: { text: 'Count', font: { size: 12 } }, gridcolor: '#E5E7EB' },
+          barmode: 'stack' as const,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
+          showlegend: true, legend: { orientation: 'h' as const, y: -0.3 },
+        },
+      };
+    }
     if (overview) return null;
     if (!data.data_completeness) return null;
 
@@ -613,6 +706,29 @@ export default function QCPlots({
   }, [data.data_completeness, labels.entity, overview]);
 
   const psmCompletenessPlot = useMemo(() => {
+    if (perSampleData?.psm_completeness?.length) {
+      const rows = perSampleData.psm_completeness;
+      const samples = rows.map((r) => r.sample_id);
+      const present = rows.map((r) => r.present);
+      const missing = rows.map((r) => r.missing);
+      const nSamples = samples.length;
+      const traces = [
+        { x: samples, y: present, name: 'Present', type: 'bar' as const, marker: { color: '#3B82F6' }, hovertemplate: 'Present: %{y}<extra></extra>' },
+        { x: samples, y: missing, name: 'Missing', type: 'bar' as const, marker: { color: '#F59E0B' }, hovertemplate: 'Missing: %{y}<extra></extra>' },
+      ];
+      return {
+        traces,
+        layout: {
+          title: { text: `${labels.psm} Data Completeness by Sample`, font: { size: 14, color: '#111827' } },
+          xaxis: { tickangle: nSamples > 2 ? -90 : 0, tickfont: { size: 11 }, automargin: true, gridcolor: '#E5E7EB' },
+          yaxis: { title: { text: 'Count', font: { size: 12 } }, gridcolor: '#E5E7EB' },
+          barmode: 'stack' as const,
+          plot_bgcolor: '#FFFFFF', paper_bgcolor: '#FFFFFF',
+          margin: { l: 50, r: 30, t: 50, b: nSamples > 2 ? 120 : 50 },
+          showlegend: true, legend: { orientation: 'h' as const, y: -0.3 },
+        },
+      };
+    }
     if (overview) return null;
     if (!data.psm_completeness) return null;
 
