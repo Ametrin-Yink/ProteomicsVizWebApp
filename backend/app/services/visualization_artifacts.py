@@ -354,7 +354,7 @@ def _materialize_peptides(
                     CAST(source.GeneName AS VARCHAR) AS gene_name,
                     CAST(source.PeptideId AS VARCHAR) AS peptide_id,
                     CAST(source.SampleId AS VARCHAR) AS sample_id,
-                    COALESCE(CAST(source.Condition AS VARCHAR), catalog.condition) AS condition,
+                    catalog.condition AS condition,
                     COALESCE(CAST(source.Replicate AS VARCHAR), catalog.replicate) AS replicate,
                     catalog.batch,
                     CAST(source.ProcessedLog2Abundance AS DOUBLE) AS processed_log2_abundance,
