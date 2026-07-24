@@ -1,6 +1,5 @@
 """Tests for DataProcessor internals and ProcessingConfig defaults."""
 
-import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -153,9 +152,15 @@ class TestProcessingConfig:
 # ── DataProcessor step4 ────────────────────────────────────────────────
 
 
+@pytest.fixture
+def parquet_paths(tmp_path):
+    """Provide isolated input/output parquet paths per test (no shared /tmp)."""
+    return tmp_path / "in.parquet", tmp_path / "out.parquet"
+
+
 class TestStep4RemoveLowQuality:
-    def test_filters_contaminants_and_low_abundance(self):
-        input_path, output_path = _tmp_parquet("step4")
+    def test_filters_contaminants_and_low_abundance(self, parquet_paths):
+        input_path, output_path = parquet_paths
         cfg = ProcessingConfig()
         processor = DataProcessor(cfg)
 
@@ -173,8 +178,8 @@ class TestStep4RemoveLowQuality:
         assert len(result) == 1  # only OK row
         assert result["Sequence"].iloc[0] == "OK"
 
-    def test_with_quan_info_column(self):
-        input_path, output_path = _tmp_parquet("step4_quan")
+    def test_with_quan_info_column(self, parquet_paths):
+        input_path, output_path = parquet_paths
         cfg = ProcessingConfig()
         processor = DataProcessor(cfg)
 
@@ -192,8 +197,8 @@ class TestStep4RemoveLowQuality:
         assert len(result) == 1  # NO_VAL filtered
         assert result["Sequence"].iloc[0] == "OK"
 
-    def test_empty_result_produces_empty_parquet(self):
-        input_path, output_path = _tmp_parquet("step4_empty")
+    def test_empty_result_produces_empty_parquet(self, parquet_paths):
+        input_path, output_path = parquet_paths
         cfg = ProcessingConfig()
         processor = DataProcessor(cfg)
 
@@ -216,8 +221,8 @@ class TestStep4RemoveLowQuality:
 
 
 class TestDeprecatedAliases:
-    def test_step3_remove_razor_delegates(self):
-        input_path, output_path = _tmp_parquet("alias_razor")
+    def test_step3_remove_razor_delegates(self, parquet_paths):
+        input_path, output_path = parquet_paths
         cfg = ProcessingConfig()
         processor = DataProcessor(cfg)
 
@@ -257,22 +262,3 @@ class TestDeprecatedAliases:
 
         # step5_filter_by_criteria is a thin alias
         processor.step5_filter_by_criteria_duckdb(input_path, output_path)
-
-
-# ── helpers ────────────────────────────────────────────────────────────
-
-
-def _tmp_parquet(name):
-    with tempfile.TemporaryDirectory() as tmp:
-        input_path = Path(tmp) / f"{name}_in.parquet"
-        output_path = Path(tmp) / f"{name}_out.parquet"
-        # Return paths that still exist — use a subdir of a persistent tmp
-        import shutil
-        base_dir = Path(tempfile.gettempdir()) / f"dp_test_{name}"
-        base_dir.mkdir(parents=True, exist_ok=True)
-        in_p = base_dir / f"{name}_in.parquet"
-        out_p = base_dir / f"{name}_out.parquet"
-        # Clean up old files
-        in_p.unlink(missing_ok=True)
-        out_p.unlink(missing_ok=True)
-        return in_p, out_p

@@ -37,6 +37,9 @@ repos:
       - id: pytest
         name: backend smoke tests
         language: system
+        # Smoke tests target fast, self-contained modules (infra, models, utils) plus a
+        # subset of services that run in <1s.  New test modules must be added here
+        # explicitly — full suites are exercised in CI.
         entry: python -m pytest Tests/backend/unit/infrastructure/ Tests/backend/unit/models/ Tests/backend/unit/utils/ Tests/backend/unit/services/test_file_index_service.py Tests/backend/unit/services/test_report_store.py -q --tb=short --no-header
         pass_filenames: false
         files: ^backend/.*\.py$

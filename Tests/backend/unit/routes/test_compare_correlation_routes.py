@@ -15,24 +15,8 @@ from fastapi.testclient import TestClient
 _SESSION_ID = "550e8400-e29b-41d4-a716-446655440000"
 
 
-@pytest.fixture
-def client(tmp_path, monkeypatch):
-    from app.api.deps import get_session_store
-    from app.core import config
-    from app.main import app
-
-    monkeypatch.setattr(config.settings, "sessions_dir", tmp_path)
-    store = SessionStore(sessions_dir=tmp_path)
-
-    session = Session(
-        id=_SESSION_ID, name="DIA", pipeline="msqrob2",
-        state=SessionState.COMPLETED,
-        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
-    )
-    asyncio.run(store.create(session))
-
-    results_dir = store.get_session_results_dir(_SESSION_ID)
-
+def _build_correlation_fixture(results_dir):
+    """Create comparison catalog, differential results, and correlation artifact."""
     comparisons = ["A_vs_B", "C_vs_B"]
     pd.DataFrame(
         {"comparison_id": comparisons, "comparison_order": [0, 1]}
@@ -62,6 +46,26 @@ def client(tmp_path, monkeypatch):
         results_dir / "differential_results.parquet", index=False
     )
     build_comparison_correlation_artifact(results_dir, block_size=1, tile_size=2)
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    from app.api.deps import get_session_store
+    from app.core import config
+    from app.main import app
+
+    monkeypatch.setattr(config.settings, "sessions_dir", tmp_path)
+    store = SessionStore(sessions_dir=tmp_path)
+
+    session = Session(
+        id=_SESSION_ID, name="DIA", pipeline="msqrob2",
+        state=SessionState.COMPLETED,
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+    )
+    asyncio.run(store.create(session))
+
+    results_dir = store.get_session_results_dir(_SESSION_ID)
+    _build_correlation_fixture(results_dir)
 
     app.dependency_overrides[get_session_store] = lambda: store
     with TestClient(app) as test_client:

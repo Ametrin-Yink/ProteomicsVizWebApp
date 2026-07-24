@@ -128,13 +128,16 @@ class TestTreeEndpoint:
         names = {e["name"] for e in data["entries"]}
         assert "sample.txt" in names
 
+class TestAsyncNonBlocking:
+    """Tests that async route helpers offload blocking I/O.
+
+    These are the only tests in this file that intentionally use a mock
+    (to inject a slow synchronous call path). All other tests use the real
+    DuckDB-backed FileIndexService.
+    """
+
     @pytest.mark.asyncio
     async def test_list_directory_does_not_block_event_loop(self, tmp_path):
-        """The async helper must offload blocking DuckDB calls.
-
-        This test intentionally uses a mock to inject a slow synchronous
-        path — it is the one exception in this file.
-        """
         from app.api.routes.files import list_directory
 
         mock_index = MagicMock()
