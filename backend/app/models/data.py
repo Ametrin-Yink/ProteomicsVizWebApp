@@ -43,7 +43,14 @@ class DataCompleteness(BaseModel):
 
 
 class QCData(BaseModel):
-    """Complete QC metrics data."""
+    """Complete QC metrics data (legacy shape).
+
+    .. deprecated::
+        This model is kept for PTM pipeline backward compatibility. The
+        canonical QC data shape for DIA/TMT pipelines is the combination of
+        ``QCOverviewData`` + ``QCDifferentialData`` + ``QCPerSampleData``
+        served through ``/visualization/qc/*`` endpoints.
+    """
 
     pca: PCAResult | None = None
     pvalue_distribution: PValueDistribution | None = None

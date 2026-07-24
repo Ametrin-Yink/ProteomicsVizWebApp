@@ -241,25 +241,54 @@ export interface CursorPage<T> {
   next_cursor: string | null;
 }
 
+/**
+ * Group-level QC summary from qc_group_metrics.parquet.
+ *
+ * Artifact: qc_group_metrics.parquet
+ * Each row is a group (condition or batch) with abundance quartiles, CV
+ * distribution summary, and IQR-based fences for boxplot whiskers.
+ */
 export interface QCGroupSummary {
+  /** Grouping dimension: 'condition' | 'batch' */
   group_by: string;
+  /** Group value (e.g. condition name or batch label) */
   group_value: string;
+  /** Number of samples in this group */
   sample_count: number;
+  /** Total abundance observations (may include repeats across features) */
   observation_count: number;
+  /** First quartile of log2 abundances */
   q1: number;
+  /** Median log2 abundance */
   median: number;
+  /** Third quartile of log2 abundances */
   q3: number;
+  /** Number of observed (non-imputed) feature counts across samples */
   observed_count: number;
+  /** Number of imputed feature counts across samples */
   imputed_count: number;
+  /** Number of missing feature counts across samples */
   missing_count: number;
+  /** Number of proteins with >=2 observations used for CV calculation */
   protein_cv_count?: number | null;
+  /** First quartile of protein-level CV values (%) */
   protein_cv_q1?: number | null;
+  /** Median protein-level CV (%) */
   protein_cv_median?: number | null;
+  /** Third quartile of protein-level CV values (%) */
   protein_cv_q3?: number | null;
+  /** Number of peptides with >=2 observations used for CV calculation */
   peptide_cv_count?: number | null;
+  /** First quartile of peptide/PSM-level CV values (%) */
   peptide_cv_q1?: number | null;
+  /** Median peptide/PSM-level CV (%) */
   peptide_cv_median?: number | null;
+  /** Third quartile of peptide/PSM-level CV values (%) */
   peptide_cv_q3?: number | null;
+  /** Clamped IQR-based lower fence for abundance boxplots (from qc_group_metrics.parquet). */
+  lowerfence?: number | null;
+  /** Clamped IQR-based upper fence for abundance boxplots (from qc_group_metrics.parquet). */
+  upperfence?: number | null;
 }
 
 export interface QCOverviewData {
@@ -302,6 +331,102 @@ export interface QCDifferentialData {
   significant_count: number;
   failed_count: number;
   pvalue_distribution: PValueDistribution;
+}
+
+/**
+ * Per-sample protein intensity boxplot statistics.
+ *
+ * Artifact: qc_sample_metrics.parquet
+ * Computed from protein_abundance_long.parquet grouped by sample_id.
+ */
+export interface QCProteinIntensity {
+  /** Sample identifier */
+  sample_id: string;
+  /** Condition this sample belongs to */
+  condition: string;
+  /** First quartile of protein log2 abundances (NULL if no data) */
+  abundance_q1: number | null;
+  /** Median protein log2 abundance (NULL if no data) */
+  abundance_median: number | null;
+  /** Third quartile of protein log2 abundances (NULL if no data) */
+  abundance_q3: number | null;
+}
+
+/**
+ * Per-(condition, replicate, result_layer) PSM intensity boxplot statistics.
+ *
+ * Artifact: qc_psm_intensity.parquet
+ * Computed from peptide_abundance_long.parquet grouped by
+ * (result_layer, condition, replicate).
+ */
+export interface QCPSMIntensity {
+  /** Condition name */
+  condition: string;
+  /** Replicate identifier within the condition */
+  replicate: string;
+  /** Pipeline data layer: 'protein' | 'ptm' | 'adjusted_ptm' */
+  result_layer: string;
+  /** Number of samples contributing to this group */
+  sample_count: number;
+  /** First quartile of PSM log2 intensities (NULL if no data) */
+  q1: number | null;
+  /** Median PSM log2 intensity (NULL if no data) */
+  median: number | null;
+  /** Third quartile of PSM log2 intensities (NULL if no data) */
+  q3: number | null;
+}
+
+/**
+ * Per-sample completeness row.
+ *
+ * Artifact: qc_sample_metrics.parquet (protein-level) or
+ *           qc_psm_completeness.parquet (PSM-level).
+ *
+ * For protein completeness, total/present/missing refer to the
+ * number of distinct protein accessions. For PSM completeness,
+ * they refer to distinct peptide IDs.
+ */
+export interface QCCompletenessRow {
+  /** Sample identifier */
+  sample_id: string;
+  /** Condition this sample belongs to */
+  condition: string;
+  /** Total number of features expected */
+  total: number;
+  /** Number of features with non-null abundance */
+  present: number;
+  /** Number of features with null abundance (total - present) */
+  missing: number;
+}
+
+/**
+ * Aggregated per-sample QC data from /visualization/qc/per-sample.
+ *
+ * Combines four arrays sourced from two Parquet artifacts:
+ * - protein_intensity:   qc_sample_metrics.parquet (per-sample abundance quartiles)
+ * - protein_completeness: qc_sample_metrics.parquet (per-sample protein detection)
+ * - psm_completeness:    qc_psm_completeness.parquet (per-sample PSM detection)
+ * - psm_intensity:       qc_psm_intensity.parquet (per-group PSM boxplot stats)
+ */
+export interface QCPerSampleData {
+  /** Per-sample protein intensity quartiles (from qc_sample_metrics.parquet) */
+  protein_intensity: QCProteinIntensity[];
+  /** Per-sample protein completeness counts (from qc_sample_metrics.parquet) */
+  protein_completeness: QCCompletenessRow[];
+  /** Per-sample PSM completeness counts (from qc_psm_completeness.parquet) */
+  psm_completeness: QCCompletenessRow[];
+  /** Per-(condition, replicate) PSM intensity stats (from qc_psm_intensity.parquet) */
+  psm_intensity: QCPSMIntensity[];
+}
+
+/** Box-plot statistics shape (matches backend QCCalculator._compute_box_stats). */
+export interface BoxStats {
+  q1: number;
+  median: number;
+  q3: number;
+  lowerfence: number;
+  upperfence: number;
+  outliers?: number[];
 }
 
 export interface AbundancePoint {

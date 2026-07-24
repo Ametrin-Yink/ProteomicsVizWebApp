@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 
 import QCWorkspace from '@/components/visualization/QCWorkspace';
 import { VisualizationScopeTabs } from '@/components/visualization/VisualizationScopeTabs';
-import type { QCData } from '@/types/api';
+import { visualizationApi } from '@/lib/api-client';
+import type { QCData, QCOverviewData, QCPerSampleData } from '@/types/api';
 
 interface PTMQCMetrics {
   preprocessing?: Record<string, unknown>;
@@ -29,25 +30,35 @@ export default function PTMQCWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [selectedComparison, setSelectedComparison] = useState('');
   const [scope, setScope] = useState<QCScope>('ptm');
+  const [overview, setOverview] = useState<QCOverviewData | null>(null);
+  const [perSampleData, setPerSampleData] = useState<QCPerSampleData | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${apiPrefix}/ptm/qc/plots`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
-      .then((response) => setMetrics(response.data ?? response))
+    const signal = controller.signal;
+
+    // PTM-specific metadata (filters, preprocessing, results)
+    visualizationApi.getPTMQCPlots(apiPrefix, signal)
+      .then((response) => setMetrics(response as PTMQCMetrics))
       .catch((reason: unknown) => {
         if (!(reason instanceof DOMException && reason.name === 'AbortError')) {
           setError(reason instanceof Error ? reason.message : 'Failed to load PTM QC metrics');
         }
       })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+      .finally(() => { if (!signal.aborted) setLoading(false); });
+
+    // Canonical overview for group abundance, CV, PCA
+    visualizationApi.getQCOverview(apiPrefix, 'condition', '', undefined, signal)
+      .then(setOverview)
+      .catch(() => setOverview(null));
+
+    // Per-sample intensity and completeness for the current scope
+    visualizationApi.getQCPerSample(apiPrefix, scope, signal)
+      .then(setPerSampleData)
+      .catch(() => setPerSampleData(null));
+
     return () => controller.abort();
-  }, [apiPrefix]);
+  }, [apiPrefix, scope]);
 
   if (loading) {
     return (
@@ -81,7 +92,9 @@ export default function PTMQCWorkspace({
     metrics.results?.protein_layer_available && metrics.protein_plots,
   );
   const data = scope === 'protein' ? metrics.protein_plots ?? null : metrics.plots ?? null;
-  const conditionList = Array.from(new Set(data?.pca?.conditions ?? []));
+  const conditionList = overview?.groups?.length
+    ? overview.groups.map((g) => g.group_value)
+    : Array.from(new Set(data?.pca?.conditions ?? []));
   const comparisonOptions = Object.keys(data?.pvalue_distributions ?? {}).map((value) => ({
     value,
     label: value.replace(/_vs_/g, ' vs '),
@@ -94,6 +107,8 @@ export default function PTMQCWorkspace({
     <div data-testid="ptm-qc-workspace">
       <QCWorkspace
         data={data}
+        overview={overview}
+        perSampleData={perSampleData}
         labels={labels}
         conditionList={conditionList}
         selectedComparison={selectedComparison}

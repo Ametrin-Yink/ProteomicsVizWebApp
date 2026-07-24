@@ -424,6 +424,26 @@ async def get_report_visualization_qc_differential(
     return create_response(data)
 
 
+@shared_router.get("/shared-reports/{share_token}/visualization/qc/per-sample")
+async def get_report_visualization_qc_per_sample(
+    share_token: str,
+    result_layer: str = Query("protein", max_length=50),
+):
+    """Capability-scoped per-sample QC details."""
+    _report_id, report_dir, _meta = _get_shared_report_or_404(share_token)
+    from app.api.routes.visualization_shared import create_response
+    from app.services.visualization_repository import VisualizationRepository
+
+    try:
+        repository = await asyncio.to_thread(
+            VisualizationRepository, report_dir / "results"
+        )
+        data = await asyncio.to_thread(repository.get_qc_per_sample, result_layer)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return create_response(data)
+
+
 @shared_router.get("/shared-reports/{share_token}/visualization/qc/samples")
 async def get_report_visualization_qc_samples(
     share_token: str,

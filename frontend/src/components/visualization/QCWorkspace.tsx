@@ -3,11 +3,12 @@
 import { useEffect, type ReactNode } from 'react';
 
 import QCPlots from '@/components/visualization/QCPlots';
-import type { QCData, QCDifferentialData, QCOverviewData } from '@/types/api';
+import type { QCData, QCDifferentialData, QCOverviewData, QCPerSampleData } from '@/types/api';
 
 interface QCWorkspaceProps {
   data: QCData | null;
   overview?: QCOverviewData | null;
+  perSampleData?: QCPerSampleData | null;
   differential?: QCDifferentialData | null;
   labels: {
     psm: string;
@@ -37,6 +38,7 @@ function formatPercent(value: number | undefined): string {
 export default function QCWorkspace({
   data,
   overview,
+  perSampleData,
   differential,
   labels,
   conditionList,
@@ -108,6 +110,7 @@ export default function QCWorkspace({
       <QCPlots
         data={data}
         overview={overview}
+        perSampleData={perSampleData}
         differential={differential}
         conditionList={conditionList}
         groupBy={groupBy}

@@ -264,6 +264,25 @@ async def get_visualization_qc_samples(
     return create_response(data)
 
 
+@router.get("/{session_id}/visualization/qc/per-sample")
+async def get_visualization_qc_per_sample(
+    session_id: str,
+    result_layer: str = Query("protein", max_length=50),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Return per-sample QC details: intensity distributions and completeness."""
+    if not await store.get(session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    repository = _repository_or_conflict(session_id)
+    try:
+        data = await asyncio.to_thread(
+            repository.get_qc_per_sample, result_layer
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return create_response(data)
+
+
 @router.get("/{session_id}/visualization/qc/differential")
 async def get_visualization_qc_differential(
     session_id: str,

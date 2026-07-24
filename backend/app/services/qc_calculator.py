@@ -1,6 +1,13 @@
 """
 QC metrics calculation service (Step 8).
 
+.. deprecated::
+    This module is **legacy** and no longer used by the DIA/TMT pipelines.
+    The canonical QC system (``visualization_artifacts.py`` +
+    ``canonical_qc.py``) replaced it with Parquet-backed scalable computation.
+    This class is still used by ``ptm_qc_calculator.py`` for PTM pipeline
+    QC metadata; it may be removed once PTM is fully on the canonical system.
+
 Calculates quality control metrics including PCA, p-value distribution,
 CV analysis, intensity distributions, and data completeness.
 """

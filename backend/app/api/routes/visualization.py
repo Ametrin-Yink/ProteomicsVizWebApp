@@ -110,7 +110,15 @@ QC_SUMMARY_FIELDS = (
 
 
 def load_qc_summary(results_dir: Path) -> dict[str, Any]:
-    """Load only compact scalar QC fields for a current artifact snapshot."""
+    """Load only compact scalar QC fields for a current artifact snapshot.
+
+    .. note::
+        This endpoint returns only 8 scalar summary fields. Rich QC data
+        (PCA, group metrics, intensity distributions, completeness) is
+        available at ``/visualization/qc/overview``,
+        ``/visualization/qc/per-sample``, and
+        ``/visualization/qc/differential``.
+    """
     if load_visualization_artifact_manifest(results_dir) is None:
         raise ValueError("Visualization artifacts require reprocessing")
     qc_file = results_dir / "QC_Results.json"

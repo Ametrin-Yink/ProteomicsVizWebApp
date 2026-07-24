@@ -218,4 +218,46 @@ describe('frontend/backend API contract', () => {
       },
     ]);
   });
+
+  it('getQCPerSample calls the correct URL with result_layer query parameter', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        protein_intensity: [],
+        protein_completeness: [],
+        psm_completeness: [],
+        psm_intensity: [],
+      })
+    );
+
+    await visualizationApi.getQCPerSample('/api/sessions/session-1', 'protein');
+
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      '/api/sessions/session-1/visualization/qc/per-sample?result_layer=protein'
+    );
+
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        protein_intensity: [],
+        protein_completeness: [],
+        psm_completeness: [],
+        psm_intensity: [],
+      })
+    );
+
+    await visualizationApi.getQCPerSample('/api/sessions/session-1', 'ptm');
+
+    expect(mockFetch.mock.calls[1][0]).toBe(
+      '/api/sessions/session-1/visualization/qc/per-sample?result_layer=ptm'
+    );
+  });
+
+  it('getPTMQCPlots calls the correct URL', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({}));
+
+    await visualizationApi.getPTMQCPlots('/api/sessions/session-1');
+
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      '/api/sessions/session-1/ptm/qc/plots'
+    );
+  });
 });

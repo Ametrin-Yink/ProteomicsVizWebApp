@@ -3,12 +3,25 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PTMQCWorkspace from './PTMQCWorkspace';
+import { visualizationApi } from '@/lib/api-client';
 
 vi.mock('@/components/visualization/QCPlots', () => ({
   default: ({ labels }: { labels: { psm: string; entity: string } }) => (
     <div data-testid="qc-plots">{labels.psm} plots Â· {labels.entity} plots</div>
   ),
 }));
+
+/** Helper: minimal fetch mock response for valid JSON API responses. */
+function jsonResponse(data: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? 'OK' : 'Error',
+    headers: { get: () => 'application/json' },
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as unknown as Response;
+}
 
 describe('PTMQCWorkspace', () => {
   let container: HTMLDivElement;
@@ -114,6 +127,42 @@ describe('PTMQCWorkspace', () => {
 
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/shared-reports/share-token/ptm/qc/plots',
+      expect.anything(),
+    );
+  });
+
+  it('calls getPTMQCPlots, getQCOverview, and getQCPerSample with the correct URL patterns', async () => {
+    // We import the real visualizationApi to verify URL construction.
+    // Each function uses fetchApi → global.fetch internally.
+    // The global.fetch mock from beforeEach returns a generic success response.
+
+    // getPTMQCPlots: /{apiPrefix}/ptm/qc/plots
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      jsonResponse({}),
+    );
+    await visualizationApi.getPTMQCPlots('/api/sessions/session-id');
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      '/api/sessions/session-id/ptm/qc/plots',
+      expect.anything(),
+    );
+
+    // getQCOverview: /{apiPrefix}/visualization/qc/overview?group_by=...
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      jsonResponse({}),
+    );
+    await visualizationApi.getQCOverview('/api/sessions/session-id', 'condition');
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      '/api/sessions/session-id/visualization/qc/overview?group_by=condition&limit=50',
+      expect.anything(),
+    );
+
+    // getQCPerSample: /{apiPrefix}/visualization/qc/per-sample?result_layer=...
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      jsonResponse({}),
+    );
+    await visualizationApi.getQCPerSample('/api/sessions/session-id', 'protein');
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      '/api/sessions/session-id/visualization/qc/per-sample?result_layer=protein',
       expect.anything(),
     );
   });

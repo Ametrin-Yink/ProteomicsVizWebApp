@@ -341,10 +341,12 @@ async def load_ptm_site_details(
     }
 
 
-async def load_ptm_qc_data(
-    results_dir: Path, *, persist_generated_plots: bool = False
-) -> dict[str, Any]:
-    """Load PTM QC data and lazily calculate missing plot payloads."""
+async def load_ptm_qc_data(results_dir: Path) -> dict[str, Any]:
+    """Load PTM QC metadata (filters, preprocessing, results).
+
+    QC plots (PCA, CV, intensity distributions, completeness) are served
+    by the canonical /visualization/qc/* endpoints backed by Parquet artifacts.
+    """
     qc_file = results_dir / "ptm_qc.json"
     default_result: dict[str, Any] = {
         "total_sites": 0,
@@ -356,32 +358,7 @@ async def load_ptm_qc_data(
     if not qc_file.exists():
         return default_result
 
-    data = await read_json_file(qc_file)
-    needs_ptm_plots = not data.get("plots")
-    needs_protein_plots = bool(
-        data.get("results", {}).get("protein_layer_available")
-    ) and not data.get("protein_plots")
-    if needs_ptm_plots or needs_protein_plots:
-        from app.services.ptm_qc_calculator import (
-            calculate_protein_qc_plots,
-            calculate_ptm_qc_plots,
-        )
-
-        plot_data, protein_plot_data = await asyncio.gather(
-            calculate_ptm_qc_plots(results_dir)
-            if needs_ptm_plots
-            else asyncio.sleep(0, result=None),
-            calculate_protein_qc_plots(results_dir)
-            if needs_protein_plots
-            else asyncio.sleep(0, result=None),
-        )
-        if plot_data is not None:
-            data["plots"] = plot_data
-        if protein_plot_data is not None:
-            data["protein_plots"] = protein_plot_data
-        if persist_generated_plots:
-            await write_json_file(qc_file, data, indent=2)
-    return data
+    return await read_json_file(qc_file)
 
 
 @router.get("/{session_id}/ptm/results")
@@ -533,7 +510,7 @@ async def get_ptm_qc_plots(
 
     results_dir = settings.sessions_dir / session_id / "results"
     try:
-        data = await load_ptm_qc_data(results_dir, persist_generated_plots=True)
+        data = await load_ptm_qc_data(results_dir)
         return create_response(data)
     except Exception as e:
         logger.error(f"Error loading PTM QC data: {e}")
