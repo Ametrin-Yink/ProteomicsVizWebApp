@@ -1,7 +1,6 @@
 """Tests for visualization shared helpers — FileCache, cache_key, create_response."""
 
 import re
-from datetime import UTC, datetime
 
 from app.api.routes.visualization_shared import (
     FileCache,

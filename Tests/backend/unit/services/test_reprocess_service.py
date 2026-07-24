@@ -71,8 +71,9 @@ class TestDirectorySize:
 
 class TestPreflightReprocessSpace:
     def test_sufficient_space(self, tmp_path):
-        from unittest.mock import patch
         from collections import namedtuple
+        from unittest.mock import patch
+
         from app.services.reprocess_service import preflight_reprocess_space
 
         session_dir = tmp_path / "session"
@@ -88,8 +89,9 @@ class TestPreflightReprocessSpace:
             preflight_reprocess_space(session_dir)
 
     def test_insufficient_space(self, tmp_path):
-        from unittest.mock import patch
         from collections import namedtuple
+        from unittest.mock import patch
+
         from app.services.reprocess_service import preflight_reprocess_space
 
         session_dir = tmp_path / "session"
@@ -101,9 +103,8 @@ class TestPreflightReprocessSpace:
         with patch(
             "app.services.reprocess_service.shutil.disk_usage",
             return_value=DiskUsage(100, 0, 1),
-        ):
-            with pytest.raises(ValueError, match="Insufficient free space"):
-                preflight_reprocess_space(session_dir)
+        ), pytest.raises(ValueError, match="Insufficient free space"):
+            preflight_reprocess_space(session_dir)
 
 
 class TestClearSavedAnalysisState:

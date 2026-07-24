@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 duckdb = pytest.importorskip("duckdb")
-from app.services.abundance_repository import (  # noqa: E402
+from app.services.abundance_repository import (
     AbundanceRepository,
     _decode_cursor,
     _encode_cursor,

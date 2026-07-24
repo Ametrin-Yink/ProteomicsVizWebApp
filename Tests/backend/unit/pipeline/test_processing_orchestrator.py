@@ -13,7 +13,11 @@ import pytest
 from app.db.session_store import SessionStore
 from app.models.analysis import AnalysisConfig, AnalysisResult, PipelineTool
 from app.models.session import (
-    ProteomicsFileInfo, Session, SessionConfig, SessionFiles, SessionState,
+    ProteomicsFileInfo,
+    Session,
+    SessionConfig,
+    SessionFiles,
+    SessionState,
 )
 from app.services.processing_orchestrator import ProcessingOrchestrator
 from app.services.session_manager import SessionManager
@@ -178,10 +182,9 @@ class TestOrchestratorProcessSession:
             patch(
                 "app.services.processing_orchestrator.session_manager",
                 new=mgr,
-            ),
+            ),pytest.raises(ValueError, match="step 3 failed")
         ):
-            with pytest.raises(ValueError, match="step 3 failed"):
-                asyncio.run(orch.process_session(orch_config))
+            asyncio.run(orch.process_session(orch_config))
 
         updated = asyncio.run(store.get(session.id))
         assert updated.state == SessionState.ERROR

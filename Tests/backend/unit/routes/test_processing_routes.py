@@ -10,7 +10,11 @@ from app.db.session_store import SessionStore
 from app.main import app
 from app.models.analysis import AnalysisConfig, Organism, PipelineTool
 from app.models.session import (
-    ProteomicsFileInfo, Session, SessionConfig, SessionFiles, SessionState,
+    ProteomicsFileInfo,
+    Session,
+    SessionConfig,
+    SessionFiles,
+    SessionState,
 )
 from app.services.task_manager import TaskCancelledError
 from fastapi.testclient import TestClient

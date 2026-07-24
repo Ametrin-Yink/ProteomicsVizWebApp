@@ -14,7 +14,10 @@ import pandas as pd
 import pytest
 from app.db.session_store import SessionStore
 from app.models.session import (
-    Session, SessionConfig, SessionFiles, SessionState,
+    Session,
+    SessionConfig,
+    SessionFiles,
+    SessionState,
 )
 from app.services.file_index_service import FileIndexService
 from fastapi.testclient import TestClient

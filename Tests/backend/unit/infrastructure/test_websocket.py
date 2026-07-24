@@ -11,7 +11,8 @@ import json
 import pytest
 from app.db.session_store import SessionStore
 from app.main import app
-from app.services.session_manager import SessionManager, session_manager as global_sm
+from app.services.session_manager import SessionManager
+from app.services.session_manager import session_manager as global_sm
 from fastapi.testclient import TestClient
 
 _SESSION_ID = "550e8400-e29b-41d4-a716-446655440000"

@@ -1,21 +1,19 @@
 """Tests for DataProcessor internals and ProcessingConfig defaults."""
 
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
 duckdb = pytest.importorskip("duckdb")
-from app.services.data_processor import (  # noqa: E402
+from app.services.data_processor import (
     DataProcessor,
     ProcessingConfig,
     _detect_delimiter,
     _detect_tmt_abundance_columns,
     _read_columns,
-    _sqlesc,
     _sql_identifier,
+    _sqlesc,
 )
-
 
 # ── _detect_delimiter ──────────────────────────────────────────────────
 

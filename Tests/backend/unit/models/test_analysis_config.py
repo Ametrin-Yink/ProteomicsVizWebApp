@@ -2,12 +2,12 @@
 
 import pytest
 from app.models.analysis import (
+    STEP_DISPLAY_NAMES,
     AnalysisConfig,
     AnalysisResult,
     DatabaseType,
-    ProcessingProgress,
     PipelineTool,
-    STEP_DISPLAY_NAMES,
+    ProcessingProgress,
 )
 
 
@@ -67,7 +67,9 @@ class TestProcessingProgress:
         assert progress.step == 1
 
     def test_rejects_invalid_status(self):
-        with pytest.raises(Exception):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             ProcessingProgress(
                 step=1,
                 step_name="Test",

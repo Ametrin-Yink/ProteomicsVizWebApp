@@ -6,9 +6,9 @@ import pandas as pd
 import pytest
 
 duckdb = pytest.importorskip("duckdb")
-from app.core.exceptions import ProcessingError  # noqa: E402
-from app.models.analysis import Organism  # noqa: E402
-from app.services.steps._helpers import (  # noqa: E402
+from app.core.exceptions import ProcessingError
+from app.models.analysis import Organism
+from app.services.steps._helpers import (
     build_comparison_label,
     build_comparison_pair_label,
     count_significant_differential,
@@ -17,7 +17,6 @@ from app.services.steps._helpers import (  # noqa: E402
     get_psm_input,
     primary_differential_output,
 )
-
 
 # ── get_gene_mapping ───────────────────────────────────────────────────
 

@@ -1,6 +1,5 @@
 """Tests for the custom exception hierarchy."""
 
-import pytest
 from app.core.exceptions import (
     AppException,
     ConfigurationError,

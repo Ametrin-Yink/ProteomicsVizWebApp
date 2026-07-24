@@ -1,7 +1,6 @@
 """Tests for trivial utility helpers."""
 
 import re
-import uuid as uuid_mod
 
 from app.utils.helpers import generate_uuid
 

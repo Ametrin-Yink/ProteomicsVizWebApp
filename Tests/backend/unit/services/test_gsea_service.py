@@ -237,7 +237,7 @@ class TestSaveAndGetResults:
         assert "go_bp" in data
 
     def test_get_results_specific_db(self):
-        from app.models.data import GSEAResult, GSEAResults
+        from app.models.data import GSEAResults
         results = {
             "go_bp": GSEAResults(
                 database="go_bp",

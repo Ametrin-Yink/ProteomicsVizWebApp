@@ -6,7 +6,6 @@ from app.models.data import (
     GSEAResult,
     GSEAResults,
     PCAResult,
-    PValueDistribution,
     QCData,
 )
 
@@ -84,7 +83,9 @@ class TestGSEAResult:
         assert result.enrichment_direction == "neutral"
 
     def test_validation_rejects_invalid_pval(self):
-        with pytest.raises(Exception):  # Pydantic validation error
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             GSEAResult(
                 term="T", name="T", es=0, nes=0,
                 pval=1.5, fdr=0.1, matched_genes=5,

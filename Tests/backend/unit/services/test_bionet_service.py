@@ -75,6 +75,7 @@ class TestBioNetServiceRun:
     def test_no_logfc_column_skips_filter(self, tmp_path):
         """DE file without logFC column should skip pre-filter."""
         from unittest.mock import patch
+
         from app.services.bionet_service import BioNetService
 
         de_file = tmp_path / "test.tsv"
@@ -131,7 +132,7 @@ class TestBioNetServiceRun:
             )
 
     def test_init_uses_settings_executable(self):
-        from app.services.bionet_service import BioNetService
         from app.core.config import settings
+        from app.services.bionet_service import BioNetService
         svc = BioNetService()
         assert svc._rscript == (settings.r_executable or "Rscript")

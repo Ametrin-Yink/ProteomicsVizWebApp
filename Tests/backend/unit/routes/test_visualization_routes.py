@@ -250,7 +250,6 @@ class TestGetQCPlots:
         assert response.status_code == 409
 
     def test_returns_only_compact_summary_for_supported_session(self, client, store):
-        from app.core.config import settings
 
         results_dir = store.get_session_results_dir(_SESSION_ID)
         _write_supported_visualization_manifest(results_dir, "msqrob2")
@@ -380,9 +379,6 @@ class TestVisualizationManifest:
     def test_ptm_pipeline_reports_result_layers_and_compare_requirement(
         self, client, store
     ):
-        from app.api.deps import get_session_store
-        from app.core.config import settings
-        from app.main import app
 
         ptm_session = Session(
             id=_SESSION_ID, name="PTM Test",
