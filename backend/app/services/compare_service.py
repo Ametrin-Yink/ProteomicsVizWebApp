@@ -6,6 +6,7 @@ All computation is synchronous (called via asyncio.to_thread from routes).
 
 import json
 import logging
+import threading
 from collections import defaultdict
 from pathlib import Path
 
@@ -20,6 +21,19 @@ from sklearn.preprocessing import StandardScaler
 from app.core.config import settings
 
 logger = logging.getLogger("proteomics")
+
+# ── Thread-local DuckDB connections ────────────────────────────────────
+# duckdb.connect() is cheap but not free — each call initialises an
+# in-memory catalog.  Reusing one connection per thread avoids that
+# overhead while keeping reads thread-safe (no concurrent writers).
+_duckdb_local = threading.local()
+
+
+def _get_duckdb():
+    """Return a persistent DuckDB connection for the calling thread."""
+    if not hasattr(_duckdb_local, "conn"):
+        _duckdb_local.conn = duckdb.connect()
+    return _duckdb_local.conn
 
 
 def accession_matches(value: object, protein_id: str) -> bool:
@@ -38,24 +52,21 @@ def _load_de_file(session_dir: str, comparison: str) -> pd.DataFrame | None:
     # ── New data format: differential_results.parquet ──────────────────
     parquet_path = results_dir / "differential_results.parquet"
     if parquet_path.exists():
-        connection = duckdb.connect()
-        try:
-            df = connection.execute(
-                """
-                SELECT
-                    protein_accession AS accession,
-                    gene_name,
-                    log2_fold_change AS log_fc,
-                    p_value         AS pval,
-                    adjusted_p_value AS adj_pval
-                FROM read_parquet(?)
-                WHERE comparison_id = ?
-                  AND result_layer = 'protein'
-                """,
-                [str(parquet_path), comparison],
-            ).df()
-        finally:
-            connection.close()
+        connection = _get_duckdb()
+        df = connection.execute(
+            """
+            SELECT
+                protein_accession AS accession,
+                gene_name,
+                log2_fold_change AS log_fc,
+                p_value         AS pval,
+                adjusted_p_value AS adj_pval
+            FROM read_parquet(?)
+            WHERE comparison_id = ?
+              AND result_layer = 'protein'
+            """,
+            [str(parquet_path), comparison],
+        ).df()
         if df.empty:
             return None
         df = df.replace([np.inf, -np.inf], np.nan)

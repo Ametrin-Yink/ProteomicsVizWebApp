@@ -54,6 +54,7 @@ export default function ScalableComparisonCorrelationPanel({ comparisons, onComp
   const [vennThresholds, setVennThresholds] = useState<VolcanoFilters>({
     foldChange: 1, pValue: 0.05, adjPValue: 0.05, s0: 0.1,
   });
+  const [thresholdsLoading, setThresholdsLoading] = useState(true);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -139,6 +140,8 @@ export default function ScalableComparisonCorrelationPanel({ comparisons, onComp
     }).catch((err: unknown) => {
       if (err instanceof Error && err.name === 'AbortError') return;
       console.warn('Failed to load Venn thresholds from session, using defaults:', err);
+    }).finally(() => {
+      setThresholdsLoading(false);
     });
     return () => controller.abort();
   }, [apiPrefix]);
@@ -380,7 +383,7 @@ export default function ScalableComparisonCorrelationPanel({ comparisons, onComp
               <button
                 type="button"
                 onClick={handleComputeVenn}
-                disabled={vennComparisons.length < 2 || vennLoading}
+                disabled={vennComparisons.length < 2 || vennLoading || thresholdsLoading}
                 className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
               >
                 {vennLoading ? 'Computing...' : 'Compute Venn'}

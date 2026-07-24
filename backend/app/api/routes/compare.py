@@ -5,6 +5,7 @@ Follows the same async polling pattern as GSEA routes.
 
 import asyncio
 import logging
+import threading
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -39,6 +40,16 @@ from app.services.task_manager import TaskCancelledError, TaskKind, task_manager
 from app.utils.json_io import read_json_file
 
 logger = logging.getLogger("proteomics")
+
+# ── Thread-local DuckDB connections ────────────────────────────────────
+_duckdb_local = threading.local()
+
+
+def _get_duckdb():
+    """Return a persistent DuckDB connection for the calling thread."""
+    if not hasattr(_duckdb_local, "conn"):
+        _duckdb_local.conn = duckdb.connect()
+    return _duckdb_local.conn
 
 router = APIRouter()
 
@@ -92,17 +103,14 @@ def _get_comparisons_from_session(session_id: str) -> list[str]:
     # ── New data format: differential_results.parquet ──────────────────
     parquet_path = results_dir / "differential_results.parquet"
     if parquet_path.exists():
-        connection = duckdb.connect()
-        try:
-            rows = connection.execute(
-                "SELECT DISTINCT comparison_id "
-                "FROM read_parquet(?) "
-                "WHERE result_layer = 'protein' "
-                "ORDER BY comparison_id",
-                [str(parquet_path)],
-            ).fetchall()
-        finally:
-            connection.close()
+        connection = _get_duckdb()
+        rows = connection.execute(
+            "SELECT DISTINCT comparison_id "
+            "FROM read_parquet(?) "
+            "WHERE result_layer = 'protein' "
+            "ORDER BY comparison_id",
+            [str(parquet_path)],
+        ).fetchall()
         return [str(row[0]) for row in rows]
 
     # ── Legacy TSV fallback ────────────────────────────────────────────
